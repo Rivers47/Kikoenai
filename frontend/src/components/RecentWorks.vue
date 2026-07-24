@@ -26,7 +26,7 @@
             :release="''"
             :lyric_status="item.lyric_status"
           >
-            <template slot="cover">
+            <template v-slot:cover>
               <div class="playInfo absolute-bottom">
                 <div class="ellipsis-2-lines audioText">
                   {{ getWorkHistoryInfo(item) }}

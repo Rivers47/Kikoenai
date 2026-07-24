@@ -1,4 +1,4 @@
-import Vue from 'vue'
+import { boot } from 'quasar/wrappers'
 import axios from 'axios'
 import { LocalStorage } from 'quasar'
 
@@ -10,4 +10,6 @@ export function setAxiosHeaders (token) {
   axios.defaults.headers['Authorization'] = 'Bearer ' + token
 }
 
-Vue.prototype.$axios = axios
+export default boot(({ app }) => {
+  app.config.globalProperties.$axios = axios
+})

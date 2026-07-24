@@ -1,13 +1,15 @@
-import Vue from 'vue'
-import VueSocketIO from 'vue-socket.io'
+import { boot } from 'quasar/wrappers'
+import { io } from 'socket.io-client'
 
-Vue.use(new VueSocketIO({
-  debug: false,
-  connection: '',
-  options: {
-    autoConnect: false,
-    query: {
-      auth_token: ''
-    }
+const socket = io('', {
+  autoConnect: false,
+  query: {
+    auth_token: ''
   }
-}))
+})
+
+export default boot(({ app }) => {
+  app.config.globalProperties.$socket = socket
+})
+
+export { socket }

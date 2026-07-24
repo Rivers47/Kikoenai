@@ -210,10 +210,10 @@
                       clearable
                       input-style="text-align: right;"
                     >
-                      <template slot="before">
+                      <template v-slot:before>
                           <q-btn size="sm" padding="md xs" icon="sync_alt" @click="lyricSyncDialog = true"></q-btn>
                       </template>
-                      <template slot="append">
+                      <template v-slot:append>
                         <div class="column">
                           <q-btn
                             size="xs"
@@ -414,7 +414,7 @@ export default {
     }
   },
 
-  beforeDestroy() {
+  beforeUnmount() {
     if (this.$q.platform.is.desktop) {
       window.removeEventListener('keydown', this.onKeyDown);
     }

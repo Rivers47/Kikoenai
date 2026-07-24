@@ -94,29 +94,37 @@ export default {
     }
   },
 
-  sockets: {
-    success (payload) {
+  created () {
+    // 从 LocalStorage 中读取 token
+    const token = this.$q.localStorage.getItem('jwt-token') || ''
+    this.$socket.auth = { auth_token: token }
+    
+    this.$socket.on('success', this.onSocketSuccess)
+    this.$socket.on('error', this.onSocketError)
+    
+    if (!this.$socket.connected) {
+      this.$socket.connect()
+    }
+  },
+
+  beforeUnmount () {
+    this.$socket.off('success', this.onSocketSuccess)
+    this.$socket.off('error', this.onSocketError)
+  },
+
+  methods: {
+    onSocketSuccess (payload) {
       this.showSuccNotif(payload.message)
       if (payload.auth) {
         this.$store.commit('User/INIT', payload.user)
         this.$store.commit('User/SET_AUTH', payload.auth)
       }
     },
-    error (err) {
+    onSocketError (err) {
       this.showWarnNotif(err.message || err)
       this.$socket.close()
       // 验证失败，跳转到登录页面
       this.$router.push('/login')
-    }
-  },
-
-  created () {
-    // 从 LocalStorage 中读取 token
-    const token = this.$q.localStorage.getItem('jwt-token') || ''
-    this.$socket.io.opts.query.auth_token = token
-    
-    if (!this.$socket.connected) {
-      this.$socket.open()
     }
   }
 }

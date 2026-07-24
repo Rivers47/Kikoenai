@@ -123,7 +123,7 @@ export default {
     addEventListener('touchcancel', this.onCursorUp)
   },
 
-  beforeDestroy() {
+  beforeUnmount() {
     removeEventListener('mousemove', this.onCursorMove)
     removeEventListener('touchmove', this.onCursorMove)
 

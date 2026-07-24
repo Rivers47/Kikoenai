@@ -625,7 +625,7 @@ export default {
     this.$refs.container.addEventListener("fullscreenchange", this.onFullscreenChange)
     this.checkVisualEffect();
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.renderNotifier.stop = true;
     this.$refs.container.removeEventListener("fullscreenchange", this.onFullscreenChange)
     this.video = null;

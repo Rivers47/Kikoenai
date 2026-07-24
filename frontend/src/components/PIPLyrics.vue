@@ -376,7 +376,7 @@ export default {
 
   },
 
-  beforeDestroy() {
+  beforeUnmount() {
     this.stopRafObject.stopped = true
     this.stopPIPLyric()
   }

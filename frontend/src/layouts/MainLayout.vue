@@ -191,7 +191,6 @@ import SleepMode from 'components/SleepMode'
 import NotifyMixin from '../mixins/Notification.js'
 import { mapMutations, mapState, mapGetters } from 'vuex'
 import { Dark } from 'quasar'
-import { truncate } from 'fs'
 
 export default {
   name: 'MainLayout',

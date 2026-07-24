@@ -1,5 +1,7 @@
-import Vue from 'vue'
+import { boot } from 'quasar/wrappers'
 import VueSlider from 'vue-slider-component'
 import 'vue-slider-component/theme/default.css'
 
-Vue.component('VueSlider', VueSlider)
+export default boot(({ app }) => {
+  app.component('VueSlider', VueSlider)
+})

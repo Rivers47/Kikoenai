@@ -12,29 +12,18 @@
       label
       :label-value="formatSeconds(displayCurrentTime)"
       />
-    <vue-plyr 
-      ref="plyr"
-      :hideControls="false"
-      class="vue-plyr"
-      :emit="['canplay', 'timeupdate', 'ended', 'seeked', 'playing', 'waiting', 'pause']" @canplay="onCanplay()"
-      @timeupdate="onTimeupdate()"
-      @ended="onEnded()"
-      @seeked="onSeeked()"
-      @playing="onPlaying()"
-      @waiting="onWaiting()"
-      @pause="onPause()"
-    >
-      <!--使用video组件来播放音频和视频文件，同时隐藏原生的vue-plyr组件，这里的组件只会留下一个进度条的功能
-      之所以用video，是因为video可以设置mp3等音频文件，也可以播放mp4等视频文件，在播放视频的时候，还能够用该video元素作为canvas绘制来源，
-      反之，audio虽然可以播放video的音频，但是将其作为canvas的绘制源，因此倾向于使用video来播放所有媒体元素-->
-      <!--注意，这里video设置了一个id，因为需要被其他组件通过document.querySelector方式进行查找引用-->
-      <video v-if="enableVideoSource" class="hide-in-global-page-for-pip" id="mediaVideo" crossorigin="anonymous" playsinline controls="controls" style="display: inline;">
+    <!--使用video组件来播放音频和视频文件，同时隐藏原生的vue-plyr组件，这里的组件只会留下一个进度条的功能
+    之所以用video，是因为video可以设置mp3等音频文件，也可以播放mp4等视频文件，在播放视频的时候，还能够用该video元素作为canvas绘制来源，
+    反之，audio虽然可以播放video的音频，但是将其作为canvas的绘制源，因此倾向于使用video来播放所有媒体元素-->
+    <!--注意，这里video设置了一个id，因为需要被其他组件通过document.querySelector方式进行查找引用-->
+    <div ref="plyrContainer" style="display: none;">
+      <video v-if="enableVideoSource" class="hide-in-global-page-for-pip" id="mediaVideo" crossorigin="anonymous" playsinline controls>
         <source v-if="source" :src="source" />
       </video>
       <audio v-else crossorigin="anonymous">
         <source v-if="source" :src="source" />
       </audio>
-    </vue-plyr>
+    </div>
   </div>
 </template>
 
@@ -42,8 +31,9 @@
 import Lyric from 'lrc-file-parser'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import NotifyMixin from '../mixins/Notification.js'
-import { formatSeconds, basenameWithoutExt } from '../utils'
+import { formatSeconds } from '../utils'
 import { debounce } from 'quasar';
+import Plyr from 'plyr'
 
 function convert_srt_vtt_to_lrc(text) {
   let lines = text.split("\n").map(l => l.trim())
@@ -54,35 +44,16 @@ function convert_srt_vtt_to_lrc(text) {
 
   const timeParseRe = /(\d*):(\d*):(\d*)(\.|,)(\d*)\s*-->\s*[\d:.]*/
 
-  const parsingUnit = []; // [([minute, seconds, millseconds], '文字\n文字'), (), ..., ()]
+  const parsingUnit = [];
   let i = 0;
   while(i < lines.length) {
 
-    // 注意 srt 和 vtt 字幕的毫秒区分符号一个是`,'另一个是`.
-    // audio.srt be like
-    // 1
-    // 00:01:22,343 --> 00:03:22,344
-    // 字幕，字幕
-    // 
-    // 2
-    // ...
-
-    // audio.vtt be like
-    // WEBVTT
-    // 
-    // 1
-    // 00:01:22.343 --> 00:03:22.344
-    // 字幕，字幕
-    // 
-    // 2
-    // ...
-
-    if (/^\d*$/.test(lines[i++])) { /* parse 序号 */
-      if (timeParseRe.test(lines[i])) { /* parse 时间戳 */
-        const [_/* whole string */ , h, m, s, _mill_sep /* ignore */, ms] = timeParseRe.exec(lines[i]).map(x => parseInt(x));
+    if (/^\d*$/.test(lines[i++])) {
+      if (timeParseRe.test(lines[i])) {
+        const [_whole, h, m, s, _mill_sep, ms] = timeParseRe.exec(lines[i]).map(x => parseInt(x));
         let texts = [];
         i++;
-        while(i < lines.length && lines[i] != "") { /* parse 文字，直到空行 */
+        while(i < lines.length && lines[i] != "") {
           texts.push(lines[i++]);
         }
         parsingUnit.push([
@@ -91,7 +62,7 @@ function convert_srt_vtt_to_lrc(text) {
         ]);
       }
     }
-  } // parse srt vtt 完成
+  }
 
   function padding(n, len) {
     n = Math.ceil(n);
@@ -123,28 +94,19 @@ export default {
       lrcContent: "",
       lrcObj: null,
       lrcAvailable: false,
+      plyr: null,
 
-      // 音频播放器进度条实现有些trick，普通的slider不能直接用，
-      // 因为time的更新源有两个【audio播放】【用户输入】，
-      // 两个更新源回导致进度条跳转出错，需要在【用户输入时】关闭【audio播放】发出的time更新（slider上）
       isChangingCurrentTime: false,
       changeCurrentTime: 0,
     }
   },
 
   computed: {
-    player () {
-      return this.$refs.plyr.player
-    },
-
     source () {
-      // 从 LocalStorage 中读取 token
       const token = this.$q.localStorage.getItem('jwt-token') || ''
-      // New API
       if (this.currentPlayingFile.mediaStreamUrl) {
         return `${this.currentPlayingFile.mediaStreamUrl}?token=${token}`
       } else if (this.currentPlayingFile.hash) {
-        // Fallback to be compatible with old backend
         return `/api/media/stream/${this.currentPlayingFile.hash}?token=${token}`
       } else {
         return ""
@@ -189,46 +151,43 @@ export default {
 
   watch: {
     playing (flag) {
-      if (this.player.duration) {
-        // 缓冲至可播放状态
-        flag ? this.player.play() : this.player.pause()
+      if (this.plyr && this.plyr.duration) {
+        flag ? this.plyr.play() : this.plyr.pause()
       }
-      // this.playLrc(flag);
     },
 
-    // watch source -> media.load() -> canPlay -> player.play()
     source (url) {
       if (url) {
-        // 加载新音频/视频文件
-        this.player.media.load();
+        const media = this.plyr.media;
+        media.load();
         this.loadLrcFile();
         this.updateMediaSessionMetadata();
       }
     },
 
     muted (flag) {
-      // 切换静音状态
-      this.player.muted = flag
+      if (this.plyr) {
+        this.plyr.muted = flag
+      }
     },
 
     volume (val) {
-      // 屏蔽非法数值
       if (val < 0 || val > 1) {
         return
       }
-
-      // 调节音量
-      this.player.volume = val
+      if (this.plyr) {
+        this.plyr.volume = val
+      }
     },
     rewindSeekMode(rewind) {
-      if (rewind) {
-        this.player.rewind(this.rewindSeekTime);
+      if (rewind && this.plyr) {
+        this.plyr.rewind(this.rewindSeekTime);
         this.SET_REWIND_SEEK_MODE(false);
       }
     },
     forwardSeekMode(forward) {
-      if (forward) {
-        this.player.forward(this.forwardSeekTime);
+      if (forward && this.plyr) {
+        this.plyr.forward(this.forwardSeekTime);
         this.SET_FORWARD_SEEK_MODE(false);
       }
     },
@@ -238,11 +197,13 @@ export default {
     },
     newCurrentTime(v) {
       if (v < 0) return;
-      this.player.currentTime = v;
-      this.SET_NEW_CURRENT_TIME(-1); // 标记时间已经更新到media上了
+      if (this.plyr) {
+        this.plyr.currentTime = v;
+      }
+      this.SET_NEW_CURRENT_TIME(-1);
     },
     lyricOffsetSeconds() {
-      this.playLrc(this.playing); // 强制更新一下歌词时间
+      this.playLrc(this.playing);
     },
     enablePIPLyrics(enablePIP) {
       if (enablePIP) {
@@ -254,33 +215,21 @@ export default {
   },
 
   created() {
-    this.debouncedPlayLrc = debounce(this.playLrc, 100, true /* 首次更改应当立即生效，对后续更改防抖动 */); // 防抖动
+    this.debouncedPlayLrc = debounce(this.playLrc, 100, true);
   },
 
   methods: {
     formatSeconds,
 
-    /**
-     * 当 外部暂停（线控暂停、软件切换）、用户控制暂停、seek 时会触发本事件
-     */
     onPause() {
-      // console.log('onPause')
       this.playLrc(false)
       this.PAUSE()
     },
-    /**
-     * 当播放器真正开始播放时会触发本事件
-     */
     onPlaying() {
-      // console.log('playing')
       this.playLrc(true)
       this.PLAY()
     },
-    /**
-     * 当播放器缓冲区空，被迫暂停加载时会触发本事件
-     */
     onWaiting() {
-      // console.log('waiting')
       this.playLrc(false)
       this.PLAY()
     },
@@ -304,28 +253,22 @@ export default {
     ]),
 
     onCanplay () {
-      // 缓冲至可播放状态时触发 (只有缓冲至可播放状态, 才能获取媒体文件的播放时长)
-      this.SET_DURATION(this.player.duration)
+      this.SET_DURATION(this.plyr.duration)
 
-      // 播放
-      if (this.playing && this.player.currentTime !== this.player.duration) {
-        this.player.play()
+      if (this.playing && this.plyr.currentTime !== this.plyr.duration) {
+        this.plyr.play()
       }
 
-      // 当音频文件在网页中加载完毕，可以播放时
-      // 检查此前是否有需要恢复的历史进度，如果尚未恢复
-      // 则设置currentTime到指定的时间点，然后标记已经恢复历史播放记录
       if (!this.resumeHistroyDone) {
-        this.player.currentTime = this.resumeHistroySeconds;
+        this.plyr.currentTime = this.resumeHistroySeconds;
         this.RESUME_HISTROY_SECONDS_DONE()
         this.$q.notify({message: "已恢复播放历史", timeout: 1000})
       }
     },
 
     onTimeupdate () {
-      // 当目前的播放位置已更改时触发
-      this.SET_CURRENT_TIME(this.player.currentTime)
-      if (this.enablePIPLyrics) this.debouncedPlayLrc(false) // 开启桌面歌词后，用视频的time更新事件驱动歌词更新，false表示禁用掉LrcObject本身的事件更新
+      this.SET_CURRENT_TIME(this.plyr.currentTime)
+      if (this.enablePIPLyrics) this.debouncedPlayLrc(false)
       if (this.sleepMode && this.sleepTime) {
         const currentTime = new Date()
         const currentHourStr = currentTime.getHours().toString().padStart(2, '0')
@@ -335,7 +278,6 @@ export default {
         if (currentHourStr === sleepHourStr && currentMinuteStr === sleepMinuteStr) {
           this.PAUSE()
           this.CLEAR_SLEEP_MODE()
-          // Persist sleep mode settings
           this.$q.sessionStorage.set('sleepTime', null)
           this.$q.sessionStorage.set('sleepMode', false)
         }
@@ -343,10 +285,8 @@ export default {
     },
 
     onEnded () {
-      // 当前文件播放结束时触发
       switch (this.playMode.name) {
         case "all repeat":
-          // 循环播放
           if (this.queueIndex === this.queue.length - 1) {
             this.SET_TRACK(0)
           } else {
@@ -354,22 +294,19 @@ export default {
           }
           break
         case "repeat once":
-          // 单曲循环
-          this.player.currentTime = 0
-          this.player.play()
+          this.plyr.currentTime = 0
+          this.plyr.play()
           this.PLAY()
           break
         case "shuffle": {
-          // 随机播放
           const index = Math.floor(Math.random()*this.queue.length)
           this.SET_TRACK(index)
           if (index === this.queueIndex) {
-            this.player.currentTime = 0
+            this.plyr.currentTime = 0
           }
           break
         }
         default:
-          // 顺序播放
           if (this.queueIndex === this.queue.length - 1) {
             this.PAUSE()
           } else {
@@ -379,22 +316,15 @@ export default {
     },
 
     onSeeked() {
-      // if (this.lrcAvailable) {
-      //   this.lrcObj.play(this.player.currentTime * 1000);
-      //   if (!this.playing) {
-      //     this.lrcObj.pause();
-      //   }
-      // }
       this.playLrc(this.playing);
     },
-
 
     playLrc (playStatus) {
       if (this.lrcAvailable) {
         if (playStatus) {
-          this.lrcObj.play((this.player.currentTime + this.lyricOffsetSeconds) * 1000);
+          this.lrcObj.play((this.plyr.currentTime + this.lyricOffsetSeconds) * 1000);
         } else {
-          this.lrcObj.play((this.player.currentTime + this.lyricOffsetSeconds) * 1000); // update and pause lyric
+          this.lrcObj.play((this.plyr.currentTime + this.lyricOffsetSeconds) * 1000);
           this.lrcObj.pause();
         }
       }
@@ -414,19 +344,16 @@ export default {
       const url = `/api/media/check-lrc/${fileHash}?token=${token}`;
 
       try {
-        // 首先向服务器查询是否有歌词
         const check_response = await this.$axios.get(url)
         if (!check_response.data.result) {
           return;
         }
 
-        // 有lrc歌词文件
         this.lrcAvailable = true;
         console.log('读入歌词');
         const lrcUrl = `/api/media/stream/${check_response.data.hash}?token=${token}`;
         const lyricExtension = check_response.data.lyricExtension.toLowerCase();
 
-        // 开始下载具体的lrc内容
         const response = await this.$axios.get(lrcUrl)
         console.log('歌词读入成功');
         console.log('srt convert to lrc');
@@ -435,12 +362,11 @@ export default {
         }
         this.lrcObj.setLyric(response.data);
         this.lrcContent = response.data;
-        this.lrcObj.play(this.player.currentTime * 1000);
-        if (!this.playing) this.lrcObj.pause() // 加载歌词后，观察当前是否在播放音频，如果没有，则暂停歌词滚动
+        this.lrcObj.play(this.plyr.currentTime * 1000);
+        if (!this.playing) this.lrcObj.pause()
         this.SET_HAS_LYRIC(true);
       } catch(error) {
         if (error.response) {
-          // 请求已发出，但服务器响应的状态码不在 2xx 范围内
           if (error.response.status !== 401) {
             console.error(error);
             this.showErrNotif(error.response.data.error || `${error.response.status} ${error.response.statusText}`);
@@ -454,15 +380,12 @@ export default {
     },
 
     resetToNoLyricStatus() {
-      // 无歌词文件
       this.lrcAvailable = false;
       this.lrcObj.setLyric('');
       this.lrcContent = '';
       this.SET_CURRENT_LYRIC('');
       this.SET_HAS_LYRIC(false);
     },
-
-
 
     updateMediaSessionMetadata() {
       console.log("try update media session")
@@ -474,13 +397,7 @@ export default {
             title: this.currentPlayingFile.title,
             artist: "",
             album: this.currentPlayingFile.workTitle,
-            // artwork: this.visualPlayerCoverUrl,
             artwork: [
-              // {
-              //   src: this.genCoverUrl(this.playWorkId, "visualPlayerCover"), // 图像太大，safari上有时会出现加载失败的问题
-              //   sizes: "600x600", // 随便写的尺寸
-              //   type: "image/jpg",
-              // },
               {
                 src: this.genCoverUrl(this.playWorkId, "main"),
                 sizes: "560x560",
@@ -504,8 +421,6 @@ export default {
       }
     },
 
-    // type: in 'visualPlayerCover', 'main', 'sam', '240x240', # warning '360x360' is almost not exist in dlsite, do not use 360x360
-    // 'visualPlayerCover' 默认是 'main'，如果用户有手动设置过可视化封面的话，则使用用户设置过的那个图片
     genCoverUrl(workId, type) {
       const token = this.$q.localStorage.getItem('jwt-token') || ''
 
@@ -521,61 +436,87 @@ export default {
     },
 
     onChangeSlider(v) {
-      console.log("player current time is ", this.player.currentTime)
+      console.log("player current time is ", this.plyr.currentTime)
       console.log("slider change value to ", v)
       console.log("global current time is ", this.currentTime)
-      this.player.currentTime = v;
+      this.plyr.currentTime = v;
     },
-     onPanSlider(phase) {
+    onPanSlider(phase) {
       console.warn(" pan with phase = ", phase)
       if (phase == 'start') {
         this.isChangingCurrentTime = true;
         this.changeCurrentTime = this.currentTime;
       } else {
-        // 延时一下，避免音频状态的值立即被更新到slider上
         setTimeout(() => {
           this.isChangingCurrentTime = false;
         }, 100);
       }
-     },
+    },
+
+    initPlyr () {
+      const container = this.$refs.plyrContainer;
+      const media = container.querySelector('video') || container.querySelector('audio');
+      if (!media) return;
+
+      this.plyr = new Plyr(media, {
+        controls: ['progress']
+      });
+
+      const player = this.plyr;
+
+      this.SET_VOLUME(player.volume);
+
+      player.on('canplay', () => this.onCanplay());
+      player.on('timeupdate', () => this.onTimeupdate());
+      player.on('ended', () => this.onEnded());
+      player.on('seeked', () => this.onSeeked());
+      player.on('playing', () => this.onPlaying());
+      player.on('waiting', () => this.onWaiting());
+      player.on('pause', () => this.onPause());
+    },
+
+    initAudioAnalyzer () {
+      const initAudio = () => {
+        document.removeEventListener('click', initAudio);
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = {
+          left: audioCtx.createAnalyser(),
+          right: audioCtx.createAnalyser(),
+          audioCtx,
+          splitter: null,
+          merger: null,
+          audioSrc: null,
+        };
+
+        const container = this.$refs.plyrContainer;
+        const media = container.querySelector('video') || container.querySelector('audio');
+        if (!media) return;
+
+        analyser.audioSrc = audioCtx.createMediaElementSource(media);
+        analyser.splitter = audioCtx.createChannelSplitter(2);
+        analyser.merger = audioCtx.createChannelMerger(2);
+        analyser.audioSrc.connect(analyser.splitter);
+        analyser.splitter.connect(analyser.left, 0);
+        analyser.splitter.connect(analyser.right, 1);
+        analyser.audioSrc.connect(audioCtx.destination)
+        this.SET_AUDIO_ANALYSER(analyser)
+      }
+
+      if (this.enableVisualizer) {
+        document.addEventListener('click', initAudio);
+        if (this.$q.platform.is.safari && this.$q.platform.is.mobile) {
+          this.$q.notify({
+            message: "监测到safari平台上开启了音频可视化功能，注意移动端safari有bug，如果没有声音的话，请关闭音频可视化功能",
+            timeout: 5000
+          })
+        }
+      }
+    }
   },
 
   mounted () {
-    // 初始化音量
-    this.SET_VOLUME(this.player.volume);
-
-    const initAudio = () => {
-      document.removeEventListener('click', initAudio);
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const analyser = {
-        left: audioCtx.createAnalyser(),
-        right: audioCtx.createAnalyser(),
-        audioCtx,
-        splitter: null,
-        merger: null,
-        audioSrc: null,
-      };
-
-      analyser.audioSrc = audioCtx.createMediaElementSource(this.player.media);
-      analyser.splitter = audioCtx.createChannelSplitter(2);
-      analyser.merger = audioCtx.createChannelMerger(2);
-      analyser.audioSrc.connect(analyser.splitter);
-      analyser.splitter.connect(analyser.left, 0);
-      analyser.splitter.connect(analyser.right, 1);
-      analyser.audioSrc.connect(audioCtx.destination)
-      this.SET_AUDIO_ANALYSER(analyser)
-    }
-
-    if (this.enableVisualizer) {
-      document.addEventListener('click', initAudio);
-      if (this.$q.platform.is.safari && this.$q.platform.is.mobile) {
-        this.$q.notify({
-          message: "监测到safari平台上开启了音频可视化功能，注意移动端safari有bug，如果没有声音的话，请关闭音频可视化功能",
-          timeout: 5000
-        })
-      }
-    }
-
+    this.initPlyr();
+    this.initAudioAnalyzer();
     this.createLrcObj();
     if (this.source) {
       this.loadLrcFile();
@@ -585,15 +526,4 @@ export default {
 </script>
 
 <style scoped>
-.vue-plyr {
-  /* visibility: hidden; */
-  /*display: none;*/
-  width: 1px;
-    height: 1px;
-    overflow: hidden;
-    top: 0px;
-    left: 0px;
-    position: absolute;
-}
-
 </style>

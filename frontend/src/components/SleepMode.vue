@@ -1,5 +1,5 @@
 <template>
-    <q-dialog v-bind:value="value" v-on:input="$emit('input')" persistent>
+    <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue')" persistent>
       <q-card>
         <div class="q-pa-sm">
           <q-time
@@ -31,7 +31,9 @@ export default {
   name: 'SleepMode',
 
   // v-model: showTimer from MainLayout
-  props: ['value'],
+  props: ['modelValue'],
+
+  emits: ['update:modelValue'],
 
   data() {
     return {
@@ -63,7 +65,7 @@ export default {
 
   watch: {
     // v-model: showTimer from MainLayout
-    value(visible) {
+    modelValue(visible) {
       if (visible) {
         if (!this.sleepMode) {
           const currentTime = new Date();

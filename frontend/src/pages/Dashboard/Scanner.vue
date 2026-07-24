@@ -187,43 +187,6 @@ export default {
     }
   },
 
-  sockets: {
-    SCAN_TASKS (payload) {
-      this.tasks = payload.tasks
-    },
-    SCAN_FAILED_TASKS (payload) {
-      this.failedTasks = payload.failedTasks
-    },
-    SCAN_MAIN_LOGS (payload) {
-      this.mainLogs = payload.mainLogs
-    },
-    SCAN_RESULTS (payload) {
-      this.results = payload.results
-    },
-    SCAN_INIT_STATE (payload) {
-      this.state = 'running'
-      this.tasks = payload.tasks
-      this.failedTasks = payload.failedTasks
-      this.mainLogs = payload.mainLogs
-      this.results = payload.results
-    },
-
-    SCAN_FINISHED (payload) {
-      this.state = 'finished'
-      this.allLogs.push({
-        level: 'info',
-        message: payload.message
-      })
-    },
-    SCAN_ERROR () {
-      this.state = 'error'
-    },
-
-    success () {
-      this.loggedIn = true
-    }
-  },
-
   methods: {
     cleanRerun() {
       this.tasks = []
@@ -258,7 +221,43 @@ export default {
         case 'warn': return 'text-yellow';
         default: return '';
       }
-    }
+    },
+
+    onSCAN_TASKS (payload) {
+      this.tasks = payload.tasks
+    },
+    onSCAN_FAILED_TASKS (payload) {
+      this.failedTasks = payload.failedTasks
+    },
+    onSCAN_MAIN_LOGS (payload) {
+      this.mainLogs = payload.mainLogs
+    },
+    onSCAN_RESULTS (payload) {
+      this.results = payload.results
+    },
+    onSCAN_INIT_STATE (payload) {
+      this.state = 'running'
+      this.tasks = payload.tasks
+      this.failedTasks = payload.failedTasks
+      this.mainLogs = payload.mainLogs
+      this.results = payload.results
+    },
+    onSCAN_FINISHED (payload) {
+      this.state = 'finished'
+      this.allLogs.push({
+        level: 'info',
+        message: payload.message
+      })
+    },
+    onSCAN_ERROR () {
+      this.state = 'error'
+    },
+    onSuccess () {
+      this.loggedIn = true
+    },
+    onConnectError () {
+      this.showErrNotif('连接Socket失败')
+    },
   },
 
   computed: {
@@ -278,9 +277,27 @@ export default {
 
   mounted () {
     this.$socket.emit('ON_SCANNER_PAGE')
-    this.$socket.on('connect_error', () => {
-      this.showErrNotif('连接Socket失败')
-    });
+    this.$socket.on('SCAN_TASKS', this.onSCAN_TASKS)
+    this.$socket.on('SCAN_FAILED_TASKS', this.onSCAN_FAILED_TASKS)
+    this.$socket.on('SCAN_MAIN_LOGS', this.onSCAN_MAIN_LOGS)
+    this.$socket.on('SCAN_RESULTS', this.onSCAN_RESULTS)
+    this.$socket.on('SCAN_INIT_STATE', this.onSCAN_INIT_STATE)
+    this.$socket.on('SCAN_FINISHED', this.onSCAN_FINISHED)
+    this.$socket.on('SCAN_ERROR', this.onSCAN_ERROR)
+    this.$socket.on('success', this.onSuccess)
+    this.$socket.on('connect_error', this.onConnectError)
+  },
+
+  beforeUnmount () {
+    this.$socket.off('SCAN_TASKS', this.onSCAN_TASKS)
+    this.$socket.off('SCAN_FAILED_TASKS', this.onSCAN_FAILED_TASKS)
+    this.$socket.off('SCAN_MAIN_LOGS', this.onSCAN_MAIN_LOGS)
+    this.$socket.off('SCAN_RESULTS', this.onSCAN_RESULTS)
+    this.$socket.off('SCAN_INIT_STATE', this.onSCAN_INIT_STATE)
+    this.$socket.off('SCAN_FINISHED', this.onSCAN_FINISHED)
+    this.$socket.off('SCAN_ERROR', this.onSCAN_ERROR)
+    this.$socket.off('success', this.onSuccess)
+    this.$socket.off('connect_error', this.onConnectError)
   },
 }
 </script>
