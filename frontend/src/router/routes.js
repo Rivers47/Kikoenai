@@ -155,7 +155,7 @@ const routes = [
 // eslint-disable-next-line
 if (process.env.MODE !== 'ssr') {
   routes.push({
-    path: '*',
+    path: '/:pathMatch(.*)*',
     component: () => import('pages/Error404.vue')
   })
 }

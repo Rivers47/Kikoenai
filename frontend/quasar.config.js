@@ -8,6 +8,7 @@ module.exports = function (ctx) {
     // https://quasar.dev/quasar-cli-webpack/boot-files
     boot: [
       'axios',
+      'store',
       'slider',
       'plyr',
       'socket.io'
@@ -63,8 +64,11 @@ module.exports = function (ctx) {
 
       modern: true,
       sourceMap: true,
-      devtool: 'source-map'
+      devtool: 'source-map',
+      minify: true
     },
+
+
 
     // Full list of options: https://quasar.dev/quasar-cli-webpack/quasar-config-js#devServer
     devServer: {

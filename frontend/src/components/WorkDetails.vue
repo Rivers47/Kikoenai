@@ -241,7 +241,7 @@ export default {
       this.progress = newMetaData.progress;
 
       // 极个别作品没有标签
-      if (newMetaData.tags && newMetaData.tags[0].name === null) {
+      if (newMetaData.tags && newMetaData.tags.length > 0 && newMetaData.tags[0].name === null) {
         this.showTags = false;
       }
     },

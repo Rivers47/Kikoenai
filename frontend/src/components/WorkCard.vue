@@ -160,7 +160,7 @@ export default {
     }
 
     // 极个别作品没有标签
-    if (this.metadata.tags && this.metadata.tags[0].name === null) {
+    if (this.metadata.tags && this.metadata.tags.length > 0 && this.metadata.tags[0].name === null) {
       this.showTags = false;
     }
   },
