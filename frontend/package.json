@@ -26,7 +26,7 @@
     "@quasar/extras": "^1.10.4",
     "axios": "^0.21.1",
     "lrc-file-parser": "^1.0.7",
-    "plyr": "^3.6.7",
+    "plyr": "^3.6.9",
     "quasar": "^1.15.12",
     "vue-plyr": "^6.0.4",
     "vue-slider-component": "^3.2.11",
@@ -38,7 +38,8 @@
     "eslint": "^7.25.0",
     "eslint-loader": "^4.0.2",
     "eslint-plugin-import": "^2.22.1",
-    "eslint-plugin-vue": "^7.9.0"
+    "eslint-plugin-vue": "^7.9.0",
+    "sass": "^1.71.1"
   },
   "engines": {
     "node": ">= 10.18.1",

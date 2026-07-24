@@ -252,12 +252,6 @@ export default {
           path: '/vas'
         },
         {
-          title: '翻译任务',
-          icon: 'subtitles',
-          path: '/ai_lyric'
-
-        },
-        {
           title: '设定',
           icon: 'tune',
           path: '/admin'

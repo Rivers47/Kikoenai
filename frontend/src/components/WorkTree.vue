@@ -73,10 +73,6 @@
             </q-item-label>
           </q-item-section>
 
-          <q-item-section v-if="item.status > AILyricTaskStatus.NONE" avatar>
-            <AIStatus :status="item.status"/>
-          </q-item-section>
-
           <!-- 上下文菜单 -->
           <q-menu
             v-if="item.type === 'audio' || item.type === 'text' || item.type === 'image' || item.type === 'other'"
@@ -99,9 +95,7 @@
                 <q-item-section>下载文件</q-item-section>
               </q-item>
 
-              <q-item clickable @click="aiTranslateToServer(item)" v-if="item.type === 'audio'">
-                <q-item-section>进行AI翻译</q-item-section>
-              </q-item>
+
             </q-list>
           </q-menu>
         </q-item>
@@ -111,20 +105,14 @@
 </template>
 
 <script>
-import AIStatus from './AIStatus.vue';
 import { mapState, mapGetters } from 'vuex'
-import { audioLyricNameMatch, basenameWithoutExt, ServerApi, AILyricTaskStatus } from 'src/utils'
-import { debounce } from 'quasar';
+import { basenameWithoutExt } from 'src/utils'
 import { formatSeconds } from '../utils'
 import NotifyMixin from '../mixins/Notification.js'
 
 export default {
   name: 'WorkTree',
   mixins: [NotifyMixin],
-
-  components: {
-    AIStatus,
-  },
 
   data() {
     return {
@@ -134,12 +122,6 @@ export default {
       preview_img_idx: 0,
       preview_img_list: [],
       preview_img_hash: "",
-      AILyricTaskStatus,
-
-      sumAITaskStatus: AILyricTaskStatus.NONE,
-      
-      checkAITaskStatusIntervalId: 0, // 周期性检查ai翻译进度的inteval id
-      checkAITaskIntervalSeconds: 10, // 检查间隔
     }
   },
 
@@ -158,24 +140,6 @@ export default {
     tree (value) {
       this.internalTree = value;
       this.initPath();
-      this.updateTreeAITaskStatus();
-    },
-
-    sumAITaskStatus(currentStatus) {
-      switch(currentStatus) {
-        case AILyricTaskStatus.SUCCESS:
-        case AILyricTaskStatus.ERROR:
-        case AILyricTaskStatus.NONE:
-          // 本作品的翻译任务均处于静止状态，无需周期性检查
-          this.disableIntervalCheckAITasks();
-          break;
-
-        case AILyricTaskStatus.PENDING:
-        case AILyricTaskStatus.TRASCRIPTING:
-          // 本作品的翻译任务处于运行状态或者排队状态，需要周期性检查
-          this.enableIntervalCheckAITasks();
-          break;
-      }
     }
   },
 
@@ -294,32 +258,6 @@ export default {
       link.click();
     },
 
-    // 翻译当前所在目录的所有音频文件，注意不是当前作品的所有音频文件
-    async translateCwd() {
-      // console.log('cwd = ', this.fatherFolder);
-      for (const item of this.fatherFolder) {
-        if (item.type === 'audio') {
-          await this.aiTranslateToServer(item);
-        }
-      }
-    },
-
-    async aiTranslateToServer(file) {
-      try {
-        await ServerApi.translateAudio(file.hash);
-        await this.enableIntervalCheckAITasks();
-      } catch(error) {
-        if (error.response) {
-          // 请求已发出，但服务器响应的状态码不在 2xx 范围内
-          if (error.response.status !== 401) {
-            this.showErrNotif(error.response.data.error || `${error.response.status} ${error.response.statusText}`);
-          }
-        } else {
-          this.showErrNotif(error.message || error);
-        }
-      }
-    },
-
     setVisualPlayerCover (imgFile) {
       if (!imgFile) return;
       const urlWithoutToken = imgFile.mediaDownloadUrl ? `${imgFile.mediaDownloadUrl}` : `/api/media/download/${imgFile.hash}`;
@@ -380,134 +318,10 @@ export default {
       this.preview_img_idx = (length +this.preview_img_idx + (next ? 1 : -1) ) % length;
     },
 
-    async updateTreeAITaskStatus() {
-      console.log("检查翻译进度")
-
-      const tasks = await ServerApi.searchWorkTask(this.metadata.id);
-
-      // console.log("tasks = ", tasks)
-      const [tree, status] = this.updateAiTranslateStatusToTracks(tasks, this.internalTree);
-      this.internalTree = tree;
-      this.sumAITaskStatus = status;
-    },
-
-    // return updated tree
-    // 
-    updateAiTranslateStatusToTracks(tasks, tree) {
-      // tree:
-      // [
-      //   {
-      //     type: "folder",
-      //     children: [
-      //       {type: "audio", title: "audio1.mp3"},
-      //       {type: "audio", title: "audio2.mp3"},
-      //       {type: "audio", title: "audio3.mp3"},
-      //     ]
-      //   },
-      //   {
-      //     type: "folder",
-      //     children: [
-      //       { "type": "image", "title": "image1.jpg" },
-      //     ]
-      //   },
-      //   {type: "audio", title: "audio4.mp3"},
-      // ]
-      
-
-      function mergeStatus(statusList, isSuccessMoreImportant) {
-        if (statusList.length == 0) return AILyricTaskStatus.NONE;
-        const includeTranscripting = statusList.includes(AILyricTaskStatus.TRASCRIPTING);
-        const includeSuccess = statusList.includes(AILyricTaskStatus.SUCCESS);
-        const includeError = statusList.includes(AILyricTaskStatus.ERROR);
-        const includePending = statusList.includes(AILyricTaskStatus.PENDING);
-
-        if (includeTranscripting) return AILyricTaskStatus.TRASCRIPTING;
-        else if (includePending) return AILyricTaskStatus.PENDING;
-        else if (isSuccessMoreImportant) {
-          // 对于单个音频文件的多个翻译任务，我们更在意是否有成功的任务
-          if (includeSuccess) return AILyricTaskStatus.SUCCESS;
-          else if (includeError) return AILyricTaskStatus.ERROR;
-        } else {
-          // 对于文件夹内多个音频的翻译状态，我们更在意是否有错误
-          if (includeError) return AILyricTaskStatus.ERROR;
-          else if (includeSuccess) return AILyricTaskStatus.SUCCESS;
-        }
-
-        // 兜底
-        return AILyricTaskStatus.NONE;
-      }
-
-      const sumStatus = [];
-      const treeUpdated = tree.map((node, index) => {
-        const nodeTitle = basenameWithoutExt(node.title);
-        switch(node.type) {
-          case "folder": {
-            const newNode = Object.assign({}, node);
-            const [newChilldren, status] = this.updateAiTranslateStatusToTracks(tasks, node.children);
-            sumStatus.push(status);
-            newNode.status = status;
-            newNode.children = newChilldren;
-            return newNode;
-          }
-
-          case "audio": {
-            const matchedTasks = tasks.filter((t) => audioLyricNameMatch(nodeTitle, t.fileName))
-            const status = mergeStatus(matchedTasks.map(t => t.status), true);
-
-            // hack status for debug
-            // const status = index + 1;
-
-            const newNode = Object.assign({}, node);
-            newNode.tasks = matchedTasks;
-            newNode.status = status;
-            sumStatus.push(status);
-            return newNode;
-          }
-          
-          default:
-            return Object.assign({ status: AILyricTaskStatus.NONE, tasks: [] }, node);
-        }
-      })
-
-      return [treeUpdated, mergeStatus(sumStatus, false)];
-    },
-
-    async checkAITaskStatus() {
-      const tasks = await ServerApi.searchWorkTask(this.workid);
-      const [tree, status] = this.updateAiTranslateStatusToTracks(tasks, this.internalTree);
-      this.internalTree = tree;
-      this.sumAITaskStatus = status;
-    },
-
-    async enableIntervalCheckAITasks() {
-      if (this.checkAITaskStatusIntervalId > 0) clearInterval(this.checkAITaskStatusIntervalId)
-      console.log("定期检查ai歌词翻译进度")
-      
-      await this.updateTreeAITaskStatus();
-      this.checkAITaskStatusIntervalId = setInterval(
-        () => this.updateTreeAITaskStatus(), 
-        this.checkAITaskIntervalSeconds * 1000,
-      )
-    },
-
-    disableIntervalCheckAITasks() {
-      console.log("取消定期检查ai歌词翻译进度")
-      clearInterval(this.checkAITaskStatusIntervalId)
-      this.checkAITaskStatusIntervalId = 0;
-    },
   },
 
-  created() {
-    this.updateTreeAITaskStatus = debounce(this.updateTreeAITaskStatus, 500); // ai进度检查防抖动2秒
-  },
-  
   mounted() {
     this.internalTree = this.tree;
-    this.updateTreeAITaskStatus();
-  },
-
-  beforeDestroy() {
-    this.disableIntervalCheckAITasks();
   }
 }
 </script>

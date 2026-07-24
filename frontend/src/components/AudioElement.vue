@@ -42,7 +42,7 @@
 import Lyric from 'lrc-file-parser'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import NotifyMixin from '../mixins/Notification.js'
-import { formatSeconds, basenameWithoutExt, audioLyricNameMatch, ServerApi, AILyricTaskStatus } from '../utils'
+import { formatSeconds, basenameWithoutExt } from '../utils'
 import { debounce } from 'quasar';
 
 function convert_srt_vtt_to_lrc(text) {
@@ -417,8 +417,6 @@ export default {
         // 首先向服务器查询是否有歌词
         const check_response = await this.$axios.get(url)
         if (!check_response.data.result) {
-          // 无lrc歌词，尝试去查询ai歌词
-          await this.tryLoadRemoteAILyric()
           return;
         }
 
@@ -464,56 +462,7 @@ export default {
       this.SET_HAS_LYRIC(false);
     },
 
-    async loadRemoteAILyricTaskId(aiTaskId) {
-      const lrcContent = await ServerApi.downloadLrc(aiTaskId)
-      this.lrcAvailable = true;
-      this.lrcObj.setLyric(lrcContent);
-      this.lrcContent = lrcContent;
-      this.lrcObj.play(this.player.currentTime * 1000);
-      if (!this.playing) this.lrcObj.pause() // 加载歌词后，观察当前是否在播放音频，如果没有，则暂停歌词滚动
-      this.SET_HAS_LYRIC(true);
-    },
 
-    async tryLoadRemoteAILyric() {
-      const workId = parseInt(this.currentPlayingFile.hash.replace(/\/.*/, "")); // 通过hash获取该文件对应的workId，返回number类型
-      const audioFileName = basenameWithoutExt(this.currentPlayingFile.title);
-
-      let tasks = [];
-      let useLooseLyric = false; // 宽松的歌词匹配策略
-      try {
-        do {
-          console.log("搜索ai歌词，第一阶段，严格匹配workId和文件title")
-          tasks = await ServerApi.searchWorkTask(workId, audioFileName);
-          tasks = tasks.filter(t => t.status == AILyricTaskStatus.SUCCESS)
-          useLooseLyric = false;
-          if (tasks.length >= 1) break;
-
-          console.log("搜索ai歌词，第二阶段，查找workId作品内所有歌词")
-          tasks = await ServerApi.searchWorkTask(workId);
-          tasks = tasks.filter((t) => t.status == AILyricTaskStatus.SUCCESS && audioLyricNameMatch(audioFileName, t.fileName))
-          useLooseLyric = true;
-          break;
-
-        /*eslint-disable no-constant-condition*/
-        } while(0);
-
-      } catch(e) {
-        console.log("查找ai歌词失败: ", e)
-      }
-
-      if (tasks.length >= 1) {
-        console.log(`  已找到ai歌词记录${tasks.length}个`)
-        
-        console.log(`  加载第一个歌词记录，id = ${tasks[0].id}`)
-        await this.loadRemoteAILyricTaskId(tasks[0].id)
-        if (useLooseLyric) {
-          this.$q.notify({message: "使用宽松的歌词匹配策略", timeout: 2000})
-        }
-      } else {
-        console.warn("没有找到ai歌词")
-        this.resetToNoLyricStatus(); // 没有找到ai歌词的话，则必然先没有本地歌词，清空歌词状态
-      }
-    },
 
     updateMediaSessionMetadata() {
       console.log("try update media session")

@@ -7,7 +7,6 @@ import List from 'pages/List'
 import Login from 'pages/Login'
 import Favourites from 'pages/Favourites'
 import FullScreenPlayer from 'pages/FullScreenPlayer'
-import AILyricCenter from 'pages/AILyricCenter'
 
 import Folders from 'pages/Dashboard/Folders'
 import Scanner from 'pages/Dashboard/Scanner'
@@ -86,10 +85,6 @@ const routes = [
       {
         path: 'fullScreenPlayer/:id?',
         component: FullScreenPlayer
-      },
-      {
-        path: 'ai_lyric',
-        component: AILyricCenter
       },
       ...prefixRoutes('favourites', [
         {
