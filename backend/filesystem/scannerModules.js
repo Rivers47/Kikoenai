@@ -7,7 +7,7 @@ const { scrapeWorkMetadataFromDLsite, scrapeWorkMetadataFromDLsiteJson, scrapeDy
 const { scrapeWorkMetadataFromAsmrOne } = require('../scraper/asmrOne');
 const db = require('../database/db');
 const { createSchema } = require('../database/schema');
-const { isContainLyric, getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, scrapeWorkMemo } = require('./utils');
+const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, scrapeWorkMemo } = require('./utils');
 const { md5 } = require('../auth/utils');
 const { nameToUUID } = require('../scraper/utils');
 
@@ -180,7 +180,7 @@ function uniqueFolderListSeparate(arr) {
  * @param {string} tagLanguage 标签语言，'ja-jp', 'zh-tw' or 'zh-cn'，默认'zh-cn'
  * @param {boolean} hasLyric 当前作品是否拥有本地字幕
  */
-async function getMetadata(id, rootFolderName, dir, tagLanguage, hasLyric) {
+async function getMetadata(id, rootFolderName, dir, tagLanguage) {
   const rjcode = formatID(id); // zero-pad to 6 digits
 
   LOG.task.info(rjcode, '从 DLSite 抓取元数据...')
@@ -219,7 +219,6 @@ async function getMetadata(id, rootFolderName, dir, tagLanguage, hasLyric) {
   
   metadata.rootFolderName = rootFolderName;
   metadata.dir = dir;
-  metadata.lyric_status = hasLyric ? "local" : "";
 
   try {
     await db.insertWorkMetadata(metadata);
@@ -343,10 +342,6 @@ async function processFolder(folder) {
     LOG.task.add(rjcode);
     LOG.task.info(rjcode, `发现新文件夹: "${folder.absolutePath}"`)
 
-    // 检查本地字幕
-    const hasLyric = await isContainLyric(folder.id, folder.absolutePath);
-    LOG.task.info(rjcode, `作品中是否有字幕：${hasLyric}`);
-
     LOG.task.info(rjcode, `扫描音频文件时长`);
     const memo = await scrapeWorkMemo(
       folder.id,
@@ -354,7 +349,7 @@ async function processFolder(folder) {
       { /* 首次添加的作品肯定没有memo，这里设置一个空object作为初始memo */}
     );
     
-    const result = await getMetadata(folder.id, folder.rootFolderName, folder.relativePath, config.tagLanguage, hasLyric); // 获取元数据
+    const result = await getMetadata(folder.id, folder.rootFolderName, folder.relativePath, config.tagLanguage); // 获取元数据
 
     // 如果获取元数据失败，跳过封面图片下载
     if (result === 'failed') {
@@ -699,13 +694,6 @@ async function scanWorkFile(work, index, total) {
     const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
     if (!rootFolder) return "skipped";
 
-    // lyric status
-    const absoluteWorkDir = path.join(rootFolder.path, work.dir);
-    const hasLocalLyric = await isContainLyric(work.id, absoluteWorkDir);
-    if (await db.updateWorkLocalLyricStatus(hasLocalLyric, work.lyric_status, work.id)) {
-      LOG.main.info(`[RJ${rjcode}] 歌词状态发生改变`)
-    }
-
     // work memo, for instance, memorize all audio durations
     const memo = await scrapeWorkMemo(
       work.id,
@@ -728,7 +716,7 @@ async function scanWorkFile(work, index, total) {
 const scanWorkFileLimited = (work, index, total) => limitP.call(scanWorkFile, work, index, total)
 async function performWorkFileScan() {
   LOG.main.info(`扫描本地文件开始`);
-  const works = await db.knex('t_work').select('id', "root_folder", "dir", "lyric_status", "memo");
+  const works = await db.knex('t_work').select('id', "root_folder", "dir", "memo");
   LOG.main.info(`总计 ${works.length} 个作品`);
 
   const results = await Promise.all(works.map((work, index) => scanWorkFileLimited(work, index, works.length)));

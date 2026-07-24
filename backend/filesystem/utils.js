@@ -36,20 +36,6 @@ async function getAudioFileDuration(filePath) {
 }
 const getAudioFileDurationLimited = (filePath) => limitP.call(getAudioFileDuration, filePath);
 
-// 是否包含字幕
-// @param {Number} id Work identifier. Currently, RJ/RE code.
-// @param {String} dir Work directory (absolute).
-async function isContainLyric(id, dir) {
-  console.log("isContainLyric check dir: ", dir)
-  const files = await recursiveReaddir(dir);
-  const lyricFiles = files.filter((file) => {
-    const ext = path.extname(file).toLocaleLowerCase();
-    return supportedSubtitleExtList.includes(ext);
-  })
-  console.log("isContainLyric check all files lenth = ", lyricFiles.length)
-  return lyricFiles.length > 0;
-}
-
 // 从文件系统，抓取单个作品本地文件的杂项信息：
 //  * 音频文件对应的时长
 //  * TODO：文件hash
@@ -367,7 +353,6 @@ function formatID(id) {
 }
 
 module.exports = {
-  isContainLyric,
   getTrackList,
   toTree,
   getFolderList,

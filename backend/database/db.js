@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 const { config } = require('../config');
-const { AILyricTaskStatus } = require('../common');
 const { formatID } = require('../filesystem/utils');
 
 const databaseExist = fs.existsSync(path.join(config.databaseFolderDir, 'db.sqlite3'));
@@ -40,7 +39,6 @@ const insertWorkMetadata = work => knex.transaction(trx => trx.raw(
       rate_average_2dp: work.rate_average_2dp,
       rate_count_detail: JSON.stringify(work.rate_count_detail),
       rank: work.rank ? JSON.stringify(work.rank) : null,
-      lyric_status: work.lyric_status,
     }))
   .then(() => {
     // Now that work is in the database, insert relationships
@@ -135,42 +133,6 @@ const updateWorkMetadata = (work, options = {}) => knex.transaction(async (trx) 
   }
 });
 
-const updateWorkLyricStatus = (workId, new_status) => knex.transaction(async (trx) => {
-  await trx('t_work')
-    .where('id', '=', workId)
-    .update({
-      lyric_status: new_status,
-    })
-});
-
-async function updateWorkLocalLyricStatus(isContainLocalLyric, currentStatus, workId) {
-  let toStatus = currentStatus;
-  if (isContainLocalLyric && !currentStatus.includes("local")) {
-    toStatus = currentStatus.includes("ai") ? "ai_local" : "local";
-  } else if (!isContainLocalLyric && currentStatus.includes("local")) {
-    toStatus = currentStatus.includes("ai") ? "ai" : "";
-  }
-  if (toStatus !== currentStatus) {
-    console.log('update local lyric status: ', workId, toStatus)
-    await updateWorkLyricStatus(workId, toStatus);
-    return true;
-  }
-  return false;
-}
-
-async function updateWorkAILyricStatus(isContainAILyric, currentStatus, workId) {
-  let toStatus = currentStatus;
-  if (isContainAILyric && !currentStatus.includes("ai")) {
-    toStatus = currentStatus.includes("local") ? "ai_local" : "ai";
-  } else if (!isContainAILyric && currentStatus.includes("ai")) {
-    toStatus = currentStatus.includes("local") ? "local" : "";
-  }
-  if (toStatus !== currentStatus) {
-    await updateWorkLyricStatus(workId, toStatus);
-    return true;
-  }
-  return false;
-}
 
 /**
  * Fetches metadata for a specific work id.
@@ -273,23 +235,6 @@ const cleanupOrphans = async (trxProvider, circle, tags, vas)  => {
 };
 
 /**
- * Delete work related lyrics and the lyric files if exists
- */
-const deleteWorkTranslateTasks = async (work_id, trxProvider) => {
-  const trx = await trxProvider();
-  const tasks = await trx('t_translate_task').select('id').where('work_id', '=', work_id);
-
-  for (const t of tasks) {
-    const lyric_path = path.join(config.lyricFolderDir, `${t.id}.lrc`);
-    if (fs.existsSync(lyric_path)) {
-      fs.unlinkSync(lyric_path);
-    }
-  }
-
-  await await trx('t_translate_task').del().where('work_id', '=', work_id);
-}
-
-/**
  * Removes a work and then its orphaned circles, tags & VAs from the database.
  * @param {Integer} id Work id.
  */
@@ -299,9 +244,6 @@ const removeWork = async (id, trxProvider) => {
     const circle = await trx('t_work').select('circle_id').where('id', '=', id).first();
     const tags = await trx('r_tag_work').select('tag_id').where('work_id', '=', id);
     const vas = await trx('r_va_work').select('va_id').where('work_id', '=', id);
-
-    // clear translate task for this work if exists
-    await deleteWorkTranslateTasks(id, trxProvider);
 
     await trx('t_play_histroy').del().where('work_id', '=', id);
     await trx('r_tag_work').del().where('work_id', '=', id);
@@ -324,23 +266,6 @@ function nsfwFilter(nsfw, knexQuery) {
     case 1: return knexQuery.where('nsfw', '=', false); // 全年龄
     case 2: return knexQuery.where('nsfw', '=', true); // 仅R18
     default: return knexQuery; // 无年龄限制
-  }
-}
-
-/**
- * @param {String} lyricFilter
- *      “”： 不限制
- *      “ai”： 包含ai字幕的作品
- *      “local”： 包含本地字幕的作品
- *      “ai_local”： 包含本地字幕或者ai字幕的作品
- */
-function lyricFilter(lyricFilter, knexQuery) {
-  switch(lyricFilter) {
-    case "ai": return knexQuery.whereIn('lyric_status', ["ai", "ai_local"]); // 选择包含ai字幕的作品
-    case "local": return knexQuery.whereIn('lyric_status', ["local", "ai_local"]); // 选择包含本地字幕的作品
-    case "ai_local": return knexQuery.whereNot('lyric_status', ""); // 选择包含字幕的作品，无论是本地字幕还是ai字幕
-    case "": return knexQuery; // 无限制
-    default: return knexQuery;
   }
 }
 
@@ -633,72 +558,6 @@ const getMetadata = ({field = 'circle', id} = {}) => {
     .first()
 };
 
-const createTranslateTask = async (work_id, audio_path) => {
-  console.log('createTranslateTask', work_id, audio_path)
-  
-  let query = () => knex('t_translate_task')
-    .select('id')
-    .where('work_id', '=', work_id)
-    .where('audio_path', '=', audio_path);
-
-  const work = await query();
-  const rjcode = formatID(work_id);
-  if (work.length > 0) {
-    throw new Error(`RJ${rjcode} already contain translation task[${audio_path}] in the database.`);
-  }
-  console.log('no duplicate task, insert task now')
-
-  return await knex.transaction((trx) => trx('t_translate_task').insert({
-    work_id,
-    audio_path,
-    status: AILyricTaskStatus.PENDING,
-    worker_name: "",
-    worker_status: "",
-    secret: "",
-  }));
-};
-
-/**
- * Returns list of tasks for translate
- * @param {Number} work_id Which work id to filter by.
- * @param {String} file_name Which audio of this work
- * @param {Array} array of constants of AILyricTaskStatus
- */
-const getTranslateTasks = (work_id, file_name, status_arr) => {
-  let query = knex('t_translate_task')
-    .select([
-      't_translate_task.id',
-      't_translate_task.work_id',
-      't_translate_task.audio_path',
-      't_translate_task.status',
-      't_translate_task.worker_name',
-      't_translate_task.worker_status',
-      't_work.title',
-    ])
-    .leftJoin('t_work', 't_translate_task.work_id', 't_work.id')
-
-  if (work_id > 0) {
-    query = query.where('t_translate_task.work_id', '=', work_id)
-  }
-
-  if (file_name) {
-    query = query.where('t_translate_task.audio_path', 'like', `%${file_name}%`)
-  }
-
-  if (status_arr.length > 0) {
-    query = query.whereIn('t_translate_task.status', status_arr);
-  }
-
-  return query;
-};
-
-async function markWorkAILyricStatus(work_id, username, hasLyric) {
-  const workList = await getWorkMetadata(work_id, username);
-  const work = workList[0];
-
-  await updateWorkAILyricStatus(hasLyric, work.lyric_status, work.id);
-}
-
 async function getWorkMemo(work_id) {
   const work = await knex('t_work')
     .select('id', 'memo')
@@ -718,14 +577,11 @@ async function setWorkMemo(work_id, memo) {
 
 module.exports = {
   knex, insertWorkMetadata, getWorkMetadata, removeWork, getWorksBy, getWorksByKeyWord, updateWorkMetadata,
-  updateWorkLyricStatus,
-  updateWorkLocalLyricStatus, updateWorkAILyricStatus,
   getLabels, getMetadata,
   createUser, updateUserPassword, resetUserPassword, deleteUser,
   getWorksWithReviews, updateUserReview, deleteUserReview,
   databaseExist, getPlayHistroy, updatePlayHistroy, deletePlayHistroy,
-  createTranslateTask, getTranslateTasks, markWorkAILyricStatus,
-  nsfwFilter, lyricFilter,
+  nsfwFilter,
   getWorkMemo, setWorkMemo,
   advanceSearch,
 };

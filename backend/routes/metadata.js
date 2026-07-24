@@ -96,13 +96,12 @@ router.get('/works',
     const order = req.query.order || 'release';
     const sort = req.query.sort || 'desc';
     const nsfw = parseInt(req.query.nsfw || '0');
-    const lyric = req.query.lyric || '';
     const offset = (currentPage - 1) * PAGE_SIZE;
     const username = config.auth ? req.user.name : 'admin';
     const shuffleSeed = req.query.seed ? req.query.seed : 7;
 
     try {
-      const query = () => db.lyricFilter(lyric, db.nsfwFilter(nsfw, db.getWorksBy({username: username})));
+      const query = () => db.nsfwFilter(nsfw, db.getWorksBy({username: username}));
       const totalCount = await query().count('id as count');
 
       let works = null;
@@ -170,7 +169,6 @@ router.get('/search', async (req, res, next) => {
   const order = req.query.order || 'release';
   const sort = req.query.sort || 'desc';
   const nsfw = parseInt(req.query.nsfw || '0'); 
-  const lyric = req.query.lyric || '';
   const offset = (currentPage - 1) * PAGE_SIZE;
   const username = config.auth ? req.user.name : 'admin';
   const shuffleSeed = req.query.seed ? req.query.seed : 7;
@@ -181,12 +179,12 @@ router.get('/search', async (req, res, next) => {
       // 临时测试，如果keyword是json字符串，则强制进入高级测试内容
       const conditions = JSON.parse(keyword);
       // console.warn(`in advance mode(page = ${currentPage}), search for: `, conditions)
-      query = () => db.lyricFilter(lyric, db.nsfwFilter(nsfw, 
+      query = () => db.nsfwFilter(nsfw, 
         db.advanceSearch(conditions, username)
-      ))
+      )
     } else {
       // console.warn("normal keyword search, keyword = ", keyword)
-      query = () => db.lyricFilter(lyric, db.nsfwFilter(nsfw, db.getWorksByKeyWord({keyword: keyword, username: username})));
+      query = () => db.nsfwFilter(nsfw, db.getWorksByKeyWord({keyword: keyword, username: username}));
     }
 
     const totalCount = await query().count('id as count');
@@ -231,13 +229,12 @@ router.get('/:field(circle|tag|va)s/:id/works',
     const order = req.query.order || 'release';
     const sort = req.query.sort || 'desc'; // ['desc', 'asc]
     const nsfw = parseInt(req.query.nsfw || '0'); 
-    const lyric = req.query.lyric || '';
     const offset = (currentPage - 1) * PAGE_SIZE;
     const username = config.auth ? req.user.name : 'admin';
     const shuffleSeed = req.query.seed ? req.query.seed : 7;
 
     try {
-      const query = () => db.lyricFilter(lyric, db.nsfwFilter(nsfw, db.getWorksBy({id: req.params.id, field: req.params.field, username: username})));
+      const query = () => db.nsfwFilter(nsfw, db.getWorksBy({id: req.params.id, field: req.params.field, username: username}));
       const totalCount = await query().count('id as count');
 
       let works = null;
@@ -289,7 +286,7 @@ router.post('/work/scan/:id',
     const work_id = parseInt(req.params.id);
     try {
       const work = await db.knex('t_work')
-        .select('root_folder', 'dir', 'lyric_status', 'memo')
+        .select('root_folder', 'dir', 'memo')
         .where('id', '=', work_id)
         .first();
       const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
@@ -299,11 +296,10 @@ router.post('/work/scan/:id',
       }
       const memo = await scrapeWorkMemo(work_id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo));
       await db.setWorkMemo(work_id, memo);
-      await db.updateWorkLocalLyricStatus(memo.isContainLyric, work.lyric_status, work_id); // 尝试更新歌词状态
       res.send({ memo });
     } catch (err) {
       console.error(err);
-      res.status(500).send({error: "重试翻译任务失败：" + err.message})
+      res.status(500).send({error: "扫描作品文件失败：" + err.message})
     }
   } 
 )
