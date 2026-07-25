@@ -1,26 +1,40 @@
 const path = require('path');
 const socket = require('socket.io');
-const jwtAuth = require('socketio-jwt-auth'); // 用于 JWT 验证的 socket.io 中间件
+const jwt = require('jsonwebtoken'); // 用于 JWT 验证
 const child_process = require('child_process'); // 子进程
 const { config } = require('./config');
 
 const initSocket = (server) => {
   const io = socket(server);
   if (config.auth) {
-    io.use(jwtAuth.authenticate({
-      secret: config.jwtsecret
-    }, (payload, done) => {
-      const user = {
-        name: payload.name,
-        group: payload.group
-      };
+    io.use((socket, next) => {
+      // socket.io-client v4 通过 auth 发送 token，同时也支持 query 方式以兼容旧客户端
+      const token = socket.handshake.auth && socket.handshake.auth.auth_token
+        || socket.handshake.query && socket.handshake.query.auth_token;
 
-      if (user.name === 'admin') {
-        done(null, user);
-      } else {
-        done(null, false, '只有 admin 账号能登录管理后台.');
+      if (!token) {
+        return next(new Error('No auth token'));
       }
-    }));
+
+      jwt.verify(token, config.jwtsecret, (err, payload) => {
+        if (err) {
+          return next(new Error('认证失败: ' + err.message));
+        }
+
+        const user = {
+          name: payload.name,
+          group: payload.group
+        };
+
+        if (user.name !== 'admin') {
+          return next(new Error('只有 admin 账号能登录管理后台.'));
+        }
+
+        // 兼容代码中 socket.request.user 的引用
+        socket.request.user = user;
+        next();
+      });
+    });
   }
 
   let scanner = null;
