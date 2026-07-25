@@ -22,12 +22,16 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Download frontend artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: kikoeru-frontend
-          path: dist/
-          repository: kikoeru-project/kikoeru-quasar
-          github-token: ${{ secrets.PAT_FOR_FRONTEND }}
+        run: |
+          mkdir -p dist
+          ARTIFACT_ID=$(gh api repos/Rivers47/kikoeru-quasar/actions/artifacts \
+            --jq '.artifacts | map(select(.name=="kikoeru-frontend" and .expired==false)) | .[0].id')
+          echo "Downloading artifact ID: $ARTIFACT_ID"
+          gh api repos/Rivers47/kikoeru-quasar/actions/artifacts/$ARTIFACT_ID/zip > dist.zip
+          unzip -o dist.zip -d dist/
+          rm dist.zip
+        env:
+          GH_TOKEN: ${{ secrets.PAT_FOR_FRONTEND }}
 
       - name: Verify frontend artifact
         run: ls -la dist/
