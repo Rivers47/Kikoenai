@@ -95,54 +95,15 @@ module.exports = function (ctx) {
     // https://quasar.dev/quasar-cli-webpack/developing-pwa/configuring-pwa
     pwa: {
       workboxMode: 'GenerateSW',
-      workboxOptions: {
-        skipWaiting: true,
-        clientsClaim: true,
-        exclude: [
-          /manifest\.json$/,
-          /.*.js.map$/
-        ],
-        navigateFallbackBlacklist: [
+      extendGenerateSWOptions (opts) {
+        opts.skipWaiting = true
+        opts.clientsClaim = true
+        opts.exclude = opts.exclude || []
+        opts.exclude.push(/manifest\.json$/, /.*.js.map$/)
+        opts.navigateFallbackDenylist.push(
           /^\/api\/.*$/,
           /\/media\/.*$/
-        ],
-        importWorkboxFrom: 'local'
-      },
-      manifest: {
-        name: 'Kikoeru',
-        short_name: 'Kikoeru',
-        description: 'A self-hosted web media player for listening to your DLsite voice works.',
-        display: 'standalone',
-        orientation: 'portrait',
-        background_color: '#ffffff',
-        theme_color: '#027be3',
-        icons: [
-          {
-            src: 'statics/icons/icon-128x128.png',
-            sizes: '128x128',
-            type: 'image/png'
-          },
-          {
-            src: 'statics/icons/icon-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'statics/icons/icon-256x256.png',
-            sizes: '256x256',
-            type: 'image/png'
-          },
-          {
-            src: 'statics/icons/icon-384x384.png',
-            sizes: '384x384',
-            type: 'image/png'
-          },
-          {
-            src: 'statics/icons/icon-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          }
-        ]
+        )
       }
     },
 
