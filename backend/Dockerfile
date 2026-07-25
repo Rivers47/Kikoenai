@@ -9,7 +9,7 @@ RUN apk add --no-cache python3 make gcc g++
 
 # Copy package files and install production dependencies
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Final stage
 FROM node:24-alpine
