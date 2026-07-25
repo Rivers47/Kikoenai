@@ -1,6 +1,6 @@
-const yargs = require('yargs/yargs')
-const { hideBin } = require('yargs/helpers')
-const { performUpdate } = require('./scannerModules')
+const yargs = require('yargs/yargs');
+const { hideBin } = require('yargs/helpers');
+const { performUpdate } = require('./scannerModules');
 
 const argv = yargs(hideBin(process.argv))
     .option('refreshAll', {
@@ -28,13 +28,13 @@ const argv = yargs(hideBin(process.argv))
 const updateOptions = {};
 
 if (argv.refreshAll) {
-  updateOptions.refreshAll = true
+  updateOptions.refreshAll = true;
 } else if (argv.includeNSFW) {
-  updateOptions.includeNSFW = true
+  updateOptions.includeNSFW = true;
 } else if (argv.includeTags) {
-  updateOptions.includeTags = true
+  updateOptions.includeTags = true;
 } else if (argv.includeVA) {
-  updateOptions.includeVA = true
+  updateOptions.includeVA = true;
 }
 
 performUpdate(updateOptions)
@@ -42,5 +42,5 @@ performUpdate(updateOptions)
     process.exit(0);
   })
   .catch(err => {
-    throw err
+    throw err;
   });

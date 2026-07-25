@@ -24,7 +24,7 @@ exports.up = async function(knex) {
       
       table.foreign('circle_id').references('id').inTable('t_circle'); // FOREIGN KEY 外键
       table.index(['circle_id', 'release', 'dl_count', 'review_count', 'price', 'rate_average_2dp'], 't_work_index'); // INDEX 索引
-    })
+    });
     await trx.raw(`INSERT INTO t_work_new SELECT * FROM t_work;`);
     await trx.raw(`DROP TABLE t_work;`);
     await trx.raw(`ALTER TABLE t_work_new RENAME TO t_work;`);
@@ -59,7 +59,7 @@ exports.down = async function(knex) {
       
       table.foreign('circle_id').references('id').inTable('t_circle'); // FOREIGN KEY 外键
       table.index(['circle_id', 'release', 'dl_count', 'review_count', 'price', 'rate_average_2dp'], 't_work_circle_id_release_dl_count_review_count_price_rate_average_2dp_index'); // INDEX 索引
-    })
+    });
     await trx.raw(`INSERT INTO t_work_new SELECT * FROM t_work;`);
     await trx.raw(`DROP TABLE t_work;`);
     await trx.raw(`ALTER TABLE t_work_new RENAME TO t_work;`);

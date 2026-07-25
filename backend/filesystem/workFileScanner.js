@@ -1,2 +1,2 @@
-const { performWorkFileScan } = require('./scannerModules')
+const { performWorkFileScan } = require('./scannerModules');
 performWorkFileScan();

@@ -1,0 +1,28 @@
+{
+  "name": "kikoeru",
+  "version": "0.6.7",
+  "private": true,
+  "description": "A self-hosted media server for DLsite voice works — monorepo combining backend (kikoeru-express) and frontend (kikoeru-quasar).",
+  "homepage": "https://github.com/kikoeru-project/kikoeru-express",
+  "keywords": ["kikoeru"],
+  "license": "GPL-3.0-or-later",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev -w backend",
+    "dev:frontend": "npm run dev -w frontend",
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build:frontend": "npm run build -w frontend",
+    "build": "npm run build:frontend",
+    "start": "npm start -w backend",
+    "lint": "npm run lint -w backend && npm run test -w frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

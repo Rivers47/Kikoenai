@@ -59,7 +59,7 @@ const createOldSchema = () => knex.schema
     table.text('works').notNullable(); // TEXT 类型 [评价分布明细]
     table.foreign('user_name').references('name').inTable('t_user'); // FOREIGN KEY 外键
     table.primary(['user_name', 'name']); // PRIMARY KEYprimary 主键
-  })
+  });
 
   module.exports = { createOldSchema };
   

@@ -15,7 +15,7 @@ const filterConfig = (_config, option = 'read') => {
     }
   }
   return configClone;
-}
+};
 
 // 修改配置文件
 router.put('/admin', (req, res, next) => {
@@ -23,7 +23,7 @@ router.put('/admin', (req, res, next) => {
     try {
       // Note: setConfig uses Object.assign to merge new configs
       setConfig(filterConfig(req.body.config, 'write'));
-      res.send({ message: '保存成功.' })
+      res.send({ message: '保存成功.' });
     } catch(err) {
       next(err);
     }

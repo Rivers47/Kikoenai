@@ -25,7 +25,7 @@ function scrapeHvdbHtml(data) {
   };
 
   // sfw
-  work.nsfw = !$('input[name="SFW"]').attr('checked')
+  work.nsfw = !$('input[name="SFW"]').attr('checked');
 
   // tags
   $('a[href*="TagWorks"]').each((idx, e) => {
@@ -34,7 +34,7 @@ function scrapeHvdbHtml(data) {
       id: getId(elem.attr('href')),
       name: elem.text(),
     });
-  })
+  });
 
   // vas
   $('a[href*="CVWorks"]').each((idx, e) => {
@@ -44,7 +44,7 @@ function scrapeHvdbHtml(data) {
       id: nameToUUID(cvName),
       name: cvName,
     });
-  })
+  });
   
   return work;
 }

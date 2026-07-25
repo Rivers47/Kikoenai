@@ -27,7 +27,7 @@ exports.up = async function(knex) {
       
       table.foreign('circle_id').references('id').inTable('t_circle'); // FOREIGN KEY 外键
       table.index(['circle_id', 'release', 'dl_count', 'review_count', 'price', 'rate_average_2dp'], 't_work_index'); // INDEX 索引
-    })
+    });
 
     await knex.raw(`INSERT INTO t_work_new SELECT * FROM t_work;`);
     await knex.raw(`DROP TABLE t_work;`);

@@ -5,9 +5,9 @@ const urljoin = require('url-join');
 // ["RJ123456", "画像/好きな人?"] => ["RJ123456", "%E7%94%BB%E5%83%8F", "%E5%A5%BD%E3%81%8D%E3%81%AA%E4%BA%BA%3F"]
 const encodeSplitFragments = (fragments) => {
   // On windows, replace "dir\RJ123456" => "dir/RJ123456"
-  const expandedFragments = fragments.map(fragment => fragment.replace(/\\/g, '/').split('/'))
+  const expandedFragments = fragments.map(fragment => fragment.replace(/\\/g, '/').split('/'));
   return expandedFragments.flat().map(fragment => encodeURIComponent(fragment));
-}
+};
 
 const joinFragments = (baseUrl, ...fragments) => {
   const pattern = new RegExp(/^https?:\/\//);
@@ -20,6 +20,6 @@ const joinFragments = (baseUrl, ...fragments) => {
     // /media/stream/
     return path.join(baseUrl, ...fragments).replace(/\\/g, '/');
   }
-}
+};
 
-module.exports = { joinFragments }
+module.exports = { joinFragments };

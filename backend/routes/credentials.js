@@ -17,9 +17,9 @@ router.post('/user', [
   check('group')
     .custom(value => {
       if (value !== 'user' && value !== 'guest') {
-        throw new Error(`用户组名称必须为 ['user', 'guest'] 的一个.`)
+        throw new Error(`用户组名称必须为 ['user', 'guest'] 的一个.`);
       }
-      return true
+      return true;
     })
 ], (req, res, next) => {
   // Finds the validation errors in this request and wraps them in an object with handy functions
@@ -90,7 +90,7 @@ router.put('/user', [
 
 // 删除用户 (仅 admin 账号拥有权限)
 router.delete('/user', (req, res, next) => {
-  const users = req.body.users
+  const users = req.body.users;
 
   if (!config.auth || req.user.name === 'admin') {
     if (!users.find(user => user.name === 'admin')) {

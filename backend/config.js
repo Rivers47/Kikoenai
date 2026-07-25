@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto')
+const crypto = require('crypto');
 
 const configFolderDir = process.pkg ? path.join(process.execPath, '..', 'config') : path.join(__dirname, 'config');
 const configPath = path.join(configFolderDir, 'config.json');
@@ -22,7 +22,7 @@ const voiceWorkDefaultPath = () => {
   } else {
     return path.join(__dirname, 'VoiceWork');
   }
-}
+};
 
 const defaultConfig = {
   version: pjson.version,
@@ -75,7 +75,7 @@ const initConfig = (writeConfigToFile = !process.env.FREEZE_CONFIG_FILE) => {
   if (writeConfigToFile) {
     fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, "\t"));
   }
-}
+};
 
 const setConfig = (newConfig, writeConfigToFile = !process.env.FREEZE_CONFIG_FILE) => {
   // Prevent changing some values, overwrite with old ones
@@ -91,7 +91,7 @@ const setConfig = (newConfig, writeConfigToFile = !process.env.FREEZE_CONFIG_FIL
   if (writeConfigToFile) {
     fs.writeFileSync(configPath, JSON.stringify(config, null, "\t"));
   }
-}
+};
 
 // Get or use default value
 const readConfig = () => {
@@ -149,9 +149,9 @@ const updateConfig = (writeConfigToFile = !process.env.FREEZE_CONFIG_FILE) => {
 
   if (countChanged || cfg.version !== pjson.version) {
     cfg.version = pjson.version;
-    setConfig(cfg, writeConfigToFile)
+    setConfig(cfg, writeConfigToFile);
   }
-}
+};
 
 class publicConfig {
   get rewindSeekTime() {
@@ -164,7 +164,7 @@ class publicConfig {
     return {
       rewindSeekTime: this.rewindSeekTime,
       forwardSeekTime: this.forwardSeekTime,
-    }
+    };
   }
 }
 

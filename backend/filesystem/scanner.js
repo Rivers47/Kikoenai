@@ -1,2 +1,2 @@
-const { performScan } = require('./scannerModules')
+const { performScan } = require('./scannerModules');
 performScan();

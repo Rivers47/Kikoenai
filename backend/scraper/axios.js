@@ -18,7 +18,7 @@ const TUNNEL_OPTIONS = {
   proxy: {
     port: Config.httpProxyPort
   }
-}
+};
 if (Config.httpProxyHost) {
   TUNNEL_OPTIONS.proxy.host = Config.httpProxyHost;
 }
@@ -31,7 +31,7 @@ axios.interceptors.request.use(function (config) {
     config.httpsAgent = httpsOverHttp(TUNNEL_OPTIONS);
   }
   
-  return config
+  return config;
 });
 
 // // 拦截响应 (遇到错误时, 重新发起新请求)

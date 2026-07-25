@@ -1,5 +1,5 @@
 exports.up = async function(knex) {
-  let exist = await knex.schema.hasTable('t_review')
+  let exist = await knex.schema.hasTable('t_review');
   if (!exist) {
     await knex.schema.createTable("t_review", function(table) {
       table.string('user_name').notNullable();
@@ -10,7 +10,7 @@ exports.up = async function(knex) {
       table.foreign('user_name').references('name').inTable('t_user'); // FOREIGN KEY 
       table.foreign('work_id').references('id').inTable('t_work'); // FOREIGN KEY 
       table.primary(['user_name', 'work_id']); // PRIMARY KEY
-    })
+    });
   }
 };
 

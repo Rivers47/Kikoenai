@@ -54,6 +54,9 @@ module.exports = function (ctx) {
     build: {
       vueRouterMode: 'history',
 
+      // Output directly to the backend's dist/ so it's served as static content
+      distDir: '../backend/dist',
+
       // rtl: false,
       // showProgress: false,
       // gzip: true,

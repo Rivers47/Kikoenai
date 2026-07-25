@@ -18,7 +18,7 @@ let lastGitHubResponse = {
 
 // eslint-disable-next-line no-unused-vars
 router.get('/', (req, res, next) => {
-  const lockReason = '新版解决了旧版扫描时将かの仔和こっこ识别为同一个人的问题，建议进行扫描以自动修复这一问题'
+  const lockReason = '新版解决了旧版扫描时将かの仔和こっこ识别为同一个人的问题，建议进行扫描以自动修复这一问题';
 
   const throttledResponse = {
     current: pjson.version,
@@ -26,7 +26,7 @@ router.get('/', (req, res, next) => {
     notifyUser: config.checkUpdate,
     lockFileExists: updateLock.isLockFilePresent,
     lockReason: updateLock.isLockFilePresent ? lockReason : null
-  }
+  };
   
   // GitHub API for unauthenticated: 60/hour
   if (lastGitHubCheck === null) {
@@ -37,7 +37,7 @@ router.get('/', (req, res, next) => {
     const timeDiff = new Date(currentTime - lastGitHubCheck);
     if (timeDiff.getMinutes() < 5) {
       res.send(throttledResponse);
-      return
+      return;
     }
   }
 
@@ -54,10 +54,10 @@ router.get('/', (req, res, next) => {
         const latest_release = responseLatest.data[0].tag_name;
         const newVerAvailable = () => {
           if (config.checkBetaUpdate) {
-            return compareVersions.compare(latest_release, current, '>')
+            return compareVersions.compare(latest_release, current, '>');
           }
-          return compareVersions.compare(latest_stable, current, '>')
-        }
+          return compareVersions.compare(latest_stable, current, '>');
+        };
 
         // Side effect
         lastGitHubResponse = {
@@ -83,7 +83,7 @@ router.get('/', (req, res, next) => {
     .catch(function () {
       res.send({throttledResponse});
       // next(error);
-    })
+    });
 });
 
 module.exports = router;

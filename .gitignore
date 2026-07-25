@@ -1,0 +1,110 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Diagnostic reports
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage
+*.lcov
+.nyc_output
+
+# Grunt intermediate storage
+.grunt
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# TypeScript caches
+typings/
+*.tsbuildinfo
+
+# Optional npm cache
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+.env.test
+
+# Build output
+dist/
+dist_*/
+temp/
+
+# Editor directories and files
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+.vscode/
+
+# OS files
+.DS_Store
+.thumbs.db
+
+# Quasar related
+.quasar
+quasar.config.js.temporary.compiled.*.mjs
+
+# Cordova / Capacitor / BEX (frontend)
+/src-cordova/node_modules
+/src-cordova/platforms
+/src-cordova/plugins
+/src-cordova/www
+/src-capacitor/www
+/src-capacitor/node_modules
+/src-bex/www
+/src-bex/js/core
+
+# Nginx config for dev
+/cert
+/nginx
+
+# Kikoeru backend runtime data
+packages/backend/config/
+packages/backend/covers/
+packages/backend/sqlite/
+packages/backend/VoiceWork/
+packages/backend/package/
+packages/backend/package-macos/
+
+# HTTPS certs
+kikoeru.crt
+kikoeru.key
+
+# Release template
+Release-Template.md
+
+# Dependecy graph
+graph.svg
+
+# Windows Batch
+/*.bat
+
+# Node REPL
+.node_repl_history
+
+# Package lock for individual workspaces (root lock file only)
+packages/*/package-lock.json

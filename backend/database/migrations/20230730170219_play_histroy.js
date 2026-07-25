@@ -1,5 +1,5 @@
 exports.up = async function(knex) {
-    let exist = await knex.schema.hasTable('t_play_histroy')
+    let exist = await knex.schema.hasTable('t_play_histroy');
     if (!exist) {
         await knex.schema.createTable("t_play_histroy", function(table) {
             table.string('user_name').notNullable();
@@ -11,7 +11,7 @@ exports.up = async function(knex) {
             table.foreign('work_id').references('id').inTable('t_work').onDelete('CASCADE'); // FOREIGN KEY 外键
         
             table.primary(['user_name', 'work_id']); // PRIMARY KEY
-        })
+        });
     }
 };
 

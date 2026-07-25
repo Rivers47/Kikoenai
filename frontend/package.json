@@ -21,8 +21,8 @@
   ],
   "scripts": {
     "test": "eslint .",
-    "dev": "node node_modules/@quasar/app-webpack/bin/quasar dev -m pwa",
-    "build": "node node_modules/@quasar/app-webpack/bin/quasar build -m pwa"
+    "dev": "quasar dev -m pwa",
+    "build": "quasar build -m pwa --debug"
   },
   "dependencies": {
     "@quasar/extras": "^1.16.0",
@@ -32,6 +32,7 @@
     "quasar": "^2.23.1",
     "register-service-worker": "^1.7.2",
     "socket.io-client": "^4.8.1",
+    "sortablejs": "^1.15.7",
     "vue": "^3.4.0",
     "vue-plyr": "^7.0.0",
     "vue-router": "^4.2.0",

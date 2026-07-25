@@ -14,7 +14,7 @@ async function updateAsmrOneApiUrl() {
       headers: { "cookie": 'locale=zh-cn' },
     });
 
-    const $ = cheerio.load(response.data)
+    const $ = cheerio.load(response.data);
 
     asmrOneApiUrl = $('link[rel="preconnect"][as="fetch"]').attr('href');
 
@@ -47,4 +47,4 @@ async function scrapeWorkMetadataFromAsmrOne(id) {
 
 module.exports = {
   scrapeWorkMetadataFromAsmrOne,
-}
+};

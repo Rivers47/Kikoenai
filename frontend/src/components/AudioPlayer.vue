@@ -290,12 +290,8 @@
         <q-separator />
 
         <!-- 音频文件列表 -->
-        <q-list style="max-height: 450px" class="scroll">
-          <draggable
-            handle=".handle"
-            v-model="queueCopy"
-            @change="val => onMoved(val.moved)"
-          >
+        <q-list style="max-height: 450px" class="scroll" ref="playlistRef">
+          <div ref="sortableRef">
             <q-item
               clickable
               v-ripple
@@ -306,6 +302,7 @@
               class="non-selectable"
               style="padding: 0px 10px;"
               @click="onClickTrack(index)"
+              :data-id="index"
             >
               <q-item-section side v-show="editCurrentPlayList">
                 <q-icon name="clear" :color="queueIndex === index ? 'white' : 'red'" @click="removeFromQueue(index)" />
@@ -324,7 +321,7 @@
                 <q-icon name="reorder" :color="queueIndex === index ? 'white' : 'dark'" />
               </q-item-section>
             </q-item>
-          </draggable>
+          </div>
         </q-list>
       </q-card>
     </q-dialog>
@@ -362,7 +359,7 @@
 </template>
 
 <script>
-import draggable from 'vuedraggable'
+import Sortable from 'sortablejs'
 import AudioElement from 'components/AudioElement'
 import Scrollable from 'components/Scrollable'
 import AudioEqualizer from 'components/AudioEqualizer'
@@ -374,7 +371,6 @@ export default {
   name: 'AudioPlayer',
 
   components: {
-    draggable,
     AudioElement,
     Scrollable,
     AudioEqualizer,
@@ -398,6 +394,7 @@ export default {
       fixWhoStartFirst: "", // "audio", "lyric" // 先看到的歌词，还是先听到的声音
       fixStartMills: 0,
       fixStopMills: 0,
+      sortable: null,
     }
   },
 
@@ -412,9 +409,20 @@ export default {
     if (this.$q.platform.is.desktop) {
       window.addEventListener('keydown', this.onKeyDown);
     }
+
+    // 监听对话框显示，初始化 SortableJS
+    this.$watch('showCurrentPlayList', (flag) => {
+      if (flag) {
+        this.$nextTick(() => this.initSortable())
+      } else {
+        this.destroySortable()
+      }
+    })
   },
 
   beforeUnmount() {
+    this.destroySortable()
+
     if (this.$q.platform.is.desktop) {
       window.removeEventListener('keydown', this.onKeyDown);
     }
@@ -680,6 +688,27 @@ export default {
       if (!this.editCurrentPlayList) {
         this.SET_TRACK(index)
         this.showCurrentPlayList = false
+      }
+    },
+
+    initSortable () {
+      const el = this.$refs.sortableRef
+      if (!el || this.sortable) return
+
+      this.sortable = new Sortable(el, {
+        handle: '.handle',
+        animation: 150,
+        onEnd: (evt) => {
+          const moved = { oldIndex: evt.oldIndex, newIndex: evt.newIndex }
+          this.onMoved(moved)
+        }
+      })
+    },
+
+    destroySortable () {
+      if (this.sortable) {
+        this.sortable.destroy()
+        this.sortable = null
       }
     },
 

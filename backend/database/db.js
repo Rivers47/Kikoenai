@@ -7,7 +7,7 @@ const databaseExist = fs.existsSync(path.join(config.databaseFolderDir, 'db.sqli
 
 // knex 操作数据库
 const connEnv = process.env.KNEX_ENV || process.env.NODE_ENV || 'development';
-const conn = require('./knexfile')[connEnv]
+const conn = require('./knexfile')[connEnv];
 const knex = require('knex')(conn);
 
 /**
@@ -255,7 +255,7 @@ const removeWork = async (id, trxProvider) => {
       circle.circle_id,
       tags.map(tag => tag.tag_id),
       vas.map(va => va.va_id),
-    )
+    );
 };
 
 /**
@@ -279,7 +279,7 @@ const getWorksBy = ({id, field, username = ''} = {}) => {
   const ratingSubQuery = knex('t_review')
     .select(['t_review.work_id', 't_review.rating'])
     .join('t_work', 't_work.id', 't_review.work_id')
-    .where('t_review.user_name', username).as('userrate')
+    .where('t_review.user_name', username).as('userrate');
 
   switch (field) {
     case 'circle':
@@ -312,10 +312,10 @@ const AdvanceSearchCondType = {
   VA: 2,
   TAG: 3,
   CIRCLE: 4,
-}
+};
 // 高级搜索功能，支持多关键字聚合搜索
 function advanceSearch(conditions, username) {
-  const intersectQueryList = []
+  const intersectQueryList = [];
   for (let cond of conditions) {
     const data = cond.d;
     // 先只考虑全文模糊搜索（差不多够用了），以后再做其他的精准搜索类型特化
@@ -333,9 +333,9 @@ function advanceSearch(conditions, username) {
           .union([
             knex('r_tag_work').select('work_id').where('tag_id', 'in', tagIdQuery), // 标签模糊匹配
             knex('r_va_work').select('work_id').where('va_id', 'in', vaIdQuery), // 声优模糊匹配
-          ])
+          ]);
 
-      intersectQueryList.push(workIdQuery)
+      intersectQueryList.push(workIdQuery);
       // console.log("cond sql = ", workIdQuery.toString())
     }
   }
@@ -343,16 +343,16 @@ function advanceSearch(conditions, username) {
   const ratingSubQuery = knex('t_review')
     .select(['t_review.work_id', 't_review.rating'])
     .join('t_work', 't_work.id', 't_review.work_id')
-    .where('t_review.user_name', username).as('userrate')
+    .where('t_review.user_name', username).as('userrate');
 
   // 最终返回的work数据源
   let query = knex('staticMetadata').select(['staticMetadata.*', 'userrate.rating AS userRating'])
     .leftJoin(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id');
 
   // 将前面的多个查询条件通过andWhere叠加到数据源条件中
-  const queryWithConditions = intersectQueryList.reduce((accQuery, idQuery) => accQuery.andWhere("id", "in", idQuery), query)
+  const queryWithConditions = intersectQueryList.reduce((accQuery, idQuery) => accQuery.andWhere("id", "in", idQuery), query);
   // console.log("advance search query = ", queryWithConditions.toString())
-  return queryWithConditions
+  return queryWithConditions;
 }
 
 /**
@@ -363,7 +363,7 @@ const getWorksByKeyWord = ({keyword, username = 'admin'} = {}) => {
   const ratingSubQuery = knex('t_review')
   .select(['t_review.work_id', 't_review.rating'])
   .join('t_work', 't_work.id', 't_review.work_id')
-  .where('t_review.user_name', username).as('userrate')
+  .where('t_review.user_name', username).as('userrate');
 
   const workid = keyword.match(/((R|r)(J|j))?(\d{6,8})/) ? keyword.match(/((R|r)(J|j))?(\d{6,8})/)[4] : '';
   if (workid) {
@@ -518,8 +518,8 @@ const getWorksWithReviews = async ({username = '', limit = 1000, offset = 0, ord
 };
 
 const getPlayHistroy = async ({username = '', sortOption = 'desc', limit = 1000, offset = 0}) => {
-  let works = []
-  let totalCount = 0
+  let works = [];
+  let totalCount = 0;
   const histroyQuery = knex('t_play_histroy')
     .select([
       't_play_histroy.work_id',
@@ -537,11 +537,11 @@ const getPlayHistroy = async ({username = '', sortOption = 'desc', limit = 1000,
   totalCount = await query().count('id as count');
   works = await query().limit(limit).offset(offset);
 
-  return {works, totalCount}
-}
+  return {works, totalCount};
+};
 
 const updatePlayHistroy = async (username, work_id, state) => knex.transaction(async(trx) => {
-  await trx.raw('INSERT OR IGNORE INTO t_play_histroy (user_name, work_id, state) VALUES (?, ?, ?);', [username, work_id, state])
+  await trx.raw('INSERT OR IGNORE INTO t_play_histroy (user_name, work_id, state) VALUES (?, ?, ?);', [username, work_id, state]);
   await trx.raw('UPDATE t_play_histroy SET state = ?, updated_at = CURRENT_TIMESTAMP WHERE user_name = ? AND work_id = ?;', [state, username, work_id]);
 });
 
@@ -555,7 +555,7 @@ const getMetadata = ({field = 'circle', id} = {}) => {
   return knex(`t_${field}`)
     .select('*')
     .where('id', '=', id)
-    .first()
+    .first();
 };
 
 async function getWorkMemo(work_id) {

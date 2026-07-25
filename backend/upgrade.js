@@ -7,9 +7,9 @@ const knexMigrate = require('./database/knex-migrate');
 const { knex } = require('./database/db');
 
 // Before the following version, there is a hash collision issue in the VA table
-const versionVAHashCollisionFixed = '0.6.0-rc.2'
+const versionVAHashCollisionFixed = '0.6.0-rc.2';
 // Before the following version, the knexfile path uses relative path to CWD, which causes a bunch of problems on Mac OS
-const versionKnexfilePathFixed = '0.6.0-rc.4'
+const versionKnexfilePathFixed = '0.6.0-rc.4';
 
 const applyFix = async (oldVersion) => {
   if (compareVersions.compare(oldVersion, versionVAHashCollisionFixed, '<')) {
@@ -39,13 +39,13 @@ const applyFix = async (oldVersion) => {
       }
     }
   }
-}
+};
 
 // Upgrade lock for VA bug fix (maybe needed in the future)
 // TODO: refactor to split upgrade lock from upgrade lock file
 class upgradeLock {
   constructor(fileName = 'update.lock') {
-    this.lockFileConfig = {}
+    this.lockFileConfig = {};
     this.lockFilePath = path.join(configFolderDir, fileName);
     this._init();
   }
@@ -80,4 +80,4 @@ const updateLock = new upgradeLock();
 module.exports = {
   applyFix,
   updateLock
-}
+};

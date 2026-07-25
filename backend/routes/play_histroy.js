@@ -42,7 +42,7 @@ router.get('/',
       });
     } catch(err) {
       res.status(500).send({error: '查询过程中出错'});
-      console.error(err)
+      console.error(err);
     }
 });
 
@@ -65,7 +65,7 @@ router.put('/',
         }).catch((err) =>{
           res.status(500).send({ error: '更新播放历史失败，服务器错误' });
           console.error(err);
-        })
+        });
 });
 
 // 删除播放历史，适用于当前场景下，某些文件被删除后，作品只有一个文件，无法播放正确文件的bug

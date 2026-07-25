@@ -13,7 +13,7 @@ const dropDatabase = async () => {
  await knex.schema.raw('DROP TABLE IF EXISTS t_work');
  await knex.schema.raw('DROP VIEW IF EXISTS userMetadata');
  await knex.schema.raw('DROP VIEW IF EXISTS staticMetadata');
-}
+};
 
 module.exports = { dropDatabase };
   

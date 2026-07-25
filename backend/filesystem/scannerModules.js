@@ -40,19 +40,19 @@ const LOG = {
       process.send({ event: 'SCAN_MAIN_LOGS', payload: { mainLogs } });
     },
     log(msg) { // default log at level info
-      this.__internal__("info", msg)
+      this.__internal__("info", msg);
     },
     debug(msg) {
-      this.__internal__("debug", msg)
+      this.__internal__("debug", msg);
     },
     info(msg) {
-      this.__internal__("info", msg)
+      this.__internal__("info", msg);
     },
     error(msg) {
-      this.__internal__("error", msg)
+      this.__internal__("error", msg);
     },
     warn(msg) {
-      this.__internal__("warn", msg)
+      this.__internal__("warn", msg);
     }
   },
   result: {
@@ -71,18 +71,18 @@ const LOG = {
   task: {
     // 添加作品专门的log记录
     add(taskId) { // taskId == rjcode, e.g. "443322" or "01134321"
-      console.log(`LOG.task.add '${taskId}'`)
-      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8))
+      console.log(`LOG.task.add '${taskId}'`);
+      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8));
       tasks.push({
         rjcode: taskId,
         result: null,
         logs: []
-      })
+      });
     },
 
     // 移除作品的专属log，如果该作品的对应任务失败，则发送相应的失败消息
     remove(taskId, result) {
-      console.log(`LOG.task.remove '${taskId}'`)
+      console.log(`LOG.task.remove '${taskId}'`);
       const index = tasks.findIndex(task => task.rjcode === taskId);
       if (index == -1) {
         // 当前任务并没有被添加，则跳过remove操作
@@ -100,7 +100,7 @@ const LOG = {
       }
     },
     __internal_task__(taskId, level, msg) {
-      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8))
+      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8));
       console[level](`task[RJ${taskId}] log`, msg);
 
       const task = tasks.find(task => task.rjcode === taskId);
@@ -110,19 +110,19 @@ const LOG = {
       }
     },
     log(taskId, msg) { // default log at level info
-      this.__internal_task__(taskId, "info", msg)
+      this.__internal_task__(taskId, "info", msg);
     },
     debug(taskId, msg) {
-      this.__internal_task__(taskId, "debug", msg)
+      this.__internal_task__(taskId, "debug", msg);
     },
     info(taskId, msg) {
-      this.__internal_task__(taskId, "info", msg)
+      this.__internal_task__(taskId, "info", msg);
     },
     error(taskId, msg) {
-      this.__internal_task__(taskId, "error", msg)
+      this.__internal_task__(taskId, "error", msg);
     },
     warn(taskId, msg) {
-      this.__internal_task__(taskId, "warn", msg)
+      this.__internal_task__(taskId, "warn", msg);
     }
 
   },
@@ -140,7 +140,7 @@ process.on('message', (m) => {
       }
     });
   } else if (m.exit) {
-    LOG.main.error(' ! 终止扫描进程.')
+    LOG.main.error(' ! 终止扫描进程.');
     process.exit(1);
   }
 });
@@ -169,7 +169,7 @@ function uniqueFolderListSeparate(arr) {
     uniqueList, // 去重后的数组
     duplicateSet, // 对象，键为id，值为多余的重复项数组
   };
-};
+}
 
 /**
  * 从 DLsite 抓取该音声的元数据，并保存到数据库，
@@ -183,39 +183,39 @@ function uniqueFolderListSeparate(arr) {
 async function getMetadata(id, rootFolderName, dir, tagLanguage) {
   const rjcode = formatID(id); // zero-pad to 6 digits
 
-  LOG.task.info(rjcode, '从 DLSite 抓取元数据...')
+  LOG.task.info(rjcode, '从 DLSite 抓取元数据...');
       
   let metadata = null;
 
   try {
-    metadata = await scrapeWorkMetadataFromDLsite(id, tagLanguage) // 抓取该音声的元数据
+    metadata = await scrapeWorkMetadataFromDLsite(id, tagLanguage); // 抓取该音声的元数据
   } catch(error) {
-    LOG.task.warn(rjcode, `DLSite获取元数据失败: ${error.message}`)
+    LOG.task.warn(rjcode, `DLSite获取元数据失败: ${error.message}`);
   }
 
   if (metadata === null) {
     try {
-      metadata = await scrapeWorkMetadataFromAsmrOne(id, tagLanguage) // 抓取该音声的元数据
+      metadata = await scrapeWorkMetadataFromAsmrOne(id, tagLanguage); // 抓取该音声的元数据
     } catch(error) {
-      LOG.task.warn(rjcode, `AsmrOne获取元数据失败: ${error.message}`)
+      LOG.task.warn(rjcode, `AsmrOne获取元数据失败: ${error.message}`);
     }
   }
 
   if (metadata === null) {
     try {
-      metadata = await scrapeWorkMetadataFromDLsiteJson(id, tagLanguage) // 抓取该音声的元数据
+      metadata = await scrapeWorkMetadataFromDLsiteJson(id, tagLanguage); // 抓取该音声的元数据
     } catch(error) {
-      LOG.task.warn(rjcode, `DLSite json api获取元数据失败: ${error.message}`)
+      LOG.task.warn(rjcode, `DLSite json api获取元数据失败: ${error.message}`);
     }
   }
 
   if (metadata === null) {
-    LOG.task.error(rjcode, `元数据获取失败`)
+    LOG.task.error(rjcode, `元数据获取失败`);
     return 'failed';
   }
 
   // 将抓取到的元数据插入到数据库
-  LOG.task.info(rjcode, '元数据抓取成功，准备添加到数据库...')
+  LOG.task.info(rjcode, '元数据抓取成功，准备添加到数据库...');
   
   metadata.rootFolderName = rootFolderName;
   metadata.dir = dir;
@@ -223,13 +223,13 @@ async function getMetadata(id, rootFolderName, dir, tagLanguage) {
   try {
     await db.insertWorkMetadata(metadata);
   } catch(error) {
-    LOG.task.error(rjcode, `元数据添加失败: ${error.message}`)
+    LOG.task.error(rjcode, `元数据添加失败: ${error.message}`);
     return 'failed';
   }
 
-  LOG.task.info(rjcode, '元数据成功添加到数据库.')
+  LOG.task.info(rjcode, '元数据成功添加到数据库.');
   return 'added';
-};
+}
 
 
 /**
@@ -258,7 +258,7 @@ async function getCoverImageForTranslated(id, types) {
   const result = await getCoverImage(id, parseInt(coverFromId), types);
 
   if (result === 'failed' && isNoImgMain) {
-    LOG.main.warn(`RJ${rjcode} 作品本身在DlSite上没有封面图片，无法抓取封面`)
+    LOG.main.warn(`RJ${rjcode} 作品本身在DlSite上没有封面图片，无法抓取封面`);
     return 'skipped';
   }
 
@@ -278,7 +278,7 @@ async function getCoverImage(cover_for_id, cover_from_id, types) {
   const id2 = (cover_from_id % 1000 === 0) ? cover_from_id : Math.floor(cover_from_id / 1000) * 1000 + 1000;
   const rjcode2 = formatID(id2); // zero-pad to 6 or 8 digits
 
-  LOG.task.info(cover_for_rjcode, `从 DLsite 下载封面...`)
+  LOG.task.info(cover_for_rjcode, `从 DLsite 下载封面...`);
   const results = await Promise.all(types.map(async (type) => {
     let url = `https://img.dlsite.jp/modpub/images2/work/doujin/RJ${rjcode2}/RJ${rjcode}_img_${type}.jpg`;
     if (type === '240x240'|| type === '360x360') {
@@ -294,12 +294,12 @@ async function getCoverImage(cover_for_id, cover_from_id, types) {
       LOG.task.warn(cover_for_rjcode, `在下载封面 RJ${rjcode}_img_${type}.jpg 过程中出错: ${err.message}`);
       return 'failed';
     }
-  }))
+  }));
 
   return results.includes("failed") 
       ? "failed" 
       : "added";
-};
+}
 
 /**
  * 获取音声元数据，获取音声封面图片，
@@ -332,7 +332,7 @@ async function processFolder(folder) {
     
     if (lostCoverTypes.length) {
       LOG.task.add(rjcode);
-      LOG.task.info(rjcode, '封面图片缺失，重新下载封面图片...')
+      LOG.task.info(rjcode, '封面图片缺失，重新下载封面图片...');
 
       coverResult = await getCoverImageForTranslated(folder.id, lostCoverTypes);
     } else {
@@ -340,7 +340,7 @@ async function processFolder(folder) {
     }
   } else {
     LOG.task.add(rjcode);
-    LOG.task.info(rjcode, `发现新文件夹: "${folder.absolutePath}"`)
+    LOG.task.info(rjcode, `发现新文件夹: "${folder.absolutePath}"`);
 
     LOG.task.info(rjcode, `扫描音频文件时长`);
     const memo = await scrapeWorkMemo(
@@ -383,7 +383,7 @@ const limitP = new LimitPromise(MAX); // 核心控制器
  */
 async function processFolderLimited(folder){
   return await limitP.call(processFolder, folder);
-};
+}
 
 /**
  * 清理本地不再存在的音声: 将其元数据从数据库中移除，并删除其封面图片
@@ -405,7 +405,7 @@ async function performCleanup() {
     const rjcode = formatID(work.id); // zero-pad to 6 digits
     try {
       // 然后删除其封面图片
-      await deleteCoverImageFromDisk(rjcode)    
+      await deleteCoverImageFromDisk(rjcode);    
     } catch(err) {
       if (err && err.code !== 'ENOENT') { 
           LOG.main.error(`[RJ${rjcode}] 在删除封面过程中出错: ${err.message}`);
@@ -414,7 +414,7 @@ async function performCleanup() {
   }));
 
   trx.commit();
-};
+}
 
 // 尝试创建数据库
 async function tryCreateDatabase() {
@@ -422,7 +422,7 @@ async function tryCreateDatabase() {
     await createSchema();
   } catch(err) {
     LOG.main.error(`在构建数据库结构过程中出错: ${err.message}`);
-    console.error(err.stack)
+    console.error(err.stack);
     process.exit(1);
   }
 }
@@ -534,13 +534,13 @@ async function tryProcessFolderListParallel(folderList) {
 
         const rjcode = formatID(key); // zero-pad to 6 or 8 digits
 
-        LOG.main.info(`[RJ${rjcode}] 存在多个文件夹:`)
+        LOG.main.info(`[RJ${rjcode}] 存在多个文件夹:`);
 
         // 打印音声文件夹的绝对路径
         duplicateSet[key].forEach((folder) => {
           const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === folder.rootFolderName);
           const absolutePath = path.join(rootFolder.path, folder.relativePath);
-          LOG.main.info(`--> ${absolutePath}`)
+          LOG.main.info(`--> ${absolutePath}`);
         });
       }
     }
@@ -563,7 +563,7 @@ async function tryProcessFolderListParallel(folderList) {
 
   } catch (err) {
     LOG.main.error(`在并行处理音声文件夹过程中出错: ${err.message}`);
-    console.error(err.stack)
+    console.error(err.stack);
     process.exit(1);
   }
 
@@ -601,7 +601,7 @@ async function performScan() {
     process.exit(1);
   }
   process.exit(0);
-};
+}
 
 /**
  * 更新音声的动态元数据
@@ -619,20 +619,20 @@ async function updateMetadata(id, options = {}) {
   LOG.task.add(rjcode); // LOG.task.add only accepts a string
 
   try {
-    const metadata = await scrapeProcessor() // 抓取该音声的元数据
+    const metadata = await scrapeProcessor(); // 抓取该音声的元数据
     // 将抓取到的元数据插入到数据库
-    LOG.task.log(rjcode, `元数据抓取成功，准备更新元数据...`)
+    LOG.task.log(rjcode, `元数据抓取成功，准备更新元数据...`);
     metadata.id = id;
 
-    await db.updateWorkMetadata(metadata, options)
-    LOG.task.log(rjcode, `元数据更新成功`)
+    await db.updateWorkMetadata(metadata, options);
+    LOG.task.log(rjcode, `元数据更新成功`);
     return 'updated';
   } catch(err) {
-    LOG.task.error(rjcode, `在抓取元数据过程中出错: ${err}`)
-    console.error(err.stack)
+    LOG.task.error(rjcode, `在抓取元数据过程中出错: ${err}`);
+    console.error(err.stack);
     return 'failed';
   }
-};
+}
 
 const updateMetadataLimited = (id, options = null) => limitP.call(updateMetadata, id, options);
 const updateVoiceActorLimited = (id) => limitP.call(updateMetadata, id, { includeVA: true });
@@ -648,14 +648,14 @@ async function performUpdate(options = null) {
   LOG.finish(message);
   db.knex.destroy();
   if (counts.failed) process.exit(1);
-};
+}
 
 async function fixVoiceActorBug() {
   const baseQuery = db.knex('r_va_work').select('va_id', 'work_id');
   const filter = (query) => query.where('va_id', nameToUUID('かの仔')).orWhere('va_id', nameToUUID('こっこ'));
   const processor = (id) => updateVoiceActorLimited(id);
   return await refreshWorks(filter(baseQuery), 'work_id', processor);
-};
+}
 
 async function refreshWorks(query, idColumnName, processor) {
   const works = await query;
@@ -681,7 +681,7 @@ async function refreshWorks(query, idColumnName, processor) {
 
   LOG.main.log(`完成元数据更新 ${counts.updated} 个，失败 ${counts.failed} 个.`);
   return counts;
-};
+}
 
 // 扫描一个作品的文件夹中的文件信息
 // 例如音频时长、是否包含歌词文件等
@@ -713,7 +713,7 @@ async function scanWorkFile(work, index, total) {
     return "failed";
   }
 }
-const scanWorkFileLimited = (work, index, total) => limitP.call(scanWorkFile, work, index, total)
+const scanWorkFileLimited = (work, index, total) => limitP.call(scanWorkFile, work, index, total);
 async function performWorkFileScan() {
   LOG.main.info(`扫描本地文件开始`);
   const works = await db.knex('t_work').select('id', "root_folder", "dir", "memo");

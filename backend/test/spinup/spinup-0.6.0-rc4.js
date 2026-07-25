@@ -64,6 +64,6 @@ const createOldSchema = () => knex.schema
     table.foreign('user_name').references('name').inTable('t_user').onDelete('CASCADE'); // FOREIGN KEY 
     table.foreign('work_id').references('id').inTable('t_work').onDelete('CASCADE'); // FOREIGN KEY 
     table.primary(['user_name', 'work_id']); // PRIMARY KEY
-  })
+  });
 
   module.exports = { createOldSchema };

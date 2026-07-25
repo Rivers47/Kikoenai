@@ -1,8 +1,8 @@
-const routes = require('./routes')
+const routes = require('./routes');
 const expressJwt = require('express-jwt'); // 把 JWT 的 payload 部分赋值于 req.user
 
 const { config } = require('./config');
-const { issuer, audience } = require('./auth/utils')
+const { issuer, audience } = require('./auth/utils');
 
 /**
  * Get token from header or query string.
@@ -14,7 +14,7 @@ const getToken = (req) => {
     return req.query.token;
   }
   return null;
-}
+};
 
 
 module.exports = (app) => {

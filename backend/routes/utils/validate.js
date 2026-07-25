@@ -10,6 +10,6 @@ const isValidRequest = (req, res, sendMessage = true) => {
   } else {
     return true;
   }
-}
+};
 
 module.exports = { isValidRequest };

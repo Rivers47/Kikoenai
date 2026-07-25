@@ -22,18 +22,18 @@ describe('Database', function() {
   before('Spin up v0.3.0 database schema', async function() {
     const { createOldSchema } = require('./spinup/spinup-0.3.0');
     await createOldSchema();
-  })
+  });
 
   it('v0.3.0 should work', async function() {
     const result = await db.raw(`pragma table_info('t_va')`);
     // t_va id column type was integer in 0.3.0
     expect(result[0]['type']).to.equal('integer');
-  })
+  });
 
   it('should be able to migrate to latest', async function() {
     const log = ({ action, migration }) => console.log('Doing ' + action + ' on ' + migration);
     await knexMigrate('up', {}, log);
-  })
+  });
 
   it('schema after migration', async function() {
     // There is no easy way to verify that the schema after the migration is the same as the one created from scratch by createSchema()
@@ -44,10 +44,10 @@ describe('Database', function() {
     // console.log(schema);
 
     const tableNames = (await db.raw(`SELECT name FROM sqlite_master WHERE type ='table' AND name NOT LIKE 'sqlite_%'`)).map(record => record['name']);
-    console.log(tableNames)
+    console.log(tableNames);
 
     for (const table of tableNames) {
-      console.log(table)
+      console.log(table);
       const tableInfo = await db.raw(`pragma table_info(${table})`);
       console.table(tableInfo);
     }
@@ -59,31 +59,31 @@ describe('Database', function() {
     const lastMigration = await db.raw('select name from knex_migrations order by id desc limit 1');
     expect(dbVersion).to.be.a('string');
     expect(lastMigration[0].name).to.startsWith(dbVersion);
-  })
+  });
 
   after('Tear down test database', async function() {
     const { dropDatabase } = require('./teardown/teardown-0.6.0');
     await dropDatabase();
-  })
-})
+  });
+});
 
 describe('Database v0.6.0-rc4', function() {
   before('Spin up v0.6.0-rc4 database schema', async function() {
     const { createOldSchema } = require('./spinup/spinup-0.6.0-rc4');
     await createOldSchema();
     await knexMigrate('skipAll', {to: '20210213233544_fill_va_uuid'});
-  })
+  });
 
   it('should work', async function() {
     const result = await db.raw(`pragma table_info('t_va')`);
     // t_va id column type has changed to text in v0.6.0-rc4
     expect(result[0]['type']).to.equal('varchar(255)');
-  })
+  });
 
   it('should be able to migrate to 20210502081522_remove_obsolete_view', async function() {
     const log = ({ action, migration }) => console.log('Doing ' + action + ' on ' + migration);
     await knexMigrate('up', { to: '20210502081522' }, log);
-  })
+  });
 
   it('should have null constraints removed', async function() {
     const tableInfo = await db.raw(`pragma table_info('t_work')`);
@@ -93,7 +93,7 @@ describe('Database v0.6.0-rc4', function() {
         expect(field['notnull']).to.equal(0);
       }
     }
-  })
+  });
 
   after('Delete test database', function(done) {
     db.destroy(() => {
@@ -102,5 +102,5 @@ describe('Database v0.6.0-rc4', function() {
       });
       done();
     });
-  })
-})
+  });
+});

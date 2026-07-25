@@ -174,16 +174,16 @@ const scrapeStaticWorkMetadataFromDLsiteJson = (id, language) => new Promise((re
   const url = `https://www.dlsite.com/maniax/api/=/product.json?workno=RJ${rjcode}`;
 
   const work = { id, tags: [], vas: [] };
-  const COOKIE_LOCALE = `locale=${language}`
+  const COOKIE_LOCALE = `locale=${language}`;
   axios.retryGet(url, {
     retry: {},
     headers: { "cookie": COOKIE_LOCALE } // 自定义请求头
   })
     .then(response => response.data)
     .then((jsonObj) => { // 解析
-      console.warn("------------------------------------------------------------------")
-      console.log(jsonObj)
-      console.warn("------------------------------------------------------------------")
+      console.warn("------------------------------------------------------------------");
+      console.log(jsonObj);
+      console.warn("------------------------------------------------------------------");
       const data = jsonObj[0];
 
       // 标题
@@ -203,7 +203,7 @@ const scrapeStaticWorkMetadataFromDLsiteJson = (id, language) => new Promise((re
       work.nsfw = data.age_category == 3; // 3 for adult, 1 for all 全年龄, 2 for R15
 
       // 贩卖日 (YYYY-MM-DD)
-      work.release = /\d{4}-\d{2}-\d{2}/.exec(data.regist_date)
+      work.release = /\d{4}-\d{2}-\d{2}/.exec(data.regist_date);
 
       // 忽略系列，外面都没有用这个，有些作品也根本没有系列
       
@@ -398,17 +398,17 @@ const scrapeCoverIdForTranslatedWorkFromDLsite = (id_translated, language) => ne
           return /RJ(\d{6,8})[_\w\.]+$/.exec(h);
         })
         .filter(r => r != null && r.length >= 2)
-        .map(r => r[1])
+        .map(r => r[1]);
 
-      console.log("linked:", linked_id_list)
-      console.log("possible:", possible_image_id_list)
+      console.log("linked:", linked_id_list);
+      console.log("possible:", possible_image_id_list);
 
       const hit_id_list = linked_id_list.filter(id => possible_image_id_list.includes(id));
 
       const result = {
         coverFromId: hit_id_list.length > 0 ? hit_id_list[0] : id_translated,
         isNoImgMain,
-      }
+      };
       resolve(result);
     })
     .catch((error) => {

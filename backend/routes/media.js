@@ -7,9 +7,9 @@ const fs = require('fs');
 const path = require('path');
 const jschardet = require('jschardet');
 const { getTrackList } = require('../filesystem/utils');
-const { joinFragments } = require('./utils/url')
-const { isValidRequest } = require('./utils/validate')
-const jimp = require("jimp")
+const { joinFragments } = require('./utils/url');
+const { isValidRequest } = require('./utils/validate');
+const jimp = require("jimp");
 
 // GET (stream) a specific track from work folder
 router.get('/stream/:id/:index',
@@ -147,7 +147,7 @@ router.get('/check-lrc/:id/:index',
                   trackTitle + ext.toUpperCase(), // sometitle.mp3 -> sometitle.mp3.LRC
                 ];
                 for (const tryFileLoc of tryFileLocs) {
-                  console.log(`尝试查找歌词文件：${tryFileLoc}`)
+                  console.log(`尝试查找歌词文件：${tryFileLoc}`);
                   if (fs.existsSync(path.join(fileDir, tryFileLoc))) {
                     foundLyricFileName = tryFileLoc;
                     break;
@@ -169,7 +169,7 @@ router.get('/check-lrc/:id/:index',
                   if (trackItem.title === foundLyricFileName && subtitleToFind === trackItem.subtitle) {
                       res.send({result: true, message:'找到歌词文件', hash: trackItem.hash, lyricExtension: foundLyricExtension});
                   }
-                })
+                });
               } else {
                 res.send({result: false, message:'不存在歌词文件', hash: ''});
               }

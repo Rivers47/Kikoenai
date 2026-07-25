@@ -1,5 +1,5 @@
-const path = require('path')
-const { config } = require('../config')
+const path = require('path');
+const { config } = require('../config');
 
 module.exports = {
   // Default environment

@@ -65,7 +65,7 @@ router.get('/tracks/:id',
       const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
       if (rootFolder) {
         try {
-          const tracks = await getTrackList(work_id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo))
+          const tracks = await getTrackList(work_id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo));
           const tree = toTree(tracks, work.title, work.dir, rootFolder);
           res.send(tree);
         } catch (err) {
@@ -161,7 +161,7 @@ router.get('/:field(circle|tag|va)s/:id',
 router.get('/search', async (req, res, next) => {
   // const keyword = req.params.keyword ? req.params.keyword.trim() : '';
   const keyword = req.query.keyword ? req.query.keyword.trim() : '';
-  const isAdvance = 1 === parseInt(req.query.isAdvance || "0") // 是否开启高级搜索模式
+  const isAdvance = 1 === parseInt(req.query.isAdvance || "0"); // 是否开启高级搜索模式
 
   const currentPage = parseInt(req.query.page) || 1;
   // 通过 "音声id, 贩卖日, 用户评价， 售出数, 评论数量, 价格, 平均评价, 全年龄新作" 排序
@@ -181,7 +181,7 @@ router.get('/search', async (req, res, next) => {
       // console.warn(`in advance mode(page = ${currentPage}), search for: `, conditions)
       query = () => db.nsfwFilter(nsfw, 
         db.advanceSearch(conditions, username)
-      )
+      );
     } else {
       // console.warn("normal keyword search, keyword = ", keyword)
       query = () => db.nsfwFilter(nsfw, db.getWorksByKeyWord({keyword: keyword, username: username}));
@@ -291,7 +291,7 @@ router.post('/work/scan/:id',
         .first();
       const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
       if (!rootFolder) {
-        res.status(500).send({error: "扫描作品文件失败，没有找到rootFolder: " + work.root_folder})
+        res.status(500).send({error: "扫描作品文件失败，没有找到rootFolder: " + work.root_folder});
         return;
       }
       const memo = await scrapeWorkMemo(work_id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo));
@@ -299,9 +299,9 @@ router.post('/work/scan/:id',
       res.send({ memo });
     } catch (err) {
       console.error(err);
-      res.status(500).send({error: "扫描作品文件失败：" + err.message})
+      res.status(500).send({error: "扫描作品文件失败：" + err.message});
     }
   } 
-)
+);
 
 module.exports = router;

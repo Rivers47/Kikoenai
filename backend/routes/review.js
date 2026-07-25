@@ -42,7 +42,7 @@ router.get('/',
       });
     } catch(err) {
       res.status(500).send({error: '查询过程中出错'});
-      console.error(err)
+      console.error(err);
     }
 });
 
@@ -64,7 +64,7 @@ router.put('/',
       starOnly = false;
     }
     if (req.query.progressOnly === 'true') {
-      progressOnly = true
+      progressOnly = true;
     }
     
     db.updateUserReview(username, req.body.work_id, req.body.rating, req.body.review_text, req.body.progress, starOnly, progressOnly)
@@ -77,7 +77,7 @@ router.put('/',
         }).catch((err) =>{
           res.status(500).send({ error: '评价失败，服务器错误' });
           console.error(err);
-        })
+        });
 });
 
 // 删除用户标记

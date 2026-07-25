@@ -59,7 +59,7 @@ router.get('/me', (req, res, next) => {
   const auth = config.auth;
   const user = config.auth
     ? { name: req.user.name, group: req.user.group }
-    : { name: 'admin', group: 'administrator' }
+    : { name: 'admin', group: 'administrator' };
   res.send({ user, auth });
 });
 

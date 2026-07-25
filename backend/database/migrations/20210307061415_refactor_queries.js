@@ -31,10 +31,10 @@ exports.up = async function(knex) {
     LEFT JOIN r_tag_work ON r_tag_work.work_id = baseQueryWithVA.id
     LEFT JOIN t_tag ON t_tag.id = r_tag_work.tag_id
     GROUP BY baseQueryWithVA.id;
-  `)
+  `);
 };
 
 // Will break most of the queries! You will need to switch to an earlier version of code.
 exports.down = async function(knex) {
-  knex.raw(`DROP VIEW IF EXISTS staticMetadata`)
+  knex.raw(`DROP VIEW IF EXISTS staticMetadata`);
 };

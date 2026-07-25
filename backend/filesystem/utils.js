@@ -50,7 +50,7 @@ const getAudioFileDurationLimited = (filePath) => limitP.call(getAudioFileDurati
 //    }
 //  }
 async function scrapeWorkMemo(work_id, dir, oldMemo) {
-  const files = await recursiveReaddir(dir)
+  const files = await recursiveReaddir(dir);
   // Filter out any files not matching these extensions
   const oldMemoMtime = oldMemo.mtime || {};
   const oldMemoDuration = oldMemo.duration || {};
@@ -102,7 +102,7 @@ async function scrapeWorkMemo(work_id, dir, oldMemo) {
  */
 const getTrackList = async function (id, dir, readMemo) {
   try {
-    const files = await recursiveReaddir(dir)
+    const files = await recursiveReaddir(dir);
     // Filter out any files not matching these extensions
     const filteredFiles = files.filter((file) => {
       const ext = path.extname(file).toLowerCase();
@@ -160,7 +160,7 @@ const getTrackList = async function (id, dir, readMemo) {
     console.log('getTracList error = ', err);
     throw new Error(`Failed to get tracklist from disk: ${err}`);
   }
-}
+};
 
 /**
  * 转换成树状结构
