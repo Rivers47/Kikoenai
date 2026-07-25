@@ -1,0 +1,64 @@
+name: Build Backend Container Image
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+  repository_dispatch:
+    types: [frontend-built]
+
+env:
+  IMAGE_REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout backend
+        uses: actions/checkout@v7
+
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: kikoeru-frontend
+          path: dist/
+          repository: kikoeru-project/kikoeru-quasar
+          github-token: ${{ secrets.PAT_FOR_FRONTEND }}
+
+      - name: Verify frontend artifact
+        run: ls -la dist/
+
+      - name: Generate container image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build container image using Buildah
+        id: build-image
+        uses: redhat-actions/buildah-build@v3
+        with:
+          image: ${{ env.IMAGE_NAME }}
+          tags: ${{ steps.meta.outputs.tags }}
+          containerfiles: |
+            ./Dockerfile
+          oci: true
+
+      - name: Push to GitHub Container Registry
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: redhat-actions/push-to-registry@v3
+        with:
+          image: ${{ steps.build-image.outputs.image }}
+          tags: ${{ steps.build-image.outputs.tags }}
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}

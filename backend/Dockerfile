@@ -1,39 +1,37 @@
-# This dockerfile generates a single-container application
-# It copies build artifacts the from front-end image
-# If you want to separate the front-end from the back-end, it should work as well
+# Backend Dockerfile
+# Build stage: install production dependencies
+FROM node:24-alpine AS build
 
-FROM node:14-alpine as build-dep
-
-# Create app directory
 WORKDIR /usr/src/kikoeru
 
-RUN apk add --update --no-cache curl py-pip
-RUN apk update && apk add python3 make gcc g++ 
+# Install build dependencies required by some native npm modules
+RUN apk add --no-cache python3 make gcc g++
 
-# Install app dependencies
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
-# where available (npm@5+)
+# Copy package files and install production dependencies
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --only=production && npm cache clean --force
 
 # Final stage
-FROM node:14-alpine
+FROM node:24-alpine
+
 ENV IS_DOCKER=true
 WORKDIR /usr/src/kikoeru
 
-# Tini
+# Install runtime dependencies: tini for signal handling, ffmpeg for audio processing
 RUN apk add --no-cache tini ffmpeg
 
-# Copy build artifacts
-COPY --from=build-dep /usr/src/kikoeru /usr/src/kikoeru
-COPY ./dist /usr/src/kikoeru/dist
+# Copy production dependencies from build stage
+COPY --from=build /usr/src/kikoeru/node_modules ./node_modules
 
-# Bundle app source
+# Copy frontend build artifacts (placed in dist/ by CI before Docker build)
+COPY ./dist ./dist
+
+# Copy backend source code
 COPY . .
-ENTRYPOINT ["/sbin/tini", "--"]
-
-# 持久化
-VOLUME [ "/usr/src/kikoeru/sqlite", "/usr/src/kikoeru/config", "/usr/src/kikoeru/covers"]
 
 EXPOSE 8888
+
+VOLUME [ "/usr/src/kikoeru/sqlite", "/usr/src/kikoeru/config", "/usr/src/kikoeru/covers" ]
+
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD [ "node", "app.js" ]
