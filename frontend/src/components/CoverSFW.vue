@@ -20,12 +20,6 @@
       </q-chip>
     </div>
 
-    <div v-if="lyricList.length > 0" class="absolute-top-right transparent" style="padding: 0px;">
-      <q-chip v-for="lyric in lyricList" :key="lyric" dense square color="green-7" text-color="white" class="q-ma-sm shadow-3">
-        {{ {ai: "AI歌词", local: "本地歌词"}[lyric] }}
-      </q-chip>
-    </div>
-
     <!-- 标签 -->
     <div class="q-pa-none q-ma-sm absolute-bottom-left tags-panel">
       <router-link
@@ -64,11 +58,6 @@ export default {
 
     release: {
       required: true
-    },
-
-    lyric_status: { // "", "ai", "local", "ai_local"
-      type: String,
-      require: true,
     },
 
     tags: {
@@ -111,11 +100,6 @@ export default {
       }
     },
 
-    lyricList() {
-      return this.lyric_status 
-      ? this.lyric_status.split("_")
-      : [];
-    }
   },
 
   methods: {

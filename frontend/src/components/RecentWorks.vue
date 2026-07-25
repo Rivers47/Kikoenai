@@ -24,8 +24,7 @@
             :workid="item.id"
             :nsfw="false"
             :release="''"
-            :lyric_status="item.lyric_status"
-          >
+            >
             <template v-slot:cover>
               <div class="playInfo absolute-bottom">
                 <div class="ellipsis-2-lines audioText">
