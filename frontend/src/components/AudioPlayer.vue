@@ -405,6 +405,10 @@ export default {
       this.onUpdatePlayingStatus()
     }, 60 * 1000) // 每隔一段时间更新一次播放记录
 
+    // 监听页面可见性变化，在页面隐藏时（锁屏/切后台）立即刷新播放进度到服务器
+    document.addEventListener('visibilitychange', this.onVisibilityChange)
+
+
     if (this.$q.platform.is.desktop) {
       window.addEventListener('keydown', this.onKeyDown);
     }
@@ -426,10 +430,7 @@ export default {
       window.removeEventListener('keydown', this.onKeyDown);
     }
     clearInterval(this.histroyCheckIntervalId)
-
-    // 原本是想要在关闭窗口时，更新最后一次播放历史
-    // 但是实际测试下来，关闭窗口时根本没有来得及发送最后一次更新消息，于是放弃这个方案
-    // this.onUpdatePlayingStatus()
+    document.removeEventListener('visibilitychange', this.onVisibilityChange)
   },
 
   watch: {
@@ -779,6 +780,36 @@ export default {
       }
       return true;
     },
+
+    // 页面隐藏时（锁屏/切后台）立即刷新播放进度，不使用防抖以确保数据到达
+    onVisibilityChange() {
+      if (document.visibilityState === 'hidden') {
+        this.flushHistoryOnHide()
+      }
+    },
+
+    // 使用 keepalive fetch 确保页面关闭时播放进度能够送达服务器
+    flushHistoryOnHide() {
+      if (this.queueCopy.length <= 0) return;
+      if (!this.resumeHistroyDone) return;
+
+      const data = {
+        work_id: this.playWorkId,
+        state: {
+          queue: this.queueCopy,
+          index: this.queueIndex,
+          seconds: this.currentTime,
+        }
+      }
+
+      fetch('/api/histroy', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        keepalive: true,
+      }).catch(() => {})
+    },
+
     
     onUpdatePlayingStatus() {
       // 当前播放列表为空，禁止记录播放历史

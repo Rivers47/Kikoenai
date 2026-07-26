@@ -392,6 +392,12 @@ export default {
       try {
         if (this.playWorkId == 0) {
           navigator.mediaSession.metadata = null;
+          navigator.mediaSession.setActionHandler('play', null);
+          navigator.mediaSession.setActionHandler('pause', null);
+          navigator.mediaSession.setActionHandler('nexttrack', null);
+          navigator.mediaSession.setActionHandler('previoustrack', null);
+          navigator.mediaSession.setActionHandler('seekbackward', null);
+          navigator.mediaSession.setActionHandler('seekforward', null);
         } else {
           navigator.mediaSession.metadata = new window.MediaMetadata({
             title: this.currentPlayingFile.title,
@@ -414,6 +420,27 @@ export default {
                 type: "image/jpeg",
               },
             ]
+          })
+
+          navigator.mediaSession.setActionHandler('play', () => {
+            this.PLAY()
+            if (this.plyr) this.plyr.play()
+          })
+          navigator.mediaSession.setActionHandler('pause', () => {
+            this.PAUSE()
+            if (this.plyr) this.plyr.pause()
+          })
+          navigator.mediaSession.setActionHandler('nexttrack', () => {
+            this.NEXT_TRACK()
+          })
+          navigator.mediaSession.setActionHandler('previoustrack', () => {
+            this.PREVIOUS_TRACK()
+          })
+          navigator.mediaSession.setActionHandler('seekbackward', () => {
+            this.SET_REWIND_SEEK_MODE(true)
+          })
+          navigator.mediaSession.setActionHandler('seekforward', () => {
+            this.SET_FORWARD_SEEK_MODE(true)
           })
         }
       } catch (e) {
