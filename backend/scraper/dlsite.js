@@ -337,32 +337,16 @@ const scrapeCoverIdForTranslatedWorkFromDLsite = (id_translated, language) => ne
   const rjcode = formatID(id_translated);
   const url = `https://www.dlsite.com/maniax/work/=/product_id/RJ${rjcode}.html`;
 
-  const work = { id_translated, tags: [], vas: [] };
-  let AGE_RATINGS, VA, GENRE, RELEASE, SERIES, COOKIE_LOCALE;
+  let COOKIE_LOCALE;
   switch(language) {
     case 'ja-jp':
       COOKIE_LOCALE = 'locale=ja-jp';
-      AGE_RATINGS = '年齢指定';
-      GENRE = 'ジャンル';
-      VA = '声優';
-      RELEASE = '販売日';
-      SERIES = 'シリーズ名';
       break;
     case 'zh-tw':
       COOKIE_LOCALE = 'locale=zh-tw';
-      AGE_RATINGS = '年齡指定';
-      GENRE = '分類';
-      VA = '聲優';
-      RELEASE = '販賣日';
-      SERIES = '系列名';
       break;
     default:
       COOKIE_LOCALE = 'locale=zh-cn';
-      AGE_RATINGS = '年龄指定';
-      GENRE = '分类';
-      VA = '声优';
-      RELEASE = '贩卖日';
-      SERIES = '系列名';
   }
 
   axios.retryGet(url, {
@@ -395,7 +379,7 @@ const scrapeCoverIdForTranslatedWorkFromDLsite = (id_translated, language) => ne
             isNoImgMain = true;
           }
 
-          return /RJ(\d{6,8})[_\w\.]+$/.exec(h);
+          return /RJ(\d{6,8})[_\w.]+$/.exec(h);
         })
         .filter(r => r != null && r.length >= 2)
         .map(r => r[1]);

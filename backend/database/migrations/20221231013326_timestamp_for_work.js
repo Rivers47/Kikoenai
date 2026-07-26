@@ -41,6 +41,8 @@ exports.up = async function(knex) {
 };
 
 exports.down = async function(knex) {
-  table.dropColumn('updated_at'); // drop column
-  table.dropColumn('created_at'); // drop column
+  await knex.schema.alterTable('t_work', function(table) {
+    table.dropColumn('updated_at'); // drop column
+    table.dropColumn('created_at'); // drop column
+  });
 };

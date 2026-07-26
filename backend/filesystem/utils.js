@@ -12,7 +12,6 @@ const supportedImageExtList = ['.jpg', '.jpeg', '.png', '.webp'];
 const LimitPromise = require('limit-promise'); // 限制并发数量
 const limitP = new LimitPromise(config.maxParallelism); // 核心控制器
 const util = require('util');
-const exec = util.promisify(require('child_process').exec);
 const execFile = util.promisify(require('child_process').execFile);
 
 async function getAudioFileDuration(filePath) {

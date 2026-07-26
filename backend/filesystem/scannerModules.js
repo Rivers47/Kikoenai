@@ -14,7 +14,6 @@ const { nameToUUID } = require('../scraper/utils');
 const { config } = require('../config');
 const { updateLock } = require('../upgrade');
 const { formatID } = require('./utils');
-const { assert } = require('console');
 
 // 只有在子进程中 process 对象才有 send() 方法
 process.send = process.send || function () {};
@@ -454,8 +453,7 @@ async function fixVADatabase() {
   if (updateLock.isLockFilePresent && updateLock.lockFileConfig.fixVA) {
     LOG.main.log('开始进行声优元数据修复，需要联网');
     try {
-      const updateResult = await fixVoiceActorBug();
-      counts.updated += updateResult;
+      await fixVoiceActorBug();
       updateLock.removeLockFile();
       LOG.main.log('完成元数据修复');
     } catch (err) {
@@ -693,6 +691,7 @@ async function scanWorkFile(work, index, total) {
   try {
     const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
     if (!rootFolder) return "skipped";
+    const absoluteWorkDir = path.join(rootFolder.path, work.dir);
 
     // work memo, for instance, memorize all audio durations
     const memo = await scrapeWorkMemo(

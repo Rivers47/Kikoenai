@@ -1,7 +1,7 @@
 const cheerio = require('cheerio'); // 解析器
 
 const axios = require('./axios'); // 数据请求
-const { nameToUUID, hasLetter } = require('./utils');
+const { nameToUUID } = require('./utils');
 const { formatID } = require('../filesystem/utils');
 
 let asmrOneApiUrl = '';

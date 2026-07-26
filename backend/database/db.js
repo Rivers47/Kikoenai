@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 const { config } = require('../config');
-const { formatID } = require('../filesystem/utils');
 
 const databaseExist = fs.existsSync(path.join(config.databaseFolderDir, 'db.sqlite3'));
 

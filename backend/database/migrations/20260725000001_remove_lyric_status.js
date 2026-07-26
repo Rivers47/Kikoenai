@@ -48,7 +48,7 @@ exports.up = async function(knex) {
   await createOrReplaceStaticMetadata(knex);
 };
 
-exports.down = async function(knex) {
+exports.down = async function() {
   console.log('Cannot revert: lyric_status column removal is irreversible.');
 };
 

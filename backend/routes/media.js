@@ -129,7 +129,6 @@ router.get('/check-lrc/:id/:index',
           getTrackList(req.params.id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo))
             .then((tracks) => {
               const track = tracks[req.params.index];
-              const fileLoc = path.join(rootFolder.path, work.dir, track.subtitle || '', track.title);
               const fileDir = path.join(rootFolder.path, work.dir, track.subtitle || '');
 
 
