@@ -1,0 +1,63 @@
+{
+  "name": "kikoeru-quasar",
+  "version": "0.6.7",
+  "description": "A self-hosted web media player for listening to your DLsite voice works.",
+  "homepage": "https://github.com/kikoeru-project/kikoeru-quasar",
+  "productName": "Kikoeru",
+  "cordovaId": "org.cordova.quasar.kikoeru",
+  "capacitorId": "",
+  "author": "Watanuki-Kimihiro",
+  "contributors": [
+    "yodhcn",
+    "umonaca <mw2010a@gmail.com>"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:kikoeru-project/kikoeru-quasar.git"
+  },
+  "license": "GPL-3.0-only",
+  "keywords": [
+    "kikoeru"
+  ],
+  "scripts": {
+    "test": "eslint .",
+    "dev": "node node_modules/@quasar/app-webpack/bin/quasar dev -m pwa",
+    "build": "node node_modules/@quasar/app-webpack/bin/quasar build -m pwa"
+  },
+  "dependencies": {
+    "@quasar/extras": "^1.16.0",
+    "axios": "^0.21.1",
+    "lrc-file-parser": "^1.0.7",
+    "plyr": "^3.7.8",
+    "quasar": "^2.23.1",
+    "register-service-worker": "^1.7.2",
+    "socket.io-client": "^4.8.1",
+    "vue": "^3.4.0",
+    "vue-plyr": "^7.0.0",
+    "vue-router": "^4.2.0",
+    "vue-slider-component": "^4.1.0-beta.7",
+    "vuedraggable": "^4.1.0",
+    "vuex": "^4.1.0"
+  },
+  "devDependencies": {
+    "@quasar/app-webpack": "^4.4.5",
+    "@quasar/babel-preset-app": "^2.0.4",
+    "autoprefixer": "^10.5.4",
+    "eslint": "^8.57.0",
+    "eslint-plugin-import": "^2.29.0",
+    "eslint-plugin-vue": "^9.21.0",
+    "sass": "^1.71.1",
+    "workbox-webpack-plugin": "^7.4.1"
+  },
+  "engines": {
+    "node": ">= 22.0.0",
+    "npm": ">= 9.0.0"
+  },
+  "browserslist": [
+    "last 1 version, not dead, ie >= 11"
+  ],
+  "eslintIgnore": [
+    "dist/*",
+    "src/router/index.js"
+  ]
+}
