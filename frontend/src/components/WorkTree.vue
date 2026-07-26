@@ -25,7 +25,7 @@
         </q-card-section>
 
         <q-card-section class="q-pt-none">
-          <q-img style="height: calc(100vh - 200pt);" :src="preview_img_url" contain />
+          <q-img style="height: calc(100vh - 200pt);" :src="preview_img_url" fit="contain" />
         </q-card-section>
 
         <q-card-actions align="around">

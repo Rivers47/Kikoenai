@@ -1,6 +1,6 @@
 <template>
   <div class="container" ref="container" @dblclick="clickOnContainer" :style="{'--cover-url': `url(${coverUrl})`}">
-    <q-img contain v-if="!enableDrawVideo"
+    <q-img fit="contain" v-if="!enableDrawVideo"
       :src="coverUrl"
       class="constrain-height"
       img-class="scale-animation image-style"

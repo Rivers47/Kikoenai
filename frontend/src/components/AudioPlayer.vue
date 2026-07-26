@@ -18,8 +18,7 @@
         <div class="row items-center albumart q-mt-lg q-pa-sm relative-position flippable-cover-container non-selectable"
           v-touch-swipe.mouse="onCoverSwipe"
         >
-          <q-img
-            contain
+          <q-img fit="contain"
             class="rounded-borders box-shadow flippable-cover cover-img"
             :class="{
               'flip-on-front': !isFlipCover,
