@@ -78,14 +78,11 @@ module.exports = function (ctx) {
       https: false,
       port: 8080,
       open: true,
-      proxy: {
-        '/api': 'http://localhost:8888',
-        '/socket.io': {
-          target: 'http://localhost:8888',
-          ws: true
-        },
-        '/workbox': 'http://localhost:8888',
-      },
+      proxy: [
+        { context: '/api', target: 'http://localhost:8888' },
+        { context: '/socket.io', target: 'http://localhost:8888', ws: true },
+        { context: '/workbox', target: 'http://localhost:8888' },
+      ],
     },
 
     animations: [],
@@ -103,6 +100,7 @@ module.exports = function (ctx) {
         opts.clientsClaim = true
         opts.exclude = opts.exclude || []
         opts.exclude.push(/manifest\.json$/, /.*.js.map$/)
+        opts.navigateFallbackDenylist = opts.navigateFallbackDenylist || []
         opts.navigateFallbackDenylist.push(
           /^\/api\/.*$/,
           /\/media\/.*$/

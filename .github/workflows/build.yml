@@ -1,4 +1,4 @@
-name: Build Backend Container Image
+name: Build All (Frontend + Backend Container)
 
 on:
   push:
@@ -6,8 +6,6 @@ on:
   pull_request:
     branches: [main, master]
   workflow_dispatch:
-  repository_dispatch:
-    types: [frontend-built]
 
 env:
   IMAGE_REGISTRY: ghcr.io
@@ -18,24 +16,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout backend
+      - name: Checkout full repository
         uses: actions/checkout@v7
 
-      - name: Download frontend artifact
-        run: |
-          mkdir -p dist
-          ARTIFACT_ID=$(gh api repos/Rivers47/kikoeru-quasar/actions/artifacts \
-            --jq '.artifacts | map(select(.name=="kikoeru-frontend" and .expired==false)) | .[0].id')
-          echo "Downloading artifact ID: $ARTIFACT_ID"
-          gh api repos/Rivers47/kikoeru-quasar/actions/artifacts/$ARTIFACT_ID/zip > dist.zip
-          unzip -o dist.zip -d dist/
-          rm dist.zip
-        env:
-          GH_TOKEN: ${{ secrets.PAT_FOR_FRONTEND }}
+      # ── Frontend ──────────────────────────────────────────────
+      - name: Use Node.js for frontend
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Verify frontend artifact
-        run: ls -la dist/
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
 
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+
+      - name: Verify frontend artifact landed in backend/dist/
+        run: ls -la backend/dist/
+
+      # ── Container image ───────────────────────────────────────
       - name: Generate container image metadata
         id: meta
         uses: docker/metadata-action@v6
@@ -54,7 +57,7 @@ jobs:
           image: ${{ env.IMAGE_NAME }}
           tags: ${{ steps.meta.outputs.tags }}
           containerfiles: |
-            ./Dockerfile
+            ./backend/Dockerfile
           oci: true
 
       - name: Push to GitHub Container Registry
