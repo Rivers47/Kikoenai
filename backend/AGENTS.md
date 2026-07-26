@@ -1,8 +1,6 @@
-# Kikoeru Express — AGENTS Guide
+# Kikoenai Backend — AGENTS Guide
 
-This document is a comprehensive reference for AI agents working on the **kikoeru-express** codebase. It describes the project's architecture, conventions, and important implementation details.
-
-**Kikoeru** is a self-hosted media streaming server for [DLsite](https://www.dlsite.com) voice works (doujin audio). It scrapes metadata from DLsite, organizes audio files, and serves them via a web UI with progress tracking, ratings, reviews, tag-based search, and real-time library scanning.
+**Kikoenai** is a self-hosted media streaming server for [DLsite](https://www.dlsite.com) voice works (doujin audio). This is the Express API server; the Quasar-based frontend SPA/PWA lives in sibling package `frontend/`.
 
 - **Language:** Node.js (JavaScript, Express)
 - **Database:** SQLite3 via Knex.js
@@ -10,8 +8,6 @@ This document is a comprehensive reference for AI agents working on the **kikoer
 - **Real-time:** Socket.IO
 - **Scraping:** Axios + Cheerio
 - **License:** GPL-3.0-or-later
-
-> The frontend SPA/PWA is a separate project: [`kikoeru-quasar`](https://github.com/kikoeru-project/kikoeru-quasar). Build output from that project goes into `dist/` and is served as static content. See the [Cross-Repo Integration](#7-cross-repo-integration) section for details.
 
 ---
 
@@ -204,7 +200,7 @@ npm run build   # Package into standalone executable (pkg)
 
 ## 6. API Contract (Exposed to Frontend)
 
-The following endpoints are consumed by the frontend (`kikoeru-quasar`):
+The following endpoints are consumed by the `frontend/` package:
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -226,29 +222,12 @@ The following endpoints are consumed by the frontend (`kikoeru-quasar`):
 
 ---
 
-## 7. Cross-Repo Integration
+## 7. Monorepo Integration
 
-### Build & Deploy Workflow
+The frontend builds directly into `backend/dist/` (configured via `distDir` in `frontend/quasar.config.js`) and is served as static content by Express.
 
-1. Build `kikoeru-quasar` → outputs to `dist/` (or `dist/pwa/` for PWA).
-2. Copy `dist/` contents into this repo's `dist/` directory.
-3. Start the server — it serves the SPA/PWA as static files.
-
-```bash
-# From kikoeru-quasar
-npm install
-npm run build           # or: quasar build -m pwa
-cp -r dist/pwa/* ../kikoeru-express/dist/
-
-# From this repo (kikoeru-express)
-npm install
-npm start               # Serves frontend on port 8888
-```
-
-### Socket.IO Events
-
-- Client emits: none (server-side triggers scanning)
-- Server emits: scan progress events (`SCAN_INIT_STATE`, `SCAN_DONE`, `SCAN_ERROR`, `SCAN_PROGRESS`)
+- **Workspace scripts:** `npm run dev:backend` / `npm start` from root.
+- **Socket.IO events:** Server emits scan progress events (`SCAN_INIT_STATE`, `SCAN_DONE`, `SCAN_ERROR`, `SCAN_PROGRESS`). Client emits none.
 
 ---
 
@@ -289,4 +268,3 @@ npm start               # Serves frontend on port 8888
 - **Config freezing:** Set `FREEZE_CONFIG_FILE=1` to prevent config file writes during testing.
 - **Docker:** Use `docker-compose.yml` with `IS_DOCKER=1` env var (sets default paths).
 - **Database path:** Controlled by `databaseFolderDir` in config, or `dbUseDefaultPath: true` (default).
-- **Frontend dev proxy:** When developing the frontend separately, the Quasar dev server proxies `/api` and `/socket.io` to `localhost:8888`.

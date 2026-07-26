@@ -1,8 +1,6 @@
-# Kikoeru Quasar — AGENTS Guide
+# Kikoenai Frontend — AGENTS Guide
 
-This document is a comprehensive reference for AI agents working on the **kikoeru-quasar** codebase. It describes the project's architecture, conventions, and important implementation details.
-
-**Kikoeru** is a self-hosted web media player for [DLsite](https://www.dlsite.com) voice works (doujin audio). This repo is the frontend SPA/PWA built with the Quasar framework.
+**Kikoenai** is a self-hosted web media player for [DLsite](https://www.dlsite.com) voice works (doujin audio). This is the Quasar-based frontend SPA/PWA; the Express API server lives in sibling package `backend/`.
 
 - **Language:** Vue 3 (Options API style)
 - **Framework:** Quasar 2 (Material Design)
@@ -11,8 +9,6 @@ This document is a comprehensive reference for AI agents working on the **kikoer
 - **Audio:** Plyr (`vue-plyr` wrapper)
 - **Real-time:** Socket.IO Client
 - **License:** GPL-3.0-only
-
-> The backend API server is a separate project: [`kikoeru-express`](https://github.com/kikoeru-project/kikoeru-express). Build output from this repo goes into `dist/` and is served as static content by the backend. See the [Cross-Repo Integration](#7-cross-repo-integration) section for details.
 
 ---
 
@@ -280,19 +276,9 @@ MainLayout
 ```bash
 npm install        # Install dependencies
 
-npm run dev        # Start dev server with PWA mode (proxies backend on :8888)
-quasar dev         # Alias
-
 npm run build      # Build for production (default: SPA)
-quasar build       # Alias
 
 npm test           # Run ESLint
-```
-
-For explicit build targets:
-```bash
-quasar build              # SPA (output in dist/spa/)
-quasar build -m pwa       # PWA with service worker (output in dist/pwa/)
 ```
 
 ---
@@ -319,31 +305,13 @@ quasar build -m pwa       # PWA with service worker (output in dist/pwa/)
 
 ---
 
-## 7. Cross-Repo Integration
+## 7. Monorepo Integration
 
-### Build & Deploy Workflow
+Build output goes directly into `backend/dist/` (configured via `distDir` in `quasar.config.js`).
 
-1. Build this repo → outputs to `dist/` (or `dist/pwa/` for PWA).
-2. Copy `dist/` contents into `kikoeru-express/dist/`.
-3. Start `kikoeru-express` — it serves the SPA/PWA as static files.
-
-```bash
-# From this repo (kikoeru-quasar)
-npm install
-npm run build           # or: quasar build -m pwa
-cp -r dist/pwa/* ../kikoeru-express/dist/
-
-# From kikoeru-express
-npm install
-npm start               # Serves frontend on port 8888
-```
-
-### Socket.IO Events
-
-- Client emits: none (server-side triggers scanning)
-- Server emits: scan progress events (`SCAN_INIT_STATE`, `SCAN_DONE`, `SCAN_ERROR`, `SCAN_PROGRESS`)
-
-The socket is exposed globally via `$socket` (from `src/boot/socket.io.js`). It connects after the user is authenticated.
+- **Workspace scripts:** `npm run dev:frontend` / `npm run build:frontend` from root.
+- **Dev proxy:** `quasar dev` proxies `/api` and `/socket.io` to `localhost:8888`.
+- **Socket.IO client:** Exposed globally as `$socket` (`src/boot/socket.io.js`), connects after auth. Listens for scan progress events only.
 
 ---
 
@@ -382,9 +350,7 @@ The socket is exposed globally via `$socket` (from `src/boot/socket.io.js`). It 
 
 ## 10. Development Tips
 
-- **Dev server proxy:** The Quasar dev server (`quasar dev`) proxies `/api` and `/socket.io` to `localhost:8888` (configured in `quasar.config.js`). Make sure the backend is running.
-- **JWT in dev:** If auth is enabled on the backend, log in via the `/login` page first. The token is stored in LocalStorage and persists across hot reloads.
-- **PWA testing:** In dev mode, service workers are disabled. Test PWA features with a production build.
-- **Build output:** `quasar build` outputs to `dist/spa/` (SPA) or `dist/pwa/` (PWA). Copy the appropriate directory to the backend's `dist/` folder.
-- **Dark mode persistence:** Quasar's `Dark` plugin in `quasar.config.js` is set to `dark: 'auto'`, which respects the OS preference. Manual toggle in `MainLayout.vue` calls `Dark.toggle()`.
+- **JWT in dev:** If auth is enabled, log in via `/login` first. Token persists across hot reloads.
+- **PWA testing:** Dev mode disables service workers. Use a production build to test PWA features.
+- **Dark mode:** Quasar's `Dark` plugin respects OS preference (`dark: auto`). Toggle via `Dark.toggle()` in `MainLayout.vue`.
 - **Component debugging:** Install Vue DevTools for inspecting Vuex state and component hierarchy.
