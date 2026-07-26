@@ -8,6 +8,7 @@ exports.up = async function(knex) {
 
     await knex.transaction(async (trx) => {
       await trx.raw('DROP INDEX IF EXISTS t_work_index');
+      await trx.raw('DROP VIEW IF EXISTS staticMetadata');
 
       await trx.schema.createTable('t_work_new', (table) => {
         table.increments();
@@ -34,7 +35,7 @@ exports.up = async function(knex) {
         table.index(['circle_id', 'release', 'dl_count', 'review_count', 'price', 'rate_average_2dp'], 't_work_index');
       });
 
-      await trx.raw(`INSERT INTO t_work_new (id, created_at, updated_at, root_folder, dir, title, circle_id, nsfw, release, dl_count, price, review_count, rate_count, rate_average_2dp, rate_count_detail, rank, original_work_id, memo, is_custom_meta) SELECT id, created_at, updated_at, root_folder, dir, title, circle_id, nsfw, release, dl_count, price, review_count, rate_count, rate_average_2dp, rate_count_detail, rank, original_work_id, memo, is_custom_meta FROM t_work`);
+      await trx.raw(`INSERT INTO t_work_new (id, created_at, updated_at, root_folder, dir, title, circle_id, nsfw, release, dl_count, price, review_count, rate_count, rate_average_2dp, rate_count_detail, rank, memo) SELECT id, created_at, updated_at, root_folder, dir, title, circle_id, nsfw, release, dl_count, price, review_count, rate_count, rate_average_2dp, rate_count_detail, rank, memo FROM t_work`);
 
       await trx.raw('DROP TABLE t_work');
       await trx.raw('ALTER TABLE t_work_new RENAME TO t_work');

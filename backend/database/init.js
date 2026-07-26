@@ -8,58 +8,6 @@ const { config, updateConfig } = require('../config');
 const { applyFix } = require('../upgrade');
 const { createSchema } = require('./schema');
 
-/**
- * Remove the leftover lyric_status column and staticMetadata view
- * from the closed-source database version.
- */
-async function removeLyricStatus() {
-  if (!await knex.schema.hasColumn('t_work', 'lyric_status')) {
-    return; // already clean
-  }
-
-  console.log('检测到遗留的 lyric_status 列，正在移除...');
-
-  await knex.raw('PRAGMA foreign_keys=off');
-  await knex.raw('PRAGMA ignore_check_constraints=on');
-
-  await knex.transaction(async (trx) => {
-    await trx.raw('DROP INDEX IF EXISTS t_work_index');
-
-    await trx.schema.createTable('t_work_new', (table) => {
-      table.increments();
-      table.datetime('created_at').notNullable().defaultTo(trx.raw('CURRENT_TIMESTAMP'));
-      table.datetime('updated_at').notNullable().defaultTo(trx.raw('CURRENT_TIMESTAMP'));
-      table.string('root_folder', 255).notNullable();
-      table.string('dir', 255).notNullable();
-      table.string('title', 255).notNullable();
-      table.integer('circle_id').notNullable();
-      table.boolean('nsfw');
-      table.string('release', 255);
-      table.integer('dl_count');
-      table.integer('price');
-      table.integer('review_count');
-      table.integer('rate_count');
-      table.float('rate_average_2dp');
-      table.text('rate_count_detail');
-      table.text('rank');
-      table.integer('original_work_id').notNullable().defaultTo(0);
-      table.json('memo');
-      table.integer('is_custom_meta').defaultTo(0);
-      table.foreign('circle_id').references('id').inTable('t_circle');
-      table.index(['circle_id', 'release', 'dl_count', 'review_count', 'price', 'rate_average_2dp'], 't_work_index');
-    });
-
-    await trx.raw(`INSERT INTO t_work_new (id, created_at, updated_at, root_folder, dir, title, circle_id, nsfw, release, dl_count, price, review_count, rate_count, rate_average_2dp, rate_count_detail, rank, original_work_id, memo, is_custom_meta) SELECT id, created_at, updated_at, root_folder, dir, title, circle_id, nsfw, release, dl_count, price, review_count, rate_count, rate_average_2dp, rate_count_detail, rank, original_work_id, memo, is_custom_meta FROM t_work`);
-
-    await trx.raw('DROP TABLE t_work');
-    await trx.raw('ALTER TABLE t_work_new RENAME TO t_work');
-  });
-
-  await knex.raw('PRAGMA ignore_check_constraints=off');
-  await knex.raw('PRAGMA foreign_keys=on');
-
-  console.log('lyric_status 列已移除。');
-}
 
 /**
  * Create or recreate the staticMetadata view using the open-source definition
@@ -177,7 +125,6 @@ const initApp = async () => {
 
   // Always ensure the staticMetadata view exists (handles closed-source db leftovers)
   if (databaseExist) {
-    await removeLyricStatus();
     await createStaticMetadataView();
   }
 };
