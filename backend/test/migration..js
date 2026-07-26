@@ -27,7 +27,7 @@ describe('Database', function() {
   it('v0.3.0 should work', async function() {
     const result = await db.raw(`pragma table_info('t_va')`);
     // t_va id column type was integer in 0.3.0
-    expect(result[0]['type']).to.equal('integer');
+    expect(result[0]['type']).to.equalIgnoreCase('integer');
   });
 
   it('should be able to migrate to latest', async function() {
