@@ -307,9 +307,6 @@ export default {
       'oldWorkCardUIStyle',
     ]),
   },
-
-  // keep-alive hooks
-  // <keep-alive /> is set in MainLayout
   activated () {
     this.stopLoad = false
   },
@@ -317,6 +314,7 @@ export default {
   deactivated () {
     this.stopLoad = true
   },
+
 
   watch: {
     url () {
@@ -350,7 +348,6 @@ export default {
     detailMode(newModeSetting) {
       localStorage.detailMode = newModeSetting;
     },
-
     advanceSearchKeywords(newValue) {
       localStorage.advanceSearchKeywords = JSON.stringify(newValue, null, 0)
       this.reset()

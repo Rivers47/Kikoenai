@@ -49,14 +49,14 @@ const routes = [
     children: [
       {
         path: '',
-        redirect: {
-          name: 'works'
-        }
-      },
-      {
-        path: 'works',
         name: 'works',
         component: Works
+      },
+      // Redirect old /works path to / for backwards compatibility
+      // (prevents a replaceState loop that breaks popstate on back navigation)
+      {
+        path: 'works',
+        redirect: to => ({ path: '/', query: to.query })
       },
       {
         path: 'work/:id',

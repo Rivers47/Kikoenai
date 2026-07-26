@@ -161,13 +161,15 @@
 
     <q-page-container :class="{'page-container-style': isFullScreenPage, 'padding-bottom-play-bar': !isFullScreenPage}">
       <!-- <q-page padding> -->
+      <router-view v-slot="{ Component }">
         <keep-alive include="Works">
-          <router-view />
+          <component :is="Component" />
         </keep-alive>
+      </router-view>
       <!-- </q-page> -->
-        <q-page-scroller v-if="!isFullScreenPage" position="bottom-right" :scroll-offset="150" :offset="[18, 90]" class="scroller" :class="{'scroller-hide': !showScroller, 'scroller-show': showScroller}">
-          <q-btn dense fab icon="keyboard_arrow_up" color="accent" padding="sm" />
-        </q-page-scroller>
+      <q-page-scroller v-if="!isFullScreenPage" position="bottom-right" :scroll-offset="150" :offset="[18, 90]" class="scroller" :class="{'scroller-hide': !showScroller, 'scroller-show': showScroller}">
+        <q-btn dense fab icon="keyboard_arrow_up" color="accent" padding="sm" />
+      </q-page-scroller>
     </q-page-container>
 
     <div :style="{'z-index': miniState ? 3001 : 0}" style="position: fixed; bottom: 0;"> <!-- z-index must be greater than header z-index -->

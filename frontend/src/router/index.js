@@ -12,13 +12,18 @@ import routes from './routes'
  */
 
 export default function (/* { store, ssrContext } */) {
+  // Prevent the browser from auto-restoring scroll on popstate — that conflicts
+  // with Vue Router's scrollBehavior (especially with keep-alive components).
+  if (typeof window !== 'undefined') {
+    window.history.scrollRestoration = 'manual'
+  }
+
   const Router = createRouter({
     scrollBehavior(to, from, savedPosition) {
       if (savedPosition) {
         return savedPosition
-      } else {
-        return { x: 0, y: 0 }
       }
+      return { x: 0, y: 0 }
     },
     routes,
 
