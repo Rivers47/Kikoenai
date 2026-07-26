@@ -36,6 +36,36 @@ kikoenai/
 
 ## Quick Start
 
+
+### Container
+
+An OCI container image is built at ()[https://github.com/Rivers47/Kikoenai/pkgs/container/kikoenai]
+
+Sample rootless quadlet config
+
+```
+[Unit]
+Description=Kikoeru ASMR server
+
+[Container]
+Image=ghcr.io/rivers47/kikoenai:latest
+ContainerName=kikoeru-server
+
+Volume=/path/to/sqlite:/usr/src/kikoeru/sqlite
+Volume=/path/to/covers:/usr/src/kikoeru/covers
+Volume=/path/to/config:/usr/src/kikoeru/config
+
+Mount=type=bind,src=/path/to/works,dst=/usr/src/kikoeru/VoiceWork,ro=true
+AutoUpdate=registry
+User=%U:%G
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target default.target
+```
+
 ### Development
 
 ```bash
@@ -63,7 +93,6 @@ npm run build
 # Start the production server
 npm start
 ```
-
 ### Individual Package Scripts
 
 Each package retains its own scripts, accessible via npm workspaces:
@@ -90,7 +119,7 @@ The frontend builds directly into `backend/dist/`, which is served as static con
 - [ ] Edit metadata
 - [x] DB migration from number178's closed source version
 - [ ] DB migration from Kikoeru-project's version
-- [ ] Container build
+- [x] Container build
 
 ## License
 
