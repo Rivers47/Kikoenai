@@ -247,12 +247,16 @@ export default {
       advanceSearchKeywords: [],
       isAdvanceSearch: false,
       isActive: false,
+      _lastUrl: null,
     }
   },
   created () {
     this.refreshPageTitle();
     this.seed = Math.floor(Math.random() * 100);
+    this._lastUrl = this.url
+    this.checkAdvanceSearchMode()
   },
+
   mounted() {
     if (localStorage.sortCategoryOption) {
       this.sortCategoryOption = localStorage.sortCategoryOption;
@@ -277,7 +281,6 @@ export default {
       this.advanceSearchKeywords = JSON.parse(localStorage.advanceSearchKeywords || "[]");
     }
 
-    this.checkAdvanceSearchMode()
   },
 
   computed: {
@@ -311,6 +314,9 @@ export default {
     this.$nextTick(() => {
       this.stopLoad = false
     })
+    if (this._lastUrl !== null && this.url !== this._lastUrl) {
+      this.reset()
+    }
   },
   deactivated () {
     this.isActive = false
@@ -481,6 +487,7 @@ export default {
       this.stopLoad = true
       this.refreshPageTitle()
       this.pagination = { currentPage:0, pageSize:12, totalCount:0 }
+      this._lastUrl = this.url
       window.scrollTo(0, 0)
       this.requestWorksQueue()
         .then(() => {
