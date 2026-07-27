@@ -68,7 +68,6 @@ PWA的优点：基本页面零延迟，可以像手机APP一样通过浏览器�
 ├── app.js                   # 项目入口文件
 ├── socket.js                # 用于初始化socket.io
 ├── config.js                # 用于生成与修改 config.json 配置文件，导出公共配置以及升级锁
-├── Dockerfile               # 用于构建 docker 镜像的文本文件
 ├── docker-compose.yml       # 用于使用docker-compose一键构建环境
 ├── package.json             # npm 脚本和依赖项
 ├── eslintrc.json            # ESLint

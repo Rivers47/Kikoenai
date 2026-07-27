@@ -45,11 +45,11 @@ Sample rootless quadlet config
 
 ```
 [Unit]
-Description=Kikoeru ASMR server
+Description=ASMR server
 
 [Container]
 Image=ghcr.io/rivers47/kikoenai:latest
-ContainerName=kikoeru-server
+ContainerName=kikoenai
 
 Volume=/path/to/sqlite:/usr/src/kikoeru/sqlite
 Volume=/path/to/covers:/usr/src/kikoeru/covers
@@ -58,6 +58,7 @@ Volume=/path/to/config:/usr/src/kikoeru/config
 Mount=type=bind,src=/path/to/works,dst=/usr/src/kikoeru/VoiceWork,ro=true
 AutoUpdate=registry
 User=%U:%G
+UserNS=keep-id
 
 [Service]
 Restart=always
@@ -65,6 +66,11 @@ Restart=always
 [Install]
 WantedBy=multi-user.target default.target
 ```
+
+Alternatively, use the provided `compose-example.yaml` with with your container compose tool of choice.
+Edit `/path/to/your/voiceworks` to your folder that contains the voice work files.
+
+The server will be up on port `4545` on the host.
 
 ### Development
 
@@ -113,8 +119,8 @@ The frontend builds directly into `backend/dist/`, which is served as static con
 - [ ] Support multiple languages
 - [ ] Support other metadata websites
 - [ ] Unify code language to English
-- [ ] Fix PWA issues
-- [ ] Refresh metadata for a single work
+- [x] Fix PWA issues
+- [x] Refresh metadata for a single work
 - [ ] Optimize DB query speed
 - [ ] Edit metadata
 - [x] DB migration from number178's closed source version

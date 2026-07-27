@@ -58,7 +58,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           context: ./backend/
           containerfiles: |
-            ./backend/Dockerfile
+            ./Containerfile
           oci: true
 
       - name: Push to GitHub Container Registry

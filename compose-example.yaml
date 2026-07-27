@@ -1,0 +1,17 @@
+services:
+  kikoenai:
+    container_name: kikoenai
+    image: ghcr.io/rivers47/kikoenai:latest
+    ports:
+      - "4545:8888"
+    volumes:
+      - kikoenai-sqlite:/usr/src/kikoeru/sqlite
+      - kikoenai-config:/usr/src/kikoeru/config
+      - kikoenai-covers:/usr/src/kikoeru/covers
+      - /path/to/your/voiceworks:/usr/src/kikoeru/VoiceWork
+    restart: unless-stopped
+
+volumes:
+  kikoenai-sqlite:
+  kikoenai-config:
+  kikoenai-covers:
