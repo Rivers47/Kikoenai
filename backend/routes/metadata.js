@@ -8,6 +8,7 @@ const { config } = require('../config');
 const normalize = require('./utils/normalize');
 const { isValidRequest } = require('./utils/validate');
 const { formatID, scrapeWorkMemo } = require('../filesystem/utils');
+const { scrapeWorkMetadataFromDLsite } = require('../scraper/dlsite');
 
 const PAGE_SIZE = config.pageSize || 12;
 
@@ -302,6 +303,25 @@ router.post('/work/scan/:id',
       res.status(500).send({error: "扫描作品文件失败：" + err.message});
     }
   } 
+);
+
+// refresh metadata of a work from DLsite, and update the database
+router.post('/refresh/:id',
+  param('id').isInt(),
+  async function(req, res) {
+    if(!isValidRequest(req, res)) return;
+
+    const work_id = parseInt(req.params.id);
+    try {
+      const metadata = await scrapeWorkMetadataFromDLsite(work_id, config.tagLanguage);
+      metadata.id = work_id;
+      await db.updateWorkMetadata(metadata, { refreshAll: true });
+      res.send({ message: 'Refresh metadata for work ' + work_id + ' successful', metadata });
+    } catch (err) {
+      console.error(err);
+      res.status(500).send({error: "Failed to refresh metadata for work " + work_id + ": " + err.message});
+    }
+  }
 );
 
 module.exports = router;

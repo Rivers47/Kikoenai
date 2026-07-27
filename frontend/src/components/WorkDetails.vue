@@ -167,6 +167,8 @@
 
       <q-btn dense @click="scanWorkFile" color="cyan q-mt-sm shadow-4 q-mx-xs q-px-sm" label="扫描本地文件" />
 
+      <q-btn dense :loading="refreshMetadataLoading" @click="refreshMetadata" color="cyan q-mt-sm shadow-4 q-mx-xs q-px-sm" label="刷新元数据" />
+
       <WriteReview v-if="showReviewDialog" @closed="processReview" :workid="metadata.id" :metadata="metadata"></WriteReview>
     </div>
   </div>
@@ -197,7 +199,7 @@ export default {
 
   data() {
     return {
-      rating: 0,
+      refreshMetadataLoading: false,
       userMarked: false,
       progress: '',
       showReviewDialog: false,
@@ -337,6 +339,20 @@ export default {
       } catch(err) {
         console.error(err);
         this.showErrNotif(err.message || err);
+      }
+    },
+
+    async refreshMetadata() {
+      this.refreshMetadataLoading = true;
+      try {
+        await this.$axios.post(`/api/refresh/${this.metadata.id}`);
+        this.showSuccNotif('元数据刷新成功');
+        this.$emit('reset');
+      } catch(err) {
+        console.error(err);
+        this.showErrNotif(err.response?.data?.error || err.message || err);
+      } finally {
+        this.refreshMetadataLoading = false;
       }
     }
   }
