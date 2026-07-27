@@ -12,12 +12,7 @@
           </router-link>
         </q-toolbar-title>
 
-        <q-input v-if="$route.name !== 'advance search'" dark dense rounded standout v-model="keyword" debounce="500" input-class="text-right" class="q-mr-sm">
-          <template v-slot:before>
-            <q-btn round dense flat icon="manage_search" to="/search">
-              <q-tooltip>点此进入聚合搜索，支持多关键字搜索</q-tooltip>
-            </q-btn>
-          </template>
+        <q-input dark dense rounded standout v-model="keyword" debounce="500" input-class="text-right" class="q-mr-sm">
           <template v-slot:append>
             <q-icon v-if="keyword === ''" name="search" />
             <q-icon v-else name="clear" class="cursor-pointer" @click="keyword = ''" />

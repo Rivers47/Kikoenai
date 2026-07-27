@@ -119,7 +119,6 @@ Main layout routes:
 |-------|------|------|-------------|
 | `/` | — | redirect→works | Root redirect |
 | `/works` | `works` | Works | Media library (grid/list, sort, filter, search) |
-| `/search` | `advance search` | Works | Advanced multi-keyword search |
 | `/work/:id` | — | Work | Work detail + track list |
 | `/fullScreenPlayer/:id?` | — | FullScreenPlayer | Full-screen player mode |
 | `/circles` | — | List | Browse by circle (artist group) |
@@ -219,17 +218,13 @@ MainLayout
 ### 2.7 Key Frontend Features
 
 1. **Infinite Scroll:** `Works.vue` uses `q-infinite-scroll` to paginate results (triggers `onLoad()` callback).
-2. **Advanced Search:** Multi-keyword search with typed conditions defined in `utils.js` as `AdvanceSearchCondType`:
-   - `FUZZY` (1) — full-text fuzzy search
-   - `VA` (2) — voice actor filter
-   - `TAG` (3) — tag filter
-   - `CIRCLE` (4) — circle filter
-3. **Cover Blurring:** `CoverSFW.vue` handles NSFW content blurring with a toggle.
-4. **Sleep Timer:** `SleepMode.vue` provides a countdown timer to stop playback.
-5. **Dark Mode:** Toggled via Quasar's `Dark` plugin, persisted in browser across sessions.
-6. **Progress Tracking:** Users can mark works as `listening`, `listened`, `replay`, or `postponed`.
-7. **Work Card Variants:** Two card styles — modern `WorkCard.vue` (hover-reveal tags) and legacy `OldWorkCard.vue` (always-show tags), toggleable via LocalStorage key `old_work_card_ui_style_key`.
-8. **Keyboard Shortcuts:** Space for play/pause, arrow keys for seeking, etc. (handled in AudioPlayer).
+
+2. **Cover Blurring:** `CoverSFW.vue` handles NSFW content blurring with a toggle.
+3. **Sleep Timer:** `SleepMode.vue` provides a countdown timer to stop playback.
+4. **Dark Mode:** Toggled via Quasar's `Dark` plugin, persisted in browser across sessions.
+5. **Progress Tracking:** Users can mark works as `listening`, `listened`, `replay`, or `postponed`.
+6. **Work Card Variants:** Two card styles — modern `WorkCard.vue` (hover-reveal tags) and legacy `OldWorkCard.vue` (always-show tags), toggleable via LocalStorage key `old_work_card_ui_style_key`.
+7. **Keyboard Shortcuts:** Space for play/pause, arrow keys for seeking, etc. (handled in AudioPlayer).
 
 ---
 
