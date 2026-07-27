@@ -246,14 +246,13 @@ export default {
       editKeyword: "",
       advanceSearchKeywords: [],
       isAdvanceSearch: false,
+      isActive: false,
     }
   },
-
   created () {
     this.refreshPageTitle();
     this.seed = Math.floor(Math.random() * 100);
   },
-
   mounted() {
     if (localStorage.sortCategoryOption) {
       this.sortCategoryOption = localStorage.sortCategoryOption;
@@ -308,17 +307,21 @@ export default {
     ]),
   },
   activated () {
-    this.stopLoad = false
+    this.isActive = true
+    this.$nextTick(() => {
+      this.stopLoad = false
+    })
   },
-
   deactivated () {
+    this.isActive = false
     this.stopLoad = true
   },
 
-
   watch: {
     url () {
-      this.reset()
+      if (this.isActive && (this.$route.name === 'works' || this.$route.name === 'advance search')) {
+        this.reset()
+      }
     },
 
     sortCategoryOption (v) {
@@ -365,8 +368,11 @@ export default {
     },
 
     '$route.query.keyword'() {
-      this.reset()
+      if (this.isActive) {
+        this.reset()
+      }
     },
+
   },
 
   methods: {
@@ -475,6 +481,7 @@ export default {
       this.stopLoad = true
       this.refreshPageTitle()
       this.pagination = { currentPage:0, pageSize:12, totalCount:0 }
+      window.scrollTo(0, 0)
       this.requestWorksQueue()
         .then(() => {
           this.stopLoad = false

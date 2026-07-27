@@ -108,3 +108,6 @@ graph.svg
 
 # Package lock for individual workspaces (root lock file only)
 packages/*/package-lock.json
+
+# Debugging tools
+.playwright-mcp
