@@ -90,13 +90,15 @@ export default {
         }
       }
     },
-
+    
     requestData () {
       this.requestMetaData();
       this.requestTracks();
     },
 
     resumeMetadataPlayHistroy() {
+      // 以最小化形式打开播放器
+      this.$store.commit('AudioPlayer/TOGGLE_HIDE')
       this.$store.commit('AudioPlayer/SET_QUEUE', {
         workId: this.metadata.id,
         queue: this.metadata.state.queue,
