@@ -7,9 +7,12 @@ WORKDIR /usr/src/kikoeru
 # Install build dependencies required by some native npm modules
 RUN apk add --no-cache python3 make gcc g++
 
-# Copy package files and install production dependencies
+# Copy root package files and backend workspace package.json
 COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+COPY backend/package*.json ./backend/
+
+# Install only backend production dependencies using the workspace-aware root lock
+RUN npm ci -w backend --omit=dev && npm cache clean --force
 
 # Final stage
 FROM node:24-alpine
@@ -23,11 +26,8 @@ RUN apk add --no-cache tini ffmpeg
 # Copy production dependencies from build stage
 COPY --from=build /usr/src/kikoeru/node_modules ./node_modules
 
-# Copy frontend build artifacts (placed in dist/ by CI before Docker build)
-COPY ./dist ./dist
-
-# Copy backend source code
-COPY . .
+# Copy backend source (including frontend build artifacts from backend/dist/)
+COPY ./backend/ ./
 
 EXPOSE 8888
 

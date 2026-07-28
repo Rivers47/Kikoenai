@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+
+# Node modules
+node_modules
+.pnp
+.pnp.js
+
+# Frontend source — not needed in the container
+frontend
+.quasar
+
+# Build artifacts (already placed by CI)
+# dist is handled by explicit COPY in Containerfile
+
+# Config
+config/*
+covers/*
+sqlite/*
+
+# Tests
+test-results
+tests
+*.spec.js
+
+# Nuxt
+.nuxt
+
+# VS Code
+.vscode
+
+# Env
+.env
+.env.*
+
+# Logs
+*.log
+npm-debug.log*
+
+# Docs
+*.md
+docs
+
+# GitHub
+.github
+
+# OS
+.DS_Store
+Thumbs.db
