@@ -146,7 +146,6 @@ router.get('/check-lrc/:id/:index',
                   trackTitle + ext.toUpperCase(), // sometitle.mp3 -> sometitle.mp3.LRC
                 ];
                 for (const tryFileLoc of tryFileLocs) {
-                  console.log(`尝试查找歌词文件：${tryFileLoc}`);
                   if (fs.existsSync(path.join(fileDir, tryFileLoc))) {
                     foundLyricFileName = tryFileLoc;
                     break;

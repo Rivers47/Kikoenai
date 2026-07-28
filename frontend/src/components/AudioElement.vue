@@ -162,14 +162,13 @@ export default {
       if (url) {
         const media = this.plyr.media;
         media.load();
+        this._debugLog('source_changed')
         this._endedHandled = false;
         this._stopKeepalive()
         this.loadLrcFile();
         this.updateMediaSessionMetadata();
-        // Explicitly start playback after loading new source.
-        // On Android when locked, 'canplay' may not fire (browser throttles
-        // media loading in hidden pages), so we cannot rely on onCanplay alone.
         if (this.playing) {
+          this._debugLog('source_play_attempt')
           this.plyr.play().catch(() => {})
         }
       }
@@ -232,12 +231,14 @@ export default {
     formatSeconds,
 
     onPause() {
+      this._debugLog('onPause')
       this.playLrc(false)
       this._stopKeepalive()
       this.PAUSE()
       try { navigator.mediaSession.playbackState = 'paused' } catch (e) {}
     },
     onPlaying() {
+      this._debugLog('onPlaying')
       this.playLrc(true)
       this._startKeepalive()
       this.PLAY()
@@ -267,6 +268,7 @@ export default {
     ]),
 
     onCanplay () {
+      this._debugLog('onCanplay')
       this.SET_DURATION(this.plyr.duration)
 
       if (this.playing && this.plyr.currentTime !== this.plyr.duration) {
@@ -307,6 +309,7 @@ export default {
     },
 
     onEnded () {
+      this._debugLog('onEnded')
       this._endedHandled = true;
       this._stopKeepalive()
       switch (this.playMode.name) {
@@ -341,15 +344,10 @@ export default {
 
     _startKeepalive() {
       this._stopKeepalive()
-      // Recurring 30s timeout that keeps the JS event loop alive when
-      // the phone is locked. Without this, Chrome may batch native DOM
-      // events (like 'ended') and delay JS execution, causing the next
-      // track to not start playing promptly.
       const tick = () => {
         if (!this.playing || !this.plyr) return
-        // Retry play if the media loaded but autoplay was blocked
-        // (common when the page is hidden / phone is locked)
         if (this.plyr.media && this.plyr.media.paused && this.plyr.duration > 0) {
+          this._debugLog('keepalive_retry_play')
           this.plyr.play().catch(() => {})
         }
         this._keepaliveTimer = setTimeout(tick, 30000)
@@ -362,6 +360,27 @@ export default {
         clearTimeout(this._keepaliveTimer)
         this._keepaliveTimer = null
       }
+    },
+
+    _debugLog(event) {
+      // Send debug event to server for analysis
+      // Uses fetch with keepalive so it survives page suspension
+      try {
+        fetch('/api/debug/playback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event,
+            source: this.source ? this.source.slice(0, 80) : 'none',
+            track: this.queueIndex,
+            time: this.plyr ? this.plyr.currentTime?.toFixed(1) : -1,
+            duration: this.plyr ? this.plyr.duration?.toFixed(1) : -1,
+            playing: this.playing,
+            ts: Date.now()
+          }),
+          keepalive: true
+        }).catch(() => {})
+      } catch (e) {}
     },
 
     onSeeked() {

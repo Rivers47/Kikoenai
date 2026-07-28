@@ -21,5 +21,6 @@ router.use('/review', require('./review'));
 router.use('/histroy', require('./play_histroy'));
 // Other routes
 router.use('/', require('./metadata'));
+router.use('/debug', require('./debug'));
 
 module.exports = router;
