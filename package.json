@@ -4,7 +4,9 @@
   "private": true,
   "description": "A self-hosted media server for DLsite voice works — monorepo combining backend (kikoeru-express) and frontend (kikoeru-quasar).",
   "homepage": "https://github.com/kikoeru-project/kikoeru-express",
-  "keywords": ["kikoeru"],
+  "keywords": [
+    "kikoeru"
+  ],
   "license": "GPL-3.0-or-later",
   "workspaces": [
     "backend",
@@ -20,9 +22,13 @@
     "lint": "npm run lint -w backend && npm run test -w frontend"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
     "concurrently": "^8.0.0"
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "quasar": "^2.23.2"
   }
 }

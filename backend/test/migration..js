@@ -1,4 +1,4 @@
-/* eslint-disable node/no-unpublished-require */
+/* eslint-disable n/no-unpublished-require */
 // This test checks whether migration from 0.3.0 works
 // There is no easy way to check verify that the schema after the migration is the same as the one created from scratch by createSchema()
 // Every time when I finish checking the schema I set dbVersion in schema.js to the number in the latest migration file

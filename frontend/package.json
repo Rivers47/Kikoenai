@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@quasar/extras": "^1.16.0",
-    "axios": "^0.21.1",
+    "axios": "^1.18.1",
     "lrc-file-parser": "^1.0.7",
     "plyr": "^3.7.8",
     "quasar": "^2.23.1",
@@ -44,11 +44,11 @@
     "@quasar/app-webpack": "^4.4.5",
     "@quasar/babel-preset-app": "^2.0.4",
     "autoprefixer": "^10.5.4",
-    "eslint": "^8.57.0",
-    "eslint-plugin-import": "^2.29.0",
-    "eslint-plugin-vue": "^9.21.0",
+    "eslint": "^10.8.0",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-vue": "^10.10.0",
     "sass": "^1.71.1",
-    "workbox-webpack-plugin": "^7.4.1"
+    "workbox-webpack-plugin": "^7.4.0"
   },
   "engines": {
     "node": ">= 22.0.0",
