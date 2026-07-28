@@ -513,7 +513,7 @@ export default {
       const player = this.plyr;
 
       this.SET_VOLUME(player.volume);
-
+      
       player.on('canplay', () => this.onCanplay());
       player.on('timeupdate', () => this.onTimeupdate());
       player.on('ended', () => this.onEnded());
@@ -521,6 +521,10 @@ export default {
       player.on('playing', () => this.onPlaying());
       player.on('waiting', () => this.onWaiting());
       player.on('pause', () => this.onPause());
+
+      // Direct listener on the media element — browser fires 'ended' on the element
+      // even when the page is hidden (phone locked). Bypasses any plyr event throttling.
+      media.addEventListener('ended', this.onEnded);
     },
 
     initAudioAnalyzer () {
@@ -570,6 +574,16 @@ export default {
       this.loadLrcFile();
     }
   },
+
+  beforeUnmount() {
+    const container = this.$refs.plyrContainer;
+    if (container) {
+      const media = container.querySelector('video') || container.querySelector('audio');
+      if (media) {
+        media.removeEventListener('ended', this.onEnded);
+      }
+    }
+   },
 }
 </script>
 
