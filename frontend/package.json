@@ -34,7 +34,6 @@
     "socket.io-client": "^4.8.1",
     "sortablejs": "^1.15.7",
     "vue": "^3.4.0",
-    "vue-plyr": "^7.0.0",
     "vue-router": "^4.2.0",
     "vue-slider-component": "^4.1.0-beta.7",
     "vuedraggable": "^4.1.0",
