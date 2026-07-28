@@ -25,16 +25,16 @@
     "build": "quasar build -m pwa --debug"
   },
   "dependencies": {
-    "@quasar/extras": "^1.16.0",
+    "@quasar/extras": "^1.18.0",
     "axios": "^1.18.1",
-    "lrc-file-parser": "^1.0.7",
+    "lrc-file-parser": "^2.4.2",
     "plyr": "^3.7.8",
     "quasar": "^2.23.1",
     "register-service-worker": "^1.7.2",
     "socket.io-client": "^4.8.1",
     "sortablejs": "^1.15.7",
     "vue": "^3.4.0",
-    "vue-router": "^4.2.0",
+    "vue-router": "^5.2.0",
     "vue-slider-component": "^4.1.0-beta.7",
     "vuedraggable": "^4.1.0",
     "vuex": "^4.1.0"
