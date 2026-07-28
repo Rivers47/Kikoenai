@@ -9,7 +9,7 @@ const jschardet = require('jschardet');
 const { getTrackList } = require('../filesystem/utils');
 const { joinFragments } = require('./utils/url');
 const { isValidRequest } = require('./utils/validate');
-const jimp = require("jimp");
+const { Jimp, JimpMime } = require('jimp');
 
 // GET (stream) a specific track from work folder
 router.get('/stream/:id/:index',
@@ -198,8 +198,8 @@ router.get('/small-img/:id/:index',
       const fileName = path.join(rootFolder.path, work.dir, track.subtitle || '', track.title);
       const extName = path.extname(fileName).toLowerCase();
       if ([".jpg", ".png", ".bmp"].includes(extName)) {
-        const img = await jimp.read(fileName);
-        const scaledBuf = await img.scaleToFit(64, 64).getBufferAsync(jimp.MIME_JPEG);
+        const img = await Jimp.read(fileName);
+        const scaledBuf = await img.scaleToFit({ w: 64, h: 64 }).getBuffer(JimpMime.jpeg);
         res.setHeader('content-type', 'image/jpeg');
         res.send(scaledBuf);
       } else if (".webp" === extName) {
