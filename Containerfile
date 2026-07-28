@@ -24,7 +24,10 @@ WORKDIR /usr/src/kikoeru
 RUN apk add --no-cache tini ffmpeg
 
 # Copy production dependencies from build stage
+# Root node_modules (hoisted packages)
 COPY --from=build /usr/src/kikoeru/node_modules ./node_modules
+# Workspace node_modules (non-hoisted packages like jsonwebtoken, knex, sqlite3)
+COPY --from=build /usr/src/kikoeru/backend/node_modules ./node_modules
 
 # Copy backend source (including frontend build artifacts from backend/dist/)
 COPY ./backend/ ./
