@@ -89,7 +89,7 @@
     "cross-env": "^7.0.3",
     "eslint": "^10.8.0",
     "eslint-plugin-n": "^18.2.2",
-    "mocha": "^8.3.2",
+    "mocha": "^11.7.6",
     "nodemon": "^3.1.14",
     "serve-index": "^1.9.1"
   }

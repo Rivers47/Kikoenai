@@ -44,7 +44,6 @@
     "@quasar/babel-preset-app": "^2.0.4",
     "autoprefixer": "^10.5.4",
     "eslint": "^10.8.0",
-    "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-vue": "^10.10.0",
     "sass": "^1.71.1",
     "workbox-webpack-plugin": "^7.4.0"
