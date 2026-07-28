@@ -24,10 +24,12 @@ WORKDIR /usr/src/kikoeru
 RUN apk add --no-cache tini ffmpeg
 
 # Copy production dependencies from build stage
-# Root node_modules (hoisted packages)
-COPY --from=build /usr/src/kikoeru/node_modules ./node_modules
-# Workspace node_modules (non-hoisted packages like jsonwebtoken, knex, sqlite3)
+# Backend workspace node_modules first (non-hoisted packages: jsonwebtoken, knex, sqlite3, jimp, etc.)
 COPY --from=build /usr/src/kikoeru/backend/node_modules ./node_modules
+# Then root node_modules on top (hoisted packages: mime@1.6.0 for express/send, etc.)
+# Root wins on the 3 overlapping packages (@jimp, mime, ms) — correct since
+# express/send needs mime@1.6.0, not mime@3.0.0 from jimp's dependency tree
+COPY --from=build /usr/src/kikoeru/node_modules ./node_modules
 
 # Copy backend source (including frontend build artifacts from backend/dist/)
 COPY ./backend/ ./

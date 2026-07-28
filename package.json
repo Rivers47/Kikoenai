@@ -29,6 +29,5 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "quasar": "^2.23.2"
   }
 }
