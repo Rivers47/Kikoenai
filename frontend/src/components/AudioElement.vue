@@ -321,6 +321,22 @@ export default {
       this._debugLog('onEnded')
       this._endedHandled = true;
       this._stopKeepalive()
+      // Log play mode and queue state to debug why next track doesn't start
+      try {
+        fetch('/api/debug/playback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'onEnded_state',
+            playMode: this.playMode.name,
+            queueIndex: this.queueIndex,
+            queueLen: this.queue.length,
+            isLast: this.queueIndex === this.queue.length - 1,
+            ts: Date.now()
+          }),
+          keepalive: true
+        }).catch(() => {})
+      } catch (e) {}
       switch (this.playMode.name) {
         case "all repeat":
           if (this.queueIndex === this.queue.length - 1) {
@@ -346,9 +362,23 @@ export default {
           if (this.queueIndex === this.queue.length - 1) {
             this.PAUSE()
           } else {
-            this.NEXT_TRACK()
-          }
+          this.NEXT_TRACK()
+        }
       }
+      // Log action taken
+      try {
+        fetch('/api/debug/playback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'onEnded_after',
+            queueIndex: this.queueIndex,
+            playing: this.playing,
+            ts: Date.now()
+          }),
+          keepalive: true
+        }).catch(() => {})
+      } catch (e) {}
     },
 
     _startKeepalive() {
