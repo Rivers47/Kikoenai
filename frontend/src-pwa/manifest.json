@@ -1,4 +1,8 @@
 {
+  "name": "Kikoeru",
+  "short_name": "Kikoeru",
+  "id": "kikoeru",
+  "description": "A self-hosted web media player for listening to your DLsite voice works.",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#027be3",
