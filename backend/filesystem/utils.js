@@ -1,6 +1,10 @@
 const fs = require('fs');
 const path = require('path');
-const recursiveReaddir = require('recursive-readdir');
+// Replacement for recursive-readdir: returns all files recursively as absolute paths
+// Uses sync glob since the walked directories are bounded and the result is needed immediately.
+const recursiveReaddir = (dir) => {
+  return fs.globSync('**/*', { cwd: dir }).map(f => path.resolve(dir, f));
+};
 const { orderBy } = require('natural-orderby');
 const { joinFragments } = require('../routes/utils/url');
 const { config } = require('../config');

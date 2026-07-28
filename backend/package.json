@@ -11,7 +11,7 @@
     "kikoeru"
   ],
   "engines": {
-    "node": ">=12.0.0"
+    "node": ">=22.0.0"
   },
   "bin": {
     "kikoeru-express": "app.js"
@@ -75,7 +75,6 @@
     "lodash": "^4.17.21",
     "md5": "^2.3.0",
     "natural-orderby": "^2.0.3",
-    "recursive-readdir": "^2.2.2",
     "socket.io": "^4.8.3",
     "sqlite3": "^6.0.1",
     "string-random": "^0.1.3",

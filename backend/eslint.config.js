@@ -46,6 +46,7 @@ module.exports = [
       ...nodePlugin.configs['flat/recommended'].rules,
       // Overrides after spread
       'n/no-process-exit': 'off',
+      'n/no-unsupported-features/node-builtins': 'off',
       'n/no-unsupported-features/es-syntax': 'off',
     },
   },
