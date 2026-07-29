@@ -100,6 +100,7 @@ export default {
       changeCurrentTime: 0,
       _endedHandled: false,
       _keepaliveTimer: null,
+      _directLoadHash: null,
     }
   },
 
@@ -159,11 +160,34 @@ export default {
     },
 
     source (url, oldUrl) {
+      // Always log source watcher fires to debug why track doesn't advance
+      try {
+        fetch('/api/debug/playback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'source_watcher_fired',
+            oldUrl: (oldUrl||'').slice(0,60),
+            newUrl: (url||'').slice(0,60),
+            urlMatch: url === oldUrl,
+            ts: Date.now()
+          }),
+          keepalive: true
+        }).catch(() => {})
+      } catch (e) {}
       if (url && url !== oldUrl) {
         const media = this.plyr.media;
+        // If onEnded already loaded this track directly (page was frozen
+        // and the watcher was deferred), skip the reload to avoid
+        // resetting playback back to 0.
+        const currentHash = this.currentPlayingFile && this.currentPlayingFile.hash
+        if (this._directLoadHash && currentHash === this._directLoadHash) {
+          this._directLoadHash = null
+          this._debugLog('watcher_skip_direct_load')
+          return
+        }
         media.load();
         this._debugLog('source_changed')
-        // Log URL comparison to identify what's actually changing
         try {
           fetch('/api/debug/playback', {
             method: 'POST',
@@ -375,8 +399,9 @@ export default {
           this.NEXT_TRACK()
         }
       }
-      // Log action taken
+      // Log action taken and whether source computed property changed
       try {
+        const newHash = this.currentPlayingFile && this.currentPlayingFile.hash;
         fetch('/api/debug/playback', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -384,11 +409,36 @@ export default {
             event: 'onEnded_after',
             queueIndex: this.queueIndex,
             playing: this.playing,
+            newHash: newHash,
             ts: Date.now()
           }),
           keepalive: true
         }).catch(() => {})
       } catch (e) {}
+
+      // Directly load and play the next track synchronously.
+      // Chrome freezes hidden pages: Vue's nextTick-based `source` watcher
+      // may be deferred for minutes, so the watcher-driven media.load()
+      // happens far too late. Doing it here (inside the event handler)
+      // starts the next track immediately. The watcher will later fire
+      // with the same URL; the marker below makes it skip the reload.
+      if (this.playing && this.plyr && this.playMode.name !== "repeat once") {
+        const media = this.plyr.media
+        const newUrl = this.source
+        if (media && newUrl) {
+          this._directLoadHash = this.currentPlayingFile && this.currentPlayingFile.hash
+          media.src = newUrl
+          media.load()
+          this._endedHandled = false
+          this.loadLrcFile()
+          this.updateMediaSessionMetadata()
+          this._debugLog('direct_load')
+          media.play().catch(() => {
+            this._debugLog('direct_load_play_rejected')
+          })
+          this._startKeepalive()
+        }
+      }
     },
 
     _startKeepalive() {
@@ -483,6 +533,19 @@ export default {
         if (!this.playing) this.lrcObj.pause()
         this.SET_HAS_LYRIC(true);
       } catch(error) {
+        try {
+          fetch('/api/debug/playback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              event: 'lyric_fetch_error',
+              message: error && error.message,
+              status: error && error.response && error.response.status,
+              ts: Date.now()
+            }),
+            keepalive: true
+          }).catch(() => {})
+        } catch (e) {}
         if (error.response) {
           if (error.response.status !== 401) {
             console.error(error);
@@ -623,6 +686,27 @@ export default {
       // Direct listener on the media element — browser fires 'ended' on the element
       // even when the page is hidden (phone locked). Bypasses any plyr event throttling.
       media.addEventListener('ended', this.onEnded);
+
+      // Log media element errors (MEDIA_ERR_NETWORK etc.) to debug endpoint
+      media.addEventListener('error', () => {
+        const err = media.error;
+        try {
+          fetch('/api/debug/playback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              event: 'media_error',
+              code: err && err.code,
+              message: err && err.message,
+              src: (media.currentSrc || '').slice(0, 60),
+              networkState: media.networkState,
+              readyState: media.readyState,
+              ts: Date.now()
+            }),
+            keepalive: true
+          }).catch(() => {})
+        } catch (e) {}
+      });
     },
 
     initAudioAnalyzer () {
