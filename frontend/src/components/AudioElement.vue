@@ -99,6 +99,7 @@ export default {
       isChangingCurrentTime: false,
       changeCurrentTime: 0,
       _endedHandled: false,
+      _keepaliveTimer: null,
     }
   },
 
@@ -162,6 +163,7 @@ export default {
         const media = this.plyr.media;
         media.load();
         this._endedHandled = false;
+        this._stopKeepalive()
         this.loadLrcFile();
         this.updateMediaSessionMetadata();
         // Explicitly start playback after loading new source.
@@ -231,11 +233,13 @@ export default {
 
     onPause() {
       this.playLrc(false)
+      this._stopKeepalive()
       this.PAUSE()
       try { navigator.mediaSession.playbackState = 'paused' } catch (e) {}
     },
     onPlaying() {
       this.playLrc(true)
+      this._startKeepalive()
       this.PLAY()
       try { navigator.mediaSession.playbackState = 'playing' } catch (e) {}
     },
@@ -304,6 +308,7 @@ export default {
 
     onEnded () {
       this._endedHandled = true;
+      this._stopKeepalive()
       switch (this.playMode.name) {
         case "all repeat":
           if (this.queueIndex === this.queue.length - 1) {
@@ -331,6 +336,31 @@ export default {
           } else {
             this.NEXT_TRACK()
           }
+      }
+    },
+
+    _startKeepalive() {
+      this._stopKeepalive()
+      // Recurring 30s timeout that keeps the JS event loop alive when
+      // the phone is locked. Without this, Chrome may batch native DOM
+      // events (like 'ended') and delay JS execution, causing the next
+      // track to not start playing promptly.
+      const tick = () => {
+        if (!this.playing || !this.plyr) return
+        // Retry play if the media loaded but autoplay was blocked
+        // (common when the page is hidden / phone is locked)
+        if (this.plyr.media && this.plyr.media.paused && this.plyr.duration > 0) {
+          this.plyr.play().catch(() => {})
+        }
+        this._keepaliveTimer = setTimeout(tick, 30000)
+      }
+      this._keepaliveTimer = setTimeout(tick, 30000)
+    },
+
+    _stopKeepalive() {
+      if (this._keepaliveTimer !== null) {
+        clearTimeout(this._keepaliveTimer)
+        this._keepaliveTimer = null
       }
     },
 
@@ -576,6 +606,7 @@ export default {
   },
 
   beforeUnmount() {
+    this._stopKeepalive()
     const container = this.$refs.plyrContainer;
     if (container) {
       const media = container.querySelector('video') || container.querySelector('audio');
