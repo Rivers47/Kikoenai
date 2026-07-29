@@ -158,11 +158,20 @@ export default {
       }
     },
 
-    source (url) {
-      if (url) {
+    source (url, oldUrl) {
+      if (url && url !== oldUrl) {
         const media = this.plyr.media;
         media.load();
         this._debugLog('source_changed')
+        // Log URL comparison to identify what's actually changing
+        try {
+          fetch('/api/debug/playback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'source_url_diff', oldUrl: (oldUrl||'').slice(0,60), newUrl: (url||'').slice(0,60), ts: Date.now() }),
+            keepalive: true
+          }).catch(() => {})
+        } catch (e) {}
         this._endedHandled = false;
         this._stopKeepalive()
         this.loadLrcFile();
