@@ -5,8 +5,15 @@ const router = express.Router();
 // Logs debug events from the frontend to the server console
 router.post('/playback',
   (req, res, next) => {
-    const { event, source, track, time, duration } = req.body;
-    console.log(`[DEBUG PLAYBACK] ${event} | track=${track} | time=${time} | duration=${duration} | source=${source}`);
+    const body = req.body || {};
+    const { event, source, track, time, duration } = body;
+    // Log standard fields as before
+    if (event && track !== undefined) {
+      console.log(`[DEBUG PLAYBACK] ${event} | track=${track} | time=${time} | duration=${duration} | source=${source}`);
+    } else {
+      // Log custom event payloads (onEnded_state, onEnded_after, etc.)
+      console.log(`[DEBUG PLAYBACK] ${JSON.stringify(body)}`);
+    }
     res.json({ ok: true });
   }
 );

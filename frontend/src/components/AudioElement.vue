@@ -178,7 +178,17 @@ export default {
         this.updateMediaSessionMetadata();
         if (this.playing) {
           this._debugLog('source_play_attempt')
-          this.plyr.play().catch(() => {})
+          this.plyr.play().catch((e) => {
+            this._debugLog('source_play_rejected')
+            try {
+              fetch('/api/debug/playback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ event: 'source_play_error', error: String(e), name: e && e.name, ts: Date.now() }),
+                keepalive: true
+              }).catch(() => {})
+            } catch (err) {}
+          })
         }
       }
     },
