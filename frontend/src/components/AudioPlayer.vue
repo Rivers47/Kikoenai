@@ -281,17 +281,15 @@
         <!-- 操作当前播放列表的控制按钮 -->
         <div class="row" style="padding: 5px; height: 45px;">
           <q-btn dense round size="md" icon="edit" color="primary" @click="editCurrentPlayList = !editCurrentPlayList" style="height: 35px; width: 35px;" class="col-auto" />
-          <q-btn dense round size="md" icon="save" color="teal" style="height: 35px; width: 35px;" class="col-auto q-mx-sm" />
+          <q-btn dense round size="md" icon="save" color="teal" style="height: 35px; width: 35px;" class="col-auto q-mx-sm" @click="editCurrentPlayList = false" />
           <q-space />
-          <q-btn dense round size="md" icon="delete_forever" color="red" @click="emptyQueue()" style="height: 35px; width: 35px;" class="col-auto" />
         </div>
         
         <q-separator />
 
         <!-- 音频文件列表 -->
         <q-list style="max-height: 450px" class="scroll" ref="playlistRef">
-          <div ref="sortableRef">
-            <q-item
+          <q-item
               clickable
               v-ripple
               v-for="(track, index) in queueCopy"
@@ -313,14 +311,9 @@
 
               <q-item-section>
                 <q-item-label>{{ track.title }}</q-item-label>
-                <q-item-label caption lines="1">{{ track.workTitle }}</q-item-label>
-              </q-item-section>
-
-              <q-item-section side class="handle" v-show="editCurrentPlayList">
-                <q-icon name="reorder" :color="queueIndex === index ? 'white' : 'dark'" />
-              </q-item-section>
-            </q-item>
-          </div>
+              <q-item-label caption lines="1">{{ track.workTitle }}</q-item-label>
+            </q-item-section>
+          </q-item>
         </q-list>
       </q-card>
     </q-dialog>
@@ -358,7 +351,6 @@
 </template>
 
 <script>
-import Sortable from 'sortablejs'
 import AudioElement from 'components/AudioElement'
 import Scrollable from 'components/Scrollable'
 import AudioEqualizer from 'components/AudioEqualizer'
@@ -393,7 +385,6 @@ export default {
       fixWhoStartFirst: "", // "audio", "lyric" // 先看到的歌词，还是先听到的声音
       fixStartMills: 0,
       fixStopMills: 0,
-      sortable: null,
     }
   },
 
@@ -412,20 +403,9 @@ export default {
     if (this.$q.platform.is.desktop) {
       window.addEventListener('keydown', this.onKeyDown);
     }
-
-    // 监听对话框显示，初始化 SortableJS
-    this.$watch('showCurrentPlayList', (flag) => {
-      if (flag) {
-        this.$nextTick(() => this.initSortable())
-      } else {
-        this.destroySortable()
-      }
-    })
   },
 
   beforeUnmount() {
-    this.destroySortable()
-
     if (this.$q.platform.is.desktop) {
       window.removeEventListener('keydown', this.onKeyDown);
     }
@@ -691,52 +671,8 @@ export default {
       }
     },
 
-    initSortable () {
-      const el = this.$refs.sortableRef
-      if (!el || this.sortable) return
-
-      this.sortable = new Sortable(el, {
-        handle: '.handle',
-        animation: 150,
-        onEnd: (evt) => {
-          const moved = { oldIndex: evt.oldIndex, newIndex: evt.newIndex }
-          this.onMoved(moved)
-        }
-      })
-    },
-
-    destroySortable () {
-      if (this.sortable) {
-        this.sortable.destroy()
-        this.sortable = null
-      }
-    },
-
-    onMoved(moved) {
-      let index = null
-      if (moved.oldIndex === this.queueIndex) {
-        index = moved.newIndex
-      } else if (moved.oldIndex < this.queueIndex && moved.newIndex >= this.queueIndex) {
-        index = this.queueIndex - 1
-      } else if (moved.oldIndex > this.queueIndex && moved.newIndex <= this.queueIndex) {
-        index = this.queueIndex + 1
-      } else {
-        index = this.queueIndex
-      }
-   
-      this.SET_QUEUE({
-        queue: this.queueCopy.concat(),
-        index: index,
-        resetPlaying: false
-      })
-    },
-
     removeFromQueue (index) {
       this.REMOVE_FROM_QUEUE(index)
-    },
-
-    emptyQueue () {
-      this.EMPTY_QUEUE()
     },
 
     onCoverSwipe(evt) {

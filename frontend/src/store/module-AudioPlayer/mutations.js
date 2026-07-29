@@ -79,14 +79,14 @@ const mutations = {
     state.queue.push(file)
   },
   REMOVE_FROM_QUEUE: (state, index) => {
-    state.queue.splice(index, 1)
+    state.queue = state.queue.filter((_, i) => i !== index)
 
     if (index === state.queueIndex) {
       state.playing = false
       state.queueIndex = 0
     } else if (index < state.queueIndex) {
       state.queueIndex -= 1
-    } 
+    }
   },
 
 
