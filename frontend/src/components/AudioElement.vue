@@ -17,11 +17,12 @@
     反之，audio虽然可以播放video的音频，但是将其作为canvas的绘制源，因此倾向于使用video来播放所有媒体元素-->
     <!--注意，这里video设置了一个id，因为需要被其他组件通过document.querySelector方式进行查找引用-->
     <div ref="plyrContainer" style="display: none;">
+      <!-- media src is managed imperatively (see _loadSource): a <source :src>
+           binding only takes effect via media.load() and races with the
+           nextTick-deferred watcher when Chrome freezes the hidden page -->
       <video v-if="enableVideoSource" class="hide-in-global-page-for-pip" id="mediaVideo" crossorigin="anonymous" playsinline controls>
-        <source v-if="source" :src="source" />
       </video>
       <audio v-else crossorigin="anonymous">
-        <source v-if="source" :src="source" />
       </audio>
     </div>
   </div>
@@ -100,7 +101,6 @@ export default {
       changeCurrentTime: 0,
       _endedHandled: false,
       _keepaliveTimer: null,
-      _directLoadHash: null,
     }
   },
 
@@ -160,7 +160,6 @@ export default {
     },
 
     source (url, oldUrl) {
-      // Always log source watcher fires to debug why track doesn't advance
       try {
         fetch('/api/debug/playback', {
           method: 'POST',
@@ -176,44 +175,8 @@ export default {
         }).catch(() => {})
       } catch (e) {}
       if (url && url !== oldUrl) {
-        const media = this.plyr.media;
-        // If onEnded already loaded this track directly (page was frozen
-        // and the watcher was deferred), skip the reload to avoid
-        // resetting playback back to 0.
-        const currentHash = this.currentPlayingFile && this.currentPlayingFile.hash
-        if (this._directLoadHash && currentHash === this._directLoadHash) {
-          this._directLoadHash = null
-          this._debugLog('watcher_skip_direct_load')
-          return
-        }
-        media.load();
         this._debugLog('source_changed')
-        try {
-          fetch('/api/debug/playback', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ event: 'source_url_diff', oldUrl: (oldUrl||'').slice(0,60), newUrl: (url||'').slice(0,60), ts: Date.now() }),
-            keepalive: true
-          }).catch(() => {})
-        } catch (e) {}
-        this._endedHandled = false;
-        this._stopKeepalive()
-        this.loadLrcFile();
-        this.updateMediaSessionMetadata();
-        if (this.playing) {
-          this._debugLog('source_play_attempt')
-          this.plyr.play().catch((e) => {
-            this._debugLog('source_play_rejected')
-            try {
-              fetch('/api/debug/playback', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ event: 'source_play_error', error: String(e), name: e && e.name, ts: Date.now() }),
-                keepalive: true
-              }).catch(() => {})
-            } catch (err) {}
-          })
-        }
+        this._onSourceChange(url)
       }
     },
 
@@ -416,28 +379,64 @@ export default {
         }).catch(() => {})
       } catch (e) {}
 
-      // Directly load and play the next track synchronously.
+      // Load and play the next track synchronously, inside the event handler.
       // Chrome freezes hidden pages: Vue's nextTick-based `source` watcher
-      // may be deferred for minutes, so the watcher-driven media.load()
-      // happens far too late. Doing it here (inside the event handler)
-      // starts the next track immediately. The watcher will later fire
-      // with the same URL; the marker below makes it skip the reload.
+      // may be deferred for minutes, so the watcher-driven load happens far
+      // too late. When the watcher eventually fires with the same URL,
+      // _loadSource sees the element already has it and skips the reload.
       if (this.playing && this.plyr && this.playMode.name !== "repeat once") {
-        const media = this.plyr.media
         const newUrl = this.source
-        if (media && newUrl) {
-          this._directLoadHash = this.currentPlayingFile && this.currentPlayingFile.hash
-          media.src = newUrl
-          media.load()
-          this._endedHandled = false
-          this.loadLrcFile()
-          this.updateMediaSessionMetadata()
+        if (newUrl) {
           this._debugLog('direct_load')
-          media.play().catch(() => {
-            this._debugLog('direct_load_play_rejected')
-          })
+          this._onSourceChange(newUrl)
           this._startKeepalive()
         }
+      }
+    },
+
+    // Imperatively point the media element at `url` and load it.
+    // Returns true if a new source was actually loaded; false if the element
+    // already has this exact source (and is not in an error state), meaning
+    // no reload is needed.
+    _loadSource (url) {
+      const media = this.plyr && this.plyr.media
+      if (!media) return false
+      if (!url) {
+        media.removeAttribute('src')
+        media.load()
+        return false
+      }
+      const absUrl = new URL(url, window.location.href).href
+      if (media.currentSrc === absUrl && !media.error) {
+        this._debugLog('load_source_skip_same')
+        return false
+      }
+      media.src = url
+      media.load()
+      return true
+    },
+
+    // Shared body for reacting to a source change: load the new track,
+    // reset ended-detection, refresh lyrics/metadata, and start playback.
+    _onSourceChange (url) {
+      if (!this._loadSource(url)) return
+      this._endedHandled = false;
+      this._stopKeepalive()
+      this.loadLrcFile();
+      this.updateMediaSessionMetadata();
+      if (this.playing) {
+        this._debugLog('source_play_attempt')
+        this.plyr.play().catch((e) => {
+          this._debugLog('source_play_rejected')
+          try {
+            fetch('/api/debug/playback', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ event: 'source_play_error', error: String(e), name: e && e.name, ts: Date.now() }),
+              keepalive: true
+            }).catch(() => {})
+          } catch (err) {}
+        })
       }
     },
 
@@ -753,6 +752,7 @@ export default {
     this.initAudioAnalyzer();
     this.createLrcObj();
     if (this.source) {
+      this._loadSource(this.source);
       this.loadLrcFile();
     }
   },
