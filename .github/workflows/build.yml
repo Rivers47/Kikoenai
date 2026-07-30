@@ -44,7 +44,7 @@ jobs:
           images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
-            type=sha,prefix={{branch}}-
+            type=sha,prefix={{branch}}-,enable=${{ github.event_name == 'push' }}
             type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
 
