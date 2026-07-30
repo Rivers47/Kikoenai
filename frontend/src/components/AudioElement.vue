@@ -99,7 +99,6 @@ export default {
 
       isChangingCurrentTime: false,
       changeCurrentTime: 0,
-      _endedHandled: false,
       _keepaliveTimer: null,
     }
   },
@@ -306,7 +305,6 @@ export default {
 
     onEnded () {
       this._debugLog('onEnded')
-      this._endedHandled = true;
       this._stopKeepalive()
       // Log play mode and queue state to debug why next track doesn't start
       try {
@@ -410,7 +408,6 @@ export default {
     // reset ended-detection, refresh lyrics/metadata, and start playback.
     _onSourceChange (url) {
       if (!this._loadSource(url)) return
-      this._endedHandled = false;
       this._stopKeepalive()
       this.loadLrcFile();
       this.updateMediaSessionMetadata();
@@ -664,14 +661,15 @@ export default {
       
       player.on('canplay', () => this.onCanplay());
       player.on('timeupdate', () => this.onTimeupdate());
-      player.on('ended', () => this.onEnded());
       player.on('seeked', () => this.onSeeked());
       player.on('playing', () => this.onPlaying());
       player.on('waiting', () => this.onWaiting());
       player.on('pause', () => this.onPause());
 
-      // Direct listener on the media element — browser fires 'ended' on the element
-      // even when the page is hidden (phone locked). Bypasses any plyr event throttling.
+      // Single source of truth for 'ended': a direct listener on the media
+      // element. Plyr's container-level 'ended' event is proxied from this
+      // same native event, so it can never fire when this listener doesn't
+      // — and registering both makes onEnded run twice per track end.
       media.addEventListener('ended', this.onEnded);
 
       // Log media element errors (MEDIA_ERR_NETWORK etc.) to debug endpoint
