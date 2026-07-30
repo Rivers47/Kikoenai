@@ -99,7 +99,6 @@ export default {
 
       isChangingCurrentTime: false,
       changeCurrentTime: 0,
-      _keepaliveTimer: null,
     }
   },
 
@@ -238,13 +237,11 @@ export default {
     onPause() {
       this._debugLog('onPause')
       this.playLrc(false)
-      this._stopKeepalive()
       this.PAUSE()
     },
     onPlaying() {
       this._debugLog('onPlaying')
       this.playLrc(true)
-      this._startKeepalive()
       this.PLAY()
     },
     onWaiting() {
@@ -305,7 +302,6 @@ export default {
 
     onEnded () {
       this._debugLog('onEnded')
-      this._stopKeepalive()
       // Log play mode and queue state to debug why next track doesn't start
       try {
         fetch('/api/debug/playback', {
@@ -377,7 +373,6 @@ export default {
         if (newUrl) {
           this._debugLog('direct_load')
           this._onSourceChange(newUrl)
-          this._startKeepalive()
         }
       }
     },
@@ -405,10 +400,9 @@ export default {
     },
 
     // Shared body for reacting to a source change: load the new track,
-    // reset ended-detection, refresh lyrics/metadata, and start playback.
+    // refresh lyrics/metadata, and start playback.
     _onSourceChange (url) {
       if (!this._loadSource(url)) return
-      this._stopKeepalive()
       this.loadLrcFile();
       this.updateMediaSessionMetadata();
       if (this.playing) {
@@ -424,26 +418,6 @@ export default {
             }).catch(() => {})
           } catch (err) {}
         })
-      }
-    },
-
-    _startKeepalive() {
-      this._stopKeepalive()
-      const tick = () => {
-        if (!this.playing || !this.plyr) return
-        if (this.plyr.media && this.plyr.media.paused && this.plyr.duration > 0) {
-          this._debugLog('keepalive_retry_play')
-          this.plyr.play().catch(() => {})
-        }
-        this._keepaliveTimer = setTimeout(tick, 30000)
-      }
-      this._keepaliveTimer = setTimeout(tick, 30000)
-    },
-
-    _stopKeepalive() {
-      if (this._keepaliveTimer !== null) {
-        clearTimeout(this._keepaliveTimer)
-        this._keepaliveTimer = null
       }
     },
 
@@ -744,7 +718,6 @@ export default {
   },
 
   beforeUnmount() {
-    this._stopKeepalive()
     const container = this.$refs.plyrContainer;
     if (container) {
       const media = container.querySelector('video') || container.querySelector('audio');
