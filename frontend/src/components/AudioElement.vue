@@ -17,11 +17,12 @@
     反之，audio虽然可以播放video的音频，但是将其作为canvas的绘制源，因此倾向于使用video来播放所有媒体元素-->
     <!--注意，这里video设置了一个id，因为需要被其他组件通过document.querySelector方式进行查找引用-->
     <div ref="plyrContainer" style="display: none;">
+      <!-- media src is managed imperatively (see _loadSource): a <source :src>
+           binding only takes effect via media.load() and races with the
+           nextTick-deferred watcher when Chrome freezes the hidden page -->
       <video v-if="enableVideoSource" class="hide-in-global-page-for-pip" id="mediaVideo" crossorigin="anonymous" playsinline controls>
-        <source v-if="source" :src="source" />
       </video>
       <audio v-else crossorigin="anonymous">
-        <source v-if="source" :src="source" />
       </audio>
     </div>
   </div>
@@ -156,12 +157,9 @@ export default {
       }
     },
 
-    source (url) {
-      if (url) {
-        const media = this.plyr.media;
-        media.load();
-        this.loadLrcFile();
-        this.updateMediaSessionMetadata();
+    source (url, oldUrl) {
+      if (url && url !== oldUrl) {
+        this._onSourceChange(url)
       }
     },
 
@@ -310,8 +308,51 @@ export default {
           if (this.queueIndex === this.queue.length - 1) {
             this.PAUSE()
           } else {
-            this.NEXT_TRACK()
-          }
+          this.NEXT_TRACK()
+        }
+      }
+      // Load and play the next track synchronously, inside the event handler.
+      // Chrome freezes hidden pages: Vue's nextTick-based `source` watcher
+      // may be deferred for minutes, so the watcher-driven load happens far
+      // too late. When the watcher eventually fires with the same URL,
+      // _loadSource sees the element already has it and skips the reload.
+      if (this.playing && this.plyr && this.playMode.name !== "repeat once") {
+        const newUrl = this.source
+        if (newUrl) {
+          this._onSourceChange(newUrl)
+        }
+      }
+    },
+
+    // Imperatively point the media element at `url` and load it.
+    // Returns true if a new source was actually loaded; false if the element
+    // already has this exact source (and is not in an error state), meaning
+    // no reload is needed.
+    _loadSource (url) {
+      const media = this.plyr && this.plyr.media
+      if (!media) return false
+      if (!url) {
+        media.removeAttribute('src')
+        media.load()
+        return false
+      }
+      const absUrl = new URL(url, window.location.href).href
+      if (media.currentSrc === absUrl && !media.error) {
+        return false
+      }
+      media.src = url
+      media.load()
+      return true
+    },
+
+    // Shared body for reacting to a source change: load the new track,
+    // refresh lyrics/metadata, and start playback.
+    _onSourceChange (url) {
+      if (!this._loadSource(url)) return
+      this.loadLrcFile();
+      this.updateMediaSessionMetadata();
+      if (this.playing) {
+        this.plyr.play().catch(() => {})
       }
     },
 
@@ -492,14 +533,19 @@ export default {
       const player = this.plyr;
 
       this.SET_VOLUME(player.volume);
-
+      
       player.on('canplay', () => this.onCanplay());
       player.on('timeupdate', () => this.onTimeupdate());
-      player.on('ended', () => this.onEnded());
       player.on('seeked', () => this.onSeeked());
       player.on('playing', () => this.onPlaying());
       player.on('waiting', () => this.onWaiting());
       player.on('pause', () => this.onPause());
+
+      // Single source of truth for 'ended': a direct listener on the media
+      // element. Plyr's container-level 'ended' event is proxied from this
+      // same native event, so it can never fire when this listener doesn't
+      // — and registering both makes onEnded run twice per track end.
+      media.addEventListener('ended', this.onEnded);
     },
 
     initAudioAnalyzer () {
@@ -546,9 +592,20 @@ export default {
     this.initAudioAnalyzer();
     this.createLrcObj();
     if (this.source) {
+      this._loadSource(this.source);
       this.loadLrcFile();
     }
   },
+
+  beforeUnmount() {
+    const container = this.$refs.plyrContainer;
+    if (container) {
+      const media = container.querySelector('video') || container.querySelector('audio');
+      if (media) {
+        media.removeEventListener('ended', this.onEnded);
+      }
+    }
+   },
 }
 </script>
 
