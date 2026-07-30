@@ -241,14 +241,12 @@ export default {
       this.playLrc(false)
       this._stopKeepalive()
       this.PAUSE()
-      try { navigator.mediaSession.playbackState = 'paused' } catch (e) {}
     },
     onPlaying() {
       this._debugLog('onPlaying')
       this.playLrc(true)
       this._startKeepalive()
       this.PLAY()
-      try { navigator.mediaSession.playbackState = 'playing' } catch (e) {}
     },
     onWaiting() {
       this.playLrc(false)
@@ -287,6 +285,7 @@ export default {
         this.$q.notify({message: "已恢复播放历史", timeout: 1000})
       }
     },
+
     onTimeupdate () {
       this.SET_CURRENT_TIME(this.plyr.currentTime)
       if (this.enablePIPLyrics) this.debouncedPlayLrc(false)
@@ -301,15 +300,6 @@ export default {
           this.CLEAR_SLEEP_MODE()
           this.$q.sessionStorage.set('sleepTime', null)
           this.$q.sessionStorage.set('sleepMode', false)
-        }
-      }
-      // Fallback ended detection: on some Android browsers the 'ended' event
-      // does not fire when the phone is locked. Use timeupdate to detect
-      // that we've reached the end of the track.
-      if (!this._endedHandled && this.plyr && this.plyr.duration > 0) {
-        if (this.plyr.currentTime >= this.plyr.duration - 0.5) {
-          this._endedHandled = true;
-          this.onEnded();
         }
       }
     },
@@ -577,7 +567,6 @@ export default {
           navigator.mediaSession.setActionHandler('previoustrack', null);
           navigator.mediaSession.setActionHandler('seekbackward', null);
           navigator.mediaSession.setActionHandler('seekforward', null);
-          navigator.mediaSession.playbackState = 'none';
         } else {
           navigator.mediaSession.metadata = new window.MediaMetadata({
             title: this.currentPlayingFile.title,
@@ -622,7 +611,6 @@ export default {
           navigator.mediaSession.setActionHandler('seekforward', () => {
             this.SET_FORWARD_SEEK_MODE(true)
           })
-          navigator.mediaSession.playbackState = this.playing ? 'playing' : 'paused';
         }
       } catch (e) {
         console.warn("set mediasession failed, because: ", e)
