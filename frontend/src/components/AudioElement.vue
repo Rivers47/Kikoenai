@@ -158,22 +158,7 @@ export default {
     },
 
     source (url, oldUrl) {
-      try {
-        fetch('/api/debug/playback', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            event: 'source_watcher_fired',
-            oldUrl: (oldUrl||'').slice(0,60),
-            newUrl: (url||'').slice(0,60),
-            urlMatch: url === oldUrl,
-            ts: Date.now()
-          }),
-          keepalive: true
-        }).catch(() => {})
-      } catch (e) {}
       if (url && url !== oldUrl) {
-        this._debugLog('source_changed')
         this._onSourceChange(url)
       }
     },
@@ -235,12 +220,10 @@ export default {
     formatSeconds,
 
     onPause() {
-      this._debugLog('onPause')
       this.playLrc(false)
       this.PAUSE()
     },
     onPlaying() {
-      this._debugLog('onPlaying')
       this.playLrc(true)
       this.PLAY()
     },
@@ -268,7 +251,6 @@ export default {
     ]),
 
     onCanplay () {
-      this._debugLog('onCanplay')
       this.SET_DURATION(this.plyr.duration)
 
       if (this.playing && this.plyr.currentTime !== this.plyr.duration) {
@@ -301,23 +283,6 @@ export default {
     },
 
     onEnded () {
-      this._debugLog('onEnded')
-      // Log play mode and queue state to debug why next track doesn't start
-      try {
-        fetch('/api/debug/playback', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            event: 'onEnded_state',
-            playMode: this.playMode.name,
-            queueIndex: this.queueIndex,
-            queueLen: this.queue.length,
-            isLast: this.queueIndex === this.queue.length - 1,
-            ts: Date.now()
-          }),
-          keepalive: true
-        }).catch(() => {})
-      } catch (e) {}
       switch (this.playMode.name) {
         case "all repeat":
           if (this.queueIndex === this.queue.length - 1) {
@@ -346,23 +311,6 @@ export default {
           this.NEXT_TRACK()
         }
       }
-      // Log action taken and whether source computed property changed
-      try {
-        const newHash = this.currentPlayingFile && this.currentPlayingFile.hash;
-        fetch('/api/debug/playback', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            event: 'onEnded_after',
-            queueIndex: this.queueIndex,
-            playing: this.playing,
-            newHash: newHash,
-            ts: Date.now()
-          }),
-          keepalive: true
-        }).catch(() => {})
-      } catch (e) {}
-
       // Load and play the next track synchronously, inside the event handler.
       // Chrome freezes hidden pages: Vue's nextTick-based `source` watcher
       // may be deferred for minutes, so the watcher-driven load happens far
@@ -371,7 +319,6 @@ export default {
       if (this.playing && this.plyr && this.playMode.name !== "repeat once") {
         const newUrl = this.source
         if (newUrl) {
-          this._debugLog('direct_load')
           this._onSourceChange(newUrl)
         }
       }
@@ -391,7 +338,6 @@ export default {
       }
       const absUrl = new URL(url, window.location.href).href
       if (media.currentSrc === absUrl && !media.error) {
-        this._debugLog('load_source_skip_same')
         return false
       }
       media.src = url
@@ -406,40 +352,8 @@ export default {
       this.loadLrcFile();
       this.updateMediaSessionMetadata();
       if (this.playing) {
-        this._debugLog('source_play_attempt')
-        this.plyr.play().catch((e) => {
-          this._debugLog('source_play_rejected')
-          try {
-            fetch('/api/debug/playback', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ event: 'source_play_error', error: String(e), name: e && e.name, ts: Date.now() }),
-              keepalive: true
-            }).catch(() => {})
-          } catch (err) {}
-        })
+        this.plyr.play().catch(() => {})
       }
-    },
-
-    _debugLog(event) {
-      // Send debug event to server for analysis
-      // Uses fetch with keepalive so it survives page suspension
-      try {
-        fetch('/api/debug/playback', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            event,
-            source: this.source ? this.source.slice(0, 80) : 'none',
-            track: this.queueIndex,
-            time: this.plyr ? this.plyr.currentTime?.toFixed(1) : -1,
-            duration: this.plyr ? this.plyr.duration?.toFixed(1) : -1,
-            playing: this.playing,
-            ts: Date.now()
-          }),
-          keepalive: true
-        }).catch(() => {})
-      } catch (e) {}
     },
 
     onSeeked() {
@@ -493,19 +407,6 @@ export default {
         if (!this.playing) this.lrcObj.pause()
         this.SET_HAS_LYRIC(true);
       } catch(error) {
-        try {
-          fetch('/api/debug/playback', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              event: 'lyric_fetch_error',
-              message: error && error.message,
-              status: error && error.response && error.response.status,
-              ts: Date.now()
-            }),
-            keepalive: true
-          }).catch(() => {})
-        } catch (e) {}
         if (error.response) {
           if (error.response.status !== 401) {
             console.error(error);
@@ -645,27 +546,6 @@ export default {
       // same native event, so it can never fire when this listener doesn't
       // — and registering both makes onEnded run twice per track end.
       media.addEventListener('ended', this.onEnded);
-
-      // Log media element errors (MEDIA_ERR_NETWORK etc.) to debug endpoint
-      media.addEventListener('error', () => {
-        const err = media.error;
-        try {
-          fetch('/api/debug/playback', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              event: 'media_error',
-              code: err && err.code,
-              message: err && err.message,
-              src: (media.currentSrc || '').slice(0, 60),
-              networkState: media.networkState,
-              readyState: media.readyState,
-              ts: Date.now()
-            }),
-            keepalive: true
-          }).catch(() => {})
-        } catch (e) {}
-      });
     },
 
     initAudioAnalyzer () {
