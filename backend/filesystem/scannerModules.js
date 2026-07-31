@@ -290,7 +290,7 @@ async function getCoverImage(cover_for_id, cover_from_id, types) {
       LOG.task.info(cover_for_rjcode, `封面 RJ${rjcode}_img_${type}.jpg 下载成功.`);
       return 'added';
     } catch(err) {
-      LOG.task.warn(cover_for_rjcode, `在下载封面 RJ${rjcode}_img_${type}.jpg 过程中出错: ${err.message}`);
+      LOG.task.warn(cover_for_rjcode, `在下载封面 RJ${rjcode}_img_${type}.jpg 过程中出错: ${err.message} (URL: ${url})`);
       return 'failed';
     }
   }));
@@ -334,6 +334,9 @@ async function processFolder(folder) {
       LOG.task.info(rjcode, '封面图片缺失，重新下载封面图片...');
 
       coverResult = await getCoverImageForTranslated(folder.id, lostCoverTypes);
+      if (coverResult === 'failed') {
+        LOG.task.error(rjcode, `该作品已存在于数据库中，但封面图片下载失败。缺失的封面类型: ${lostCoverTypes.join(', ')}`);
+      }
     } else {
       coverResult = 'skipped';
     }
