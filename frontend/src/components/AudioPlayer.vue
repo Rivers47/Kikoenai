@@ -15,32 +15,19 @@
         <div class="pull-handler" @click="toggleHide" v-touch-swipe.mouse.down="toggleHide"></div>
 
         <!-- 音声封面 -->
-        <div class="row items-center albumart q-mt-lg q-pa-sm relative-position flippable-cover-container non-selectable"
+        <div class="row items-center albumart q-mt-lg q-pa-sm relative-position non-selectable"
           v-touch-swipe.mouse="onCoverSwipe"
         >
           <q-img fit="contain"
-            class="rounded-borders box-shadow flippable-cover cover-img"
-            :class="{
-              'flip-on-front': !isFlipCover,
-              'flip-on-back': isFlipCover,
-            }"
+            class="rounded-borders box-shadow cover-img"
             :img-style="{
               transition: 'opacity 1s, filter 1s',
-              filter: isFlipCover ? 'brightness(0.1) grayscale(80%)' : 'brightness(1) grayscale(0%)',
-              'backface-visibility': 'hidden',
             }"
             transition="fade"
             :src="coverUrl"
             :ratio="4/3"
             @dblclick.prevent="openWorkDetail()"
           >
-          <AudioEqualizer class="equalizer rounded-borders box-shadow flip-on-back"
-            :disable="!isFlipCover"
-            :style="{
-              transition: 'all 1s',
-              opacity: isFlipCover ? 1 : 0,
-            }"
-             />
           </q-img>
 
         </div>
@@ -137,21 +124,6 @@
               </q-tooltip>
             </q-btn>
 
-            <!--equalizer-->
-            <q-btn 
-              v-if="enableVisualizer"
-              flat 
-              dense 
-              size="md" 
-              padding="none sm" 
-              icon="equalizer" 
-              @click="flipCover"
-            >
-              <q-tooltip anchor="top middle" self="bottom middle">
-                音效均衡器
-              </q-tooltip>
-            </q-btn>
-
           <!-- 放在尾部 -->
             <q-btn
               flat 
@@ -189,15 +161,6 @@
                   </q-item-section>
                   <q-item-section>
                     打开作品详情（或双击封面）
-                  </q-item-section>
-                </q-item>
-                
-                <q-item clickable v-ripple @click="toggleEnableVisualizer">
-                  <q-item-section avatar>
-                    <q-icon :name="enableVisualizer ? 'done' : ''" />
-                  </q-item-section>
-                  <q-item-section>
-                    开启音频可视化（需要刷新页面）
                   </q-item-section>
                 </q-item>
                 
@@ -371,7 +334,6 @@
 <script>
 import AudioElement from 'components/AudioElement'
 import Scrollable from 'components/Scrollable'
-import AudioEqualizer from 'components/AudioEqualizer'
 import SleepMode from 'components/SleepMode'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import { formatSeconds } from '../utils'
@@ -383,7 +345,6 @@ export default {
   components: {
     AudioElement,
     Scrollable,
-    AudioEqualizer,
     SleepMode,
   },
 
@@ -397,8 +358,6 @@ export default {
       isAndroid: navigator.userAgent.toLowerCase().indexOf('android') > -1,
       histroyCheckIntervalId: -1,
       latestUpdatedHistory: null, // 记录最近一次更新的历史记录，防止反复对同一个播放历史进行远程数据更新
-
-      isFlipCover: false, // 是否反转封面显示其他内容
 
       // 歌词偏移量修复工具
       lyricSyncDialog: false,
@@ -494,9 +453,6 @@ export default {
         // 暂停状态下切换时间，也更新播放历史
         this.onUpdatePlayingStatus()
       }
-    },
-    enableVisualizer() {
-      this.suggestRefreshPage();
     },
     enableVideoSource() {
       this.suggestRefreshPage();
@@ -638,7 +594,6 @@ export default {
       'rewindSeekTime',
       'forwardSeekTime',
       'swapSeekButton',
-      'enableVisualizer',
       'enableVideoSource',
       'enableVideoSourcePIP',
       'enablePIPLyrics',
@@ -687,7 +642,6 @@ export default {
       rewind: 'SET_REWIND_SEEK_MODE',
       forward: 'SET_FORWARD_SEEK_MODE',
       toggleSwapSeekButton: 'TOGGLE_SWAP_SEEK_BUTTON',
-      toggleEnableVisualizer: 'TOGGLE_ENABLE_VISUALIZER',
       toggleEnableVideoSource: 'TOGGLE_ENABLE_VIDEO_SOURCE',
       setEnableVideoSourcePIP: 'SET_ENABLE_VIDEO_SOURCE_PIP',
       setEnablePIPLyrics: 'SET_ENABLE_PIP_LYRICS',
@@ -719,13 +673,8 @@ export default {
     },
 
     onCoverSwipe(evt) {
-      switch(evt.direction) {
-        case 'left':
-        case 'right':
-          this.flipCover();
-          break;
-        case 'down':
-          this.toggleHide();
+      if (evt.direction === 'down') {
+        this.toggleHide();
       }
     },
 
@@ -897,12 +846,6 @@ export default {
       this.setLyricOffsetSeconds(seconds)
     },
 
-    flipCover() {
-      if (!this.enableVisualizer) return; // 尚未开启音频可视化选项，无法使用音效均衡器
-      console.warn("flip cover");
-      this.isFlipCover = !this.isFlipCover;
-    },
-
     onKeyDown(event) {
       // console.warn("key down code = ", event.code, ", activeElement is ", document.activeElement); 
       if (document.activeElement.tagName === "INPUT") return; // 禁止文本编辑的按键响应
@@ -1039,39 +982,8 @@ export default {
   white-space: nowrap;
 }
 
-.equalizer {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  background: transparent;
-  transform: rotateY(180deg);
-}
-
-.flippable-cover-container {
-  perspective: 60rem;
-  transition: opacity 1s;
-}
-
 .cover-img {
-  transition: transform 1s;
-}
-
-.hide-cover-img {
-  opacity: 0;
-}
-
-.show-cover-img {
-  opacity: 1;
-}
-
-.flip-on-front {
-  transform: rotateY(0);
-}
-
-.flip-on-back {
-  transform: rotateY(180deg);
+  transition: opacity 1s;
 }
 
 </style>

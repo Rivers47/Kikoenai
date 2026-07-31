@@ -129,7 +129,6 @@ export default {
       'forwardSeekTime',
       'rewindSeekMode',
       'forwardSeekMode',
-      'enableVisualizer',
       'resumeHistroySeconds',
       'playWorkId',
       'visualPlayerCoverUrl',
@@ -247,7 +246,6 @@ export default {
       'DECREMENT_SLEEP_TRACKS',
       'SET_REWIND_SEEK_MODE',
       'SET_FORWARD_SEEK_MODE',
-      'SET_AUDIO_ANALYSER',
       'RESUME_HISTROY_SECONDS_DONE',
       'SET_HAS_LYRIC',
       'SET_NEW_CURRENT_TIME',
@@ -563,41 +561,7 @@ export default {
     },
 
     initAudioAnalyzer () {
-      const initAudio = () => {
-        document.removeEventListener('click', initAudio);
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const analyser = {
-          left: audioCtx.createAnalyser(),
-          right: audioCtx.createAnalyser(),
-          audioCtx,
-          splitter: null,
-          merger: null,
-          audioSrc: null,
-        };
-
-        const container = this.$refs.plyrContainer;
-        const media = container.querySelector('video') || container.querySelector('audio');
-        if (!media) return;
-
-        analyser.audioSrc = audioCtx.createMediaElementSource(media);
-        analyser.splitter = audioCtx.createChannelSplitter(2);
-        analyser.merger = audioCtx.createChannelMerger(2);
-        analyser.audioSrc.connect(analyser.splitter);
-        analyser.splitter.connect(analyser.left, 0);
-        analyser.splitter.connect(analyser.right, 1);
-        analyser.audioSrc.connect(audioCtx.destination)
-        this.SET_AUDIO_ANALYSER(analyser)
-      }
-
-      if (this.enableVisualizer) {
-        document.addEventListener('click', initAudio);
-        if (this.$q.platform.is.safari && this.$q.platform.is.mobile) {
-          this.$q.notify({
-            message: "监测到safari平台上开启了音频可视化功能，注意移动端safari有bug，如果没有声音的话，请关闭音频可视化功能",
-            timeout: 5000
-          })
-        }
-      }
+      // Audio analyzer setup will be added when the reverse-channel UI is introduced.
     }
   },
 

@@ -8,17 +8,6 @@
       <q-list>
         <q-item style="height: 70px;">
           <q-item-section>
-            <q-item-label>高级音频模式</q-item-label>
-            <q-item-label caption>支持显示音频特效、左右声道反转等音频功能，建议在桌面浏览器中开启，移动端iOS设备会有声音播放bug</q-item-label>
-          </q-item-section>
-
-          <q-item-section avatar>
-            <q-toggle :value="enableVisualizer" @input="changeEnableVisualizer" dense/>
-          </q-item-section>
-        </q-item>
-
-        <q-item style="height: 70px;">
-          <q-item-section>
             <q-item-label>启用视频源作为播放格式</q-item-label>
             <q-item-label caption>开启此选项后，视频格式(mp4)用于播放音频的同时，也可以看到视频画面(大图模式下)</q-item-label>
           </q-item-section>
@@ -436,7 +425,6 @@ export default {
     ...mapState('AudioPlayer', [
       'oldWorkCardUIStyle',
       'enableVideoSource',
-      'enableVisualizer',
     ]),
   },
 
@@ -493,10 +481,6 @@ export default {
     changeEnableVideoSource(value) {
       this.$store.commit('AudioPlayer/SET_ENABLE_VIDEO_SOURCE', value);
     },
-
-    changeEnableVisualizer(value) {
-      this.$store.commit('AudioPlayer/SET_ENABLE_VISUALIZER', value);
-    }
   },
 
   created () {
