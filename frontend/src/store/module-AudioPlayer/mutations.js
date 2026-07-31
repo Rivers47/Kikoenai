@@ -1,6 +1,6 @@
-import { LocalStorage } from 'quasar'
+import { LocalStorage, SessionStorage } from 'quasar'
 import getters from './getters'
-import state, { SWAP_SEEK_BUTTON_KEY, ENABLE_VISUALIZER_KEY, ENABLE_PIP_LYRICS, ENABLE_VIDEO_SOURCE_KEY, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY } from './state'
+import state, { SWAP_SEEK_BUTTON_KEY, ENABLE_VISUALIZER_KEY, ENABLE_PIP_LYRICS, ENABLE_VIDEO_SOURCE_KEY, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, SLEEP_TIMER_KEY } from './state'
 
 const mutations = {
   TOGGLE_HIDE (state) {
@@ -79,14 +79,14 @@ const mutations = {
     state.queue.push(file)
   },
   REMOVE_FROM_QUEUE: (state, index) => {
-    state.queue.splice(index, 1)
+    state.queue = state.queue.filter((_, i) => i !== index)
 
     if (index === state.queueIndex) {
       state.playing = false
       state.queueIndex = 0
     } else if (index < state.queueIndex) {
       state.queueIndex -= 1
-    } 
+    }
   },
 
 
@@ -158,14 +158,30 @@ const mutations = {
   SET_LYRIC_OFFSET_SECONDS: (state, value) => {
     state.lyricOffsetSeconds = value;
   },
-  SET_SLEEP_TIMER: (state, time) => {
-    state.sleepTime = time
+  // payload: { type: 'minutes', stopAt: <ms 时间戳> } 或 { type: 'tracks', tracksLeft: <int> }
+  SET_SLEEP_TIMER: (state, { type, stopAt = null, tracksLeft = 0 }) => {
     state.sleepMode = true
+    state.sleepModeType = type
+    state.sleepStopAt = type === 'minutes' ? stopAt : null
+    state.sleepTracksLeft = type === 'tracks' ? tracksLeft : 0
+    SessionStorage.set(SLEEP_TIMER_KEY, { type, stopAt: state.sleepStopAt, tracksLeft: state.sleepTracksLeft })
+  },
+
+  DECREMENT_SLEEP_TRACKS: (state) => {
+    if (state.sleepTracksLeft > 0) {
+      state.sleepTracksLeft -= 1
+      if (state.sleepMode && state.sleepModeType === 'tracks') {
+        SessionStorage.set(SLEEP_TIMER_KEY, { type: 'tracks', stopAt: null, tracksLeft: state.sleepTracksLeft })
+      }
+    }
   },
 
   CLEAR_SLEEP_MODE: (state) => {
-    state.sleepTime = null
     state.sleepMode = false
+    state.sleepModeType = null
+    state.sleepStopAt = null
+    state.sleepTracksLeft = 0
+    SessionStorage.remove(SLEEP_TIMER_KEY)
   },
 
   SET_VISUAL_PLAYER_COVER_URL: (state, value) => {

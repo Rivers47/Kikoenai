@@ -81,25 +81,6 @@
             v-ripple
             exact
             active-class="text-deep-purple text-weight-medium"
-            @click="showTimer = true"
-          >
-            <q-item-section avatar>
-              <q-icon name="timer" />
-            </q-item-section>
-
-            <q-item-section>
-              <q-item-label class="text-subtitle1">
-                睡眠定时
-              </q-item-label>
-            </q-item-section>
-          </q-item>
-
-
-          <q-item
-            clickable
-            v-ripple
-            exact
-            active-class="text-deep-purple text-weight-medium"
             @click="toggleDarkMode"
           >
             <q-item-section avatar>
@@ -152,8 +133,6 @@
       </q-card>
     </q-dialog>
 
-    <SleepMode v-model="showTimer" />
-
     <q-page-container :class="{'page-container-style': isFullScreenPage, 'padding-bottom-play-bar': !isFullScreenPage}">
       <!-- <q-page padding> -->
       <router-view v-slot="{ Component }">
@@ -184,7 +163,6 @@ import PlayerBar from 'components/PlayerBar'
 import AudioPlayer from 'components/AudioPlayer'
 import LyricsBar from 'components/LyricsBar'
 import PIPLyrics from 'src/components/PIPLyrics'
-import SleepMode from 'components/SleepMode'
 import NotifyMixin from '../mixins/Notification.js'
 import { mapMutations, mapState, mapGetters } from 'vuex'
 import { Dark } from 'quasar'
@@ -198,7 +176,6 @@ export default {
     PlayerBar,
     AudioPlayer,
     LyricsBar,
-    SleepMode,
     PIPLyrics,
 },
 
@@ -209,7 +186,6 @@ export default {
       miniState: true,
       confirm: false,
       randId: null,
-      showTimer: false,
       showScroller: false,
       links: [
         {

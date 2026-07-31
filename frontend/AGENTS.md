@@ -152,8 +152,10 @@ Main layout routes:
   hasLyric: false,
   currentLyric: '',
   lyricOffsetSeconds: 0,
-  sleepTime: null,
-  sleepMode: false,
+  sleepMode: false,                 // Sleep timer armed
+  sleepModeType: null,              // 'minutes' | 'tracks'
+  sleepStopAt: null,                // minutes mode: stop timestamp (ms)
+  sleepTracksLeft: 0,               // tracks mode: tracks left after current one
   rewindSeekTime: 5,
   forwardSeekTime: 30,
   swapSeekButton: false,          // Swap seek/next buttons
@@ -220,7 +222,7 @@ MainLayout
 1. **Infinite Scroll:** `Works.vue` uses `q-infinite-scroll` to paginate results (triggers `onLoad()` callback).
 
 2. **Cover Blurring:** `CoverSFW.vue` handles NSFW content blurring with a toggle.
-3. **Sleep Timer:** `SleepMode.vue` provides a countdown timer to stop playback.
+3. **Sleep Timer:** `SleepMode.vue` (opened from the bedtime button in `AudioPlayer.vue`'s settings row) stops playback either after a chosen number of minutes (5-min slider steps) or after a chosen number of tracks past the current one. The armed timer is persisted in `SessionStorage` under the `sleepTimer` key (`SLEEP_TIMER_KEY`) and restored on reload; stop logic lives in `AudioElement.vue` (`onTimeupdate` for minutes, `onEnded` for tracks).
 4. **Dark Mode:** Toggled via Quasar's `Dark` plugin, persisted in browser across sessions.
 5. **Progress Tracking:** Users can mark works as `listening`, `listened`, `replay`, or `postponed`.
 6. **Work Card Variants:** Two card styles — modern `WorkCard.vue` (hover-reveal tags) and legacy `OldWorkCard.vue` (always-show tags), toggleable via LocalStorage key `old_work_card_ui_style_key`.

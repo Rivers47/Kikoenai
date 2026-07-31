@@ -6,6 +6,8 @@ export const ENABLE_PIP_LYRICS = 'enable_pip_lyrics'
 export const ENABLE_VIDEO_SOURCE_KEY = 'enable_video_source'
 export const AI_SERVER_URL_KEY = 'ai_server_url'
 export const OLD_WORK_CARD_UI_STYLE_KEY = 'old_work_card_ui_style_key'
+// sessionStorage 中持久化睡眠定时的键，值为 { type, stopAt, tracksLeft }
+export const SLEEP_TIMER_KEY = 'sleepTimer'
 
 export default function () {
   return {
@@ -33,8 +35,10 @@ export default function () {
     hasLyric: false,
     currentLyric: '',
     lyricOffsetSeconds: 0,
-    sleepTime: null,
-    sleepMode: false,
+    sleepMode: false,          // 睡眠定时是否开启
+    sleepModeType: null,       // 'minutes' | 'tracks'
+    sleepStopAt: null,         // minutes 模式：停止播放的时间戳 (ms)
+    sleepTracksLeft: 0,        // tracks 模式：当前曲目之后还需播放的曲目数，为 0 时当前曲目结束即停止
     rewindSeekTime: 5,
     forwardSeekTime: 30,
     rewindSeekMode: false,

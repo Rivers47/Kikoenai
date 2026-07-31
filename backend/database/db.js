@@ -498,7 +498,7 @@ const updatePlayHistroy = async (username, work_id, state) => knex.transaction(a
 });
 
 async function deletePlayHistroy(username, work_id) {
-  await knex('t_play_histroy').select('*').where('work_id', '=', work_id).where('user_name', '=', username).first().del();
+  await knex('t_play_histroy').where('work_id', '=', work_id).where('user_name', '=', username).del();
 }
 
 const getMetadata = ({field = 'circle', id} = {}) => {
