@@ -1,6 +1,6 @@
 import { LocalStorage, SessionStorage } from 'quasar'
 import getters from './getters'
-import state, { SWAP_SEEK_BUTTON_KEY, ENABLE_PIP_LYRICS, ENABLE_VIDEO_SOURCE_KEY, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, SLEEP_TIMER_KEY } from './state'
+import state, { SWAP_SEEK_BUTTON_KEY, ENABLE_PIP_LYRICS, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, SLEEP_TIMER_KEY } from './state'
 
 const mutations = {
   TOGGLE_HIDE (state) {
@@ -214,20 +214,6 @@ const mutations = {
 
   RESUME_HISTROY_SECONDS_DONE: (state) => {
     state.resumeHistroySeconds = -1
-  },
-
-  TOGGLE_ENABLE_VIDEO_SOURCE: (state) => {
-    state.enableVideoSource = !state.enableVideoSource
-    LocalStorage.set(ENABLE_VIDEO_SOURCE_KEY, state.enableVideoSource)
-  },
-
-  SET_ENABLE_VIDEO_SOURCE: (state, value) => {
-    state.enableVideoSource = value
-    LocalStorage.set(ENABLE_VIDEO_SOURCE_KEY, value)
-  },
-
-  SET_ENABLE_VIDEO_SOURCE_PIP: (state, value) => {
-    state.enableVideoSourcePIP = value
   },
 
   SET_OLD_WORK_CARD_UI_STYLE: (state, value) => {

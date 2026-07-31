@@ -8,17 +8,6 @@
       <q-list>
         <q-item style="height: 70px;">
           <q-item-section>
-            <q-item-label>启用视频源作为播放格式</q-item-label>
-            <q-item-label caption>开启此选项后，视频格式(mp4)用于播放音频的同时，也可以看到视频画面(大图模式下)</q-item-label>
-          </q-item-section>
-
-          <q-item-section avatar>
-            <q-toggle :value="enableVideoSource" @input="changeEnableVideoSource" dense/>
-          </q-item-section>
-        </q-item>
-
-        <q-item style="height: 70px;">
-          <q-item-section>
             <q-item-label>切换回旧式作品卡片UI</q-item-label>
             <q-item-label caption>搜索页面展示作品使用旧的卡片样式，旧式卡片可以直接显示所有标签</q-item-label>
           </q-item-section>
@@ -424,7 +413,6 @@ export default {
   computed: {
     ...mapState('AudioPlayer', [
       'oldWorkCardUIStyle',
-      'enableVideoSource',
     ]),
   },
 
@@ -476,10 +464,6 @@ export default {
     changeOldWorkCardUIStyle(value) {
       console.log("change old work card ui to: ", value, typeof(value));
       this.$store.commit('AudioPlayer/SET_OLD_WORK_CARD_UI_STYLE', value);
-    },
-
-    changeEnableVideoSource(value) {
-      this.$store.commit('AudioPlayer/SET_ENABLE_VIDEO_SOURCE', value);
     },
   },
 

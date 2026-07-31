@@ -1,14 +1,11 @@
 <template>
   <div class="container" ref="container" @dblclick="clickOnContainer" :style="{'--cover-url': `url(${coverUrl})`}">
-    <q-img fit="contain" v-if="!enableDrawVideo"
+    <q-img fit="contain"
       :src="coverUrl"
       class="constrain-height"
       img-class="scale-animation image-style"
       :img-style="{'animation-play-state': playing ? 'running' : 'paused'}"
     />
-    <div v-if="enableDrawVideo" ref="videoCanvasContainer" class="video-canvas">
-      <canvas ref="videoCanvas" width="1000" height="1000"></canvas>
-    </div>
     <div v-if="isInFullScreen" class="simple-progress" :style="progressBarStyle"></div>
     <div class="footer">
       <LyricsBar v-if="isInFullScreen && !enablePIPLyrics" />
@@ -42,8 +39,7 @@ export default {
       renderNotifier: { stop: false, pause: false },
       isInFullScreen: false,
 
-      enableDrawVideo: true,
-      videoElement: null,
+
     }
   },
 
@@ -62,70 +58,7 @@ export default {
     },
 
     audioElementInit() {
-      this.checkVisualEffect();
-      
-      const canvas = this.$refs.videoCanvas;
-      if (!canvas) return;
-      const canvasCtx = canvas.getContext("2d");
-
-      this.renderNotifier.stop = true;
-      let newNotifier = {stop: false, pause: !this.playing, drawer: null};
-      const draw = (millsTime) => {
-        if (newNotifier.stop) return false;
-        requestAnimationFrame(draw);
-
-        let pauseDraw = newNotifier.pause;
-
-        // sync canvas inner drawing size with client element size
-        if (canvasCtx.canvas.width !== canvasCtx.canvas.clientWidth) {
-          canvasCtx.canvas.width = canvasCtx.canvas.clientWidth * window.devicePixelRatio;
-          pauseDraw = false;
-        }
-        if (canvasCtx.canvas.height !== canvasCtx.canvas.clientHeight) {
-          canvasCtx.canvas.height = canvasCtx.canvas.clientHeight * window.devicePixelRatio;
-          pauseDraw = false;
-        }
-
-        if (this.enableDrawVideo && this.video) {
-          pauseDraw = false;
-          canvasCtx.clearRect(0, 0, canvasCtx.canvas.width, canvasCtx.canvas.height);
-          this.drawVideoInCanvas(canvas, canvasCtx)
-        }
-
-        if (pauseDraw) return false;
-      };
-      newNotifier.drawer = draw;
-      this.renderNotifier = newNotifier;
-      requestAnimationFrame(newNotifier.drawer);
-    },
-
-    drawVideoInCanvas(canvas, canvasCtx) {
-      const containerRatio = canvas.width / canvas.height;
-      const video = this.video;
-      const videoRatio = video.videoWidth / video.videoHeight;
-
-      let x,y,newVideoWidth, newVideoHeight
-      if (containerRatio > videoRatio) {
-        // 横置居中
-        newVideoHeight = canvas.height;
-        newVideoWidth = videoRatio * newVideoHeight;
-        x = 0.5 * (canvas.width - newVideoWidth)
-        y = 0;
-      } else {
-        // 竖置居中
-        newVideoWidth = canvas.width;
-        newVideoHeight = newVideoWidth / videoRatio;
-        x = 0;
-        y = 0.5 * (canvas.height - newVideoHeight)
-      }
-      canvasCtx.drawImage(video, x, y, newVideoWidth, newVideoHeight)
-    },
-
-    checkVisualEffect() {
-      this.enableDrawVideo = this.enableVideoSource && this.isCurrentPlayingFileVideo;
-      if (this.enableDrawVideo) {
-        this.video = document.querySelector("#mediaVideo");
-      }
+      // No-op: video source drawing has been removed
     }
   },
 
@@ -160,12 +93,10 @@ export default {
       'playWorkId',
       'playing',
       'enablePIPLyrics',
-      'enableVideoSource'
     ]),
 
     ...mapGetters('AudioPlayer', [
-      'currentPlayingFile',
-      'isCurrentPlayingFileVideo'
+      'currentPlayingFile'
     ]),
 
     title() {
@@ -178,9 +109,7 @@ export default {
     playing (isPlaying) {
       this.renderNotifier.pause = !isPlaying;
     },
-    currentPlayingFile() {
-      this.checkVisualEffect()
-    },
+
   },
   created() {
     // console.log("full screen rounter workid = ", this.workid)
@@ -204,12 +133,9 @@ export default {
   mounted() {
     this.audioElementInit()
     this.$refs.container.addEventListener("fullscreenchange", this.onFullscreenChange)
-    this.checkVisualEffect();
   },
   beforeUnmount() {
-    this.renderNotifier.stop = true;
     this.$refs.container.removeEventListener("fullscreenchange", this.onFullscreenChange)
-    this.video = null;
   }
 }
 </script>
@@ -239,14 +165,6 @@ export default {
 .constrain-height {
   /* max-height: calc(100vh - 110px); */
   max-height: 100%;
-}
-
-.video-canvas {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  left: 0;
-  bottom: 0;
 }
 
 .simple-progress {

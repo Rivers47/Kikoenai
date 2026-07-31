@@ -12,17 +12,12 @@
       label
       :label-value="formatSeconds(displayCurrentTime)"
       />
-    <!--使用video组件来播放音频和视频文件，同时隐藏原生的vue-plyr组件，这里的组件只会留下一个进度条的功能
-    之所以用video，是因为video可以设置mp3等音频文件，也可以播放mp4等视频文件，在播放视频的时候，还能够用该video元素作为canvas绘制来源，
-    反之，audio虽然可以播放video的音频，但是将其作为canvas的绘制源，因此倾向于使用video来播放所有媒体元素-->
-    <!--注意，这里video设置了一个id，因为需要被其他组件通过document.querySelector方式进行查找引用-->
+    <!--使用audio组件来播放音频文件，同时隐藏原生的vue-plyr组件，这里的组件只会留下一个进度条的功能-->
     <div ref="plyrContainer" style="display: none;">
       <!-- media src is managed imperatively (see _loadSource): a <source :src>
            binding only takes effect via media.load() and races with the
            nextTick-deferred watcher when Chrome freezes the hidden page -->
-      <video v-if="enableVideoSource" class="hide-in-global-page-for-pip" id="mediaVideo" crossorigin="anonymous" playsinline controls>
-      </video>
-      <audio v-else crossorigin="anonymous">
+      <audio crossorigin="anonymous">
       </audio>
     </div>
   </div>
@@ -135,7 +130,6 @@ export default {
       'duration',
       'currentTime',
       'newCurrentTime',
-      'enableVideoSource',
       'lyricOffsetSeconds',
       'enablePIPLyrics',
     ]),

@@ -7,11 +7,6 @@ const getters = {
     }
   },
 
-  isCurrentPlayingFileVideo: (state) => {
-    const title = (state.queue[state.queueIndex] || {title: ''}).title;
-    return title.endsWith("mp4");
-  },
-
   resumeHistroyDone: (state) => {
     return state.resumeHistroySeconds < 0
   },
