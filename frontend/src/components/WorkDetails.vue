@@ -24,6 +24,13 @@
           </router-link>
         </div>
 
+        <!-- 系列 -->
+        <div class="text-subtitle1 text-weight-regular" v-if="metadata.series">
+          <router-link :to="`/works?seriesId=${metadata.series.id}`" class="text-grey">
+            {{metadata.series.name}}
+          </router-link>
+        </div>
+
         <!-- 评价&评论 -->
         <div class="row items-center q-gutter-xs">
           <!-- 评价 -->
@@ -102,6 +109,32 @@
         >
           <q-chip square size="md" class="shadow-4" color="teal" text-color="white" icon="mic">
             {{va.name}}
+          </q-chip>
+        </router-link>
+      </div>
+
+      <!-- 插画师 -->
+      <div class="q-px-none q-pt-sm q-py-sm" v-if="metadata.illustrators && metadata.illustrators.length > 0">
+        <router-link
+          v-for="(illustrator, index) in metadata.illustrators"
+          :to="`/works?illustratorId=${illustrator.id}`"
+          :key=index
+        >
+          <q-chip square size="md" class="shadow-4" color="purple" text-color="white" icon="brush">
+            {{illustrator.name}}
+          </q-chip>
+        </router-link>
+      </div>
+
+      <!-- 脚本 writer -->
+      <div class="q-px-none q-pt-sm q-py-sm" v-if="metadata.scriptWriters && metadata.scriptWriters.length > 0">
+        <router-link
+          v-for="(sw, index) in metadata.scriptWriters"
+          :to="`/works?scriptWriterId=${sw.id}`"
+          :key=index
+        >
+          <q-chip square size="md" class="shadow-4" color="deep-orange" text-color="white" icon="edit">
+            {{sw.name}}
           </q-chip>
         </router-link>
       </div>
