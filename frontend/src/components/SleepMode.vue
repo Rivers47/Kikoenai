@@ -1,5 +1,5 @@
 <template>
-  <q-dialog :model-value="visible" @update:model-value="onVisChange" persistent>
+  <q-dialog :model-value="visible" @update:model-value="onVisChange">
     <q-card class="sleep-mode-dialog" style="min-width: 300px">
 
       <!-- Header: title + current timer status -->
@@ -12,16 +12,22 @@
 
       <!-- Body -->
       <q-card-section>
-
+        
         <!-- Mode toggle -->
-        <q-toggle
-          flat
-          color="primary"
-          v-model="currentMode"
-          true-value="tracks"
-          false-value="minutes"
-          :label="currentMode === 'minutes' ? '按分钟' : '按曲目'"
-        />
+        <div class="text-center">
+          <q-btn-toggle
+            toggle-color="primary"
+            text-color="primary"
+            no-caps
+            rounded
+            unelevated
+            v-model="currentMode"
+            :options="[
+              { label: '按分钟停止', value: 'minutes' },
+              { label: '按曲目停止', value: 'tracks' }
+            ]"
+          />
+        </div>
 
         <!-- Minutes mode -->
         <div v-if="currentMode === 'minutes'" class="q-mt-md">
@@ -31,22 +37,16 @@
           <q-slider
             v-model="sliderValue"
             :min="0"
-            :max="120"
-            :inner_min="5"
-            :inner_max="120"
+            :max="90"
+            :inner-min="5"
             :step="5"
             track-size="6px"
             :markers="15"
             :marker-labels="fnMarkerLabel"
             snap
-            dark
             color="primary"
-            track-color="primary"
             class="picker-slider"
           />
-          <div class="text-center q-mt-sm">
-            <span class="text-body2">{{ minutesHint }}</span>
-          </div>
         </div>
 
         <!-- Tracks mode -->
@@ -57,16 +57,14 @@
           <q-slider
             v-model="trackValue"
             :min="0"
-            :max="10"
+            :max="fnGetRemainingTracks()"
             :step="1"
             snap
-            dark
+            :markers="1"
             color="primary"
             class="picker-slider"
           />
-          <div class="text-center q-mt-sm">
-            <span class="text-body2">{{ tracksHint }}</span>
-          </div>
+          
         </div>
 
       </q-card-section>
@@ -244,6 +242,12 @@ export default {
 
     fnMarkerLabel(val) {
       return `${val}`
+    },
+
+    fnGetRemainingTracks() {
+      const queue = this.$store.state.AudioPlayer.queue
+      const queueIndex = this.$store.state.AudioPlayer.queueIndex
+      return Math.max(0, queue.length - queueIndex - 1)
     },
 
     showSuccNotif(message) {
