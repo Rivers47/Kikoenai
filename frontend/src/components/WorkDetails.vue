@@ -201,6 +201,7 @@ export default {
     return {
       refreshMetadataLoading: false,
       userMarked: false,
+      rating: 0,
       progress: '',
       showReviewDialog: false,
       showTags: true
