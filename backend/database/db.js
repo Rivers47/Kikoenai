@@ -74,6 +74,61 @@ const insertWorkMetadata = work => knex.transaction(trx => trx.raw(
             }).toString().replace('insert', 'insert or ignore'))));
     }
 
+    // イラスト
+    if (work.illustrators) {
+      for (let i = 0; i < work.illustrators.length; i += 1) {
+        promises.push(trx.raw(
+          trx('t_illustrator')
+            .insert({
+              id: work.illustrators[i].id,
+              name: work.illustrators[i].name,
+            }).toString().replace('insert', 'insert or ignore'),
+        )
+          .then(() => trx.raw(
+            trx('r_illustrator_work')
+              .insert({
+                illustrator_id: work.illustrators[i].id,
+                work_id: work.id,
+              }).toString().replace('insert', 'insert or ignore'))));
+      }
+    }
+
+    // シナリオ
+    if (work.scriptWriters) {
+      for (let i = 0; i < work.scriptWriters.length; i += 1) {
+        promises.push(trx.raw(
+          trx('t_script_writer')
+            .insert({
+              id: work.scriptWriters[i].id,
+              name: work.scriptWriters[i].name,
+            }).toString().replace('insert', 'insert or ignore'),
+        )
+          .then(() => trx.raw(
+            trx('r_script_writer_work')
+              .insert({
+                script_writer_id: work.scriptWriters[i].id,
+                work_id: work.id,
+              }).toString().replace('insert', 'insert or ignore'))));
+      }
+    }
+
+    // シリーズ
+    if (work.series && work.series.id) {
+      promises.push(trx.raw(
+        trx('t_series')
+          .insert({
+            id: work.series.id,
+            name: work.series.name,
+          }).toString().replace('insert', 'insert or ignore'),
+      )
+        .then(() => trx.raw(
+          trx('r_series_work')
+            .insert({
+              series_id: work.series.id,
+              work_id: work.id,
+            }).toString().replace('insert', 'insert or ignore'))));
+    }
+
     return Promise.all(promises)
       .then(() => trx);
   }));
@@ -100,6 +155,31 @@ const updateWorkMetadata = (work, options = {}) => knex.transaction(async (trx) 
     for (const va of work.vas) {
       await trx.raw('INSERT OR IGNORE INTO t_va(id, name) VALUES (?, ?)', [va.id, va.name]);
       await trx.raw('INSERT OR IGNORE INTO r_va_work(va_id, work_id) VALUES (?, ?)', [va.id, work.id]);
+    }
+  }
+  if (options.includeIllustrator || options.refreshAll) {
+    await trx('r_illustrator_work').where('work_id', work.id).del();
+    if (work.illustrators) {
+      for (const illustrator of work.illustrators) {
+        await trx.raw('INSERT OR IGNORE INTO t_illustrator(id, name) VALUES (?, ?)', [illustrator.id, illustrator.name]);
+        await trx.raw('INSERT OR IGNORE INTO r_illustrator_work(illustrator_id, work_id) VALUES (?, ?)', [illustrator.id, work.id]);
+      }
+    }
+  }
+  if (options.includeScriptWriter || options.refreshAll) {
+    await trx('r_script_writer_work').where('work_id', work.id).del();
+    if (work.scriptWriters) {
+      for (const sw of work.scriptWriters) {
+        await trx.raw('INSERT OR IGNORE INTO t_script_writer(id, name) VALUES (?, ?)', [sw.id, sw.name]);
+        await trx.raw('INSERT OR IGNORE INTO r_script_writer_work(script_writer_id, work_id) VALUES (?, ?)', [sw.id, work.id]);
+      }
+    }
+  }
+  if (options.includeSeries || options.refreshAll) {
+    await trx('r_series_work').where('work_id', work.id).del();
+    if (work.series && work.series.id) {
+      await trx.raw('INSERT OR IGNORE INTO t_series(id, name) VALUES (?, ?)', [work.series.id, work.series.name]);
+      await trx.raw('INSERT OR IGNORE INTO r_series_work(series_id, work_id) VALUES (?, ?)', [work.series.id, work.id]);
     }
   }
   if (options.includeTags || options.refreshAll) {
@@ -169,13 +249,16 @@ const getWorkMetadata = async (id, username) => {
 };
 
 /**
- * Tests if the given circle, tags and VAs are orphans and if so, removes them.
+ * Tests if the given circle, tags, VAs, illustrators, script writers and series are orphans and if so, removes them.
  * @param {*} trx Knex transaction object.
  * @param {*} circle Circle id to check.
  * @param {*} tags Array of tag ids to check.
  * @param {*} vas Array of VA ids to check.
+ * @param {*} illustrators Array of illustrator ids to check.
+ * @param {*} scriptWriters Array of script writer ids to check.
+ * @param {*} series Array of series ids to check.
  */
-const cleanupOrphans = async (trxProvider, circle, tags, vas)  => {
+const cleanupOrphans = async (trxProvider, circle, tags, vas, illustrators = [], scriptWriters = [], series = [])  => {
   const trx = await trxProvider();
   const getCount = (tableName, colName, colValue) => new Promise((resolveCount, rejectCount) => {
     trx(tableName)
@@ -230,6 +313,45 @@ const cleanupOrphans = async (trxProvider, circle, tags, vas)  => {
     }
   }
 
+  for (let i = 0; i < illustrators.length; i += 1) {
+    const illustrator = illustrators[i];
+    const count = await getCount('r_illustrator_work', 'illustrator_id', illustrator);
+
+    if (count === 0) {
+      promises.push(
+        trx('t_illustrator')
+          .delete()
+          .where('id', '=', illustrator),
+      );
+    }
+  }
+
+  for (let i = 0; i < scriptWriters.length; i += 1) {
+    const sw = scriptWriters[i];
+    const count = await getCount('r_script_writer_work', 'script_writer_id', sw);
+
+    if (count === 0) {
+      promises.push(
+        trx('t_script_writer')
+          .delete()
+          .where('id', '=', sw),
+      );
+    }
+  }
+
+  for (let i = 0; i < series.length; i += 1) {
+    const s = series[i];
+    const count = await getCount('r_series_work', 'series_id', s);
+
+    if (count === 0) {
+      promises.push(
+        trx('t_series')
+          .delete()
+          .where('id', '=', s),
+      );
+    }
+  }
+
   await Promise.all(promises);
 };
 
@@ -239,14 +361,20 @@ const cleanupOrphans = async (trxProvider, circle, tags, vas)  => {
  */
 const removeWork = async (id, trxProvider) => {
   const trx = await trxProvider();
-  // Save circle, tags and VAs to array for later testing
+  // Save circle, tags, VAs, illustrators, script writers and series to array for later testing
     const circle = await trx('t_work').select('circle_id').where('id', '=', id).first();
     const tags = await trx('r_tag_work').select('tag_id').where('work_id', '=', id);
     const vas = await trx('r_va_work').select('va_id').where('work_id', '=', id);
+    const illustrators = await trx('r_illustrator_work').select('illustrator_id').where('work_id', '=', id);
+    const scriptWriters = await trx('r_script_writer_work').select('script_writer_id').where('work_id', '=', id);
+    const series = await trx('r_series_work').select('series_id').where('work_id', '=', id);
 
     await trx('t_play_histroy').del().where('work_id', '=', id);
     await trx('r_tag_work').del().where('work_id', '=', id);
     await trx('r_va_work').del().where('work_id', '=', id);
+    await trx('r_illustrator_work').del().where('work_id', '=', id);
+    await trx('r_script_writer_work').del().where('work_id', '=', id);
+    await trx('r_series_work').del().where('work_id', '=', id);
     await trx('t_review').del().where('work_id', '=', id);
     await trx('t_work').del().where('id', '=', id);
     await cleanupOrphans(
@@ -254,6 +382,9 @@ const removeWork = async (id, trxProvider) => {
       circle.circle_id,
       tags.map(tag => tag.tag_id),
       vas.map(va => va.va_id),
+      illustrators.map(i => i.illustrator_id),
+      scriptWriters.map(s => s.script_writer_id),
+      series.map(s => s.series_id),
     );
 };
 
@@ -269,7 +400,7 @@ function nsfwFilter(nsfw, knexQuery) {
 }
 
 /**
- * Returns list of works by circle, tag or VA.
+ * Returns list of works by circle, tag, VA, illustrator, script writer or series.
  * @param {Number} id Which id to filter by.
  * @param {String} field Which field to filter by.
  */
@@ -294,6 +425,24 @@ const getWorksBy = ({id, field, username = ''} = {}) => {
 
     case 'va':
       workIdQuery = knex('r_va_work').select('work_id').where('va_id', '=', id);
+      return knex('staticMetadata').select(['staticMetadata.*', 'userrate.rating AS userRating'])
+        .leftJoin(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id')
+        .where('id', 'in', workIdQuery);
+
+    case 'illustrator':
+      workIdQuery = knex('r_illustrator_work').select('work_id').where('illustrator_id', '=', id);
+      return knex('staticMetadata').select(['staticMetadata.*', 'userrate.rating AS userRating'])
+        .leftJoin(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id')
+        .where('id', 'in', workIdQuery);
+
+    case 'script_writer':
+      workIdQuery = knex('r_script_writer_work').select('work_id').where('script_writer_id', '=', id);
+      return knex('staticMetadata').select(['staticMetadata.*', 'userrate.rating AS userRating'])
+        .leftJoin(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id')
+        .where('id', 'in', workIdQuery);
+
+    case 'series':
+      workIdQuery = knex('r_series_work').select('work_id').where('series_id', '=', id);
       return knex('staticMetadata').select(['staticMetadata.*', 'userrate.rating AS userRating'])
         .leftJoin(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id')
         .where('id', 'in', workIdQuery);
@@ -328,9 +477,15 @@ const getWorksByKeyWord = ({keyword, username = 'admin'} = {}) => {
 
   const tagIdQuery = knex('t_tag').select('id').where('name', 'like', `%${keyword}%`);
   const vaIdQuery = knex('t_va').select('id').where('name', 'like', `%${keyword}%`);
+  const illustratorIdQuery = knex('t_illustrator').select('id').where('name', 'like', `%${keyword}%`);
+  const scriptWriterIdQuery = knex('t_script_writer').select('id').where('name', 'like', `%${keyword}%`);
+  const seriesIdQuery = knex('t_series').select('id').where('name', 'like', `%${keyword}%`);
 
   const workIdQuery = knex('r_tag_work').select('work_id').where('tag_id', 'in', tagIdQuery).union([
-    knex('r_va_work').select('work_id').where('va_id', 'in', vaIdQuery)
+    knex('r_va_work').select('work_id').where('va_id', 'in', vaIdQuery),
+    knex('r_illustrator_work').select('work_id').where('illustrator_id', 'in', illustratorIdQuery),
+    knex('r_script_writer_work').select('work_id').where('script_writer_id', 'in', scriptWriterIdQuery),
+    knex('r_series_work').select('work_id').where('series_id', 'in', seriesIdQuery),
   ]);
 
 
@@ -352,12 +507,13 @@ const getLabels = (field) => {
       .select(`t_${field}.id`, 'name')
       .groupBy(`${field}_id`)
       .count(`${field}_id as count`);
-  } else if (field === 'tag' || field === 'va') {
-    return knex(`r_${field}_work`)
-      .join(`t_${field}`, `${field}_id`, '=', 'id')
+  } else if (['tag', 'va', 'illustrator', 'script_writer', 'series'].includes(field)) {
+    const tableName = field === 'illustrator' || field === 'script_writer' || field === 'series' ? field : field;
+    return knex(`r_${tableName}_work`)
+      .join(`t_${tableName}`, `${tableName}_id`, '=', 'id')
       .select('id', 'name')
-      .groupBy(`${field}_id`)
-      .count(`${field}_id as count`);
+      .groupBy(`${tableName}_id`)
+      .count(`${tableName}_id as count`);
   }
 };
 
@@ -502,7 +658,7 @@ async function deletePlayHistroy(username, work_id) {
 }
 
 const getMetadata = ({field = 'circle', id} = {}) => {
-  const validFields = ['circle', 'tag', 'va'];
+  const validFields = ['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series'];
   if (!validFields.includes(field)) throw new Error('无效的查询域');
   return knex(`t_${field}`)
     .select('*')
