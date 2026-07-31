@@ -96,6 +96,15 @@ app.use((err, req, res, next) => {
 
 // Create HTTP and HTTPS server
 const server = http.createServer(app);
+
+// Keep idle keep-alive connections open longer than the browser's own idle
+// timeout (Firefox: 115s, Chrome: 300s). Node's default is only 5s, which
+// causes a race where the browser reuses a connection the server has already
+// closed -> request fails with "Network Error" (NS_ERROR_NET_RESET) in Firefox.
+// headersTimeout must be greater than keepAliveTimeout.
+server.keepAliveTimeout = 120000; // 120s
+server.headersTimeout = 125000;   // 125s
+
 let httpsServer = null;
 let httpsSuccess = false;
 if (config.httpsEnabled) {
@@ -104,6 +113,8 @@ if (config.httpsEnabled) {
       key: fs.readFileSync(config.httpsPrivateKey),
       cert: fs.readFileSync(config.httpsCert),
     },app);
+    httpsServer.keepAliveTimeout = 120000;
+    httpsServer.headersTimeout = 125000;
     httpsSuccess = true;
   } catch (err) {
     console.error('HTTPS服务器启动失败，请检查证书位置以及是否文件可读');
