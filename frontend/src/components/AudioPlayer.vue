@@ -108,6 +108,21 @@
               </q-tooltip>
             </q-btn>
 
+            <!--睡眠定时-->
+            <q-btn
+              dense
+              size="md"
+              padding="none sm"
+              :flat="!sleepMode"
+              :outline="sleepMode"
+              icon="snooze"
+              @click="showSleepTimer = true"
+            >
+              <q-tooltip anchor="top middle" self="bottom middle">
+                {{ sleepTimerTooltip }}
+              </q-tooltip>
+            </q-btn>
+
             <!--大屏幕-->
             <q-btn 
               flat 
@@ -275,6 +290,9 @@
       </q-card>
     </div>
 
+    <!-- 睡眠定时 -->
+    <SleepMode v-model="showSleepTimer" />
+
     <!-- 当前播放列表 -->
     <q-dialog v-model="showCurrentPlayList">
       <q-card class="current-play-list">
@@ -354,6 +372,7 @@
 import AudioElement from 'components/AudioElement'
 import Scrollable from 'components/Scrollable'
 import AudioEqualizer from 'components/AudioEqualizer'
+import SleepMode from 'components/SleepMode'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import { formatSeconds } from '../utils'
 import { debounce } from 'quasar'
@@ -365,11 +384,13 @@ export default {
     AudioElement,
     Scrollable,
     AudioEqualizer,
+    SleepMode,
   },
 
   data () {
     return {
       showCurrentPlayList: false,
+      showSleepTimer: false,
       editCurrentPlayList: false,
       queueCopy: [],
       hideSeekButton: false,
@@ -548,6 +569,24 @@ export default {
       return this.playing ? "pause" : "play_arrow"
     },
 
+    sleepTimerTooltip () {
+      if (!this.sleepMode) {
+        return '睡眠定时'
+      }
+      if (this.sleepModeType === 'minutes' && this.sleepStopAt) {
+        const stopAt = new Date(this.sleepStopAt)
+        const h = stopAt.getHours().toString().padStart(2, '0')
+        const m = stopAt.getMinutes().toString().padStart(2, '0')
+        return `睡眠定时：约 ${h}:${m} 停止`
+      }
+      if (this.sleepModeType === 'tracks') {
+        return this.sleepTracksLeft > 0
+          ? `睡眠定时：再播放 ${this.sleepTracksLeft} 首后停止`
+          : '睡眠定时：当前曲目结束后停止'
+      }
+      return '睡眠定时'
+    },
+
     rewindIcon () {
       switch (this.rewindSeekTime) {
         case 5:
@@ -592,6 +631,10 @@ export default {
       'duration',
       'queueIndex',
       'playMode',
+      'sleepMode',
+      'sleepModeType',
+      'sleepStopAt',
+      'sleepTracksLeft',
       'rewindSeekTime',
       'forwardSeekTime',
       'swapSeekButton',

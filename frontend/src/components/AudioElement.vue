@@ -121,8 +121,10 @@ export default {
       'playMode',
       'muted',
       'volume',
-      'sleepTime',
       'sleepMode',
+      'sleepModeType',
+      'sleepStopAt',
+      'sleepTracksLeft',
       'rewindSeekTime',
       'forwardSeekTime',
       'rewindSeekMode',
@@ -242,6 +244,7 @@ export default {
       'SET_CURRENT_LYRIC',
       'SET_VOLUME',
       'CLEAR_SLEEP_MODE',
+      'DECREMENT_SLEEP_TRACKS',
       'SET_REWIND_SEEK_MODE',
       'SET_FORWARD_SEEK_MODE',
       'SET_AUDIO_ANALYSER',
@@ -267,22 +270,33 @@ export default {
     onTimeupdate () {
       this.SET_CURRENT_TIME(this.plyr.currentTime)
       if (this.enablePIPLyrics) this.debouncedPlayLrc(false)
-      if (this.sleepMode && this.sleepTime) {
-        const currentTime = new Date()
-        const currentHourStr = currentTime.getHours().toString().padStart(2, '0')
-        const currentMinuteStr = currentTime.getMinutes().toString().padStart(2, '0')
-        const sleepHourStr = this.sleepTime.match(/\d+/g)[0]
-        const sleepMinuteStr = this.sleepTime.match(/\d+/g)[1]
-        if (currentHourStr === sleepHourStr && currentMinuteStr === sleepMinuteStr) {
-          this.PAUSE()
-          this.CLEAR_SLEEP_MODE()
-          this.$q.sessionStorage.set('sleepTime', null)
-          this.$q.sessionStorage.set('sleepMode', false)
-        }
+      // 睡眠定时（按分钟）：到达停止时间戳即暂停
+      if (this.sleepMode && this.sleepModeType === 'minutes' && this.sleepStopAt && Date.now() >= this.sleepStopAt) {
+        this._stopBySleepTimer()
       }
     },
 
+    _stopBySleepTimer () {
+      this.PAUSE()
+      this.CLEAR_SLEEP_MODE()
+      this.$q.notify({
+        message: '睡眠定时已到，停止播放',
+        color: 'primary',
+        icon: 'bedtime',
+        timeout: 5000
+      })
+    },
+
     onEnded () {
+      // 睡眠定时（按曲目）：剩余曲目数为 0 时在当前曲目结束后停止，否则扣减一首
+      // 必须在切换曲目逻辑之前处理：一旦推进到下一曲，"当前曲目结束后停止" 就无法实现了
+      if (this.sleepMode && this.sleepModeType === 'tracks') {
+        if (this.sleepTracksLeft <= 0) {
+          this._stopBySleepTimer()
+          return
+        }
+        this.DECREMENT_SLEEP_TRACKS()
+      }
       switch (this.playMode.name) {
         case "all repeat":
           if (this.queueIndex === this.queue.length - 1) {
