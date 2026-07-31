@@ -29,16 +29,23 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci -w frontend
 
-      - name: Build frontend
+      - name: Build frontend (production, no debug)
+        run: npm run build:prod
+        working-directory: frontend
+
+      - name: Save production build
+        run: cp -r backend/dist backend/dist-prod
+
+      - name: Build frontend (debug)
         run: npm run build
         working-directory: frontend
 
-      - name: Verify frontend artifact landed in backend/dist/
-        run: ls -la backend/dist/
+      - name: Save debug build
+        run: cp -r backend/dist backend/dist-debug
 
-      # ── Container image ───────────────────────────────────────
-      - name: Generate container image metadata
-        id: meta
+      # ── Container image metadata ──────────────────────────────
+      - name: Generate production image metadata
+        id: meta-prod
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -48,23 +55,63 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build container image using Buildah
-        id: build-image
+      - name: Generate debug image metadata
+        id: meta-debug
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch,suffix=-debug
+            type=sha,prefix={{branch}}-,suffix=-debug,enable=${{ github.event_name == 'push' }}
+            type=semver,pattern={{version}},suffix=-debug
+            type=raw,value=latest-debug,enable={{is_default_branch}}
+
+      # ── Production image ──────────────────────────────────────
+      - name: Stage production build for image
+        run: rm -rf backend/dist && cp -r backend/dist-prod backend/dist
+
+      - name: Build production container image
+        id: build-image-prod
         uses: redhat-actions/buildah-build@v3
         with:
           image: ${{ env.IMAGE_NAME }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.meta-prod.outputs.tags }}
           context: ./
           containerfiles: |
             ./Containerfile
           oci: true
 
-      - name: Push to GitHub Container Registry
+      - name: Push production image to GitHub Container Registry
         if: ${{ github.event_name != 'pull_request' }}
         uses: redhat-actions/push-to-registry@v3
         with:
-          image: ${{ steps.build-image.outputs.image }}
-          tags: ${{ steps.build-image.outputs.tags }}
+          image: ${{ steps.build-image-prod.outputs.image }}
+          tags: ${{ steps.meta-prod.outputs.tags }}
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Debug image ──────────────────────────────────────────
+      - name: Stage debug build for image
+        run: rm -rf backend/dist && cp -r backend/dist-debug backend/dist
+
+      - name: Build debug container image
+        id: build-image-debug
+        uses: redhat-actions/buildah-build@v3
+        with:
+          image: ${{ env.IMAGE_NAME }}
+          tags: ${{ steps.meta-debug.outputs.tags }}
+          context: ./
+          containerfiles: |
+            ./Containerfile
+          oci: true
+
+      - name: Push debug image to GitHub Container Registry
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: redhat-actions/push-to-registry@v3
+        with:
+          image: ${{ steps.build-image-debug.outputs.image }}
+          tags: ${{ steps.meta-debug.outputs.tags }}
           registry: ${{ env.IMAGE_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}

@@ -22,7 +22,8 @@
   "scripts": {
     "test": "eslint .",
     "dev": "quasar dev -m pwa",
-    "build": "quasar build -m pwa --debug"
+    "build": "quasar build -m pwa --debug",
+	  "build:prod": "quasar build -m pwa"
   },
   "dependencies": {
     "@quasar/extras": "^1.18.0",
