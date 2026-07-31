@@ -14,15 +14,13 @@
       <q-card-section>
 
         <!-- Mode toggle -->
-        <q-btn-toggle
+        <q-toggle
           flat
-          toggle-color="primary"
-          no-caps
+          color="primary"
           v-model="currentMode"
-          :options="[
-            { label: '按分钟停止', value: 'minutes' },
-            { label: '按曲目停止', value: 'tracks' }
-          ]"
+          true-value="tracks"
+          false-value="minutes"
+          :label="currentMode === 'minutes' ? '按分钟' : '按曲目'"
         />
 
         <!-- Minutes mode -->
@@ -32,13 +30,18 @@
           </div>
           <q-slider
             v-model="sliderValue"
-            :min="5"
+            :min="0"
             :max="120"
+            :inner_min="5"
+            :inner_max="120"
             :step="5"
-            :markers="5"
+            track-size="6px"
+            :markers="15"
+            :marker-labels="fnMarkerLabel"
             snap
             dark
             color="primary"
+            track-color="primary"
             class="picker-slider"
           />
           <div class="text-center q-mt-sm">
@@ -104,12 +107,12 @@ export default {
   props: ['modelValue'],
 
   emits: ['update:modelValue'],
-
+  
   data() {
     return {
       sliderValue: 45,
       trackValue: 0,
-      currentMode: 'minutes'
+      currentMode: 'tracks'
     }
   },
 
@@ -190,7 +193,7 @@ export default {
     clear() {
       this.sliderValue = 45
       this.trackValue = 0
-      this.currentMode = 'minutes'
+      this.currentMode = 'tracks'
     },
 
     open() {
@@ -237,6 +240,10 @@ export default {
     clearSleepTimer() {
       this.CLEAR_SLEEP_MODE()
       this.showSuccNotif('已关闭睡眠模式')
+    },
+
+    fnMarkerLabel(val) {
+      return `${val}`
     },
 
     showSuccNotif(message) {
