@@ -176,8 +176,8 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
   // 插入文件夹
   tracks.forEach(track => {
     let fatherFolder = tree;
-    const path = track.subtitle ? track.subtitle.split('\\') : [];
-    path.forEach(folderName => {
+    const pathParts = track.subtitle ? track.subtitle.split(path.sep) : [];
+    pathParts.forEach(folderName => {
       const index = fatherFolder.findIndex(item => item.type === 'folder' && item.title === folderName);
       if (index === -1) {
         fatherFolder.push({
@@ -193,8 +193,8 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
   // 插入文件
   tracks.forEach(track => {
     let fatherFolder = tree;
-    const paths = track.subtitle ? track.subtitle.split('\\') : [];
-    paths.forEach(folderName => {
+    const pathParts = track.subtitle ? track.subtitle.split(path.sep) : [];
+    pathParts.forEach(folderName => {
       fatherFolder = fatherFolder.find(item => item.type === 'folder' && item.title === folderName).children;
     });
 
