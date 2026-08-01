@@ -19,7 +19,7 @@
 
         <!-- 社团名 -->
         <div class="text-subtitle1 text-weight-regular">
-          <router-link :to="`/works?circleId=${metadata.circle.id}`" class="text-grey">
+          <router-link :to="`/works?circleId=${metadata.circle.id}`" class="text-muted">
             {{metadata.circle.name}}
           </router-link>
         </div>
@@ -34,7 +34,7 @@
               @input="setRating"
               name="rating"
               size="sm"
-              :color="userMarked ? 'blue' : 'amber'"
+              :color="warning-container"
               icon="star_border"
               icon-selected="star"
               icon-half="star_half"
@@ -49,8 +49,8 @@
                 <!-- 评价占比 -->
                 <q-linear-progress
                   :value="rate.ratio/100"
-                  color="amber"
-                  track-color="white"
+                  color="on-info-container"
+                  track-color="info-container"
                   style="height: 15px; width: 100px"
                   class="col-auto"
                 />
@@ -61,24 +61,24 @@
           </div>
 
           <div class="col-auto">
-            <span class="text-weight-medium text-body1 text-red">{{metadata.rate_average_2dp}}</span> <span class="text-grey"> ({{metadata.rate_count}})</span>
+            <span class="text-weight-medium text-body1 text-negative">{{metadata.rate_average_2dp}}</span> <span class="text-muted"> ({{metadata.rate_count}})</span>
           </div>
 
           <!-- 评论数量 -->
           <div class="col-auto q-px-sm">
-            <q-icon name="chat" size="xs" /> <span class="text-grey"> ({{metadata.review_count}})</span>
+            <q-icon name="chat" size="xs" /> <span class="text-muted"> ({{metadata.review_count}})</span>
           </div>
 
           <!-- DLsite链接 -->
           <div class="col-auto">
-            <q-icon name="launch" size="xs" /><a class="text-blue" :href="`https://www.dlsite.com/home/work/=/product_id/RJ${dlsiteCode}.html`" rel="noreferrer noopener" target="_blank">DLsite</a>
+            <q-icon name="launch" size="xs" /><a class="text-primary" :href="`https://www.dlsite.com/home/work/=/product_id/RJ${dlsiteCode}.html`" rel="noreferrer noopener" target="_blank">DLsite</a>
           </div>
         </div>
       </div>
 
       <!-- 价格&售出数 -->
       <div class="q-pt-sm q-pb-none">
-        <span class="q-mx-sm text-weight-medium text-h6 text-red">{{metadata.price}} 日元</span> 售出数: {{metadata.dl_count}}
+        <span class="q-mx-sm text-weight-medium text-h6 text-negative">{{metadata.price}} 日元</span> 售出数: {{metadata.dl_count}}
       </div>
 
       <!-- 标签 -->
@@ -101,24 +101,24 @@
           :to="`/works?vaId=${va.id}`"
           :key=index
         >
-          <q-chip square size="md" class="shadow-4" color="teal" text-color="white" icon="mic">
+          <q-chip square size="md" class="shadow-4" color="tertiary-container" text-color="on-tertiary-container" icon="mic">
             {{va.name}}
           </q-chip>
         </router-link>
       </div>
 
       <!-- Illustrator -->
-      <div class="q-px-none q-pb-xs" v-if="metadata.illustrators && metadata.illustrators.length > 0">
+      <!-- <div class="q-px-none q-pb-xs" v-if="metadata.illustrators && metadata.illustrators.length > 0">
         <router-link
           v-for="(illustrator, index) in metadata.illustrators"
           :to="`/works?illustratorId=${illustrator.id}`"
           :key=index
         >
-          <q-chip square size="md" class="shadow-4" color="purple" text-color="white" icon="brush">
+          <q-chip square size="md" class="shadow-4" color="tertiary-container" text-color="on-tertiary-container" icon="brush">
             {{illustrator.name}}
           </q-chip>
         </router-link>
-      </div>
+      </div> -->
 
       <!-- Scriptwriter -->
       <div class="q-px-none q-pb-xs" v-if="metadata.scriptWriters && metadata.scriptWriters.length > 0">
@@ -127,7 +127,7 @@
           :to="`/works?scriptWriterId=${sw.id}`"
           :key=index
         >
-          <q-chip square size="md" class="shadow-4" color="deep-orange" text-color="white" icon="edit">
+          <q-chip square size="md" class="shadow-4" color="secondary-container" text-color="on-secondary-container" icon="edit">
             {{sw.name}}
           </q-chip>
         </router-link>
@@ -136,7 +136,7 @@
       <!-- 系列 -->
       <div class="q-px-none q-pb-xs" v-if="metadata.series">
         <router-link :to="`/works?seriesId=${metadata.series.id}`">
-          <q-chip square size="md" class="shadow-4" color="blue" text-color="white" icon="collections_bookmark">
+          <q-chip square size="md" class="shadow-4" color="surface-container-highest" text-color="on-surface" icon="collections_bookmark">
             {{metadata.series.name}}
           </q-chip>
         </router-link>
@@ -145,7 +145,8 @@
       <q-btn-dropdown
         dense
         class="q-mt-sm shadow-4 q-mx-xs q-pl-sm"
-        color="cyan"
+        color="primary"
+        text-color="on-primary"
         label="标记进度"
       >
         <q-list>
@@ -193,17 +194,17 @@
         </q-list>
       </q-btn-dropdown>
 
-      <q-btn dense @click="showReviewDialog = true" color="cyan q-mt-sm shadow-4 q-mx-xs q-px-sm" label="写评论" />
+      <q-btn dense @click="showReviewDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" label="写评论" />
 
-      <q-btn v-if="metadata.state && playWorkId !== metadata.id" dense @click="resumeThisHistroy" color="cyan q-mt-sm shadow-4 q-mx-xs q-px-sm" label="播放此作品的历史记录" />
-      <q-btn v-if="metadata.state" dense @click="clearThisHistroy" color="cyan q-mt-sm shadow-4 q-mx-xs q-px-sm" label="删除播放记录">
+      <q-btn v-if="metadata.state && playWorkId !== metadata.id" dense @click="resumeThisHistroy" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" label="播放此作品的历史记录" />
+      <q-btn v-if="metadata.state" dense @click="clearThisHistroy" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" label="删除播放记录">
         <q-tooltip>当历史记录中有已被删除的音频文件，可能会无法正确播放文件，可通过此按钮解决</q-tooltip>
       </q-btn>
 
 
-      <q-btn dense @click="scanWorkFile" color="cyan q-mt-sm shadow-4 q-mx-xs q-px-sm" label="扫描本地文件" />
+      <q-btn dense @click="scanWorkFile" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" label="扫描本地文件" />
 
-      <q-btn dense :loading="refreshMetadataLoading" @click="refreshMetadata" color="cyan q-mt-sm shadow-4 q-mx-xs q-px-sm" label="刷新元数据" />
+      <q-btn dense :loading="refreshMetadataLoading" @click="refreshMetadata" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" label="刷新元数据" />
 
       <WriteReview v-if="showReviewDialog" @closed="processReview" :workid="metadata.id" :metadata="metadata"></WriteReview>
     </div>

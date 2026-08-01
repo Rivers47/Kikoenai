@@ -14,7 +14,7 @@
       <div class="col-xs-6 col-sm-4 row q-pa-sm">
         <q-btn
           class="col"
-          color="teal"
+          color="primary"
           label="扫描本地音声库"
           :disable="state === 'running' || !(loggedIn || $socket.connected)"
           @click="performScan()"
@@ -48,7 +48,7 @@
           <q-item-section avatar>
             <q-spinner-gears v-if="state === 'running'" color="primary" size="2em" />
             <q-icon v-else-if="state === 'finished'" name="done" color="positive" size="2em" />
-            <q-icon v-else-if="state === 'error'" name="bug_report" color="red" size="2em" />
+            <q-icon v-else-if="state === 'error'" name="bug_report" color="negative" size="2em" />
           </q-item-section>
 
           <q-item-section>
@@ -70,10 +70,10 @@
         v-model="tab"
         dense
         inline-label
-        class="text-grey"
-        active-color="white"
-        active-bg-color="brown"
-        indicator-color="yellow"
+        class="text-muted"
+        active-color="on-secondary"
+        active-bg-color="secondary"
+        indicator-color="accent"
         align="justify"
         narrow-indicator
       >
@@ -81,7 +81,7 @@
           <q-badge v-show="tasks.length > 0" color="primary" floating>{{tasks.length}}</q-badge>
         </q-tab>
         <q-tab name="failedTasks" icon="error_outline" label="处理失败">
-          <q-badge v-show="failedTasks.length > 0" color="red" floating>{{failedTasks.length}}</q-badge>
+          <q-badge v-show="failedTasks.length > 0" color="negative" floating>{{failedTasks.length}}</q-badge>
         </q-tab>
       </q-tabs>
 
@@ -217,8 +217,8 @@ export default {
 
     textColorOnLevel(level) {
       switch(level) {
-        case 'error': return 'text-red';
-        case 'warn': return 'text-yellow';
+        case 'error': return 'text-negative';
+        case 'warn': return 'text-warning';
         default: return '';
       }
     },

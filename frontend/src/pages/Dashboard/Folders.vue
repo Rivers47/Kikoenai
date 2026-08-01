@@ -43,7 +43,7 @@
         <q-list>
           <q-item v-for="rootFolder in config.rootFolders" :key="rootFolder.name">
             <q-item-section avatar>
-              <q-icon color="amber" name="folder" />
+              <q-icon color="warning" name="folder" />
             </q-item-section>
 
             <q-item-section>
@@ -52,7 +52,7 @@
             </q-item-section>
 
             <q-item-section avatar>
-              <q-btn flat round color="red" icon="delete" @click="removeFromRootFolders(index)" />
+              <q-btn flat round color="negative" icon="delete" @click="removeFromRootFolders(index)" />
             </q-item-section>
           </q-item>
         </q-list>

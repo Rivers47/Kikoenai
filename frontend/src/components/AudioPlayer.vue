@@ -299,7 +299,7 @@
         <!-- 操作当前播放列表的控制按钮 -->
         <div class="row" style="padding: 5px; height: 45px;">
           <q-btn dense round size="md" icon="edit" color="primary" @click="editCurrentPlayList = !editCurrentPlayList" style="height: 35px; width: 35px;" class="col-auto" />
-          <q-btn dense round size="md" icon="save" color="teal" style="height: 35px; width: 35px;" class="col-auto q-mx-sm" @click="editCurrentPlayList = false" />
+          <q-btn dense round size="md" icon="save" color="secondary" style="height: 35px; width: 35px;" class="col-auto q-mx-sm" @click="editCurrentPlayList = false" />
           <q-space />
         </div>
         
@@ -313,7 +313,7 @@
               v-for="(track, index) in queueCopy"
               :key="index"
               :active="queueIndex === index"
-              active-class="text-white bg-teal"
+              active-class="text-on-primary bg-primary"
               class="non-selectable"
               style="padding: 0px 10px;"
               @click="onClickTrack(index)"

@@ -10,7 +10,7 @@
             <q-rating
               v-model="rating"
               size="sm"
-              color="blue"
+              color="primary"
               icon="star_border"
               icon-selected="star"
               icon-half="star_half"
@@ -47,7 +47,7 @@
           </q-card-section>
           
           <div class="row justify-between">
-            <q-card-actions  class="text-red">
+            <q-card-actions  class="text-negative">
               <q-btn flat label="删除标记" v-close-popup @click="deleteConfirm = true" />
             </q-card-actions>
 
@@ -60,12 +60,12 @@
       </q-dialog>
 
       <q-dialog v-model="deleteConfirm" persistent transition-show="scale" transition-hide="scale">
-        <q-card class="bg-teal text-white" style="width: 300px">
+        <q-card class="bg-negative text-on-error" style="width: 300px">
           <q-card-section>
             <div class="text-h6">确定要删除标记吗</div>
           </q-card-section>
 
-          <q-card-actions align="right" class="text-teal">
+          <q-card-actions align="right" class="text-negative">
               <q-btn flat label="确定" v-close-popup @click="deleteReview()" />
               <q-btn flat label="取消" v-close-popup @click="closeDialog()"/>
           </q-card-actions>
@@ -184,5 +184,5 @@ export default {
 
 <style lang="sass" scoped>
 .my-custom-toggle
-  border: 1px solid #027be3
+  border: 1px solid $primary
 </style>
