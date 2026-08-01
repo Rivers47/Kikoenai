@@ -115,17 +115,22 @@ The frontend builds directly into `backend/dist/`, which is served as static con
 
 
 ## TODO
-- [ ] Migrate packages to their modern versions
+- [x] Migrate packages to their modern versions
 - [ ] Support multiple languages
 - [ ] Support other metadata websites
 - [ ] Unify code language to English
 - [x] Fix PWA issues
 - [x] Refresh metadata for a single work
 - [ ] Optimize DB query speed
+- [ ] Tests
 - [ ] Edit metadata
 - [x] DB migration from number178's closed source version
 - [ ] DB migration from Kikoeru-project's version
 - [x] Container build
+- [ ] iOS support for opus
+- [ ] Migrate frontend to shadcn
+- [ ] metadata cache server to replace hvdb/asmrone
+- [ ] Smarter Play status, hide finished work in history
 
 ## License
 

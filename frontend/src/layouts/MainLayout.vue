@@ -213,11 +213,6 @@ export default {
           path: '/'
         },
         {
-          title: '聚合搜索',
-          icon: 'manage_search',
-          path: '/search'
-        },
-        {
           title: '大图模式',
           icon: 'play_circle',
           path: '/fullScreenPlayer'

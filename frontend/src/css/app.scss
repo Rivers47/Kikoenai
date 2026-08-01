@@ -9,11 +9,13 @@
   --sfw-badge-bg: #E6F7D6;
   --sfw-badge-text: #56842A;
   --lyrics-bg: rgba(158, 158, 158, 0.7); // translucent pill behind lyrics
+  --rating-star: #F2C037; // bright amber for rating stars
 }
 body.body--dark {
   --sfw-badge-bg: #33511D;
   --sfw-badge-text: #C5E8A5;
   --lyrics-bg: rgba(97, 97, 97, 0.8);
+  --rating-star: #FFD54F; // brighter on dark backgrounds
 }
 
 .sfw-badge {
@@ -24,6 +26,7 @@ body.body--dark {
 // Utility classes for theme tokens, usable with Quasar color props
 // (e.g. color="primary-container" text-color="on-primary-container")
 .text-muted { color: var(--on-surface-variant) !important; }
+.text-rating-star { color: var(--rating-star) !important; }
 .text-on-primary { color: var(--on-primary) !important; }
 .text-on-secondary { color: var(--on-secondary) !important; }
 .text-on-error { color: var(--on-error) !important; }

@@ -142,8 +142,8 @@
                   <q-item-section>
                     <q-input
                       v-if="hasLyric"
-                      :value="lyricOffsetSeconds"
-                      @input="lyricOffsetChange"
+                      :model-value="lyricOffsetSeconds"
+                      @update:model-value="lyricOffsetChange"
                       type="number"
                       prefix="歌词偏移"
                       suffix="s"

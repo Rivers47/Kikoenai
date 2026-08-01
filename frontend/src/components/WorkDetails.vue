@@ -31,10 +31,10 @@
           <div class="col-auto">
             <q-rating
               v-model="rating"
-              @input="setRating"
+              @update:model-value="setRating"
               name="rating"
               size="sm"
-              :color="warning-container"
+              :color="userMarked ? 'rating-star' : 'primary'"
               icon="star_border"
               icon-selected="star"
               icon-half="star_half"

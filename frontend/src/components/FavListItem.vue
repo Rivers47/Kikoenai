@@ -37,7 +37,7 @@
           <q-rating
             v-if="!hideRating"
             v-model="rating"
-            @input="setRating"
+            @update:model-value="setRating"
             size="sm"
             color="primary"
             icon="star_border"
@@ -84,7 +84,7 @@
           <q-btn-toggle
             v-if="mode === 'progress'"
             v-model="progress"
-            @input="setProgress"
+            @update:model-value="setProgress"
             dense
             no-caps
             rounded

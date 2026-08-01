@@ -28,7 +28,7 @@
           <q-rating
             v-model="rating"
             size="sm"
-            :color="userMarked ? 'primary' : 'warning'"
+            :color="userMarked ? 'rating-star' : 'primary'"
             icon="star_border"
             icon-selected="star"
             icon-half="star_half"

@@ -49,7 +49,7 @@
           class="non-selectable"
         >
           <q-item-section avatar style="position: relative;">
-            <q-icon size="34px" v-if="item.type === 'folder'" :style="{ color: 'color-mix(in srgb, var(--warning), var(--surface) 50%)' }"  name="folder" />
+            <q-icon size="34px" v-if="item.type === 'folder'" color="info" name="folder" />
             <q-icon size="34px" v-else-if="item.type === 'text'" color="info" name="description" />
             <q-icon size="34px" v-else-if="item.type === 'image'" color="accent" name="photo" />
             <!-- <q-img width="34px" height="34px" v-else-if="item.type === 'image'" :src="imgSrc(item)" contain :ratio="1/1"  name="thumbnail" /> -->

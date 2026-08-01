@@ -28,7 +28,7 @@
           <q-rating
             v-model="rating"
             size="sm"
-            :color="userMarked ? 'primary' : 'warning'"
+            :color="userMarked ? 'rating-star' : 'primary'"
             icon="star_border"
             icon-selected="star"
             icon-half="star_half"
@@ -43,8 +43,8 @@
               <!-- 评价占比 -->
               <q-linear-progress
                 :value="rate.ratio/100"
-                color="warning"
-                track-color="surface-container-highest"
+                color="on-info-container"
+                track-color="info-container"
                 style="height: 15px; width: 100px"
                 class="col-auto"
               />

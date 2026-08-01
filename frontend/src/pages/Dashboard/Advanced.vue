@@ -13,7 +13,7 @@
           </q-item-section>
 
           <q-item-section avatar>
-            <q-toggle :value="oldWorkCardUIStyle" @input="changeOldWorkCardUIStyle" dense/>
+            <q-toggle :model-value="oldWorkCardUIStyle" @update:model-value="changeOldWorkCardUIStyle" dense/>
           </q-item-section>
         </q-item>
       </q-list>
