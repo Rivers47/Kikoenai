@@ -12,7 +12,7 @@
       <div class="q-px-sm q-py-none">
         <!-- 标题 -->
         <div class="text-h6 text-weight-regular">
-          <router-link :to="`/work/${metadata.id}`" class="text-secondary">
+          <router-link :to="`/work/${metadata.id}`" class="text-primary">
             {{metadata.title}}
           </router-link>
         </div>
@@ -24,12 +24,6 @@
           </router-link>
         </div>
 
-        <!-- 系列 -->
-        <div class="text-subtitle1 text-weight-regular" v-if="metadata.series">
-          <router-link :to="`/works?seriesId=${metadata.series.id}`" class="text-grey">
-            {{metadata.series.name}}
-          </router-link>
-        </div>
 
         <!-- 评价&评论 -->
         <div class="row items-center q-gutter-xs">
@@ -100,8 +94,8 @@
         </router-link>
       </div>
 
-      <!-- 声优 -->
-      <div class="q-px-none q-pt-sm q-py-sm">
+      <!-- Voice Actor -->
+      <div class="q-px-none q-pb-xs">
         <router-link
           v-for="(va, index) in metadata.vas"
           :to="`/works?vaId=${va.id}`"
@@ -113,8 +107,8 @@
         </router-link>
       </div>
 
-      <!-- 插画师 -->
-      <div class="q-px-none q-pt-sm q-py-sm" v-if="metadata.illustrators && metadata.illustrators.length > 0">
+      <!-- Illustrator -->
+      <div class="q-px-none q-pb-xs" v-if="metadata.illustrators && metadata.illustrators.length > 0">
         <router-link
           v-for="(illustrator, index) in metadata.illustrators"
           :to="`/works?illustratorId=${illustrator.id}`"
@@ -126,8 +120,8 @@
         </router-link>
       </div>
 
-      <!-- 脚本 writer -->
-      <div class="q-px-none q-pt-sm q-py-sm" v-if="metadata.scriptWriters && metadata.scriptWriters.length > 0">
+      <!-- Scriptwriter -->
+      <div class="q-px-none q-pb-xs" v-if="metadata.scriptWriters && metadata.scriptWriters.length > 0">
         <router-link
           v-for="(sw, index) in metadata.scriptWriters"
           :to="`/works?scriptWriterId=${sw.id}`"
@@ -135,6 +129,15 @@
         >
           <q-chip square size="md" class="shadow-4" color="deep-orange" text-color="white" icon="edit">
             {{sw.name}}
+          </q-chip>
+        </router-link>
+      </div>
+
+      <!-- 系列 -->
+      <div class="q-px-none q-pb-xs" v-if="metadata.series">
+        <router-link :to="`/works?seriesId=${metadata.series.id}`">
+          <q-chip square size="md" class="shadow-4" color="blue" text-color="white" icon="collections_bookmark">
+            {{metadata.series.name}}
           </q-chip>
         </router-link>
       </div>

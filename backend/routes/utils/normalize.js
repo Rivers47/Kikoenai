@@ -35,21 +35,22 @@ const normalize = (works, options = {}) => {
     }
     if (record.illustratorObj) {
       const parsed = JSON.parse(record.illustratorObj);
-      record.illustrators = parsed.illustrators || [];
+      record.illustrators = (parsed.illustrators || []).filter(i => i.id !== null);
     } else {
       record.illustrators = [];
     }
 
     if (record.scriptWriterObj) {
       const parsed = JSON.parse(record.scriptWriterObj);
-      record.scriptWriters = parsed.scriptWriters || [];
+      record.scriptWriters = (parsed.scriptWriters || []).filter(s => s.id !== null);
     } else {
       record.scriptWriters = [];
     }
 
     if (record.seriesObj) {
       const parsed = JSON.parse(record.seriesObj);
-      record.series = parsed.series && parsed.series.length > 0 ? parsed.series[0] : null;
+      const filtered = (parsed.series || []).filter(s => s.id !== null);
+      record.series = filtered.length > 0 ? filtered[0] : null;
     } else {
       record.series = null;
     }
