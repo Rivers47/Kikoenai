@@ -15,32 +15,19 @@
         <div class="pull-handler" @click="toggleHide" v-touch-swipe.mouse.down="toggleHide"></div>
 
         <!-- 音声封面 -->
-        <div class="row items-center albumart q-mt-lg q-pa-sm relative-position flippable-cover-container non-selectable"
+        <div class="row items-center albumart q-mt-lg q-pa-sm relative-position non-selectable"
           v-touch-swipe.mouse="onCoverSwipe"
         >
           <q-img fit="contain"
-            class="rounded-borders box-shadow flippable-cover cover-img"
-            :class="{
-              'flip-on-front': !isFlipCover,
-              'flip-on-back': isFlipCover,
-            }"
+            class="rounded-borders box-shadow cover-img"
             :img-style="{
               transition: 'opacity 1s, filter 1s',
-              filter: isFlipCover ? 'brightness(0.1) grayscale(80%)' : 'brightness(1) grayscale(0%)',
-              'backface-visibility': 'hidden',
             }"
             transition="fade"
             :src="coverUrl"
             :ratio="4/3"
             @dblclick.prevent="openWorkDetail()"
           >
-          <AudioEqualizer class="equalizer rounded-borders box-shadow flip-on-back"
-            :disable="!isFlipCover"
-            :style="{
-              transition: 'all 1s',
-              opacity: isFlipCover ? 1 : 0,
-            }"
-             />
           </q-img>
 
         </div>
@@ -60,22 +47,6 @@
               <q-tooltip anchor="top middle" self="bottom middle">
                 切换曲目
               </q-tooltip>
-            </q-btn>
-
-            <!--视频画中画-->
-            <q-btn 
-              v-if="enableVideoSource && isCurrentPlayingFileVideo" 
-              dense 
-              size="md" 
-              padding="none sm" 
-              :flat="!enableVideoSourcePIP"
-              :outline="enableVideoSourcePIP"
-              icon="picture_in_picture_alt" 
-              @click="onSetEnableVideoSourcePIP(!enableVideoSourcePIP)" 
-            >
-            <q-tooltip anchor="top middle" self="bottom middle">
-              视频画中画
-            </q-tooltip>
             </q-btn>
 
             <!--画中画歌词-->
@@ -137,21 +108,6 @@
               </q-tooltip>
             </q-btn>
 
-            <!--equalizer-->
-            <q-btn 
-              v-if="enableVisualizer"
-              flat 
-              dense 
-              size="md" 
-              padding="none sm" 
-              icon="equalizer" 
-              @click="flipCover"
-            >
-              <q-tooltip anchor="top middle" self="bottom middle">
-                音效均衡器
-              </q-tooltip>
-            </q-btn>
-
           <!-- 放在尾部 -->
             <q-btn
               flat 
@@ -164,16 +120,6 @@
                 更多播放设置
               </q-tooltip>
               <q-menu anchor="bottom right" self="top right">
-                <q-item clickable v-ripple @click="hideSeekButton = !hideSeekButton">
-                  <q-item-section avatar>
-                    <q-icon :name="hideSeekButton ? 'done' : ''" />
-                  </q-item-section>
-
-                  <q-item-section>
-                    隐藏封面按钮
-                  </q-item-section>
-                </q-item>
-                
                 <q-item clickable v-ripple @click="toggleSwapSeekButton">
                   <q-item-section avatar>
                     <q-icon :name="swapSeekButton ? 'done' : ''" />
@@ -189,24 +135,6 @@
                   </q-item-section>
                   <q-item-section>
                     打开作品详情（或双击封面）
-                  </q-item-section>
-                </q-item>
-                
-                <q-item clickable v-ripple @click="toggleEnableVisualizer">
-                  <q-item-section avatar>
-                    <q-icon :name="enableVisualizer ? 'done' : ''" />
-                  </q-item-section>
-                  <q-item-section>
-                    开启音频可视化（需要刷新页面）
-                  </q-item-section>
-                </q-item>
-                
-                <q-item clickable v-ripple @click="onToggleVideoSource">
-                  <q-item-section avatar>
-                    <q-icon :name="enableVideoSource ? 'done' : ''" />
-                  </q-item-section>
-                  <q-item-section>
-                    视频源绘制功能（需要刷新页面）
                   </q-item-section>
                 </q-item>
 
@@ -371,7 +299,6 @@
 <script>
 import AudioElement from 'components/AudioElement'
 import Scrollable from 'components/Scrollable'
-import AudioEqualizer from 'components/AudioEqualizer'
 import SleepMode from 'components/SleepMode'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import { formatSeconds } from '../utils'
@@ -383,7 +310,6 @@ export default {
   components: {
     AudioElement,
     Scrollable,
-    AudioEqualizer,
     SleepMode,
   },
 
@@ -393,12 +319,9 @@ export default {
       showSleepTimer: false,
       editCurrentPlayList: false,
       queueCopy: [],
-      hideSeekButton: false,
       isAndroid: navigator.userAgent.toLowerCase().indexOf('android') > -1,
       histroyCheckIntervalId: -1,
       latestUpdatedHistory: null, // 记录最近一次更新的历史记录，防止反复对同一个播放历史进行远程数据更新
-
-      isFlipCover: false, // 是否反转封面显示其他内容
 
       // 歌词偏移量修复工具
       lyricSyncDialog: false,
@@ -410,9 +333,6 @@ export default {
   },
 
   mounted () {
-    if (this.$q.localStorage.has('hideSeekButton')) {
-      this.hideSeekButton = this.$q.localStorage.getItem('hideSeekButton')
-    }
     this.histroyCheckIntervalId = setInterval(() => {
       this.onUpdatePlayingStatus()
     }, 60 * 1000) // 每隔一段时间更新一次播放记录
@@ -459,10 +379,6 @@ export default {
       }
     },
 
-    hideSeekButton (option) {
-      this.$q.localStorage.set('hideSeekButton', option)
-    },
-
     playing() {
       this.onUpdatePlayingStatus()
     },
@@ -494,12 +410,6 @@ export default {
         // 暂停状态下切换时间，也更新播放历史
         this.onUpdatePlayingStatus()
       }
-    },
-    enableVisualizer() {
-      this.suggestRefreshPage();
-    },
-    enableVideoSource() {
-      this.suggestRefreshPage();
     },
     lyricSyncDialog() {
       this.fixState = 'ready';
@@ -638,9 +548,6 @@ export default {
       'rewindSeekTime',
       'forwardSeekTime',
       'swapSeekButton',
-      'enableVisualizer',
-      'enableVideoSource',
-      'enableVideoSourcePIP',
       'enablePIPLyrics',
       'playWorkId',
       'rewindSeekMode',
@@ -652,7 +559,6 @@ export default {
     ...mapGetters('AudioPlayer', [
       'currentPlayingFile',
       'resumeHistroyDone',
-      'isCurrentPlayingFileVideo',
     ])
   },
 
@@ -687,9 +593,6 @@ export default {
       rewind: 'SET_REWIND_SEEK_MODE',
       forward: 'SET_FORWARD_SEEK_MODE',
       toggleSwapSeekButton: 'TOGGLE_SWAP_SEEK_BUTTON',
-      toggleEnableVisualizer: 'TOGGLE_ENABLE_VISUALIZER',
-      toggleEnableVideoSource: 'TOGGLE_ENABLE_VIDEO_SOURCE',
-      setEnableVideoSourcePIP: 'SET_ENABLE_VIDEO_SOURCE_PIP',
       setEnablePIPLyrics: 'SET_ENABLE_PIP_LYRICS',
       setLyricOffsetSeconds: 'SET_LYRIC_OFFSET_SECONDS',
     }),
@@ -719,13 +622,8 @@ export default {
     },
 
     onCoverSwipe(evt) {
-      switch(evt.direction) {
-        case 'left':
-        case 'right':
-          this.flipCover();
-          break;
-        case 'down':
-          this.toggleHide();
+      if (evt.direction === 'down') {
+        this.toggleHide();
       }
     },
 
@@ -825,69 +723,8 @@ export default {
         })
     },
 
-    // 中转一道这个设置，加一些用户提示
-    onToggleVideoSource() {
-
-      // 如果是关闭的话，直接关掉，无需用户提示
-      if (this.enableVideoSource) {
-        this.toggleEnableVideoSource();
-        return;
-      }
-
-      // 打开的话，需要提示一些用户信息
-      this.$q.dialog({
-        title: '注意',
-        message: '开启视频源绘制功能会增加性能开销，移动设备上可能会发热严重，请谨慎选择。此外，在iOS safari系统中，safari会强制将页面中正在播放的视频元素设置为画中画模式，无法规避，建议iOS safari环境下关闭此项功能',
-        cancel: true,
-      }).onOk(() => {
-        this.toggleEnableVideoSource()
-      }).onCancel(() => {})
-    },
-
-    onSetEnableVideoSourcePIP(enable) {
-      this.setEnableVideoSourcePIP(enable)
-
-      const video = document.querySelector("#mediaVideo") // 全局id获取对应的video元素，因为safari进入pip模式需要在用户动作回调中执行，实在是没法跨组件做这个，这里hack一下
-      const isAlreadyInPIP = document.pictureInPictureElement === video
-      if (enable && !isAlreadyInPIP) {
-        if (
-          typeof video.requestPictureInPicture === 'function' &&
-          document.pictureInPictureEnabled
-        ) {
-          video.requestPictureInPicture().then(() => {
-            video.addEventListener('leavepictureinpicture', () => {
-              if (this.playing) this.player.play()
-              this.setEnableVideoSourcePIP(false)
-            })
-          }).catch((err) => {
-            console.log("PIP in video source failed, msg = ", err.message)
-          })
-        } else if (typeof video.webkitPresentationMode === 'function') {
-          video.webkitPresentationMode('picture-in-picture')
-        }
-      } else if (isAlreadyInPIP) {
-        document.exitPictureInPicture();
-      }
-    },
-
     gotoFullScreenPlayer() {
       this.$router.push(`/fullScreenPlayer`)
-    },
-
-    // 当发生特定配置改动，需要用户刷新页面时，通过这个通知来提示用户
-    suggestRefreshPage() {
-      this.$q.notify({
-        message: "配置已更改，建议刷新页面",
-        actions: [
-          { label: "立即刷新",
-            handler: () => {
-              // this.$router.push(`/fullScreenPlayer/${this.playWorkId}`)
-              // this.$router.push(`/fullScreenPlayer`)
-              this.$router.go(0);
-            }
-          }
-        ],
-      });
     },
 
     lyricOffsetChange(seconds) {
@@ -895,12 +732,6 @@ export default {
       seconds = Math.round(seconds * 10000) / 10000; // 解决javascript小数点精度问题，比如0.9+0.1变成0.999999这种问题，在这里修复成1.0
       console.log("lyric offset change to ", seconds, typeof seconds)
       this.setLyricOffsetSeconds(seconds)
-    },
-
-    flipCover() {
-      if (!this.enableVisualizer) return; // 尚未开启音频可视化选项，无法使用音效均衡器
-      console.warn("flip cover");
-      this.isFlipCover = !this.isFlipCover;
     },
 
     onKeyDown(event) {
@@ -1039,39 +870,8 @@ export default {
   white-space: nowrap;
 }
 
-.equalizer {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  background: transparent;
-  transform: rotateY(180deg);
-}
-
-.flippable-cover-container {
-  perspective: 60rem;
-  transition: opacity 1s;
-}
-
 .cover-img {
-  transition: transform 1s;
-}
-
-.hide-cover-img {
-  opacity: 0;
-}
-
-.show-cover-img {
-  opacity: 1;
-}
-
-.flip-on-front {
-  transform: rotateY(0);
-}
-
-.flip-on-back {
-  transform: rotateY(180deg);
+  transition: opacity 1s;
 }
 
 </style>

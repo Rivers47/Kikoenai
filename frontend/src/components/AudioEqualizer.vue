@@ -1,52 +1,27 @@
 <template>
-  <div class="container">
-    <div class="text-h5">均衡器</div>
-    <q-toggle
-      :disable="disable"
-      v-model="isFlipLeftRightChannel"
-      color="primary"
-      :icon="isFlipLeftRightChannel ? 'sync_alt' : 'headphones'"
-      label="左右声道交换"
-    />
-  </div>
+  <!--
+    AudioEqualizer – kept for the flipLeftRightChannel function.
+    UI will be added later.
+  -->
+  <div style="display: none"></div>
 </template>
 
 <script>
 
-import { mapState } from 'vuex'
-
 export default {
   name: 'AudioEqualizer',
 
-  props: {
-    disable: {
-      type: Boolean,
-      required: true
-    },
-  },
-
-  data () {
-    return {
-      isFlipLeftRightChannel: false,
-    }
-  },
-
-  watch: {
-    isFlipLeftRightChannel(v) {
-      this.flipLeftRightChannel(v);
-    }
-  },
-
-  computed: {
-    ...mapState("AudioPlayer", [
-      "enableVisualizer",
-      "audioAnalyser",
-    ])
-  },
-
   methods: {
+    /**
+     * Flip or restore left/right audio channels.
+     * @param {boolean} flip - true to swap channels, false to restore.
+     * Requires this.$store.state.AudioPlayer.audioAnalyser to be set.
+     */
     flipLeftRightChannel(flip) {
-      const {audioSrc, merger, splitter, audioCtx, left, right} = this.audioAnalyser;
+      // The audio analyser is stored in the store by AudioElement after the future UI initializes it
+      const analyser = this.$store.state.AudioPlayer.audioAnalyser;
+      if (!analyser) return;
+      const {audioSrc, merger, splitter, audioCtx, left, right} = analyser;
       if (flip) {
         // disconnect direct source
         audioSrc.disconnect(audioCtx.destination);
