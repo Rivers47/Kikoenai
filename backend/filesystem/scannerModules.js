@@ -176,10 +176,8 @@ function uniqueFolderListSeparate(arr) {
  * @param {number} id work id
  * @param {string} rootFolderName 根文件夹别名
  * @param {string} dir 音声文件夹相对路径
- * @param {string} tagLanguage 标签语言，'ja-jp', 'zh-tw' or 'zh-cn'，默认'zh-cn'
- * @param {boolean} hasLyric 当前作品是否拥有本地字幕
  */
-async function getMetadata(id, rootFolderName, dir, tagLanguage) {
+async function getMetadata(id, rootFolderName, dir) {
   const rjcode = formatID(id); // zero-pad to 6 digits
 
   LOG.task.info(rjcode, '从 DLSite 抓取元数据...');
@@ -187,14 +185,14 @@ async function getMetadata(id, rootFolderName, dir, tagLanguage) {
   let metadata = null;
 
   try {
-    metadata = await scrapeWorkMetadataFromDLsite(id, tagLanguage); // 抓取该音声的元数据
+    metadata = await scrapeWorkMetadataFromDLsite(id); // 抓取该音声的元数据
   } catch(error) {
     LOG.task.warn(rjcode, `DLSite获取元数据失败: ${error.message}`);
   }
 
   if (metadata === null) {
     try {
-      metadata = await scrapeWorkMetadataFromAsmrOne(id, tagLanguage); // 抓取该音声的元数据
+      metadata = await scrapeWorkMetadataFromAsmrOne(id); // 抓取该音声的元数据
     } catch(error) {
       LOG.task.warn(rjcode, `AsmrOne获取元数据失败: ${error.message}`);
     }
@@ -202,7 +200,7 @@ async function getMetadata(id, rootFolderName, dir, tagLanguage) {
 
   if (metadata === null) {
     try {
-      metadata = await scrapeWorkMetadataFromDLsiteJson(id, tagLanguage); // 抓取该音声的元数据
+      metadata = await scrapeWorkMetadataFromDLsiteJson(id); // 抓取该音声的元数据
     } catch(error) {
       LOG.task.warn(rjcode, `DLSite json api获取元数据失败: ${error.message}`);
     }
@@ -351,7 +349,7 @@ async function processFolder(folder) {
       { /* 首次添加的作品肯定没有memo，这里设置一个空object作为初始memo */}
     );
     
-    const result = await getMetadata(folder.id, folder.rootFolderName, folder.relativePath, config.tagLanguage); // 获取元数据
+    const result = await getMetadata(folder.id, folder.rootFolderName, folder.relativePath); // 获取元数据
 
     // 如果获取元数据失败，跳过封面图片下载
     if (result === 'failed') {
@@ -611,9 +609,9 @@ async function performScan() {
  */
 async function updateMetadata(id, options = {}) {
   let scrapeProcessor = () => scrapeDynamicWorkMetadataFromDLsite(id);
-  if (options.includeVA || options.includeTags || options.includeNSFW || options.refreshAll) {
+  if (options.includeVA || options.includeTags || options.includeNSFW || options.includeIllustrator || options.includeScriptWriter || options.includeSeries || options.refreshAll) {
     // static + dynamic
-    scrapeProcessor = () => scrapeWorkMetadataFromDLsite(id, config.tagLanguage);
+    scrapeProcessor = () => scrapeWorkMetadataFromDLsite(id);
   }
 
   const rjcode = formatID(id); // zero-pad to 6 or 8 digits

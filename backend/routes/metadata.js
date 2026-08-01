@@ -135,9 +135,9 @@ router.get('/works',
     }
 });
 
-// GET name of a circle/tag/VA
-router.get('/:field(circle|tag|va)s/:id',
-  param('field').isIn(['circle', 'tag', 'va']),
+// GET name of a circle/tag/VA/illustrator/script_writer/series
+router.get('/:field(circle|tag|va|illustrator|script_writer|series)s/:id',
+  param('field').isIn(['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series']),
   (req, res, next) => {
     // In case regex matching goes wrong
     if(!isValidRequest(req, res)) return;
@@ -150,7 +150,10 @@ router.get('/:field(circle|tag|va)s/:id',
           const errorMessage= {
             'circle': `社团${req.params.id}不存在`,
             'tag': `标签${req.params.id}不存在`,
-            'va': `声优${req.params.id}不存在`
+            'va': `声优${req.params.id}不存在`,
+            'illustrator': `イラスト${req.params.id}不存在`,
+            'script_writer': `シナリオ${req.params.id}不存在`,
+            'series': `シリーズ${req.params.id}不存在`
           };
           res.status(404).send({error: errorMessage[req.params.field]});
         }
@@ -204,9 +207,9 @@ router.get('/search', async (req, res, next) => {
   }
 });
 
-// GET list of work ids, restricted by circle/tag/VA
-router.get('/:field(circle|tag|va)s/:id/works',
-  param('field').isIn(['circle', 'tag', 'va']),
+// GET list of work ids, restricted by circle/tag/VA/illustrator/script_writer/series
+router.get('/:field(circle|tag|va|illustrator|script_writer|series)s/:id/works',
+  param('field').isIn(['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series']),
   // eslint-disable-next-line no-unused-vars
   async (req, res, next) => {
     // In case regex matching goes wrong
@@ -252,9 +255,9 @@ router.get('/:field(circle|tag|va)s/:id/works',
     }
 });
 
-// GET list of circles/tags/VAs
-router.get('/:field(circle|tag|va)s/',
-  param('field').isIn(['circle', 'tag', 'va']),
+// GET list of circles/tags/VAs/illustrators/script_writers/series
+router.get('/:field(circle|tag|va|illustrator|script_writer|series)s/',
+  param('field').isIn(['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series']),
   (req, res, next) => {
     // In case regex matching goes wrong
     if(!isValidRequest(req, res)) return;
@@ -301,7 +304,7 @@ router.post('/refresh/:id',
 
     const work_id = parseInt(req.params.id);
     try {
-      const metadata = await scrapeWorkMetadataFromDLsite(work_id, config.tagLanguage);
+      const metadata = await scrapeWorkMetadataFromDLsite(work_id);
       metadata.id = work_id;
       await db.updateWorkMetadata(metadata, { refreshAll: true });
       res.send({ message: 'Refresh metadata for work ' + work_id + ' successful', metadata });

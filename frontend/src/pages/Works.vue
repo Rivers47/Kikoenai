@@ -239,8 +239,13 @@ export default {
         return `/api/tags/${this.$route.query.tagId}/works`
       } else if (query.vaId) {
         return `/api/vas/${this.$route.query.vaId}/works`
+      } else if (query.illustratorId) {
+        return `/api/illustrators/${this.$route.query.illustratorId}/works`
+      } else if (query.scriptWriterId) {
+        return `/api/script_writers/${this.$route.query.scriptWriterId}/works`
+      } else if (query.seriesId) {
+        return `/api/seriess/${this.$route.query.seriesId}/works`
       } else if (query.keyword) {
-        // keyword should pass in as a query param later
         return `/api/search`
       } else {
         return '/api/works'
@@ -352,17 +357,27 @@ export default {
     },
 
     refreshPageTitle () {
-      if (this.$route.query.circleId || this.$route.query.tagId || this.$route.query.vaId) {
+      const q = this.$route.query;
+      if (q.circleId || q.tagId || q.vaId || q.illustratorId || q.scriptWriterId || q.seriesId) {
         let url = '', restrict = ''
-        if (this.$route.query.circleId) {
+        if (q.circleId) {
           restrict = 'circles'
-          url = `/api/${restrict}/${this.$route.query.circleId}`
-        } else if (this.$route.query.tagId) {
+          url = `/api/${restrict}/${q.circleId}`
+        } else if (q.tagId) {
           restrict = 'tags'
-          url = `/api/${restrict}/${this.$route.query.tagId}`
-        } else {
+          url = `/api/${restrict}/${q.tagId}`
+        } else if (q.vaId) {
           restrict = 'vas'
-          url = `/api/${restrict}/${this.$route.query.vaId}`
+          url = `/api/${restrict}/${q.vaId}`
+        } else if (q.illustratorId) {
+          restrict = 'illustrators'
+          url = `/api/${restrict}/${q.illustratorId}`
+        } else if (q.scriptWriterId) {
+          restrict = 'script_writers'
+          url = `/api/${restrict}/${q.scriptWriterId}`
+        } else {
+          restrict = 'seriess'
+          url = `/api/${restrict}/${q.seriesId}`
         }
 
         this.$axios.get(url)
@@ -380,14 +395,21 @@ export default {
               case 'circles':
                 pageTitle = '社团作品：'
                 break
+              case 'illustrators':
+                pageTitle = 'イラスト：'
+                break
+              case 'script_writers':
+                pageTitle = 'シナリオ：'
+                break
+              case 'seriess':
+                pageTitle = 'シリーズ作品：'
+                break
             }
-            // pageTitle += name || ''
             this.searchMetas = [name]
             this.pageTitle = pageTitle
           })
           .catch((error) => {
             if (error.response) {
-              // 请求已发出，但服务器响应的状态码不在 2xx 范围内
               if (error.response.status !== 401) {
                 this.showErrNotif(error.response.data.error || `${error.response.status} ${error.response.statusText}`)
               }

@@ -9,13 +9,13 @@
     @mouseout="toggleBlurFlag()"
   >
     <div class="absolute-top-left transparent" style="padding: 0;">
-      <q-chip dense square color="brown" text-color="white" class="q-ma-sm shadow-3">
+      <q-chip dense square color="dark" text-color="white" class="q-ma-sm shadow-3">
         {{`RJ${rjcode}`}}
       </q-chip>
     </div>
 
     <div v-if="release !== ''" class="absolute-bottom-right transparent" style="padding: 0px;">
-      <q-chip dense square color="blue-grey" text-color="white" class="q-ma-sm shadow-3">
+      <q-chip dense square color="surface-container-highest" text-color="on-surface" class="q-ma-sm shadow-3">
         {{release}}
       </q-chip>
     </div>

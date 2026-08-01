@@ -16,7 +16,7 @@
 
       <!-- 社团 -->
       <div class="q-ml-sm q-mt-sm q-mb-xs text-subtitle1 text-weight-regular ellipsis">
-        <router-link :to="`/works?circleId=${metadata.circle.id}`" class="text-grey">
+        <router-link :to="`/works?circleId=${metadata.circle.id}`" class="text-muted">
           {{ metadata.circle.name }}
         </router-link>
       </div>
@@ -28,7 +28,7 @@
           <q-rating
             v-model="rating"
             size="sm"
-            :color="userMarked ? 'blue' : 'amber'"
+            :color="userMarked ? 'primary' : 'warning'"
             icon="star_border"
             icon-selected="star"
             icon-half="star_half"
@@ -43,8 +43,8 @@
               <!-- 评价占比 -->
               <q-linear-progress
                 :value="rate.ratio/100"
-                color="amber"
-                track-color="white"
+                color="warning"
+                track-color="surface-container-highest"
                 style="height: 15px; width: 100px"
                 class="col-auto"
               />
@@ -55,30 +55,30 @@
         </div>
 
         <div class="col-auto">
-          <span class="text-weight-medium text-body1 text-red">{{ metadata.rate_average_2dp }}</span>
-          <span class="text-grey"> ({{ metadata.rate_count }})</span>
+          <span class="text-weight-medium text-body1 text-negative">{{ metadata.rate_average_2dp }}</span>
+          <span class="text-muted"> ({{ metadata.rate_count }})</span>
         </div>
 
         <!-- 评论数量 -->
         <div class="col-auto q-px-sm">
           <q-icon name="chat" size="xs" />
-          <span class="text-grey"> ({{ metadata.review_count }})</span>
+          <span class="text-muted"> ({{ metadata.review_count }})</span>
         </div>
 
         <!-- DLsite链接 -->
         <div class="col-auto">
           <q-icon name="launch" size="xs" />
-          <a class="text-blue" :href="`https://www.dlsite.com/home/work/=/product_id/RJ${dlsiteCode}.html`" rel="noreferrer noopener" target="_blank">DLsite</a>
+          <a class="text-primary" :href="`https://www.dlsite.com/home/work/=/product_id/RJ${dlsiteCode}.html`" rel="noreferrer noopener" target="_blank">DLsite</a>
         </div>
       </div>
 
       <!-- 价格&售出数 -->
       <div v-show="metadata.title" class="row items-center">
-        <span class="q-ml-sm text-weight-medium text-h6 text-red">
+        <span class="q-ml-sm text-weight-medium text-h6 text-negative">
           {{ metadata.price }}¥
         </span>
         <q-chip size="sm" icon="sell">{{ metadata.dl_count }}</q-chip>
-        <q-chip v-if="!metadata.nsfw" class="q-mx-sm" dense style="background: #e6f7d6; color: #56842a">全年龄</q-chip>
+        <q-chip v-if="!metadata.nsfw" class="q-mx-sm sfw-badge" dense>全年龄</q-chip>
       </div>
 
       <!-- 声优 -->
@@ -91,7 +91,7 @@
           :to="`/works?vaId=${va.id}`"
           :key=index
         >
-          <q-chip square size="md" class="shadow-2" color="teal" text-color="white">
+          <q-chip square size="md" class="shadow-2" color="primary-container" text-color="on-primary-container">
             {{ va.name }}
           </q-chip>
         </router-link>

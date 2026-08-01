@@ -15,12 +15,12 @@
         </q-item-label>
 
         <div class="row q-gutter-x-sm col-auto" >
-          <router-link :to="`/works?circleId=${metadata.circle.id}`" class="col-auto text-grey">
+          <router-link :to="`/works?circleId=${metadata.circle.id}`" class="col-auto text-muted">
             {{metadata.circle.name}}
           </router-link>
 
           <span class="col-auto">/</span>
-          <span class="col-auto text-grey"> {{metadata.release}}</span>
+          <span class="col-auto text-muted"> {{metadata.release}}</span>
           <span class="col-auto">/</span>
 
           <router-link
@@ -39,13 +39,13 @@
             v-model="rating"
             @input="setRating"
             size="sm"
-            color="blue"
+            color="primary"
             icon="star_border"
             icon-selected="star"
             icon-half="star_half"
             class="col-auto"
           />
-          <span class="col-auto text-grey ">{{metadata.updated_at}}</span>
+          <span class="col-auto text-muted ">{{metadata.updated_at}}</span>
         </div>
 
         <q-item-label class="q-pt-sm" v-if="mode === 'review'">
@@ -64,7 +64,7 @@
           <!--
           <div>
             <span class="text-accent">历史：</span>
-              <q-badge color="blue">
+              <q-badge color="primary">
                 {{ metadata.play_updated_at }}
               </q-badge>
           </div>
@@ -72,9 +72,9 @@
 
           <div>
             <span class="text-accent">进度：</span>
-            <q-badge color="purple">{{ metadata.state.index+1 }} / {{ metadata.state.queue.length }}</q-badge>
-            <q-badge color="blue">{{ humanReadableSeconds(metadata.state.seconds) }}</q-badge>
-            <span class="text-grey">
+            <q-badge color="tertiary-container" text-color="on-tertiary-container">{{ metadata.state.index+1 }} / {{ metadata.state.queue.length }}</q-badge>
+            <q-badge color="primary-container" text-color="on-primary-container">{{ humanReadableSeconds(metadata.state.seconds) }}</q-badge>
+            <span class="text-muted">
               {{ metadata.state.queue[metadata.state.index].title }}
             </span>
           </div>

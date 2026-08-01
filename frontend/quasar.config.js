@@ -11,7 +11,8 @@ module.exports = function (ctx) {
       'store',
       'slider',
       'plyr',
-      'socket.io'
+      'socket.io',
+      'contrast'
     ],
 
     // https://quasar.dev/quasar-cli-webpack/quasar-config-js#css

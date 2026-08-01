@@ -94,14 +94,15 @@ export default {
       const fontSize = fontScale * Math.round(Math.sqrt((cvs.width * cvs.height) / expectCharCount))
 
       const isDarkMode = this.$q.dark.isActive;
+      const themeVar = (name) => getComputedStyle(document.body).getPropertyValue(name).trim()
 
       // background
       ctx.clearRect(0, 0, cvs.width, cvs.height)
-      ctx.fillStyle = isDarkMode ? 'rgba(50, 50, 50, 1.0)' : "rgba(255, 255, 255, 1.0)"
+      ctx.fillStyle = themeVar('--surface-container') || (isDarkMode ? '#1E1F25' : '#FFFFFF')
       ctx.fillRect(0, 0, cvs.width, cvs.height)
 
       ctx.font = `bold ${fontSize}px "-apple-system", "BlinkMacSystemFont", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", "Helvetica", "Arial", "sans-serif", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"`
-      ctx.fillStyle = '#9c27b0'
+      ctx.fillStyle = themeVar('--q-accent') || '#745470'
 
       // 可绘制参数
       const padWidth = 5

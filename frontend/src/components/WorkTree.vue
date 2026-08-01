@@ -44,14 +44,14 @@
           v-for="item in fatherFolder"
           :key="item.hash"
           :active="item.type === 'audio' && currentPlayingFile.hash === item.hash"
-          active-class="text-white bg-teal"
+          active-class="text-on-primary bg-primary"
           @click="onClickItem(item)"
           class="non-selectable"
         >
           <q-item-section avatar style="position: relative;">
-            <q-icon size="34px" v-if="item.type === 'folder'" color="amber" name="folder" />
+            <q-icon size="34px" v-if="item.type === 'folder'" :style="{ color: 'color-mix(in srgb, var(--warning), var(--surface) 50%)' }"  name="folder" />
             <q-icon size="34px" v-else-if="item.type === 'text'" color="info" name="description" />
-            <q-icon size="34px" v-else-if="item.type === 'image'" color="orange" name="photo" />
+            <q-icon size="34px" v-else-if="item.type === 'image'" color="accent" name="photo" />
             <!-- <q-img width="34px" height="34px" v-else-if="item.type === 'image'" :src="imgSrc(item)" contain :ratio="1/1"  name="thumbnail" /> -->
             <q-icon size="34px" v-else-if="item.type === 'other'" color="info" name="description" />
             <q-btn v-else round dense color="primary" :icon="playIcon(item.hash)" @click="onClickPlayButton(item.hash)" />

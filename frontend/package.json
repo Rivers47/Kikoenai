@@ -1,6 +1,6 @@
 {
   "name": "kikoeru-quasar",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "A self-hosted web media player for listening to your DLsite voice works.",
   "homepage": "https://github.com/kikoeru-project/kikoeru-quasar",
   "productName": "Kikoeru",
@@ -23,7 +23,8 @@
     "test": "eslint .",
     "dev": "quasar dev -m pwa",
     "build": "quasar build -m pwa --debug",
-	  "build:prod": "quasar build -m pwa"
+    "build:prod": "quasar build -m pwa",
+    "theme": "node scripts/generate-theme.mjs"
   },
   "dependencies": {
     "@quasar/extras": "^1.18.0",
@@ -41,6 +42,7 @@
     "vuex": "^4.1.0"
   },
   "devDependencies": {
+    "@material/material-color-utilities": "^0.2.7",
     "@quasar/app-webpack": "^4.4.5",
     "@quasar/babel-preset-app": "^2.0.4",
     "autoprefixer": "^10.5.4",

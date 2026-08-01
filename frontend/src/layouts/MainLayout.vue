@@ -42,7 +42,7 @@
             v-ripple
             exact
             :to="link.path"
-            active-class="text-deep-purple text-weight-medium"
+            active-class="text-primary text-weight-medium"
             v-for="(link, index) in getLinks()"
             :key="index"
             @click="miniState = true"
@@ -62,7 +62,7 @@
             clickable
             v-ripple
             exact
-            active-class="text-deep-purple text-weight-medium"
+            active-class="text-primary text-weight-medium"
             @click="randomPlay"
           >
             <q-item-section avatar>
@@ -80,7 +80,7 @@
             clickable
             v-ripple
             exact
-            active-class="text-deep-purple text-weight-medium"
+            active-class="text-primary text-weight-medium"
             @click="toggleDarkMode"
           >
             <q-item-section avatar>
@@ -93,6 +93,23 @@
               </q-item-label>
             </q-item-section>
           </q-item>
+
+          <q-item
+            clickable
+            v-ripple
+            exact
+            @click="cycleContrastMode"
+          >
+            <q-item-section avatar>
+              <q-icon name="contrast" />
+            </q-item-section>
+
+            <q-item-section>
+              <q-item-label class="text-subtitle1">
+                对比度：{{ contrastModeLabel }}
+              </q-item-label>
+            </q-item-section>
+          </q-item>
         </q-list>
 
         <q-list>
@@ -100,7 +117,7 @@
             clickable
             v-ripple
             exact
-            active-class="text-deep-purple text-weight-medium"
+            active-class="text-primary text-weight-medium"
             @click="confirm = true"
             v-if="authEnabled"
           >
@@ -166,6 +183,7 @@ import PIPLyrics from 'src/components/PIPLyrics'
 import NotifyMixin from '../mixins/Notification.js'
 import { mapMutations, mapState, mapGetters } from 'vuex'
 import { Dark } from 'quasar'
+import { CONTRAST_MODES, getContrastMode, setContrastMode } from 'src/utils/contrast'
 
 export default {
   name: 'MainLayout',
@@ -187,6 +205,7 @@ export default {
       confirm: false,
       randId: null,
       showScroller: false,
+      contrastMode: getContrastMode(),
       links: [
         {
           title: '媒体库',
@@ -254,6 +273,14 @@ export default {
   },
 
   computed: {
+    contrastModeLabel () {
+      return {
+        '': '跟随系统',
+        'contrast-medium': '中',
+        'contrast-high': '高'
+      }[this.contrastMode]
+    },
+
     isNotAtHomePage () {
       const path = this.$route.path
       return path && path !=='/' && path !=='/works' && path !== '/favourites';
@@ -411,6 +438,12 @@ export default {
     toggleDarkMode() {
       console.log("toggleDarkMode called")
       Dark.toggle();
+    },
+
+    cycleContrastMode() {
+      const next = CONTRAST_MODES[(CONTRAST_MODES.indexOf(this.contrastMode) + 1) % CONTRAST_MODES.length]
+      setContrastMode(next)
+      this.contrastMode = next
     },
 
     getLinks() {

@@ -15,7 +15,7 @@
 
       <q-item-label>
         <div class="row q-gutter-x-sm q-gutter-y-xs">
-          <router-link :to="`/works?circleId=${metadata.circle.id}`" class="col-auto text-grey">
+          <router-link :to="`/works?circleId=${metadata.circle.id}`" class="col-auto text-muted">
             {{ metadata.circle.name }}
           </router-link>
 
@@ -38,7 +38,7 @@
             v-for="(tag, index) in metadata.tags"
             :to="`/works?tagId=${tag.id}`"
             :key=index
-            class="col-auto text-grey"
+            class="col-auto text-muted"
           >
             {{ tag.name }}
           </router-link>

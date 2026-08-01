@@ -12,8 +12,8 @@
           class="text-center text-bold ellipsis-2-lines absolute-bottom non-selectable"
           @mousedown="onCursorDown"
           @touchstart="onCursorDown"
-          :class="$q.dark.isActive ? 'text-purple-7' : 'text-purple-11'">
-          <div class="lyricBackground" :class="$q.dark.isActive ? 'lyricBackgroundDarkMode' : 'lyricBackgroundLightMode'">
+          :class="'text-accent'">
+          <div class="lyricBackground">
             <span id="lyric"
               :style="{'font-size': `${fontSize}rem`}">
               {{currentLyric}}
@@ -167,12 +167,7 @@ export default {
     padding: 2px 4px;
     transition: 0.5s;
     backdrop-filter: blur(4px);
-  }
-  .lyricBackgroundDarkMode {
-    background-color: rgba($grey-7, $alpha: 0.8);
-  }
-  .lyricBackgroundLightMode {
-    background-color: rgba($grey-5, $alpha: 0.7);
+    background-color: var(--lyrics-bg);
   }
   .fontSizeBar {
     width: 300px;

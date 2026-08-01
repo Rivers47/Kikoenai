@@ -15,7 +15,7 @@
       :class="{}"
     >
       <!--默认进度条-->
-      <div class="simple-progress" :class="$q.dark.isActive ? 'simple-progress-dark' : 'simple-progress-light'" :style="progressBarStyle"></div>
+      <div class="simple-progress" :style="progressBarStyle"></div>
 
       <!--拖拽时的进度条-->
       <div
@@ -393,11 +393,9 @@ export default {
   transition: 0.5s;
 }
 
-.simple-progress-dark {
-  background-color: rgba($primary, $alpha: 0.5);
-}
-.simple-progress-light {
-  background-color: rgba($primary, $alpha: 0.3);
+.simple-progress {
+  // follows --q-primary in both light and dark schemes
+  background-color: rgb(var(--primary-rgb) / 0.4);
 }
 
 .new-progress {

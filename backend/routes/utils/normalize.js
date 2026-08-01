@@ -33,6 +33,28 @@ const normalize = (works, options = {}) => {
         name: name
       }));
     }
+    if (record.illustratorObj) {
+      const parsed = JSON.parse(record.illustratorObj);
+      record.illustrators = (parsed.illustrators || []).filter(i => i.id !== null);
+    } else {
+      record.illustrators = [];
+    }
+
+    if (record.scriptWriterObj) {
+      const parsed = JSON.parse(record.scriptWriterObj);
+      record.scriptWriters = (parsed.scriptWriters || []).filter(s => s.id !== null);
+    } else {
+      record.scriptWriters = [];
+    }
+
+    if (record.seriesObj) {
+      const parsed = JSON.parse(record.seriesObj);
+      const filtered = (parsed.series || []).filter(s => s.id !== null);
+      record.series = filtered.length > 0 ? filtered[0] : null;
+    } else {
+      record.series = null;
+    }
+
     if (record.hasOwnProperty("state")) {
       record.state = JSON.parse(record.state);
       record.play_updated_at = strftime('%F', record.play_updated_at);
@@ -40,6 +62,9 @@ const normalize = (works, options = {}) => {
     delete record.circleObj;
     delete record.tagObj;
     delete record.vaObj;
+    delete record.illustratorObj;
+    delete record.scriptWriterObj;
+    delete record.seriesObj;
     delete record.tagNames;
     delete record.tagIds;
     delete record.vaNames;
