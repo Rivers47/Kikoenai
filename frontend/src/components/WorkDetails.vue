@@ -196,6 +196,17 @@
 
       <q-btn dense @click="showReviewDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" label="写评论" />
 
+      <div v-if="metadata.state" class="q-mt-sm q-px-sm">
+        <div class="text-caption text-weight-medium text-on-surface-variant">上次播放记录</div>
+        <div class="text-body2 text-secondary">
+          <q-icon name="music_note" size="xs" class="q-mr-xs" />
+          {{ currentHistoryTrack }}
+        </div>
+        <div class="text-caption text-on-surface0-variant">
+          播放至 {{ formatSeconds(historySeconds) }}
+        </div>
+      </div>
+
       <q-btn v-if="metadata.state && playWorkId !== metadata.id" dense @click="resumeThisHistroy" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" label="播放此作品的历史记录" />
       <q-btn v-if="metadata.state" dense @click="clearThisHistroy" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" label="删除播放记录">
         <q-tooltip>当历史记录中有已被删除的音频文件，可能会无法正确播放文件，可通过此按钮解决</q-tooltip>
@@ -259,6 +270,18 @@ export default {
         ? c.padStart(8,'0')  // 8位RJ番号
         : c.padStart(6,'0'); // 6位RJ番号
       return c;
+    },
+
+    currentHistoryTrack() {
+      const state = this.metadata.state
+      if (!state || !state.queue || state.queue.length === 0) return '—'
+      const idx = Math.min(state.index ?? 0, state.queue.length - 1)
+      const track = state.queue[idx]
+      return track ? (track.title || '—') : '—'
+    },
+
+    historySeconds() {
+      return this.metadata.state?.seconds ?? 0
     },
 
     ...mapState('AudioPlayer', [
@@ -392,6 +415,13 @@ export default {
       } finally {
         this.refreshMetadataLoading = false;
       }
+    },
+
+    formatSeconds(totalSeconds) {
+      if (totalSeconds == null || totalSeconds < 0) return '—'
+      const mins = Math.floor(totalSeconds / 60)
+      const secs = Math.floor(totalSeconds % 60)
+      return `${mins}:${secs.toString().padStart(2, '0')}`
     }
   }
 }
