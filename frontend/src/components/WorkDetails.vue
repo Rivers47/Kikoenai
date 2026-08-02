@@ -215,9 +215,13 @@
 
       <q-btn dense @click="scanWorkFile" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" label="扫描本地文件" />
 
+      <q-btn v-if="isAdmin" dense @click="showEditDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" label="编辑元数据" />
+
       <q-btn dense :loading="refreshMetadataLoading" @click="refreshMetadata" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" label="刷新元数据" />
 
       <WriteReview v-if="showReviewDialog" @closed="processReview" :workid="metadata.id" :metadata="metadata"></WriteReview>
+
+      <EditMetadata v-if="showEditDialog" :metadata="metadata" @saved="onEditSaved" @closed="showEditDialog = false" />
     </div>
   </div>
 </template>
@@ -225,6 +229,7 @@
 <script>
 import CoverSFW from 'components/CoverSFW'
 import WriteReview from './WriteReview'
+import EditMetadata from './EditMetadata'
 import NotifyMixin from '../mixins/Notification.js'
 import { mapState } from 'vuex'
 
@@ -235,7 +240,8 @@ export default {
 
   components: {
     CoverSFW,
-    WriteReview
+    WriteReview,
+    EditMetadata
   },
 
   props: {
@@ -252,6 +258,7 @@ export default {
       rating: 0,
       progress: '',
       showReviewDialog: false,
+      showEditDialog: false,
       showTags: true
     }
   },
@@ -282,6 +289,10 @@ export default {
 
     historySeconds() {
       return this.metadata.state?.seconds ?? 0
+    },
+
+    isAdmin() {
+      return !this.$store.state.User.auth || this.$store.state.User.group === 'administrator' || this.$store.state.User.name === 'admin';
     },
 
     ...mapState('AudioPlayer', [
@@ -367,6 +378,11 @@ export default {
 
     processReview () {
       this.showReviewDialog = false;
+    },
+
+    onEditSaved () {
+      this.showEditDialog = false;
+      this.$emit('reset');
     },
 
     resumeThisHistroy() {

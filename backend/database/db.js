@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { config } = require('../config');
+const { nameToUUID } = require('../scraper/utils');
 
 const databaseExist = fs.existsSync(path.join(config.databaseFolderDir, 'db.sqlite3'));
 
@@ -150,15 +152,21 @@ const updateWorkMetadata = (work, options = {}) => knex.transaction(async (trx) 
       rank: work.rank ? JSON.stringify(work.rank) : null,
     });
 
-  if (options.includeVA || options.refreshAll) {
+  // VA: delete only when includeVA flag explicitly set; insert always if includeVA or refreshAll
+  if (options.includeVA) {
     await trx('r_va_work').where('work_id', work.id).del();
+  }
+  if (options.includeVA || options.refreshAll) {
     for (const va of work.vas) {
       await trx.raw('INSERT OR IGNORE INTO t_va(id, name) VALUES (?, ?)', [va.id, va.name]);
       await trx.raw('INSERT OR IGNORE INTO r_va_work(va_id, work_id) VALUES (?, ?)', [va.id, work.id]);
     }
   }
-  if (options.includeIllustrator || options.refreshAll) {
+  // Illustrator: delete only when includeIllustrator flag explicitly set; insert always if includeIllustrator or refreshAll
+  if (options.includeIllustrator) {
     await trx('r_illustrator_work').where('work_id', work.id).del();
+  }
+  if (options.includeIllustrator || options.refreshAll) {
     if (work.illustrators) {
       for (const illustrator of work.illustrators) {
         await trx.raw('INSERT OR IGNORE INTO t_illustrator(id, name) VALUES (?, ?)', [illustrator.id, illustrator.name]);
@@ -166,8 +174,11 @@ const updateWorkMetadata = (work, options = {}) => knex.transaction(async (trx) 
       }
     }
   }
-  if (options.includeScriptWriter || options.refreshAll) {
+  // ScriptWriter: delete only when includeScriptWriter flag explicitly set; insert always if includeScriptWriter or refreshAll
+  if (options.includeScriptWriter) {
     await trx('r_script_writer_work').where('work_id', work.id).del();
+  }
+  if (options.includeScriptWriter || options.refreshAll) {
     if (work.scriptWriters) {
       for (const sw of work.scriptWriters) {
         await trx.raw('INSERT OR IGNORE INTO t_script_writer(id, name) VALUES (?, ?)', [sw.id, sw.name]);
@@ -175,8 +186,11 @@ const updateWorkMetadata = (work, options = {}) => knex.transaction(async (trx) 
       }
     }
   }
-  if (options.includeSeries || options.refreshAll) {
+  // Series: delete only when includeSeries flag explicitly set; insert always if includeSeries or refreshAll
+  if (options.includeSeries) {
     await trx('r_series_work').where('work_id', work.id).del();
+  }
+  if (options.includeSeries || options.refreshAll) {
     if (work.series && work.series.id) {
       await trx.raw('INSERT OR IGNORE INTO t_series(id, name) VALUES (?, ?)', [work.series.id, work.series.name]);
       await trx.raw('INSERT OR IGNORE INTO r_series_work(series_id, work_id) VALUES (?, ?)', [work.series.id, work.id]);
@@ -202,14 +216,197 @@ const updateWorkMetadata = (work, options = {}) => knex.transaction(async (trx) 
   }
 
   if (options.refreshAll) {
-    await trx('t_work')
-    .where('id', '=', work.id)
-    .update({
-      nsfw: work.nsfw,
-      title: work.title,
-      release: work.release,
-    });
+    // Gap-fill: only update title/nsfw/release if the current value is empty/null
+    const cur = await trx('t_work').select('title', 'nsfw', 'release').where('id', work.id).first();
+    const patch = {};
+    if (!cur.title && work.title) patch.title = work.title;
+    if (cur.nsfw == null && work.nsfw != null) patch.nsfw = work.nsfw;
+    if (!cur.release && work.release) patch.release = work.release;
+    if (Object.keys(patch).length) {
+      await trx('t_work').where('id', work.id).update(patch);
+    }
   }
+});
+
+/**
+ * Hash a string to a 32-bit signed integer using MD5.
+ * @param {String} name
+ * @returns {Number}
+ */
+const hash32 = (name) => {
+  const buf = crypto.createHash('md5').update(name).digest();
+  return buf.readInt32BE(0);
+};
+
+/**
+ * Resolve or create a circle by name. Returns the id.
+ * @param {import('knex').Knex.Transaction} trx
+ * @param {String} name
+ * @returns {Promise<Number>}
+ */
+const resolveCircle = async (trx, name) => {
+  let row = await trx('t_circle').select('id').where('name', name).first();
+  if (!row) {
+    const [id] = await trx('t_circle').insert({ name });
+    return id;
+  }
+  return row.id;
+};
+
+/**
+ * Resolve or create a tag by name. Returns the id.
+ * @param {import('knex').Knex.Transaction} trx
+ * @param {String} name
+ * @returns {Promise<Number>}
+ */
+const resolveTag = async (trx, name) => {
+  let row = await trx('t_tag').select('id').where('name', name).first();
+  if (!row) {
+    const [id] = await trx('t_tag').insert({ name });
+    return id;
+  }
+  return row.id;
+};
+
+/**
+ * Resolve or create a VA/illustrator/script_writer by name (UUID-based id).
+ * @param {import('knex').Knex.Transaction} trx
+ * @param {String} tableName 't_va' | 't_illustrator' | 't_script_writer'
+ * @param {String} name
+ * @returns {Promise<String>} UUID id
+ */
+const resolveUUIDLabel = async (trx, tableName, name) => {
+  const id = nameToUUID(name);
+  await trx.raw('INSERT OR IGNORE INTO ??(id, name) VALUES (?, ?)', [tableName, id, name]);
+  return id;
+};
+
+/**
+ * Resolve or create a series by name. Generates a negative id for new series.
+ * @param {import('knex').Knex.Transaction} trx
+ * @param {String} name
+ * @returns {Promise<Number>}
+ */
+const resolveSeries = async (trx, name) => {
+  let row = await trx('t_series').select('id').where('name', name).first();
+  if (!row) {
+    let id = -(hash32(name) & 0x7FFFFFFF);
+    // On collision with an existing id whose name differs, decrement until free
+    while (true) {
+      const existing = await trx('t_series').select('name').where('id', id).first();
+      if (!existing) break;
+      if (existing.name === name) return id; // should not happen but handle gracefully
+      id -= 1;
+    }
+    await trx('t_series').insert({ id, name });
+    return id;
+  }
+  return row.id;
+};
+
+/**
+ * Manually edit a work's descriptive metadata (full replace semantics).
+ * Runs in one transaction. Updates t_work, resolves-or-creates labels,
+ * replaces relational links, and cleans up orphaned labels.
+ * @param {Number} workId
+ * @param {Object} data
+ * @param {String} data.title
+ * @param {Boolean} data.nsfw
+ * @param {String} data.release
+ * @param {String} data.circle - circle name
+ * @param {Array<{id?:Number, name:String}>} data.tags
+ * @param {Array<{id?:String, name:String}>} data.vas
+ * @param {Array<{id?:String, name:String}>} data.illustrators
+ * @param {Array<{id?:String, name:String}>} data.scriptWriters
+ * @param {Object|null} data.series - {id?:Number, name:String} or null
+ * @returns {Promise<void>}
+ */
+const editWorkMetadata = async (workId, data) => knex.transaction(async (trx) => {
+  // 1. Update t_work core fields
+  const patch = {};
+  if (data.title !== undefined) patch.title = data.title;
+  if (data.nsfw !== undefined) patch.nsfw = data.nsfw;
+  if (data.release !== undefined) patch.release = data.release;
+  if (Object.keys(patch).length) {
+    await trx('t_work').where('id', workId).update(patch);
+  }
+
+  // 2. Circle
+  const prevWork = await trx('t_work').select('circle_id').where('id', workId).first();
+  const prevCircleId = prevWork ? prevWork.circle_id : null;
+  const newCircleId = await resolveCircle(trx, data.circle);
+  await trx('t_work').where('id', workId).update({ circle_id: newCircleId });
+
+  // 3. Tags
+  const prevTagRows = await trx('r_tag_work').select('tag_id').where('work_id', workId);
+  const prevTagIds = prevTagRows.map(r => r.tag_id);
+  await trx('r_tag_work').where('work_id', workId).del();
+  const newTagIds = [];
+  for (const tag of data.tags) {
+    const id = await resolveTag(trx, tag.name);
+    newTagIds.push(id);
+    await trx.raw('INSERT OR IGNORE INTO r_tag_work(tag_id, work_id) VALUES (?, ?)', [id, workId]);
+  }
+  const removedTagIds = prevTagIds.filter(id => !newTagIds.includes(id));
+
+  // 4. VAs
+  const prevVaRows = await trx('r_va_work').select('va_id').where('work_id', workId);
+  const prevVaIds = prevVaRows.map(r => r.va_id);
+  await trx('r_va_work').where('work_id', workId).del();
+  const newVaIds = [];
+  for (const va of data.vas) {
+    const id = await resolveUUIDLabel(trx, 't_va', va.name);
+    newVaIds.push(id);
+    await trx.raw('INSERT OR IGNORE INTO r_va_work(va_id, work_id) VALUES (?, ?)', [id, workId]);
+  }
+  const removedVaIds = prevVaIds.filter(id => !newVaIds.includes(id));
+
+  // 5. Illustrators
+  const prevIllustratorRows = await trx('r_illustrator_work').select('illustrator_id').where('work_id', workId);
+  const prevIllustratorIds = prevIllustratorRows.map(r => r.illustrator_id);
+  await trx('r_illustrator_work').where('work_id', workId).del();
+  const newIllustratorIds = [];
+  for (const illus of data.illustrators) {
+    const id = await resolveUUIDLabel(trx, 't_illustrator', illus.name);
+    newIllustratorIds.push(id);
+    await trx.raw('INSERT OR IGNORE INTO r_illustrator_work(illustrator_id, work_id) VALUES (?, ?)', [id, workId]);
+  }
+  const removedIllustratorIds = prevIllustratorIds.filter(id => !newIllustratorIds.includes(id));
+
+  // 6. Script writers
+  const prevSwRows = await trx('r_script_writer_work').select('script_writer_id').where('work_id', workId);
+  const prevSwIds = prevSwRows.map(r => r.script_writer_id);
+  await trx('r_script_writer_work').where('work_id', workId).del();
+  const newSwIds = [];
+  for (const sw of data.scriptWriters) {
+    const id = await resolveUUIDLabel(trx, 't_script_writer', sw.name);
+    newSwIds.push(id);
+    await trx.raw('INSERT OR IGNORE INTO r_script_writer_work(script_writer_id, work_id) VALUES (?, ?)', [id, workId]);
+  }
+  const removedSwIds = prevSwIds.filter(id => !newSwIds.includes(id));
+
+  // 7. Series
+  const prevSeriesRows = await trx('r_series_work').select('series_id').where('work_id', workId);
+  const prevSeriesIds = prevSeriesRows.map(r => r.series_id);
+  await trx('r_series_work').where('work_id', workId).del();
+  let removedSeriesIds = prevSeriesIds;
+  if (data.series && data.series.name) {
+    const id = await resolveSeries(trx, data.series.name);
+    await trx.raw('INSERT OR IGNORE INTO r_series_work(series_id, work_id) VALUES (?, ?)', [id, workId]);
+    removedSeriesIds = prevSeriesIds.filter(sid => sid !== id);
+  }
+
+  // 8. Cleanup orphans
+  const trxProvider = () => Promise.resolve(trx);
+  await cleanupOrphans(
+    trxProvider,
+    prevCircleId,
+    removedTagIds,
+    removedVaIds,
+    removedIllustratorIds,
+    removedSwIds,
+    removedSeriesIds,
+  );
 });
 
 
@@ -685,6 +882,7 @@ async function setWorkMemo(work_id, memo) {
 
 module.exports = {
   knex, insertWorkMetadata, getWorkMetadata, removeWork, getWorksBy, getWorksByKeyWord, updateWorkMetadata,
+  editWorkMetadata,
   getLabels, getMetadata,
   createUser, updateUserPassword, resetUserPassword, deleteUser,
   getWorksWithReviews, updateUserReview, deleteUserReview,

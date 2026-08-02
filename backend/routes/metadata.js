@@ -1,7 +1,7 @@
 const path = require('path');
 const express = require('express');
 const router = express.Router();
-const { param, query} = require('express-validator');
+const { param, query, body } = require('express-validator');
 const db = require('../database/db');
 const { getTrackList, toTree } = require('../filesystem/utils');
 const { config } = require('../config');
@@ -268,6 +268,66 @@ router.get('/:field(circle|tag|va|illustrator|script_writer|series)s/',
       .then(list => res.send(list))
       .catch(err => next(err));
 });
+
+// PUT - manually edit work metadata (admin only)
+router.put('/work/:id',
+  param('id').isInt(),
+  body('title').isString().notEmpty(),
+  body('nsfw').isBoolean(),
+  body('release').optional({ nullable: true }).isString(),
+  body('circle').isString(),
+  body('tags').isArray(),
+  body('vas').isArray(),
+  body('illustrators').isArray(),
+  body('scriptWriters').isArray(),
+  body('series').optional({ nullable: true }),
+  async (req, res) => {
+    if (!isValidRequest(req, res)) return;
+
+    // Admin gate
+    if (config.auth && req.user.name !== 'admin') {
+      return res.status(403).send({ error: '只有 admin 账号能编辑作品元数据.' });
+    }
+
+    const workId = parseInt(req.params.id);
+
+    try {
+      // Normalize input: coerce list elements to {id, name}, skip empty names, trim, deduplicate by name
+      const normalizeList = (items) => {
+        const seen = new Set();
+        return items
+          .map(item => (typeof item === 'string' ? { name: item.trim() } : { name: (item.name || '').trim() }))
+          .filter(item => item.name !== '' && !seen.has(item.name) && seen.add(item.name))
+          .map(item => ({ id: item.id, name: item.name }));
+      };
+
+      const data = {
+        title: req.body.title.trim(),
+        nsfw: req.body.nsfw,
+        release: req.body.release != null ? req.body.release : '',
+        circle: req.body.circle.trim(),
+        tags: normalizeList(req.body.tags || []),
+        vas: normalizeList(req.body.vas || []),
+        illustrators: normalizeList(req.body.illustrators || []),
+        scriptWriters: normalizeList(req.body.scriptWriters || []),
+        series: req.body.series != null && req.body.series.name
+          ? { name: req.body.series.name.trim() }
+          : null,
+      };
+
+      await db.editWorkMetadata(workId, data);
+
+      // Re-fetch and return updated metadata
+      const username = config.auth ? req.user.name : 'admin';
+      const work = await db.getWorkMetadata(workId, username);
+      normalize(work);
+      res.send({ message: '元数据更新成功', metadata: work[0] });
+    } catch (err) {
+      console.error(err);
+      res.status(500).send({ error: '更新元数据失败' });
+    }
+  }
+);
 
 // 刷新单个作品文件夹中的文件信息记录，例如音频文件发生变动后，通过这个请求重新扫描音频文件时长
 router.post('/work/scan/:id',
