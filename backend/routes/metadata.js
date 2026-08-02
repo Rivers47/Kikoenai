@@ -11,6 +11,7 @@ const { formatID, scrapeWorkMemo } = require('../filesystem/utils');
 const { scrapeWorkMetadataFromDLsite } = require('../scraper/dlsite');
 
 const PAGE_SIZE = config.pageSize || 12;
+const FIELDS = ['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series'];
 
 // GET work cover image
 router.get('/cover/:id',
@@ -20,7 +21,7 @@ router.get('/cover/:id',
 
     const rjcode = formatID(req.params.id);
     const type = req.query.type || 'main'; // 'main', 'sam', '240x240', '360x360'
-    res.sendFile(path.join(config.coverFolderDir, `RJ${rjcode}_img_${type}.jpg`), (err) => {
+    res.sendFile(path.join(config.coverFolderDir, `RJ${rjcode}_img_${type}.jpg`), { dotfiles: 'allow' /* Express 5: preserve v4 behavior */ }, (err) => {
       if (err) {
         res.sendFile(path.join(__dirname, '../static/no-image.jpg'), (err2) => {
           if (err2) {
@@ -82,11 +83,11 @@ router.get('/tracks/:id',
 
 // GET list of work ids without any search
 router.get('/works', 
-  query('page').optional({nullable: true}).isInt(),
-  query('order').optional({nullable: true}).isIn(["release", "rating", "dl_count", "price", "rate_average_2dp", "review_count", "id", "created_at", "random", "betterRandom"]),
-  query('sort').optional({nullable: true}).isIn(['desc', 'asc']),
-  query('nsfw').optional({nullable: true}).isInt().isIn([0/* 无年龄限制 */, 1 /* 全年龄 */, 2 /* 仅R18 */]),
-  query('seed').optional({nullable: true}).isInt(),
+  query('page').optional().isInt(),
+  query('order').optional().isIn(["release", "rating", "dl_count", "price", "rate_average_2dp", "review_count", "id", "created_at", "random", "betterRandom"]),
+  query('sort').optional().isIn(['desc', 'asc']),
+  query('nsfw').optional().isInt().isIn([0/* 无年龄限制 */, 1 /* 全年龄 */, 2 /* 仅R18 */]),
+  query('seed').optional().isInt(),
   // eslint-disable-next-line no-unused-vars
   async (req, res, next) => {
     if(!isValidRequest(req, res)) return;
@@ -123,30 +124,30 @@ router.get('/works',
 });
 
 // GET name of a circle/tag/VA/illustrator/script_writer/series
-router.get('/:field(circle|tag|va|illustrator|script_writer|series)s/:id',
-  param('field').isIn(['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series']),
-  (req, res, next) => {
-    // In case regex matching goes wrong
-    if(!isValidRequest(req, res)) return;
+for (const field of FIELDS) {
+  router.get(`/${field}s/:id`,
+    (req, res, next) => {
+      if(!isValidRequest(req, res)) return;
 
-    return db.getMetadata({field: req.params.field, id: req.params.id})
-      .then(item => {
-        if (item) {
-          res.send(item); 
-        } else {
-          const errorMessage= {
-            'circle': `社团${req.params.id}不存在`,
-            'tag': `标签${req.params.id}不存在`,
-            'va': `声优${req.params.id}不存在`,
-            'illustrator': `イラスト${req.params.id}不存在`,
-            'script_writer': `シナリオ${req.params.id}不存在`,
-            'series': `シリーズ${req.params.id}不存在`
-          };
-          res.status(404).send({error: errorMessage[req.params.field]});
-        }
-      })
-      .catch(err => next(err));
-});
+      return db.getMetadata({field, id: req.params.id})
+        .then(item => {
+          if (item) {
+            res.send(item); 
+          } else {
+            const errorMessage= {
+              'circle': `社团${req.params.id}不存在`,
+              'tag': `标签${req.params.id}不存在`,
+              'va': `声优${req.params.id}不存在`,
+              'illustrator': `イラスト${req.params.id}不存在`,
+              'script_writer': `シナリオ${req.params.id}不存在`,
+              'series': `シリーズ${req.params.id}不存在`
+            };
+            res.status(404).send({error: errorMessage[field]});
+          }
+        })
+        .catch(err => next(err));
+  });
+}
 
 // eslint-disable-next-line no-unused-vars
 router.get('/search', async (req, res, next) => {
@@ -185,72 +186,71 @@ router.get('/search', async (req, res, next) => {
 });
 
 // GET list of work ids, restricted by circle/tag/VA/illustrator/script_writer/series
-router.get('/:field(circle|tag|va|illustrator|script_writer|series)s/:id/works',
-  param('field').isIn(['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series']),
-  // eslint-disable-next-line no-unused-vars
-  async (req, res, next) => {
-    // In case regex matching goes wrong
-    if(!isValidRequest(req, res)) return;
+for (const field of FIELDS) {
+  router.get(`/${field}s/:id/works`,
+    // eslint-disable-next-line no-unused-vars
+    async (req, res, next) => {
+      if(!isValidRequest(req, res)) return;
 
-    const currentPage = parseInt(req.query.page) || 1;
-    // 通过 "音声id, 贩卖日, 用户评价, 售出数, 评论数量, 价格, 平均评价, 全年龄新作" 排序
-    // ['id', 'release', 'rating', 'dl_count', 'review_count', 'price', 'rate_average_2dp, 'nsfw']
-    const order = req.query.order || 'release';
-    const sort = req.query.sort || 'desc'; // ['desc', 'asc]
-    const nsfw = parseInt(req.query.nsfw || '0'); 
-    const offset = (currentPage - 1) * PAGE_SIZE;
-    const username = config.auth ? req.user.name : 'admin';
-    const shuffleSeed = req.query.seed ? req.query.seed : 7;
+      const currentPage = parseInt(req.query.page) || 1;
+      // 通过 "音声id, 贩卖日, 用户评价, 售出数, 评论数量, 价格, 平均评价, 全年龄新作" 排序
+      // ['id', 'release', 'rating', 'dl_count', 'review_count', 'price', 'rate_average_2dp, 'nsfw']
+      const order = req.query.order || 'release';
+      const sort = req.query.sort || 'desc'; // ['desc', 'asc]
+      const nsfw = parseInt(req.query.nsfw || '0'); 
+      const offset = (currentPage - 1) * PAGE_SIZE;
+      const username = config.auth ? req.user.name : 'admin';
+      const shuffleSeed = req.query.seed ? req.query.seed : 7;
 
-    try {
-      const { works, totalCount } = await db.getWorksBy({
-        id: req.params.id, field: req.params.field,
-        username, nsfw, order, sort, limit: PAGE_SIZE, offset, seed: shuffleSeed
-      });
+      try {
+        const { works, totalCount } = await db.getWorksBy({
+          id: req.params.id, field,
+          username, nsfw, order, sort, limit: PAGE_SIZE, offset, seed: shuffleSeed
+        });
 
-      normalize(works);
+        normalize(works);
 
-      res.send({
-        works,
-        pagination: {
-          currentPage,
-          pageSize: PAGE_SIZE,
-          totalCount: totalCount[0]['count']
-        }
-      });
-    } catch(err) {
-      res.status(500).send({error: '查询过程中出错'});
-      console.error(err);
-      // next(err);
-    }
-});
+        res.send({
+          works,
+          pagination: {
+            currentPage,
+            pageSize: PAGE_SIZE,
+            totalCount: totalCount[0]['count']
+          }
+        });
+      } catch(err) {
+        res.status(500).send({error: '查询过程中出错'});
+        console.error(err);
+        // next(err);
+      }
+  });
+}
 
 // GET list of circles/tags/VAs/illustrators/script_writers/series
-router.get('/:field(circle|tag|va|illustrator|script_writer|series)s/',
-  param('field').isIn(['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series']),
-  (req, res, next) => {
-    // In case regex matching goes wrong
-    if(!isValidRequest(req, res)) return;
+for (const field of FIELDS) {
+  router.get(`/${field}s/`,
+    (req, res, next) => {
+      if(!isValidRequest(req, res)) return;
 
-    const field = req.params.field;
-    db.getLabels(field)
-      .orderBy(`name`, 'asc')
-      .then(list => res.send(list))
-      .catch(err => next(err));
-});
+      db.getLabels(field)
+        .orderBy(`name`, 'asc')
+        .then(list => res.send(list))
+        .catch(err => next(err));
+  });
+}
 
 // PUT - manually edit work metadata (admin only)
 router.put('/work/:id',
   param('id').isInt(),
   body('title').isString().notEmpty(),
   body('nsfw').isBoolean(),
-  body('release').optional({ nullable: true }).isString(),
+  body('release').optional().isString(),
   body('circle').isString(),
   body('tags').isArray(),
   body('vas').isArray(),
   body('illustrators').isArray(),
   body('scriptWriters').isArray(),
-  body('series').optional({ nullable: true }),
+  body('series').optional(),
   async (req, res) => {
     if (!isValidRequest(req, res)) return;
 

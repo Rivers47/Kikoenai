@@ -54,16 +54,15 @@
     "@umonaca/umzug": "^2.3.1",
     "axios": "^1.18.1",
     "bluebird": "^3.7.2",
-    "body-parser": "^1.19.0",
     "cheerio": "^1.0.0-rc.6",
     "compare-versions": "^3.6.0",
     "compression": "^1.7.4",
     "connect-history-api-fallback": "^1.6.0",
     "crypto": "^1.0.1",
     "dotenv": "^8.2.0",
-    "express": "^4.17.1",
+    "express": "^5.1.0",
     "express-jwt": "^8.5.1",
-    "express-validator": "^6.10.1",
+    "express-validator": "^7.0.0",
     "htmlparser2": "^4.1.0",
     "https": "^1.0.0",
     "invariant": "^2.2.4",
@@ -81,7 +80,8 @@
     "tunnel-agent": "^0.6.0",
     "url-join": "^4.0.1",
     "uuid": "^11.1.1",
-    "yargs": "^16.2.0"
+    "yargs": "^16.2.0",
+    "mime-types": "^3.0.0"
   },
   "devDependencies": {
     "chai": "^4.3.4",

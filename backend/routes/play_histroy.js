@@ -10,8 +10,8 @@ const PAGE_SIZE = config.pageSize || 12;
 
 
 router.get('/',
-  query('page').optional({nullable: true}).isInt(),
-  query('sort').optional({nullable: true}).isIn(['desc', 'asc']),
+  query('page').optional().isInt(),
+  query('sort').optional().isIn(['desc', 'asc']),
   // eslint-disable-next-line no-unused-vars
   async (req, res, next) => {
     if(!isValidRequest(req, res)) return;

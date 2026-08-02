@@ -59,7 +59,9 @@ router.get('/stream/:id/:index',
                 res.redirect(offloadUrl);
               } else {
                 // By default, serve file through express
-                res.sendFile(fileName);
+                // dotfiles: 'allow' — Express 5's send rejects paths containing a dot-segment
+                // (e.g. .hidden/track.opus) unless opted in; v4 served them by default.
+                res.sendFile(fileName, { dotfiles: 'allow' });
               }
             })
             .catch(err => next(err));
@@ -203,7 +205,7 @@ router.get('/small-img/:id/:index',
         res.send(scaledBuf);
       } else if (".webp" === extName) {
         // jimp 不支持webp格式的图像，这里直接发送原始图像文件
-        res.sendFile(fileName);
+        res.sendFile(fileName, { dotfiles: 'allow' });
       } else {
         res.status(500).send({error: `获取小图像失败，不支持的图像格式"${extName}"`});
       }

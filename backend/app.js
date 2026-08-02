@@ -5,7 +5,6 @@ const path = require('path');
 const express = require('express');
 
 const compression = require('compression');
-const bodyParser = require('body-parser'); // 获取 req.body
 const history = require('connect-history-api-fallback');
 const http = require('http');
 const https = require('https');
@@ -44,16 +43,16 @@ if (config.enableGzip) {
 }
 
 // parse application/x-www-form-urlencoded
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true }));
 // parse application/json
-app.use(bodyParser.json());
+app.use(express.json());
 
 // For dev purpose only
 if (process.env.NODE_ENV === 'development') {
   // eslint-disable-next-line n/no-unpublished-require
-  app.use('/media/stream/VoiceWork', express.static('VoiceWork'), require('serve-index')('VoiceWork', {'icons': true}));
+  app.use('/media/stream/VoiceWork', express.static('VoiceWork', { dotfiles: 'allow' /* Express 5: preserve v4 behavior */ }), require('serve-index')('VoiceWork', {'icons': true}));
   // eslint-disable-next-line n/no-unpublished-require
-  app.use('/media/download/VoiceWork', express.static('VoiceWork'), require('serve-index')('VoiceWork', {'icons': true}));
+  app.use('/media/download/VoiceWork', express.static('VoiceWork', { dotfiles: 'allow' /* Express 5: preserve v4 behavior */ }), require('serve-index')('VoiceWork', {'icons': true}));
 }
 
 // connect-history-api-fallback 中间件后所有的 GET 请求都会变成 index (default: './index.html').
@@ -70,7 +69,7 @@ app.use(history({
 api(app);
 
 // Serve WebApp routes
-app.use(express.static(path.join(__dirname, './dist')));
+app.use(express.static(path.join(__dirname, './dist'), { dotfiles: 'allow' /* Express 5: preserve v4 behavior */ }));
 
 // 返回错误响应
 // eslint-disable-next-line no-unused-vars
