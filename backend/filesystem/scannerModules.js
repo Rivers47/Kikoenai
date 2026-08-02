@@ -70,7 +70,6 @@ const LOG = {
   task: {
     // 添加作品专门的log记录
     add(taskId) { // taskId == rjcode or cid, e.g. "443322" or "01134321" or "d_215444"
-      console.log(`LOG.task.add '${taskId}'`);
       console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8 || taskId.startsWith('d_')));
       tasks.push({
         rjcode: taskId,
@@ -81,7 +80,6 @@ const LOG = {
 
     // 移除作品的专属log，如果该作品的对应任务失败，则发送相应的失败消息
     remove(taskId, result) {
-      console.log(`LOG.task.remove '${taskId}'`);
       const index = tasks.findIndex(task => task.rjcode === taskId);
       if (index == -1) {
         // 当前任务并没有被添加，则跳过remove操作
