@@ -4,16 +4,16 @@ const LimitPromise = require('limit-promise'); // 限制并发数量
 
 const axios = require('../scraper/axios.js'); // 数据请求
 const { scrapeWorkMetadataFromDLsite, scrapeWorkMetadataFromDLsiteJson, scrapeDynamicWorkMetadataFromDLsite, scrapeCoverIdForTranslatedWorkFromDLsite } = require('../scraper/dlsite');
+const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
 const { scrapeWorkMetadataFromAsmrOne } = require('../scraper/asmrOne');
 const db = require('../database/db');
 const { createSchema } = require('../database/schema');
-const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, scrapeWorkMemo } = require('./utils');
+const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, scrapeWorkMemo, coverFileName, formatID } = require('./utils');
 const { md5 } = require('../auth/utils');
 const { nameToUUID } = require('../scraper/utils');
 
 const { config } = require('../config');
 const { updateLock } = require('../upgrade');
-const { formatID } = require('./utils');
 
 // 只有在子进程中 process 对象才有 send() 方法
 process.send = process.send || function () {};
@@ -69,9 +69,9 @@ const LOG = {
   },
   task: {
     // 添加作品专门的log记录
-    add(taskId) { // taskId == rjcode, e.g. "443322" or "01134321"
+    add(taskId) { // taskId == rjcode or cid, e.g. "443322" or "01134321" or "d_215444"
       console.log(`LOG.task.add '${taskId}'`);
-      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8));
+      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8 || taskId.startsWith('d_')));
       tasks.push({
         rjcode: taskId,
         result: null,
@@ -99,8 +99,8 @@ const LOG = {
       }
     },
     __internal_task__(taskId, level, msg) {
-      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8));
-      console[level](`task[RJ${taskId}] log`, msg);
+      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8 || taskId.startsWith('d_')));
+      console[level](`task[${taskId}] log`, msg);
 
       const task = tasks.find(task => task.rjcode === taskId);
       if (task) {
@@ -171,13 +171,47 @@ function uniqueFolderListSeparate(arr) {
 }
 
 /**
- * 从 DLsite 抓取该音声的元数据，并保存到数据库，
+ * 从 DLsite 或 Fanza 抓取该音声的元数据，并保存到数据库，
  * 返回一个 Promise 对象，处理结果: 'added' or 'failed'
- * @param {number} id work id
+ * @param {string} id work id (e.g. '123456', 'd_215444')
  * @param {string} rootFolderName 根文件夹别名
  * @param {string} dir 音声文件夹相对路径
  */
 async function getMetadata(id, rootFolderName, dir) {
+  const isFanza = String(id).startsWith('d_');
+
+  if (isFanza) {
+    LOG.task.info(id, '从 Fanza (DMM) 抓取元数据...');
+    let metadata = null;
+
+    try {
+      metadata = await scrapeWorkMetadataFromFanza(id);
+    } catch(error) {
+      LOG.task.warn(id, `Fanza获取元数据失败: ${error.message}`);
+    }
+
+    if (metadata === null) {
+      LOG.task.error(id, `元数据获取失败`);
+      return 'failed';
+    }
+
+    // 将抓取到的元数据插入到数据库
+    LOG.task.info(id, '元数据抓取成功，准备添加到数据库...');
+    metadata.rootFolderName = rootFolderName;
+    metadata.dir = dir;
+
+    try {
+      await db.insertWorkMetadata(metadata);
+    } catch(error) {
+      LOG.task.error(id, `元数据添加失败: ${error.message}`);
+      return 'failed';
+    }
+
+    LOG.task.info(id, '元数据成功添加到数据库.');
+    return 'added';
+  }
+
+  // DLsite branch
   const rjcode = formatID(id); // zero-pad to 6 digits
 
   LOG.task.info(rjcode, '从 DLSite 抓取元数据...');
@@ -299,6 +333,41 @@ async function getCoverImage(cover_for_id, cover_from_id, types) {
 }
 
 /**
+ * Download cover images from Fanza (DMM) for a Fanza work.
+ * @param {String} id Work id (e.g. 'd_215444')
+ * @param {Array} types img types: ['main', 'sam', '240x240']
+ * @returns {Promise<String>} 'added' or 'failed'
+ */
+async function getFanzaCoverImage(id, types) {
+  const cid = id; // e.g. d_215444
+  LOG.task.info(id, `从 Fanza 下载封面...`);
+  const results = await Promise.all(types.map(async (type) => {
+    let url;
+    if (type === 'main') {
+      url = `https://doujin-assets.dmm.co.jp/digital/doujin/${cid}/${cid}pl.jpg`;
+    } else if (type === 'sam' || type === '240x240') {
+      url = `https://doujin-assets.dmm.co.jp/digital/doujin/${cid}/${cid}ps.jpg`;
+    } else {
+      return 'failed';
+    }
+
+    try {
+      const imageRes = await axios.retryGet(url, { responseType: "stream", retry: {} });
+      await saveCoverImageToDisk(imageRes.data, id, type);
+      LOG.task.info(id, `封面 ${coverFileName(id, type)} 下载成功.`);
+      return 'added';
+    } catch(err) {
+      LOG.task.warn(id, `在下载封面 ${coverFileName(id, type)} 过程中出错: ${err.message} (URL: ${url})`);
+      return 'failed';
+    }
+  }));
+
+  return results.includes("failed")
+      ? "failed"
+      : "added";
+}
+
+/**
  * 获取音声元数据，获取音声封面图片，
  * 返回一个 Promise 对象，处理结果: 'added', 'skipped' or 'failed'
  * @param {string} folder 音声文件夹对象 { relativePath: '相对路径', rootFolderName: '根文件夹别名', id: '音声ID' }
@@ -310,7 +379,8 @@ async function processFolder(folder) {
     .count()
     .first();
 
-  const rjcode = formatID(folder.id); // zero-pad to 6 digits
+  const workId = folder.id;
+  const isFanza = String(workId).startsWith('d_');
   const coverTypes = ['main', 'sam', '240x240'];
   const count = res['count(*)'];
 
@@ -321,46 +391,54 @@ async function processFolder(folder) {
     // 检查音声封面图片是否缺失
     const lostCoverTypes = [];
     coverTypes.forEach(type => {
-      const coverPath = path.join(config.coverFolderDir, `RJ${rjcode}_img_${type}.jpg`);
+      const coverPath = path.join(config.coverFolderDir, coverFileName(workId, type));
       if (!fs.existsSync(coverPath)) {
         lostCoverTypes.push(type);
       }
     });
     
     if (lostCoverTypes.length) {
-      LOG.task.add(rjcode);
-      LOG.task.info(rjcode, '封面图片缺失，重新下载封面图片...');
+      LOG.task.add(workId);
+      LOG.task.info(workId, '封面图片缺失，重新下载封面图片...');
 
-      coverResult = await getCoverImageForTranslated(folder.id, lostCoverTypes);
+      if (isFanza) {
+        coverResult = await getFanzaCoverImage(workId, lostCoverTypes);
+      } else {
+        coverResult = await getCoverImageForTranslated(workId, lostCoverTypes);
+      }
       if (coverResult === 'failed') {
-        LOG.task.error(rjcode, `该作品已存在于数据库中，但封面图片下载失败。缺失的封面类型: ${lostCoverTypes.join(', ')}`);
+        LOG.task.error(workId, `该作品已存在于数据库中，但封面图片下载失败。缺失的封面类型: ${lostCoverTypes.join(', ')}`);
       }
     } else {
       coverResult = 'skipped';
     }
   } else {
-    LOG.task.add(rjcode);
-    LOG.task.info(rjcode, `发现新文件夹: "${folder.absolutePath}"`);
+    LOG.task.add(workId);
+    LOG.task.info(workId, `发现新文件夹: "${folder.absolutePath}"`);
 
-    LOG.task.info(rjcode, `扫描音频文件时长`);
+    LOG.task.info(workId, `扫描音频文件时长`);
     const memo = await scrapeWorkMemo(
-      folder.id,
+      workId,
       folder.absolutePath,
       { /* 首次添加的作品肯定没有memo，这里设置一个空object作为初始memo */}
     );
     
-    const result = await getMetadata(folder.id, folder.rootFolderName, folder.relativePath); // 获取元数据
+    const result = await getMetadata(workId, folder.rootFolderName, folder.relativePath); // 获取元数据
 
     // 如果获取元数据失败，跳过封面图片下载
     if (result === 'failed') {
       return 'failed';
     }
 
-    await db.setWorkMemo(folder.id, memo);
+    await db.setWorkMemo(workId, memo);
     
     // 不要在乎图片是否下载成功，dlsite上一些老作品已经没有图片了，会下载失败
     // 只要元数据插入成功就行
-    coverResult = await getCoverImageForTranslated(folder.id, coverTypes);
+    if (isFanza) {
+      coverResult = await getFanzaCoverImage(workId, coverTypes);
+    } else {
+      coverResult = await getCoverImageForTranslated(workId, coverTypes);
+    }
   }
 
   // 到这一步其实都已经插入了元数据
@@ -402,13 +480,12 @@ async function performCleanup() {
     }
 
     await db.removeWork(work.id, trxProvider); // 将其数据项从数据库中移除
-    const rjcode = formatID(work.id); // zero-pad to 6 digits
     try {
       // 然后删除其封面图片
-      await deleteCoverImageFromDisk(rjcode);    
+      await deleteCoverImageFromDisk(work.id);    
     } catch(err) {
       if (err && err.code !== 'ENOENT') { 
-          LOG.main.error(`[RJ${rjcode}] 在删除封面过程中出错: ${err.message}`);
+          LOG.main.error(`[${work.id}] 在删除封面过程中出错: ${err.message}`);
       }
     }
   }));
@@ -528,12 +605,10 @@ async function tryProcessFolderListParallel(folderList) {
       for (const key in duplicateSet) {
         // duplicateSet中并不包含存在于uniqueFolderList中的文件夹，
         // 将unique和duplicate重复的选项添加回duplicateSet，方便用户观察那些文件夹是重复的
-        const addedFolder = uniqueFolderList.find(folder => folder.id === parseInt(key));
+        const addedFolder = uniqueFolderList.find(folder => folder.id === key);
         duplicateSet[key].push(addedFolder); // 最后一项为是被添加到数据库中的音声文件夹，将其一同展示给用户
 
-        const rjcode = formatID(key); // zero-pad to 6 or 8 digits
-
-        LOG.main.info(`[RJ${rjcode}] 存在多个文件夹:`);
+        LOG.main.info(`[${key}] 存在多个文件夹:`);
 
         // 打印音声文件夹的绝对路径
         duplicateSet[key].forEach((folder) => {
@@ -550,14 +625,14 @@ async function tryProcessFolderListParallel(folderList) {
       const result = await processFolderLimited(folder);
       counts[result] += 1;
 
-      const rjcode = formatID(folder.id); // zero-pad to 6 digits\
+      const displayId = folder.id;
         switch(result) {
-          case 'added': LOG.task.info(rjcode, `添加成功! Added: ${counts.added}`); break;
-          case 'failed': LOG.task.error(rjcode, `添加失败! Failed: ${counts.failed}`); break;
+          case 'added': LOG.task.info(displayId, `添加成功! Added: ${counts.added}`); break;
+          case 'failed': LOG.task.error(displayId, `添加失败! Failed: ${counts.failed}`); break;
           default: break;
         }
-        LOG.task.remove(rjcode, result);
-        if (result !== 'skipped') LOG.result.add(rjcode, result, counts[result]);
+        LOG.task.remove(displayId, result);
+        if (result !== 'skipped') LOG.result.add(displayId, result, counts[result]);
     }));
 
   } catch (err) {
@@ -604,30 +679,37 @@ async function performScan() {
 
 /**
  * 更新音声的动态元数据
- * @param {number} id work id
- * @param {options = {}} options includeVA, includeTags
+ * @param {string} id work id (e.g. '123456', 'd_215444')
+ * @param {options = {}} options includeVA, includeTags, refreshAll, etc.
  */
 async function updateMetadata(id, options = {}) {
-  let scrapeProcessor = () => scrapeDynamicWorkMetadataFromDLsite(id);
-  if (options.includeVA || options.includeTags || options.includeNSFW || options.includeIllustrator || options.includeScriptWriter || options.includeSeries || options.refreshAll) {
+  const isFanza = String(id).startsWith('d_');
+
+  let scrapeProcessor;
+  if (isFanza) {
+    // Fanza: only static scraping is available
+    scrapeProcessor = () => scrapeWorkMetadataFromFanza(id);
+  } else if (options.includeVA || options.includeTags || options.includeNSFW || options.includeIllustrator || options.includeScriptWriter || options.includeSeries || options.refreshAll) {
     // static + dynamic
     scrapeProcessor = () => scrapeWorkMetadataFromDLsite(id);
+  } else {
+    scrapeProcessor = () => scrapeDynamicWorkMetadataFromDLsite(id);
   }
 
-  const rjcode = formatID(id); // zero-pad to 6 or 8 digits
-  LOG.task.add(rjcode); // LOG.task.add only accepts a string
+  const displayId = isFanza ? id : formatID(id);
+  LOG.task.add(displayId);
 
   try {
-    const metadata = await scrapeProcessor(); // 抓取该音声的元数据
+    const metadata = await scrapeProcessor();
     // 将抓取到的元数据插入到数据库
-    LOG.task.log(rjcode, `元数据抓取成功，准备更新元数据...`);
+    LOG.task.log(displayId, `元数据抓取成功，准备更新元数据...`);
     metadata.id = id;
 
     await db.updateWorkMetadata(metadata, options);
-    LOG.task.log(rjcode, `元数据更新成功`);
+    LOG.task.log(displayId, `元数据更新成功`);
     return 'updated';
   } catch(err) {
-    LOG.task.error(rjcode, `在抓取元数据过程中出错: ${err}`);
+    LOG.task.error(displayId, `在抓取元数据过程中出错: ${err}`);
     console.error(err.stack);
     return 'failed';
   }
@@ -667,15 +749,15 @@ async function refreshWorks(query, idColumnName, processor) {
 
   await Promise.all(works.map(async (work) => {
     const workid = work[idColumnName];
-    const rjcode = formatID(workid);
+    const displayId = String(workid).startsWith('d_') ? workid : formatID(workid);
     
     const result = (await processor(workid)) === 'failed'
     ? 'failed'
     : 'updated';
 
     counts[result]++;
-    LOG.task.remove(rjcode, result);
-    LOG.result.add(rjcode, result, counts[result]);
+    LOG.task.remove(displayId, result);
+    LOG.result.add(displayId, result, counts[result]);
   }));
 
   LOG.main.log(`完成元数据更新 ${counts.updated} 个，失败 ${counts.failed} 个.`);
@@ -685,7 +767,7 @@ async function refreshWorks(query, idColumnName, processor) {
 // 扫描一个作品的文件夹中的文件信息
 // 例如音频时长、是否包含歌词文件等
 async function scanWorkFile(work, index, total) {
-  const rjcode = formatID(work.id);
+  const displayId = String(work.id).startsWith('d_') ? work.id : formatID(work.id);
 
   LOG.main.info(`扫描进度：${index+1}/${total}`);
 
@@ -708,7 +790,7 @@ async function scanWorkFile(work, index, total) {
 
     return "updated";
   } catch(error) {
-    LOG.main.error(`[RJ${rjcode}] 扫描歌词过程中发生错误：${error}`);
+    LOG.main.error(`[${displayId}] 扫描歌词过程中发生错误：${error}`);
     console.error(error.stack);
     return "failed";
   }

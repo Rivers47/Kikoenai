@@ -5,6 +5,7 @@ import axios from "axios";
  * @return {string}
  */
 export function formatID(id) {
+  if (typeof id === 'string') return id; // already in final form ('123456', '01134567', 'd_215444')
   if (id >= 1000000) {
     // 大于 7 位数，则补全为 8 位
     id = `0${id}`.slice(-8);

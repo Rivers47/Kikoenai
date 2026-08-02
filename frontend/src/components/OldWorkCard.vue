@@ -68,7 +68,7 @@
         <!-- DLsite链接 -->
         <div class="col-auto">
           <q-icon name="launch" size="xs" />
-          <a class="text-primary" :href="`https://www.dlsite.com/home/work/=/product_id/RJ${dlsiteCode}.html`" rel="noreferrer noopener" target="_blank">DLsite</a>
+          <a class="text-primary" :href="sourceLink" rel="noreferrer noopener" target="_blank">{{sourceLabel}}</a>
         </div>
       </div>
 
@@ -148,12 +148,20 @@ export default {
 
       return this.metadata.rate_count_detail.slice().sort(compare);
     },
+    isFanza() {
+      return String(this.metadata.id).startsWith('d_');
+    },
+    sourceLink() {
+      if (this.isFanza) {
+        return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${this.metadata.id}/`;
+      }
+      return `https://www.dlsite.com/home/work/=/product_id/RJ${this.metadata.id}.html`;
+    },
+    sourceLabel() {
+      return this.isFanza ? 'Fanza' : 'DLsite';
+    },
     dlsiteCode() {
-      let c = String(this.metadata.id);
-      c = this.metadata.id > 1000000 
-        ? c.padStart(8,'0')  // 8位RJ番号
-        : c.padStart(6,'0'); // 6位RJ番号
-      return c;
+      return String(this.metadata.id);
     }
   },
 

@@ -1,20 +1,21 @@
 const { knex } = require('./db');
 
-const dbVersion = '20260801000000';
+const dbVersion = '20260802000000';
 
 // 数据库结构
 const createSchema = () => knex.schema
   .createTable('t_circle', (table) => {
-    table.increments(); // id自增列(INTEGER 类型)，会被用作主键 [社团id]
+    table.string('id').notNullable(); // UUID v5, based on name
     table.string('name').notNullable(); // VARCHAR 类型 [社团名称]
+    table.primary('id');
   })
   .createTable('t_work', (table) => {
-    table.increments(); // id自增列(INTEGER 类型)，会被用作主键 [音声id]
+    table.string('id').notNullable(); // TEXT PK: DLsite id (RJ-padded), Fanza id (d_XXXXXX)
     table.timestamps(true, true); // 时间戳created_at, updated_at
     table.string('root_folder').notNullable(); // VARCHAR 类型 [根文件夹别名]
     table.string('dir').notNullable(); // VARCHAR 类型 [相对存储路径]
     table.string('title').notNullable(); // VARCHAR 类型 [音声名称]
-    table.integer('circle_id').notNullable(); // INTEGER 类型 [社团id]
+    table.string('circle_id').notNullable(); // UUID 类型 [社团id]
     table.boolean('nsfw'); // BOOLEAN 类型
     table.string('release');  // VARCHAR 类型 [贩卖日 (YYYY-MM-DD)]
 
@@ -28,12 +29,14 @@ const createSchema = () => knex.schema
 
     table.json('memo'); // 关于这个作品的各种信息记录,音频文件,音频文件时长,歌词映射
     
+    table.primary('id');
     table.foreign('circle_id').references('id').inTable('t_circle'); // FOREIGN KEY 外键
     table.index(['circle_id', 'release', 'dl_count', 'review_count', 'price', 'rate_average_2dp'], 't_work_index'); // INDEX 索引
   })
   .createTable('t_tag', (table) => {
-    table.increments(); // id自增列(INTEGER 类型)，会被用作主键 [标签id]
+    table.string('id').notNullable(); // UUID v5, based on name
     table.string('name').notNullable(); // VARCHAR 类型 [标签名称]
+    table.primary('id');
   })
   .createTable('t_va', (table) => {
     table.string('id'); // UUID v5, 基于name生成的固定值
@@ -41,15 +44,15 @@ const createSchema = () => knex.schema
     table.primary('id');
   })
   .createTable('r_tag_work', (table) => {
-    table.integer('tag_id');
-    table.integer('work_id');
+    table.string('tag_id');
+    table.string('work_id');
     table.foreign('tag_id').references('id').inTable('t_tag'); // FOREIGN KEY 外键
     table.foreign('work_id').references('id').inTable('t_work'); // FOREIGN KEY 外键
     table.primary(['tag_id', 'work_id']); // PRIMARY KEYprimary 主键
   })
   .createTable('r_va_work', (table) => {
     table.string('va_id');
-    table.integer('work_id');
+    table.string('work_id');
     table.foreign('va_id').references('id').inTable('t_va').onUpdate('CASCADE').onDelete('CASCADE'); // FOREIGN KEY 外键
     table.foreign('work_id').references('id').inTable('t_work').onUpdate('CASCADE').onDelete('CASCADE'); // FOREIGN KEY 外键
     table.primary(['va_id', 'work_id']); // PRIMARY KEYprimary 主键
@@ -61,7 +64,7 @@ const createSchema = () => knex.schema
   })
   .createTable('r_illustrator_work', (table) => {
     table.string('illustrator_id');
-    table.integer('work_id');
+    table.string('work_id');
     table.foreign('illustrator_id').references('id').inTable('t_illustrator').onUpdate('CASCADE').onDelete('CASCADE');
     table.foreign('work_id').references('id').inTable('t_work').onUpdate('CASCADE').onDelete('CASCADE');
     table.primary(['illustrator_id', 'work_id']);
@@ -73,19 +76,19 @@ const createSchema = () => knex.schema
   })
   .createTable('r_script_writer_work', (table) => {
     table.string('script_writer_id');
-    table.integer('work_id');
+    table.string('work_id');
     table.foreign('script_writer_id').references('id').inTable('t_script_writer').onUpdate('CASCADE').onDelete('CASCADE');
     table.foreign('work_id').references('id').inTable('t_work').onUpdate('CASCADE').onDelete('CASCADE');
     table.primary(['script_writer_id', 'work_id']);
   })
   .createTable('t_series', (table) => {
-    table.integer('id'); // SRI番号
+    table.string('id').notNullable(); // UUID v5, based on name
     table.string('name').notNullable(); // VARCHAR 类型 [シリーズ名称]
     table.primary('id');
   })
   .createTable('r_series_work', (table) => {
-    table.integer('series_id');
-    table.integer('work_id');
+    table.string('series_id');
+    table.string('work_id');
     table.foreign('series_id').references('id').inTable('t_series').onUpdate('CASCADE').onDelete('CASCADE');
     table.foreign('work_id').references('id').inTable('t_work').onUpdate('CASCADE').onDelete('CASCADE');
     table.primary(['series_id', 'work_id']);
@@ -109,7 +112,7 @@ const createSchema = () => knex.schema
   })
   .createTable('t_play_histroy', (table) => {
     table.string('user_name').notNullable();
-    table.integer('work_id').notNullable();
+    table.string('work_id').notNullable();
     table.timestamps(true, true); // 时间戳created_at, updated_at
     table.string('state').notNullable(); // 播放状态，一个json字符串，从前端村粗的状态，记录了当前播放的队列文件、播放序号、播放时间等
 

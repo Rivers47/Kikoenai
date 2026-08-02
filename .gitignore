@@ -111,3 +111,4 @@ packages/*/package-lock.json
 
 # Debugging tools
 .playwright-mcp
+.pi-subagents/

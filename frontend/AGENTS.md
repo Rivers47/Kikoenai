@@ -300,7 +300,7 @@ npm test           # Run ESLint
 | `/api/histroy/:id` | GET/POST | `Work.vue` | Playback state (history) |
 | `/api/config/shared` | GET | `MainLayout.vue` | Public config (seek times) |
 | `/api/version` | GET | `MainLayout.vue` | Version + update info |
-| `/api/work/:id` | PUT | `EditMetadata.vue` | Manually edit work metadata (admin only) |
+| `/api/work/:id` | PUT | `EditMetadata.vue` | Manually edit work metadata (admin only). Work id is a string: DLsite RJ-padded (`\d{6,8}`) or Fanza cid (`d_\d+`). |
 | `/api/illustrators` | GET | `EditMetadata.vue` | List illustrators (autocomplete) |
 | `/api/script_writers` | GET | `EditMetadata.vue` | List script writers (autocomplete) |
 | `/api/seriess` | GET | `EditMetadata.vue` | List series (autocomplete; irregular plural) |
