@@ -3,9 +3,14 @@
  *
  * Usage:
  *   node scripts/test-fanza-scraper.js d_215444 [d_XXXXXX ...]
+ *   node scripts/test-fanza-scraper.js --dump d_215444
  *
  * Prints every field scraped from the Fanza doujin detail page.
  * Proxy settings from config/config.json (httpProxyHost/httpProxyPort) apply.
+ *
+ * --dump also saves the raw page HTML to ./fanza-<cid>.html and prints a
+ * diagnostic view of the product-information table and price-ish elements,
+ * for debugging selector mismatches.
  */
 
 // Prevent writing config files (side effect of config.js)
@@ -23,6 +28,7 @@ if (args.includes('--no-proxy')) {
 
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
 
+const dump = args.includes('--dump');
 const ids = args.filter((a) => !a.startsWith('--'));
 
 if (ids.length === 0) {
@@ -55,11 +61,51 @@ const printWork = (work) => {
   console.log();
 };
 
+const dumpPage = async (id) => {
+  const path = require('path');
+  const fs = require('fs');
+  const cheerio = require('cheerio');
+  const axios = require('../scraper/axios');
+
+  const url = `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${id}/`;
+  const response = await axios.retryGet(url, {
+    retry: {},
+    headers: { cookie: 'age_check_done=1; dc_doujin_age_check_done=1' },
+  });
+  const html = response.data;
+  const file = path.resolve(`fanza-${id}.html`);
+  fs.writeFileSync(file, html);
+  console.log(`HTML saved to: ${file} (${html.length} bytes)`);
+
+  const $ = cheerio.load(html);
+
+  console.log('\nProduct-information rows found:');
+  const items = $('div.m-productInformation div.productInformation__item');
+  console.log(`  (selector matched ${items.length} rows)`);
+  items.each(function () {
+    const header = $(this).find('dt.informationList__ttl').text().trim();
+    const value = $(this).find('dd').text().trim().replace(/\s+/g, ' ');
+    console.log(`  [${header}] = ${value}`);
+  });
+
+  console.log('\nPrice-ish elements (text content):');
+  ['.m-productPrice', '.productPrice', '.productPrice__txt', '.m-productDetailPrice', '#price', '.price'].forEach((sel) => {
+    $(sel).each(function () {
+      const text = $(this).text().trim().replace(/\s+/g, ' ');
+      if (text) console.log(`  ${sel}: ${text.slice(0, 120)}`);
+    });
+  });
+  console.log('');
+};
+
 (async () => {
   let failed = 0;
   for (const id of ids) {
     console.log(`\nScraping ${id} ...`);
     try {
+      if (dump) {
+        await dumpPage(id);
+      }
       const work = await scrapeWorkMetadataFromFanza(id);
       printWork(work);
     } catch (err) {

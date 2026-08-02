@@ -46,8 +46,10 @@ const scrapeWorkMetadataFromFanza = (cid) => new Promise((resolve, reject) => {
       titleEl.children('span').remove();
       work.title = titleEl.text().trim();
 
-      // Circle
-      const circleEl = $('.circleName__txt');
+      // Circle (the doujin "maker", e.g. FANZA同人オリジナル).
+      // .first(): some page variants render the circle name more than once
+      // and .text() would concatenate all matches.
+      const circleEl = $('.circleName__txt').first();
       if (circleEl.length) {
         work.circle = { name: circleEl.text().trim() };
       }
@@ -59,6 +61,7 @@ const scrapeWorkMetadataFromFanza = (cid) => new Promise((resolve, reject) => {
         const valueEl = $(this).find('dd.informationList__txt, dd.informationList__item');
 
         switch (header) {
+          case '配信開始日': // digital doujin pages
           case '販売日': {
             const dateText = valueEl.text().trim();
             const match = dateText.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
@@ -124,26 +127,87 @@ const scrapeWorkMetadataFromFanza = (cid) => new Promise((resolve, reject) => {
         }
       });
 
-      // Rating / review_count from review element
+      // Price: lives in the purchase box, not the information table.
+      // e.g. <p class="priceList__main">1,650<span class="priceList__main--small">円</span></p>
+      const priceEl = $('p.priceList__main').first().clone();
+      if (priceEl.length) {
+        priceEl.children('span').remove();
+        const priceMatch = priceEl.text().trim().match(/(\d[\d,]*)/);
+        if (priceMatch) {
+          work.price = parseInt(priceMatch[1].replace(/,/g, ''), 10);
+        }
+      }
+
+      // Cumulative sales count (累計販売数), e.g. <span class="numberOfSales__txt">2,717</span>
+      const salesEl = $('span.numberOfSales__txt').first();
+      if (salesEl.length) {
+        const salesMatch = salesEl.text().trim().match(/(\d[\d,]*)/);
+        if (salesMatch) {
+          work.dl_count = parseInt(salesMatch[1].replace(/,/g, ''), 10);
+        }
+      }
+
+      // Rating, rating count, review (comment) count, and rating distribution.
+      // Preferred source: the review section (.dcd-review), which carries exact values:
+      //   平均評価 <strong>4.89</strong> / 総評価数 <strong>9</strong>（3件のコメント）
+      const averageEl = $('.dcd-review__average strong').first();
+      if (averageEl.length) {
+        const avg = parseFloat(averageEl.text().trim());
+        if (!Number.isNaN(avg)) {
+          work.rate_average_2dp = avg;
+        }
+      }
+      const evaluatesText = $('.dcd-review__evaluates').first().text();
+      const totalMatch = evaluatesText.match(/総評価数\s*(\d[\d,]*)/);
+      if (totalMatch) {
+        work.rate_count = parseInt(totalMatch[1].replace(/,/g, ''), 10);
+      }
+      const commentMatch = evaluatesText.match(/（(\d[\d,]*)件のコメント）/);
+      if (commentMatch) {
+        work.review_count = parseInt(commentMatch[1].replace(/,/g, ''), 10);
+      }
+      // Per-star distribution, stored in the same shape as DLsite's API:
+      // [{review_point: 1, count, ratio}, ..., {review_point: 5, count, ratio}]
+      const detail = [];
+      $('.dcd-review__rating_map > div').each(function () {
+        const starClass = $(this).find('span[class*="dcd-review-rating-"]').first().attr('class') || '';
+        const starMatch = starClass.match(/dcd-review-rating-(\d)0/);
+        const countMatch2 = $(this).text().match(/(\d+)件/);
+        if (starMatch && countMatch2) {
+          detail.push({ review_point: parseInt(starMatch[1], 10), count: parseInt(countMatch2[1], 10) });
+        }
+      });
+      if (detail.length) {
+        const total = detail.reduce((sum, d) => sum + d.count, 0);
+        work.rate_count_detail = detail
+          .sort((a, b) => a.review_point - b.review_point)
+          .map((d) => ({
+            review_point: d.review_point,
+            count: d.count,
+            ratio: total > 0 ? Math.round((d.count / total) * 100) : 0,
+          }));
+      }
+
+      // Fallback: star icon + count next to the work title when the review
+      // section is absent (e.g. <span class="u-common__ico--review45"></span> ( 9 件))
       const reviewItem = $('div.userReview__item');
       if (reviewItem.length) {
-        // Rating: look for span with class matching u-common__ico--reviewNN
-        const ratingSpan = reviewItem.find('a span[class*="u-common__ico--review"]');
-        if (ratingSpan.length) {
-          const classList = ratingSpan.attr('class') || '';
-          const ratingMatch = classList.match(/review(\d{1,2})/);
-          if (ratingMatch) {
-            work.rate_average_2dp = parseInt(ratingMatch[1], 10) / 10;
+        if (work.rate_average_2dp === null) {
+          const ratingSpan = reviewItem.find('a span[class*="u-common__ico--review"]');
+          if (ratingSpan.length) {
+            const classList = ratingSpan.attr('class') || '';
+            const ratingMatch = classList.match(/review(\d{1,2})/);
+            if (ratingMatch) {
+              work.rate_average_2dp = parseInt(ratingMatch[1], 10) / 10;
+            }
           }
         }
-        // Review count from link text
-        const reviewLink = reviewItem.find('a');
-        const reviewLinkText = reviewLink.text().trim();
-        const countMatch = reviewLinkText.match(/(\d+)/);
-        if (countMatch) {
-          work.review_count = parseInt(countMatch[1], 10);
+        if (work.rate_count === null) {
+          const countMatch3 = reviewItem.find('.userReview__txt').text().match(/(\d[\d,]*)\s*件/);
+          if (countMatch3) {
+            work.rate_count = parseInt(countMatch3[1].replace(/,/g, ''), 10);
+          }
         }
-        work.rate_count = work.review_count;
       }
 
       if (!work.title && work.tags.length === 0 && work.vas.length === 0) {
