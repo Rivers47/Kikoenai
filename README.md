@@ -123,7 +123,7 @@ The frontend builds directly into `backend/dist/`, which is served as static con
 - [x] Refresh metadata for a single work
 - [ ] Optimize DB query speed
 - [ ] Tests
-- [ ] Edit metadata
+- [x] Edit metadata
 - [x] DB migration from number178's closed source version
 - [ ] DB migration from Kikoeru-project's version
 - [x] Container build
