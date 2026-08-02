@@ -345,7 +345,20 @@ async function getCoverImage(cover_for_id, cover_from_id, types) {
  */
 async function getFanzaCoverImage(id, types, coverUrls) {
   const cid = id; // e.g. d_215444
-  // Fallback only: correct for many, but not all, Fanza doujin works.
+  // The asset path segment varies by content type (digital/voice,
+  // digital/cg_game, ...), so the real cover URL only exists on the work
+  // page. When the caller has no scraped coverUrls (e.g. re-downloading a
+  // missing cover for an already-indexed work), re-scrape the page for them
+  // instead of guessing.
+  if (!coverUrls) {
+    try {
+      const metadata = await scrapeWorkMetadataFromFanza(id);
+      coverUrls = metadata.coverUrls; // eslint-disable-line no-param-reassign
+    } catch (err) {
+      LOG.task.warn(id, `重新抓取 Fanza 页面以获取封面 URL 失败: ${err.message}，将尝试推测的封面 URL`);
+    }
+  }
+  // Fallback only: wrong for works whose assets are not under digital/doujin.
   // Fanza doujin only serves pl/pr cover variants (no ps), and pl == pr.
   const mainUrl = (coverUrls && coverUrls.main) || `https://doujin-assets.dmm.co.jp/digital/doujin/${cid}/${cid}pl.jpg`;
   const samUrl = (coverUrls && coverUrls.sam) || `https://doujin-assets.dmm.co.jp/digital/doujin/${cid}/${cid}pl.jpg`;
