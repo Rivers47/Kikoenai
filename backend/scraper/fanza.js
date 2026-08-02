@@ -222,9 +222,12 @@ const scrapeWorkMetadataFromFanza = (cid) => new Promise((resolve, reject) => {
       // stored in the database.
       const ogImage = $('meta[property="og:image"]').attr('content');
       if (ogImage) {
+        // og:image is the medium "pr" (preview) image; the CDN serves the
+        // large "pl" and small "ps" variants at the same path.
+        const toVariant = (url, suffix) => url.replace(/p[rls]\.jpg(\?.*)?$/, `${suffix}.jpg$1`);
         work.coverUrls = {
-          main: ogImage,
-          sam: ogImage.replace(/pl\.jpg(\?.*)?$/, 'ps.jpg$1'),
+          main: toVariant(ogImage, 'pl'),
+          sam: toVariant(ogImage, 'ps'),
         };
       }
 
