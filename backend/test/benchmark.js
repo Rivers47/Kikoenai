@@ -8,7 +8,6 @@ const { config } = require('../config');
 const knex = require('knex');
 const knexfile = require('../database/knexfile');
 const chai = require('chai');
-const { nsfwFilter } = require('../database/db');
 
 const expect = chai.expect;
 
@@ -48,9 +47,7 @@ const bench = async (label, fn) => {
 };
 
 describe('DB query benchmark', function () {
-  // Each case runs WARMUP + ITERATIONS query executions; the slowest paths
-  // (e.g. getWorksBy default over a large dev DB) can take ~40ms each, so the
-  // default 2s mocha timeout is far too small. Scale the timeout with the
+  // Each case runs WARMUP + ITERATIONS query executions; scale timeout with
   // iteration count and give plenty of headroom.
   this.timeout(Math.max(30000, (WARMUP + ITERATIONS) * 1000));
 
@@ -102,7 +99,7 @@ describe('DB query benchmark', function () {
     const seriesRow = await myKnex('r_series_work').select('series_id as id').first();
     this.sample.seriesId = seriesRow ? seriesRow.id : null;
 
-    // Numeric RJ id for keyword search (strip leading digits from work id)
+    // Numeric RJ id for keyword search
     if (this.sample.workId) {
       this.sample.numericId = String(this.sample.workId).replace(/\D/g, '');
     }
@@ -127,9 +124,6 @@ describe('DB query benchmark', function () {
       console.table(results);
     }
     if (myKnex) {
-      // destroy() can abort still-pending pool acquire operations, which tarn
-      // reports as a noisy 'Acquire connection error: aborted'. It is a benign
-      // teardown artifact (all timed queries have already resolved), so swallow it.
       try {
         await myKnex.destroy();
       } catch (err) {
@@ -139,6 +133,7 @@ describe('DB query benchmark', function () {
   });
 
   it('getWorksBy default (all works)', async function () {
+    // Omit limit/offset to get all works
     const row = await bench('getWorksBy default', () => Q.getWorksBy({ username: this.sample.username }));
     expect(row).to.exist;
   });
@@ -180,12 +175,11 @@ describe('DB query benchmark', function () {
   });
 
   it('realistic /api/works (paged + count)', async function () {
-    const query = () => nsfwFilter(0, Q.getWorksBy({ username: this.sample.username }));
-    const countRes = await query().count('id as count');
-    expect(countRes).to.exist;
-    const row = await bench('realistic /api/works', () => query()
-      .limit(PAGE_SIZE).offset(48).orderBy('release', 'desc')
-      .orderBy([{ column: 'release', order: 'desc' }, { column: 'id', order: 'desc' }]));
+    const row = await bench('realistic /api/works', () => Q.getWorksBy({
+      username: this.sample.username, nsfw: 0,
+      order: 'release', sort: 'desc',
+      limit: PAGE_SIZE, offset: 48,
+    }));
     expect(row).to.exist;
   });
 

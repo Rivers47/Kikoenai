@@ -31,12 +31,13 @@
 │   └── config.json          # Runtime config (auto-generated on first run)
 ├── covers/                  # Cached cover images
 ├── database/
-│   ├── db.js                # Knex instance, connection config
+│   ├── db.js                # Thin re-export: singleton knex + databaseExist + queries (via makeQueries)
+│   ├── queries.js           # makeQueries(knex) factory: all query functions bound to a knex instance
 │   ├── init.js              # App initialization (db creation, migration, config upgrade)
 │   ├── knexfile.js          # Knex config for migrations
 │   ├── knex-migrate.js      # Migration runner
-│   ├── migrations/          # DB migration files (timestamped, 17 migrations)
-│   ├── schema.js            # Full database schema (createSchema with all tables + views)
+│   ├── migrations/          # DB migration files (timestamped, 20 migrations)
+│   ├── schema.js            # Full database schema (createSchema with all tables)
 │   └── storage.js           # DB path resolution
 ├── dist/                    # Frontend build output (kikoeru-quasar)
 ├── filesystem/
@@ -113,7 +114,6 @@ SQLite3 via Knex.js with the following tables:
 | `t_review` | Reviews & progress | `user_name`, `work_id`, `rating`, `review_text`, `progress` |
 | `t_play_histroy` | Playback state | `user_name`, `work_id`, `state` (JSON) |
 
-**Important:** There is a view `staticMetadata` (defined in `schema.js`) that joins all work metadata — circle, VAs, tags, **illustrators, script writers, and series** — into a single queryable view. Many route queries use `raw` SQL against this view. The view is recreated by migrations whenever its column set changes (see `20260731075621_add_illustrator_script_writer_series.js`).
 
 ### 2.4 Configuration (`config.js`)
 
@@ -167,7 +167,7 @@ All routes mounted under `/api`:
 ## 3. Critical Conventions & Gotchas
 
 - **SQLite:** No concurrent writes. Busy timeout configured. Foreign keys enabled via `PRAGMA foreign_keys = ON` in `db.js`.
-- **Migrations:** Sequential, timestamp-prefixed files in `database/migrations/`. Run automatically on startup via `knex-migrate.js`.
+- **Migrations:** Sequential, timestamp-prefixed files in `database/migrations/`. Run automatically on startup via `knex-migrate.js`.`dbVersion` in `schema.js` must always equal the latest migration's timestamp prefix (asserted by `test/migration..js`).
 - **Config write protection:** `setConfig()` always overwrites `production`, `md5secret`, `jwtsecret` with current values — these cannot be changed through the admin panel.
 - **Error handling:** JWT errors → 401 with `WWW-Authenticate` header. Missing DB tables → 500 with "数据库结构尚未建立". Production mode sanitizes error messages (no stack traces).
 - **Child process IPC:** Uses `process.on('message')` / `process.send()`. Parent (Socket.IO) relays events to all connected clients.
@@ -216,6 +216,8 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/auth/me` | GET | Get current user + auth status |
 | `/api/auth/login` | POST | Authenticate, get JWT |
 | `/api/works` | GET | List/search works (supports pagination, sort, filter) |
+| `/api/search` | GET | Keyword search
+| `/api/:fields/:id/works` | GET | Works filtered
 | `/api/work/:id` | GET | Get work metadata + playback state |
 | `/api/tags` | GET | List all tags |
 | `/api/circles` | GET | List all circles |
@@ -223,7 +225,9 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/media/:id/:file` | GET | Stream audio file (supports Range) |
 | `/api/cover/:id` | GET | Get cover image |
 | `/api/files/:id` | GET | List files in a work |
+| `/api/review` | GET | List works the user has reviewed/rated/progress-marked
 | `/api/review/:id` | GET/POST/PUT/DELETE | Work reviews |
+| `/api/histroy` | GET | List works the user has playback history for
 | `/api/histroy/:id` | GET/POST | Playback state (history) |
 | `/api/config/shared` | GET | Public config (seek times) |
 | `/api/version` | GET | Version + update info |
@@ -256,7 +260,7 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 3. Routes under `/api` are automatically protected by JWT middleware in `api.js`.
 
 ### Adding a database migration
-1. Create file in `database/migrations/` with timestamp prefix (e.g., `20240101000000_my_migration.js`).
+1. Create file in `database/migrations/` with timestamp prefix (e.g., `20260802000000_my_migration.js`).
 2. Export `up` and `down` functions following existing patterns.
 3. Migration runs automatically on next server startup.
 
@@ -275,7 +279,9 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 
 - **Framework:** Mocha + Chai
 - **Linting:** ESLint (node plugin)
-- **Tests:** Located in `test/` directory (e.g. `edit-metadata.js` covers the `PUT /api/work/:id` flow and `db.editWorkMetadata`)
+- **Tests:** Located in `test/` directory:
+  - `edit-metadata.js` — covers the `PUT /api/work/:id` flow and `db.editWorkMetadata` (uses shared `db-test.sqlite3` singleton)
+  - `benchmark.js` — DB query benchmark; Skips if `backend/sqlite/db.sqlite3` is missing/empty; 
 - **Run:** `npm test` (sets `NODE_ENV=test`)
 
 ---

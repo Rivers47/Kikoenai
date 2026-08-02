@@ -10,6 +10,115 @@ const { nameToUUID } = require('../scraper/utils');
  */
 const makeQueries = (knex) => {
   /**
+   * @param {Number} nsfw 0所有年龄分级，1仅全年龄，2仅十八禁
+   */
+  function nsfwFilter(nsfw, knexQuery) {
+    switch(nsfw) {
+      case 1: return knexQuery.where('nsfw', '=', false); // 全年龄
+      case 2: return knexQuery.where('nsfw', '=', true); // 仅R18
+      default: return knexQuery; // 无年龄限制
+    }
+  }
+
+  /**
+   * Shared helper: batch-fetch static relations (tags, vas, illustrators,
+   * script_writers, series) and optional user state for a set of work IDs,
+   * then assemble into the JSON-string *Obj shape that normalize() expects.
+   *
+   * @param {Array<Object>} coreRows - Rows from t_work ⋈ t_circle with core fields.
+   * @param {Object} [opts]
+   * @param {String} opts.username
+   * @param {Boolean} opts.reviewFields - also fetch review_text/progress/updated_at/user_name
+   * @param {Boolean} opts.historyFields - also fetch state/play_updated_at
+   * @returns {Promise<Array<Object>>} Assembled rows with *Obj JSON-string fields.
+   */
+  async function assembleWorks(coreRows, { username = 'admin', reviewFields = false, historyFields = false } = {}) {
+    if (coreRows.length === 0) return [];
+
+    const ids = coreRows.map(r => r.id);
+
+    // Batch-fetch static relations
+    const [tagRows, vaRows, illusRows, swRows, seriesRows, reviewRows, historyRows] = await Promise.all([
+      knex('r_tag_work').join('t_tag', 't_tag.id', 'r_tag_work.tag_id')
+        .select('r_tag_work.work_id', 'r_tag_work.tag_id as id', 't_tag.name').whereIn('r_tag_work.work_id', ids),
+      knex('r_va_work').join('t_va', 't_va.id', 'r_va_work.va_id')
+        .select('r_va_work.work_id', 'r_va_work.va_id as id', 't_va.name').whereIn('r_va_work.work_id', ids),
+      knex('r_illustrator_work').join('t_illustrator', 't_illustrator.id', 'r_illustrator_work.illustrator_id')
+        .select('r_illustrator_work.work_id', 'r_illustrator_work.illustrator_id as id', 't_illustrator.name').whereIn('r_illustrator_work.work_id', ids),
+      knex('r_script_writer_work').join('t_script_writer', 't_script_writer.id', 'r_script_writer_work.script_writer_id')
+        .select('r_script_writer_work.work_id', 'r_script_writer_work.script_writer_id as id', 't_script_writer.name').whereIn('r_script_writer_work.work_id', ids),
+      knex('r_series_work').join('t_series', 't_series.id', 'r_series_work.series_id')
+        .select('r_series_work.work_id', 'r_series_work.series_id as id', 't_series.name').whereIn('r_series_work.work_id', ids),
+      // User state — review (only if requested)
+      reviewFields
+        ? knex('t_review').select('work_id', 'rating as userRating', 'review_text', 'progress',
+            knex.raw("strftime('%Y-%m-%d %H-%M-%S', updated_at, 'localtime') AS updated_at"), 'user_name')
+            .where('user_name', username).whereIn('work_id', ids)
+        : Promise.resolve([]),
+      // Play history (only if requested)
+      historyFields
+        ? knex('t_play_histroy').select('work_id', 'state', 'updated_at as play_updated_at')
+            .where('user_name', username).whereIn('work_id', ids)
+        : Promise.resolve([]),
+    ]);
+
+    // Build a Map from id -> assembled row
+    const byId = new Map();
+    for (const row of coreRows) {
+      const a = { ...row };
+      a.circleObj = JSON.stringify({ id: row.circle_id, name: row.name });
+      a.tagObj = JSON.stringify({ tags: [] });
+      a.vaObj = JSON.stringify({ vas: [] });
+      a.illustratorObj = JSON.stringify({ illustrators: [] });
+      a.scriptWriterObj = JSON.stringify({ scriptWriters: [] });
+      a.seriesObj = JSON.stringify({ series: [] });
+      byId.set(a.id, a);
+    }
+
+    // Helper: push a relation item into a work's *Obj array, deduping by id
+    const pushDeduped = (workId, objKey, subKey, item) => {
+      const w = byId.get(workId);
+      if (!w) return;
+      const arr = JSON.parse(w[objKey])[subKey];
+      // Dedupe by id (mimics json_group_array(DISTINCT ...))
+      if (!arr.some(existing => existing.id === item.id)) {
+        arr.push(item);
+      }
+      w[objKey] = JSON.stringify({ [subKey]: arr });
+    };
+
+    for (const t of tagRows) pushDeduped(t.work_id, 'tagObj', 'tags', { id: t.id, name: t.name });
+    for (const v of vaRows) pushDeduped(v.work_id, 'vaObj', 'vas', { id: v.id, name: v.name });
+    for (const it of illusRows) pushDeduped(it.work_id, 'illustratorObj', 'illustrators', { id: it.id, name: it.name });
+    for (const sw of swRows) pushDeduped(sw.work_id, 'scriptWriterObj', 'scriptWriters', { id: sw.id, name: sw.name });
+    for (const se of seriesRows) pushDeduped(se.work_id, 'seriesObj', 'series', { id: se.id, name: se.name });
+
+    // Apply user state fields (if any)
+    if (reviewFields) {
+      for (const r of reviewRows) {
+        const w = byId.get(r.work_id);
+        if (!w) continue;
+        w.userRating = r.userRating;
+        w.review_text = r.review_text;
+        w.progress = r.progress;
+        w.updated_at = r.updated_at;
+        w.user_name = r.user_name;
+      }
+    }
+    if (historyFields) {
+      for (const h of historyRows) {
+        const w = byId.get(h.work_id);
+        if (!w) continue;
+        w.state = h.state;
+        w.play_updated_at = h.play_updated_at;
+      }
+    }
+
+    // Return in the same order as coreRows
+    return coreRows.map(r => byId.get(r.id));
+  }
+
+  /**
    * Takes a work metadata object and inserts it into the database.
    * @param {Object} work Work object.
    */
@@ -409,37 +518,27 @@ const makeQueries = (knex) => {
 
   /**
    * Fetches metadata for a specific work id.
+   * Returns an Array of length 1 (compatible with normalize()).
    * @param {Number} id Work identifier.
    * @param {String} username 'admin' or other usernames for current user
    */
   const getWorkMetadata = async (id, username) => {
-    // TODO: do this all in a single transaction?
-    // <= Yes, WTF is this
-    // I think we are done.
+    const row = await knex('t_work')
+      .join('t_circle', 't_circle.id', 't_work.circle_id')
+      .select(
+        't_work.id', 't_work.created_at', 't_work.updated_at',
+        't_work.title', 't_work.circle_id', 't_circle.name',
+        't_work.nsfw', 't_work.release',
+        't_work.dl_count', 't_work.price', 't_work.review_count',
+        't_work.rate_count', 't_work.rate_average_2dp',
+        't_work.rate_count_detail', 't_work.rank')
+      .where('t_work.id', id)
+      .first();
 
-      const ratingSubQuery = knex('t_review')
-      .select(['t_review.work_id', 't_review.rating AS userRating', 't_review.review_text', 't_review.progress', knex.raw('strftime(\'%Y-%m-%d %H-%M-%S\', t_review.updated_at, \'localtime\') AS updated_at'), 't_review.user_name'])
-      .join('t_work', 't_work.id', 't_review.work_id')
-      .where('t_review.user_name', username).as('userrate');
+    if (!row) throw new Error(`There is no work with id ${id} in the database.`);
 
-      const histroyQuery = knex('t_play_histroy')
-        .select([
-          't_play_histroy.work_id',
-          't_play_histroy.state AS state',
-          't_play_histroy.updated_at AS play_updated_at'
-        ])
-        .join('t_work', 't_work.id', 't_play_histroy.work_id')
-        .where('t_play_histroy.user_name', "=", username).as('histroy');
-
-      let query = () => knex('staticMetadata')
-        .select(['staticMetadata.*', 'userrate.userRating', 'userrate.review_text', 'userrate.progress', 'userrate.updated_at', 'userrate.user_name', 'histroy.state', 'histroy.play_updated_at'])
-        .leftJoin(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id')
-        .leftJoin(histroyQuery, 'histroy.work_id', 'staticMetadata.id')
-        .where('id', '=', id);
-
-      const work = await query();
-      if (work.length === 0) throw new Error(`There is no work with id ${id} in the database.`);
-      return work;
+    const assembled = await assembleWorks([row], { username, reviewFields: true, historyFields: true });
+    return assembled;
   };
 
   /**
@@ -584,96 +683,226 @@ const makeQueries = (knex) => {
 
   /**
    * Returns list of works by circle, tag, VA, illustrator, script writer or series.
-   * @param {Number} id Which id to filter by.
-   * @param {String} field Which field to filter by.
+   * Now async — returns { works, totalCount }.
+   * @param {Object} opts
+   * @param {Number} [opts.id] - filter id (for field-specific queries)
+   * @param {String} [opts.field] - 'circle' | 'tag' | 'va' | 'illustrator' | 'script_writer' | 'series'
+   * @param {String} [opts.username='']
+   * @param {Number} [opts.nsfw=0] - 0=all, 1=全年龄, 2=R18
+   * @param {String} [opts.order='release'] - sort column; 'rating' for userRating; 'random'/'betterRandom'
+   * @param {String} [opts.sort='desc']
+   * @param {Number} [opts.limit] - page size; omit for all rows
+   * @param {Number} [opts.offset]
+   * @param {Number} [opts.seed] - shuffle seed for random order
+   * @returns {Promise<{works: Object[], totalCount: Array<{count: number}>}>}
    */
-  const getWorksBy = ({id, field, username = ''} = {}) => {
-    let workIdQuery;
-    const ratingSubQuery = knex('t_review')
-      .select(['t_review.work_id', 't_review.rating'])
-      .join('t_work', 't_work.id', 't_review.work_id')
-      .where('t_review.user_name', username).as('userrate');
+  const getWorksBy = async ({id, field, username = '', nsfw = 0, order = 'release', sort = 'desc', limit, offset, seed} = {}) => {
+    // Build the core query (t_work ⋈ t_circle)
+    let coreQ = knex('t_work')
+      .join('t_circle', 't_circle.id', 't_work.circle_id')
+      .select(
+        't_work.id', 't_work.created_at', 't_work.updated_at',
+        't_work.title', 't_work.circle_id', 't_circle.name',
+        't_work.nsfw', 't_work.release',
+        't_work.dl_count', 't_work.price', 't_work.review_count',
+        't_work.rate_count', 't_work.rate_average_2dp',
+        't_work.rate_count_detail', 't_work.rank');
 
-    switch (field) {
-      case 'circle':
-        return knex('staticMetadata').select(['staticMetadata.*', 'userrate.rating AS userRating'])
-          .leftJoin(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id')
-          .where('circle_id', '=', id);
-
-      case 'tag':
-        workIdQuery = knex('r_tag_work').select('work_id').where('tag_id', '=', id);
-        return knex('staticMetadata').select(['staticMetadata.*', 'userrate.rating AS userRating'])
-          .leftJoin(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id')
-          .where('id', 'in', workIdQuery);
-
-      case 'va':
-        workIdQuery = knex('r_va_work').select('work_id').where('va_id', '=', id);
-        return knex('staticMetadata').select(['staticMetadata.*', 'userrate.rating AS userRating'])
-          .leftJoin(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id')
-          .where('id', 'in', workIdQuery);
-
-      case 'illustrator':
-        workIdQuery = knex('r_illustrator_work').select('work_id').where('illustrator_id', '=', id);
-        return knex('staticMetadata').select(['staticMetadata.*', 'userrate.rating AS userRating'])
-          .leftJoin(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id')
-          .where('id', 'in', workIdQuery);
-
-      case 'script_writer':
-        workIdQuery = knex('r_script_writer_work').select('work_id').where('script_writer_id', '=', id);
-        return knex('staticMetadata').select(['staticMetadata.*', 'userrate.rating AS userRating'])
-          .leftJoin(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id')
-          .where('id', 'in', workIdQuery);
-
-      case 'series':
-        workIdQuery = knex('r_series_work').select('work_id').where('series_id', '=', id);
-        return knex('staticMetadata').select(['staticMetadata.*', 'userrate.rating AS userRating'])
-          .leftJoin(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id')
-          .where('id', 'in', workIdQuery);
-
-      default:
-        return knex('staticMetadata').select(['staticMetadata.*', 'userrate.rating AS userRating'])
-          .leftJoin(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id');
+    // Apply field filter
+    if (field) {
+      switch (field) {
+        case 'circle':
+          coreQ = coreQ.where('t_work.circle_id', id);
+          break;
+        case 'tag':
+          coreQ = coreQ.whereIn('t_work.id', knex('r_tag_work').select('work_id').where('tag_id', id));
+          break;
+        case 'va':
+          coreQ = coreQ.whereIn('t_work.id', knex('r_va_work').select('work_id').where('va_id', id));
+          break;
+        case 'illustrator':
+          coreQ = coreQ.whereIn('t_work.id', knex('r_illustrator_work').select('work_id').where('illustrator_id', id));
+          break;
+        case 'script_writer':
+          coreQ = coreQ.whereIn('t_work.id', knex('r_script_writer_work').select('work_id').where('script_writer_id', id));
+          break;
+        case 'series':
+          coreQ = coreQ.whereIn('t_work.id', knex('r_series_work').select('work_id').where('series_id', id));
+          break;
+        default:
+          break;
+      }
     }
+
+    // Apply nsfw filter
+    coreQ = nsfwFilter(nsfw, coreQ);
+
+    // Compute totalCount
+    const countRow = await coreQ.clone().count('t_work.id as count').first();
+    const totalCount = [{ count: countRow ? countRow.count : 0 }];
+
+    // Handle special order modes
+    let works = [];
+    if (order === 'random') {
+      const seedVal = seed || 7;
+      const rows = await coreQ.clone()
+        .orderBy(knex.raw('t_work.id % ?', seedVal))
+        .limit(limit)
+        .offset(offset || 0);
+      works = await assembleWorks(rows, { username });
+    } else if (order === 'betterRandom') {
+      const rows = await coreQ.clone()
+        .orderBy(knex.raw('random()'))
+        .limit(1);
+      works = await assembleWorks(rows, { username });
+    } else {
+      // Standard ordering — may need userrate for 'rating' order
+      let orderedQ = coreQ.clone();
+      if (order === 'rating') {
+        // LEFT JOIN userrate so unrated works still appear (with null rating)
+        const userrateSub = knex('t_review')
+          .select('work_id', 'rating as userRating')
+          .where('user_name', username)
+          .as('userrate');
+        orderedQ = orderedQ
+          .leftJoin(userrateSub, 'userrate.work_id', 't_work.id')
+          .select('userrate.userRating')
+          .orderBy('userRating', sort);
+      } else {
+        orderedQ = orderedQ.orderBy(`t_work.${order}`, sort);
+      }
+      orderedQ = orderedQ.orderBy([{ column: 't_work.release', order: 'desc' }, { column: 't_work.id', order: 'desc' }]);
+
+      if (limit != null) {
+        orderedQ = orderedQ.limit(limit).offset(offset || 0);
+      }
+
+      const rows = await orderedQ;
+
+      // If we ordered by rating, userRating is already on the rows; assembleWorks passes it through
+      works = await assembleWorks(rows, { username });
+
+      // If userRating was selected via LEFT JOIN, it's already on the rows
+      if (order !== 'rating') {
+        // Batch-fetch user ratings for the page
+        const ids = works.map(w => w.id);
+        if (ids.length > 0) {
+          const ratings = await knex('t_review')
+            .select('work_id', 'rating as userRating')
+            .where('user_name', username)
+            .whereIn('work_id', ids);
+          const ratingMap = new Map(ratings.map(r => [r.work_id, r.userRating]));
+          for (const w of works) {
+            w.userRating = ratingMap.get(w.id) || null;
+          }
+        }
+      }
+    }
+
+    return { works, totalCount };
   };
 
   /**
-   * 根据关键字查询音声
-   * @param {String} keyword
+   * 根据关键字查询音声 (async, paged).
+   * @param {Object} opts
+   * @param {String} opts.keyword
+   * @param {String} [opts.username='admin']
+   * @param {Number} [opts.nsfw=0]
+   * @param {String} [opts.order='release']
+   * @param {String} [opts.sort='desc']
+   * @param {Number} [opts.limit]
+   * @param {Number} [opts.offset]
+   * @param {Number} [opts.seed]
+   * @returns {Promise<{works: Object[], totalCount: Array<{count: number}>}>}
    */
-  const getWorksByKeyWord = ({keyword, username = 'admin'} = {}) => {
-    const ratingSubQuery = knex('t_review')
-    .select(['t_review.work_id', 't_review.rating'])
-    .join('t_work', 't_work.id', 't_review.work_id')
-    .where('t_review.user_name', username).as('userrate');
+  const getWorksByKeyWord = async ({keyword, username = 'admin', nsfw = 0, order = 'release', sort = 'desc', limit, offset, seed} = {}) => {
+    let coreQ = knex('t_work')
+      .join('t_circle', 't_circle.id', 't_work.circle_id')
+      .select(
+        't_work.id', 't_work.created_at', 't_work.updated_at',
+        't_work.title', 't_work.circle_id', 't_circle.name',
+        't_work.nsfw', 't_work.release',
+        't_work.dl_count', 't_work.price', 't_work.review_count',
+        't_work.rate_count', 't_work.rate_average_2dp',
+        't_work.rate_count_detail', 't_work.rank');
 
     const workid = keyword.match(/((R|r)(J|j))?(\d{6,8})/) ? keyword.match(/((R|r)(J|j))?(\d{6,8})/)[4] : '';
     if (workid) {
-      return knex('staticMetadata').select(['staticMetadata.*', 'userrate.rating AS userRating'])
-        .leftJoin(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id')
-        .where('id', '=', workid);
+      coreQ = coreQ.where('t_work.id', workid);
+    } else {
+      const circleIdQuery = knex('t_circle').select('id').where('name', 'like', `%${keyword}%`);
+      const tagIdQuery = knex('t_tag').select('id').where('name', 'like', `%${keyword}%`);
+      const vaIdQuery = knex('t_va').select('id').where('name', 'like', `%${keyword}%`);
+      const illustratorIdQuery = knex('t_illustrator').select('id').where('name', 'like', `%${keyword}%`);
+      const scriptWriterIdQuery = knex('t_script_writer').select('id').where('name', 'like', `%${keyword}%`);
+      const seriesIdQuery = knex('t_series').select('id').where('name', 'like', `%${keyword}%`);
+
+      const workIdQuery = knex('r_tag_work').select('work_id').where('tag_id', 'in', tagIdQuery).union([
+        knex('r_va_work').select('work_id').where('va_id', 'in', vaIdQuery),
+        knex('r_illustrator_work').select('work_id').where('illustrator_id', 'in', illustratorIdQuery),
+        knex('r_script_writer_work').select('work_id').where('script_writer_id', 'in', scriptWriterIdQuery),
+        knex('r_series_work').select('work_id').where('series_id', 'in', seriesIdQuery),
+      ]);
+
+      coreQ = coreQ
+        .where('t_work.title', 'like', `%${keyword}%`)
+        .orWhere('t_work.circle_id', 'in', circleIdQuery)
+        .orWhere('t_work.id', 'in', workIdQuery);
     }
 
-    const circleIdQuery = knex('t_circle').select('id').where('name', 'like', `%${keyword}%`);
+    coreQ = nsfwFilter(nsfw, coreQ);
 
-    const tagIdQuery = knex('t_tag').select('id').where('name', 'like', `%${keyword}%`);
-    const vaIdQuery = knex('t_va').select('id').where('name', 'like', `%${keyword}%`);
-    const illustratorIdQuery = knex('t_illustrator').select('id').where('name', 'like', `%${keyword}%`);
-    const scriptWriterIdQuery = knex('t_script_writer').select('id').where('name', 'like', `%${keyword}%`);
-    const seriesIdQuery = knex('t_series').select('id').where('name', 'like', `%${keyword}%`);
+    const countRow = await coreQ.clone().count('t_work.id as count').first();
+    const totalCount = [{ count: countRow ? countRow.count : 0 }];
 
-    const workIdQuery = knex('r_tag_work').select('work_id').where('tag_id', 'in', tagIdQuery).union([
-      knex('r_va_work').select('work_id').where('va_id', 'in', vaIdQuery),
-      knex('r_illustrator_work').select('work_id').where('illustrator_id', 'in', illustratorIdQuery),
-      knex('r_script_writer_work').select('work_id').where('script_writer_id', 'in', scriptWriterIdQuery),
-      knex('r_series_work').select('work_id').where('series_id', 'in', seriesIdQuery),
-    ]);
+    let works = [];
+    if (order === 'random') {
+      const seedVal = seed || 7;
+      const rows = await coreQ.clone()
+        .orderBy(knex.raw('t_work.id % ?', seedVal))
+        .limit(limit)
+        .offset(offset || 0);
+      works = await assembleWorks(rows, { username });
+    } else {
+      let orderedQ = coreQ.clone();
+      if (order === 'rating') {
+        const userrateSub = knex('t_review')
+          .select('work_id', 'rating as userRating')
+          .where('user_name', username)
+          .as('userrate');
+        orderedQ = orderedQ
+          .leftJoin(userrateSub, 'userrate.work_id', 't_work.id')
+          .select('userrate.userRating')
+          .orderBy('userRating', sort);
+      } else {
+        orderedQ = orderedQ.orderBy(`t_work.${order}`, sort);
+      }
+      orderedQ = orderedQ.orderBy([{ column: 't_work.release', order: 'desc' }, { column: 't_work.id', order: 'desc' }]);
 
+      if (limit != null) {
+        orderedQ = orderedQ.limit(limit).offset(offset || 0);
+      }
 
-    return knex('staticMetadata').select(['staticMetadata.*', 'userrate.rating AS userRating'])
-      .leftJoin(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id')
-      .where('title', 'like', `%${keyword}%`)
-      .orWhere('circle_id', 'in', circleIdQuery)
-      .orWhere('id', 'in', workIdQuery);
+      const rows = await orderedQ;
+      works = await assembleWorks(rows, { username });
+
+      // Batch-fetch user ratings if not already joined
+      if (order !== 'rating') {
+        const ids = works.map(w => w.id);
+        if (ids.length > 0) {
+          const ratings = await knex('t_review')
+            .select('work_id', 'rating as userRating')
+            .where('user_name', username)
+            .whereIn('work_id', ids);
+          const ratingMap = new Map(ratings.map(r => [r.work_id, r.userRating]));
+          for (const w of works) {
+            w.userRating = ratingMap.get(w.id) || null;
+          }
+        }
+      }
+    }
+
+    return { works, totalCount };
   };
 
   /**
@@ -780,49 +1009,70 @@ const makeQueries = (knex) => {
 
   // 读取星标及评语 + 作品元数据
   const getWorksWithReviews = async ({username = '', limit = 1000, offset = 0, orderBy = 'release', sortOption = 'desc', filter} = {}) => {
-    let works = [];
-    let totalCount = 0;
-
-    const ratingSubQuery = knex('t_review')
-    .select(['t_review.work_id', 't_review.rating AS userRating', 't_review.review_text', 't_review.progress', knex.raw('strftime(\'%Y-%m-%d %H-%M-%S\', t_review.updated_at, \'localtime\') AS updated_at'), 't_review.user_name'])
-    .join('t_work', 't_work.id', 't_review.work_id')
-    .where('t_review.user_name', username).as('userrate');
-
-    let query = () => knex('staticMetadata')
-      .select(['staticMetadata.*', 'userrate.userRating', 'userrate.review_text', 'userrate.progress', 'userrate.updated_at', 'userrate.user_name'])
-      .join(ratingSubQuery, 'userrate.work_id', 'staticMetadata.id')
-      .orderBy(orderBy, sortOption).orderBy([{ column: 'release', order: 'desc'}, { column: 'id', order: 'desc' }]);
+    let coreQ = knex('t_work')
+      .join('t_review', function() {
+        this.on('t_review.work_id', '=', 't_work.id')
+          .andOn('t_review.user_name', '=', knex.raw('?', [username]));
+      })
+      .join('t_circle', 't_circle.id', 't_work.circle_id')
+      .select(
+        't_work.id', 't_work.created_at', 't_work.updated_at',
+        't_work.title', 't_work.circle_id', 't_circle.name',
+        't_work.nsfw', 't_work.release',
+        't_work.dl_count', 't_work.price', 't_work.review_count',
+        't_work.rate_count', 't_work.rate_average_2dp',
+        't_work.rate_count_detail', 't_work.rank',
+        't_review.rating as userRating', 't_review.review_text',
+        't_review.progress',
+        knex.raw("strftime('%Y-%m-%d %H-%M-%S', t_review.updated_at, 'localtime') AS updated_at"),
+        't_review.user_name');
 
     if (filter) {
-      totalCount = await query().where('progress', '=', filter).count('id as count');
-      works = await query().where('progress', '=', filter).limit(limit).offset(offset);
-    } else {
-      totalCount = await query().count('id as count');
-      works = await query().limit(limit).offset(offset);
+      coreQ = coreQ.where('t_review.progress', filter);
     }
+
+    // Order by
+    let orderCol;
+    if (orderBy === 'rating') {
+      orderCol = 't_review.rating';
+    } else {
+      orderCol = `t_work.${orderBy}`;
+    }
+    coreQ = coreQ.orderBy(orderCol, sortOption)
+      .orderBy([{ column: 't_work.release', order: 'desc' }, { column: 't_work.id', order: 'desc' }]);
+
+    // Compute totalCount
+    const countRow = await coreQ.clone().count('t_work.id as count').first();
+    const totalCount = [{ count: countRow ? countRow.count : 0 }];
+
+    const rows = await coreQ.clone().limit(limit).offset(offset);
+    const works = await assembleWorks(rows, { username });
 
     return {works, totalCount};
   };
 
   const getPlayHistroy = async ({username = '', sortOption = 'desc', limit = 1000, offset = 0}) => {
-    let works = [];
-    let totalCount = 0;
-    const histroyQuery = knex('t_play_histroy')
-      .select([
-        't_play_histroy.work_id',
-        't_play_histroy.state AS state',
-        't_play_histroy.updated_at AS play_updated_at'
-      ])
-      .join('t_work', 't_work.id', 't_play_histroy.work_id')
-      .where('t_play_histroy.user_name', "=", username).as('histroy');
+    const coreQ = knex('t_work')
+      .join('t_play_histroy', function() {
+        this.on('t_play_histroy.work_id', '=', 't_work.id')
+          .andOn('t_play_histroy.user_name', '=', knex.raw('?', [username]));
+      })
+      .join('t_circle', 't_circle.id', 't_work.circle_id')
+      .select(
+        't_work.id', 't_work.created_at', 't_work.updated_at',
+        't_work.title', 't_work.circle_id', 't_circle.name',
+        't_work.nsfw', 't_work.release',
+        't_work.dl_count', 't_work.price', 't_work.review_count',
+        't_work.rate_count', 't_work.rate_average_2dp',
+        't_work.rate_count_detail', 't_work.rank',
+        't_play_histroy.state', 't_play_histroy.updated_at as play_updated_at')
+      .orderBy('t_play_histroy.updated_at', sortOption);
 
-    const query = () => knex('staticMetadata')
-      .select(['staticMetadata.*', 'histroy.state', 'histroy.play_updated_at'])
-      .join(histroyQuery, 'histroy.work_id', 'staticMetadata.id')
-      .orderBy('play_updated_at', sortOption);
+    const countRow = await coreQ.clone().count('t_work.id as count').first();
+    const totalCount = [{ count: countRow ? countRow.count : 0 }];
 
-    totalCount = await query().count('id as count');
-    works = await query().limit(limit).offset(offset);
+    const rows = await coreQ.clone().limit(limit).offset(offset);
+    const works = await assembleWorks(rows, { username });
 
     return {works, totalCount};
   };
@@ -863,6 +1113,7 @@ const makeQueries = (knex) => {
   }
 
   return {
+    nsfwFilter,
     insertWorkMetadata, getWorkMetadata, removeWork, getWorksBy, getWorksByKeyWord, updateWorkMetadata,
     editWorkMetadata,
     getLabels, getMetadata,
