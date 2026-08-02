@@ -171,7 +171,7 @@ All routes mounted under `/api`:
 ## 3. Critical Conventions & Gotchas
 
 - **SQLite:** No concurrent writes. Busy timeout configured. Foreign keys enabled via `PRAGMA foreign_keys = ON` in `db.js`.
-- **Migrations:** Sequential, timestamp-prefixed files in `database/migrations/`. Run automatically on startup via `knex-migrate.js` — **but only when the app version in `package.json` is newer than the `version` stored in the user's `config.json`** (see `init.js`). This means a new migration is silently skipped on existing installs until the version is bumped: **whenever you add a migration, the next release must include a version bump** (`npm run release:*` from the repo root), or existing users will never run it. `dbVersion` in `schema.js` must always equal the latest migration's timestamp prefix (asserted by `test/migration..js`).
+- **Migrations:** Sequential, timestamp-prefixed files in `database/migrations/`. Run automatically on **every** startup via `knex-migrate.js` (`init.js`); umzug tracks executed migrations in the `knex_migrations` table, so only pending ones run (idempotent — no version bump required for a migration to be picked up). The app-version comparison in `init.js` gates only the version-keyed upgrade tasks (`applyFix`/`fixMigrations` in `upgrade.js`, `updateConfig`) — those must run **before** `up` because they can mark migrations as executed (`skipAll`). `dbVersion` in `schema.js` must always equal the latest migration's timestamp prefix (asserted by `test/migration..js`).
 - **Config write protection:** `setConfig()` always overwrites `production`, `md5secret`, `jwtsecret` with current values — these cannot be changed through the admin panel.
 - **Error handling:** JWT errors → 401 with `WWW-Authenticate` header. Missing DB tables → 500 with "数据库结构尚未建立". Production mode sanitizes error messages (no stack traces).
 - **Child process IPC:** Uses `process.on('message')` / `process.send()`. Parent (Socket.IO) relays events to all connected clients.
@@ -270,8 +270,7 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 1. Create file in `database/migrations/` with timestamp prefix (e.g., `20260802000000_my_migration.js`).
 2. Export `up` and `down` functions following existing patterns.
 3. Bump `dbVersion` in `database/schema.js` to the new timestamp prefix and update `createSchema` so a fresh DB matches the migrated one.
-4. **Bump the app version before release** (`npm run release:*` from the repo root). Migrations only run on startup when `package.json` version > the `version` in the user's `config.json` (`init.js` gate) — without a bump, existing installs silently skip the new migration. (This was forgotten once for `20260801000000_drop_staticmetadata_view`.)
-5. Migration runs automatically on next server startup, logging `Doing up on <file>` and `数据库迁移完成`.
+4. Migration runs automatically on next server startup, logging `Doing migrate on <file>` (and `数据库迁移完成` when the startup is also a version upgrade). Pending migrations run on every boot regardless of version bumps — the `knex_migrations` table is the source of truth, not the app version.
 
 ### Adding a new scraper source
 1. Create scraper module in `scraper/` following `dlsite.js` pattern.

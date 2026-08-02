@@ -41,20 +41,31 @@ const initApp = async () => {
   }
 
   // 迁移或创建数据库结构
-  if (databaseExist && compareVersions.compare(currentVersion, configVersion, '>')) {
-    console.log('升级中');
+  if (databaseExist) {
+    const isUpgrade = compareVersions.compare(currentVersion, configVersion, '>');
     const oldVersion = config.version;
     try {
-      await applyFix(oldVersion);
-      await fixMigrations();
+      if (isUpgrade) {
+        console.log('升级中');
+        // Version-keyed fixes. These may mark migrations as executed
+        // (skipAll) or run specific ones, so they must precede `up`.
+        await applyFix(oldVersion);
+        await fixMigrations();
+      }
+      // Always run pending migrations on startup. Umzug tracks executed
+      // migrations in the knex_migrations table, so `up` is idempotent.
+      // Deliberately NOT gated on the version bump above: a forgotten bump
+      // must never cause a migration to be silently skipped.
       await runMigrations();
-      console.log('数据库迁移完成');
-      updateConfig();
+      if (isUpgrade) {
+        console.log('数据库迁移完成');
+        updateConfig();
+      }
     } catch (error) {
       console.log('升级迁移过程中出错，请在GitHub issues中报告作者');
       console.error(error);
     }
-  } else if (!databaseExist) {
+  } else {
     initDatabaseDir();
     await createSchema();
     try { // 创建内置的管理员账号
