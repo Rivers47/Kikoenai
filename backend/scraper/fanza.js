@@ -32,6 +32,7 @@ const scrapeWorkMetadataFromFanza = (cid) => new Promise((resolve, reject) => {
     dl_count: null,
     rank: null,
     rate_count_detail: null,
+    coverUrls: null,
   };
 
   axios.retryGet(url, {
@@ -212,6 +213,19 @@ const scrapeWorkMetadataFromFanza = (cid) => new Promise((resolve, reject) => {
             work.rate_count = parseInt(countMatch3[1].replace(/,/g, ''), 10);
           }
         }
+      }
+
+      // Cover URLs. The asset path segment varies by content type
+      // (digital/doujin, digital/cg_game, ...), so a hardcoded path fetches
+      // the wrong image; og:image always points at the package (pl) image.
+      // coverUrls is consumed by the scanner's cover download and is not
+      // stored in the database.
+      const ogImage = $('meta[property="og:image"]').attr('content');
+      if (ogImage) {
+        work.coverUrls = {
+          main: ogImage,
+          sam: ogImage.replace(/pl\.jpg(\?.*)?$/, 'ps.jpg$1'),
+        };
       }
 
       if (!work.title && work.tags.length === 0 && work.vas.length === 0) {

@@ -208,7 +208,9 @@ async function getMetadata(id, rootFolderName, dir) {
     }
 
     LOG.task.info(id, '元数据成功添加到数据库.');
-    return 'added';
+    // Return the metadata object (processFolder needs metadata.coverUrls for
+    // the cover download); callers only check for 'failed'.
+    return metadata;
   }
 
   // DLsite branch
@@ -336,17 +338,23 @@ async function getCoverImage(cover_for_id, cover_from_id, types) {
  * Download cover images from Fanza (DMM) for a Fanza work.
  * @param {String} id Work id (e.g. 'd_215444')
  * @param {Array} types img types: ['main', 'sam', '240x240']
+ * @param {Object} [coverUrls] URLs scraped from the work page ({ main, sam }).
+ *        The asset path segment varies by content type (digital/doujin,
+ *        digital/cg_game, ...), so prefer these over the guessed fallback.
  * @returns {Promise<String>} 'added' or 'failed'
  */
-async function getFanzaCoverImage(id, types) {
+async function getFanzaCoverImage(id, types, coverUrls) {
   const cid = id; // e.g. d_215444
+  // Fallback only: correct for many, but not all, Fanza doujin works.
+  const mainUrl = (coverUrls && coverUrls.main) || `https://doujin-assets.dmm.co.jp/digital/doujin/${cid}/${cid}pl.jpg`;
+  const samUrl = (coverUrls && coverUrls.sam) || `https://doujin-assets.dmm.co.jp/digital/doujin/${cid}/${cid}ps.jpg`;
   LOG.task.info(id, `从 Fanza 下载封面...`);
   const results = await Promise.all(types.map(async (type) => {
     let url;
     if (type === 'main') {
-      url = `https://doujin-assets.dmm.co.jp/digital/doujin/${cid}/${cid}pl.jpg`;
+      url = mainUrl;
     } else if (type === 'sam' || type === '240x240') {
-      url = `https://doujin-assets.dmm.co.jp/digital/doujin/${cid}/${cid}ps.jpg`;
+      url = samUrl;
     } else {
       return 'failed';
     }
@@ -435,7 +443,8 @@ async function processFolder(folder) {
     // 不要在乎图片是否下载成功，dlsite上一些老作品已经没有图片了，会下载失败
     // 只要元数据插入成功就行
     if (isFanza) {
-      coverResult = await getFanzaCoverImage(workId, coverTypes);
+      // result is the inserted metadata object for Fanza works
+      coverResult = await getFanzaCoverImage(workId, coverTypes, result.coverUrls);
     } else {
       coverResult = await getCoverImageForTranslated(workId, coverTypes);
     }

@@ -55,6 +55,7 @@ const printWork = (work) => {
   console.log(`dl_count:          ${work.dl_count}`);
   console.log(`rank:              ${work.rank}`);
   console.log(`rate_count_detail: ${work.rate_count_detail}`);
+  console.log(`coverUrls:         ${work.coverUrls ? JSON.stringify(work.coverUrls) : '(none)'}`);
   console.log('─'.repeat(60));
   console.log('Raw object:');
   console.dir(work, { depth: null });
