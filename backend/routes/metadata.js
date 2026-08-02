@@ -65,6 +65,10 @@ router.get('/tracks/:id',
         .where('id', '=', work_id)
         .first();
 
+      if (!work) {
+        res.status(404).send({error: `没有 id 为 "${work_id}" 的作品`});
+        return;
+      }
       const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
       if (rootFolder) {
         try {
@@ -312,6 +316,10 @@ router.post('/work/scan/:id',
         .select('root_folder', 'dir', 'memo')
         .where('id', '=', work_id)
         .first();
+      if (!work) {
+        res.status(404).send({error: `没有 id 为 "${work_id}" 的作品`});
+        return;
+      }
       const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
       if (!rootFolder) {
         res.status(500).send({error: "扫描作品文件失败，没有找到rootFolder: " + work.root_folder});

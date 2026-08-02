@@ -23,6 +23,10 @@ router.get('/stream/:id/:index',
       .where('id', '=', req.params.id)
       .first()
       .then((work) => {
+        if (!work) {
+          res.status(404).send({error: `没有 id 为 "${req.params.id}" 的作品`});
+          return;
+        }
         const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
         if (rootFolder) {
           getTrackList(req.params.id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo))
@@ -83,6 +87,10 @@ router.get('/download/:id/:index',
       .where('id', '=', req.params.id)
       .first()
       .then((work) => {
+        if (!work) {
+          res.status(404).send({error: `没有 id 为 "${req.params.id}" 的作品`});
+          return;
+        }
         const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
         if (rootFolder) {
           getTrackList(req.params.id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo))
@@ -126,6 +134,10 @@ router.get('/check-lrc/:id/:index',
       .where('id', '=', req.params.id)
       .first()
       .then((work) => {
+        if (!work) {
+          res.status(404).send({error: `没有 id 为 "${req.params.id}" 的作品`});
+          return;
+        }
         const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
         if (rootFolder) {
           getTrackList(req.params.id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo))
@@ -192,6 +204,10 @@ router.get('/small-img/:id/:index',
       .select('root_folder', 'dir')
       .where('id', '=', req.params.id)
       .first();
+    if (!work) {
+      res.status(404).send({error: `没有 id 为 "${req.params.id}" 的作品`});
+      return;
+    }
     const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
     if (rootFolder) {
       const tracks = await getTrackList(req.params.id, path.join(rootFolder.path, work.dir));
