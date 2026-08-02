@@ -362,6 +362,13 @@ async function getFanzaCoverImage(id, types, coverUrls) {
 
     try {
       const imageRes = await axios.retryGet(url, { responseType: "stream", retry: {} });
+      // DMM serves a 302 to a now_printing.jpg placeholder for nonexistent
+      // cover variants (axios follows it silently). Never save that as a cover.
+      const finalUrl = imageRes.request && imageRes.request.res && imageRes.request.res.responseUrl;
+      if (finalUrl && finalUrl.includes('now_printing')) {
+        LOG.task.warn(id, `封面 ${coverFileName(id, type)} 不存在（FANZA 返回了占位图，URL: ${url}）`);
+        return 'failed';
+      }
       await saveCoverImageToDisk(imageRes.data, id, type);
       LOG.task.info(id, `封面 ${coverFileName(id, type)} 下载成功.`);
       return 'added';
@@ -371,8 +378,8 @@ async function getFanzaCoverImage(id, types, coverUrls) {
     }
   }));
 
-  return results.includes("failed")
-      ? "failed"
+  return results.includes("failed") 
+      ? "failed" 
       : "added";
 }
 
