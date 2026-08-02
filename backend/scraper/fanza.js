@@ -222,13 +222,11 @@ const scrapeWorkMetadataFromFanza = (cid) => new Promise((resolve, reject) => {
       // stored in the database.
       const ogImage = $('meta[property="og:image"]').attr('content');
       if (ogImage) {
-        // og:image is the medium "pr" (preview) image; the CDN serves the
-        // large "pl" and small "ps" variants at the same path.
-        const toVariant = (url, suffix) => url.replace(/p[rls]\.jpg(\?.*)?$/, `${suffix}.jpg$1`);
-        work.coverUrls = {
-          main: toVariant(ogImage, 'pl'),
-          sam: toVariant(ogImage, 'ps'),
-        };
+        // og:image is the "pr" (preview) image. Fanza doujin only serves
+        // pl and pr variants (there is no ps), and the two are the same
+        // image, so normalize to pl and use it for both cover types.
+        const plUrl = ogImage.replace(/p[rl]\.jpg(\?.*)?$/, 'pl.jpg$1');
+        work.coverUrls = { main: plUrl, sam: plUrl };
       }
 
       if (!work.title && work.tags.length === 0 && work.vas.length === 0) {
