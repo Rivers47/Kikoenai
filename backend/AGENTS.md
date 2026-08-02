@@ -114,7 +114,6 @@ SQLite3 via Knex.js with the following tables:
 | `t_review` | Reviews & progress | `user_name`, `work_id`, `rating`, `review_text`, `progress` |
 | `t_play_histroy` | Playback state | `user_name`, `work_id`, `state` (JSON) |
 
-
 ### 2.4 Configuration (`config.js`)
 
 - Config file: `config/config.json` (auto-created with defaults on first run)
@@ -281,7 +280,7 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 - **Linting:** ESLint (node plugin)
 - **Tests:** Located in `test/` directory:
   - `edit-metadata.js` — covers the `PUT /api/work/:id` flow and `db.editWorkMetadata` (uses shared `db-test.sqlite3` singleton)
-  - `benchmark.js` — DB query benchmark; Skips if `backend/sqlite/db.sqlite3` is missing/empty; 
+  - `benchmark.js` — DB query benchmark; Skips if `backend/sqlite/db.sqlite3` is missing/empty;
 - **Run:** `npm test` (sets `NODE_ENV=test`)
 
 ---
