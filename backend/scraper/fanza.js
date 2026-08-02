@@ -2,6 +2,10 @@ const cheerio = require('cheerio');
 const axios = require('./axios');
 const { nameToUUID } = require('./utils');
 
+// The ジャンル row mixes in storefront section and sale-status markers that
+// carry no genre information; skip them.
+const IGNORED_TAGS = new Set(['旧作', '新作', '成人向け', '男性向け', '女性向け']);
+
 /**
  * Scrape work metadata from Fanza (DMM) doujin detail page.
  * @param {string} cid Content ID, e.g. 'd_215444'
@@ -73,7 +77,7 @@ const scrapeWorkMetadataFromFanza = (cid) => new Promise((resolve, reject) => {
           case 'ジャンル': {
             valueEl.find('a').each(function () {
               const tagName = $(this).text().trim();
-              if (tagName) {
+              if (tagName && !IGNORED_TAGS.has(tagName)) {
                 work.tags.push({ name: tagName });
               }
             });
