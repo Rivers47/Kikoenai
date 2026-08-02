@@ -56,7 +56,8 @@
 │   │   ├── WorkCard.vue                  # Work card (grid mode)
 │   │   ├── OldWorkCard.vue               # Legacy work card style
 │   │   ├── WorkListItem.vue              # Work list item (list mode)
-│   │   ├── WorkDetails.vue               # Work detail panel (metadata, review, rating)
+│   │   ├── WorkDetails.vue               # Work detail panel (metadata, review, rating; opens EditMetadata for admins)
+│   │   ├── EditMetadata.vue             # Admin-only metadata edit dialog (PUT /api/work/:id)
 │   │   ├── WorkTree.vue                  # Track tree view for a work
 │   │   ├── CoverSFW.vue                  # Cover image with NSFW blur
 │   │   ├── RecentWorks.vue               # Recently played works section
@@ -214,7 +215,7 @@ MainLayout
     ? 'Bearer ' + LocalStorage.getItem('jwt-token')
     : ''
   ```
-- **WebSocket (Socket.IO):** Used for real-time scan progress updates. The client connects after login and listens for scanner events.
+- **WebSocket (Socket.IO):** Used for real-time scan progress updates. The client connects after auth and **both emits and listens**: it emits `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_LYRIC_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`, and listens for `SCAN_INIT_STATE`, `SCAN_TASKS`, `SCAN_FAILED_TASKS`, `SCAN_MAIN_LOGS`, `SCAN_RESULTS`, `SCAN_FINISHED`, `SCAN_ERROR` (all handled in `pages/Dashboard/Scanner.vue`).
 - **Public config:** `GET /api/config/shared` retrieves `rewindSeekTime` and `forwardSeekTime` on app mount (`MainLayout.vue` → `readSharedConfig()`).
 
 ### 2.7 Key Frontend Features
@@ -226,7 +227,8 @@ MainLayout
 4. **Dark Mode:** Toggled via Quasar's `Dark` plugin, persisted in browser across sessions.
 5. **Progress Tracking:** Users can mark works as `listening`, `listened`, `replay`, or `postponed`.
 6. **Work Card Variants:** Two card styles — modern `WorkCard.vue` (hover-reveal tags) and legacy `OldWorkCard.vue` (always-show tags), toggleable via LocalStorage key `old_work_card_ui_style_key`.
-7. **Keyboard Shortcuts:** Space for play/pause, arrow keys for seeking, etc. (handled in AudioPlayer).
+7. **Metadata Editing (admin only):** `WorkDetails.vue` shows an "编辑元数据" button only when the current user is an admin (computed `isAdmin`: auth disabled, or `group === 'administrator'`, or `name === 'admin'`). It opens `EditMetadata.vue`, which PUTs to `/api/work/:id` with `{title, nsfw, release, circle, tags[], vas[], illustrators[], scriptWriters[], series}`. Tag/VA/illustrator/script-writer/series inputs use Quasar `q-select` with `use-input` autocomplete, fetching options from `/api/tags`, `/api/vas`, `/api/illustrators`, `/api/script_writers`, `/api/seriess` (note the irregular plural `seriess`). On save, the dialog emits `saved` and `WorkDetails.vue` re-reads the work metadata.
+8. **Keyboard Shortcuts:** Space for play/pause, arrow keys for seeking, etc. (handled in AudioPlayer).
 
 ---
 
@@ -298,7 +300,12 @@ npm test           # Run ESLint
 | `/api/histroy/:id` | GET/POST | `Work.vue` | Playback state (history) |
 | `/api/config/shared` | GET | `MainLayout.vue` | Public config (seek times) |
 | `/api/version` | GET | `MainLayout.vue` | Version + update info |
-| `/api/scanner` | POST | `Scanner.vue` | Trigger library scan |
+| `/api/work/:id` | PUT | `EditMetadata.vue` | Manually edit work metadata (admin only) |
+| `/api/illustrators` | GET | `EditMetadata.vue` | List illustrators (autocomplete) |
+| `/api/script_writers` | GET | `EditMetadata.vue` | List script writers (autocomplete) |
+| `/api/seriess` | GET | `EditMetadata.vue` | List series (autocomplete; irregular plural) |
+
+> **Note:** Library scanning is **not** a REST endpoint. `Scanner.vue` triggers scans over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN` / `KILL_SCAN_PROCESS`) and listens for the `SCAN_*` events.
 
 ---
 
@@ -308,7 +315,7 @@ Build output goes directly into `backend/dist/` (configured via `distDir` in `qu
 
 - **Workspace scripts:** `npm run dev:frontend` / `npm run build:frontend` from root.
 - **Dev proxy:** `quasar dev` proxies `/api` and `/socket.io` to `localhost:8888`.
-- **Socket.IO client:** Exposed globally as `$socket` (`src/boot/socket.io.js`), connects after auth. Listens for scan progress events only.
+- **Socket.IO client:** Exposed globally as `$socket` (`src/boot/socket.io.js`), connects after auth. Drives library scanning in `Scanner.vue` — emits `PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN` / `KILL_SCAN_PROCESS` / `ON_SCANNER_PAGE` and listens for `SCAN_INIT_STATE`, `SCAN_TASKS`, `SCAN_FAILED_TASKS`, `SCAN_MAIN_LOGS`, `SCAN_RESULTS`, `SCAN_FINISHED`, `SCAN_ERROR`.
 
 ---
 

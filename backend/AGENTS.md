@@ -31,12 +31,13 @@
 │   └── config.json          # Runtime config (auto-generated on first run)
 ├── covers/                  # Cached cover images
 ├── database/
-│   ├── db.js                # Knex instance, connection config
+│   ├── db.js                # Thin re-export: singleton knex + databaseExist + queries (via makeQueries)
+│   ├── queries.js           # makeQueries(knex) factory: all query functions bound to a knex instance
 │   ├── init.js              # App initialization (db creation, migration, config upgrade)
 │   ├── knexfile.js          # Knex config for migrations
 │   ├── knex-migrate.js      # Migration runner
-│   ├── migrations/          # DB migration files (timestamped, 17 migrations)
-│   ├── schema.js            # Full database schema (createSchema with all tables + views)
+│   ├── migrations/          # DB migration files (timestamped, 20 migrations)
+│   ├── schema.js            # Full database schema (createSchema with all tables)
 │   └── storage.js           # DB path resolution
 ├── dist/                    # Frontend build output (kikoeru-quasar)
 ├── filesystem/
@@ -97,17 +98,22 @@ SQLite3 via Knex.js with the following tables:
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
-| `t_work` | Voice works (audio albums) | `id`, `title`, `dir`, `circle_id`, `release`, `dl_count`, `price`, `rate_average_2dp`, `memo` (JSON) |
+| `t_work` | Voice works (audio albums) | `id`, `title`, `dir`, `circle_id`, `nsfw`, `release`, `dl_count`, `price`, `rate_average_2dp`, `memo` (JSON) |
 | `t_circle` | Circles (artist groups) | `id`, `name` |
 | `t_tag` | Tags | `id`, `name` |
 | `t_va` | Voice actors | `id` (UUID v5), `name` |
+| `t_illustrator` | Illustrators | `id` (UUID), `name` |
+| `t_script_writer` | Script writers | `id` (UUID), `name` |
+| `t_series` | Series (manual collections) | `id` (integer; **negative** for user-created), `name` |
 | `r_tag_work` | Tag-work many-to-many | `tag_id`, `work_id` |
 | `r_va_work` | VA-work many-to-many | `va_id`, `work_id` |
+| `r_illustrator_work` | Illustrator-work many-to-many | `illustrator_id`, `work_id` |
+| `r_script_writer_work` | Script-writer-work many-to-many | `script_writer_id`, `work_id` |
+| `r_series_work` | Series-work many-to-many | `series_id`, `work_id` |
 | `t_user` | Users | `name` (PK), `password`, `group` |
 | `t_review` | Reviews & progress | `user_name`, `work_id`, `rating`, `review_text`, `progress` |
 | `t_play_histroy` | Playback state | `user_name`, `work_id`, `state` (JSON) |
 
-**Important:** There is a view `staticMetadata` (defined in `schema.js`) that joins all work metadata (circle, VAs, tags) into a single queryable view. Many route queries use `raw` SQL against this view.
 
 ### 2.4 Configuration (`config.js`)
 
@@ -121,9 +127,9 @@ SQLite3 via Knex.js with the following tables:
 
 Scanning runs in a **child process** (`child_process.fork`) for isolation:
 
-1. **Socket.IO** in `socket.js` listens for `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_LYRIC_SCAN` events.
-2. It forks the appropriate scanner script (`scanner.js`, `updater.js`, or `workFileScanner.js`).
-3. The child process communicates via `process.send()` with events: `SCAN_INIT_STATE`, `SCAN_DONE`, `SCAN_ERROR`.
+1. **Socket.IO** in `socket.js` listens for client events: `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_LYRIC_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`.
+2. It forks the appropriate scanner script (`scanner.js`, `updater.js`, or `workFileScanner.js`); each child is bound to `scannerModules.js`.
+3. The child process communicates via `process.send()` with events: `SCAN_INIT_STATE`, `SCAN_TASKS`, `SCAN_FAILED_TASKS`, `SCAN_MAIN_LOGS`, `SCAN_RESULTS`, `SCAN_FINISHED`, `SCAN_ERROR`. The parent relays any `m.event` it receives from the child to all connected clients via `io.emit(m.event, m.payload)`.
 4. `scannerModules.js` contains the heavy lifting: reading directories, parsing file structures, scraping DLsite, and upserting into the DB.
 
 Only one scanner process can run at a time (guarded by `scanner` variable in `socket.js`).
@@ -146,7 +152,7 @@ All routes mounted under `/api`:
 | `version.js` | `/api/version/*` | App version, changelog |
 | `config.js` | `/api/config/*` | Get/set server config |
 | `media.js` | `/api/media/*` | Stream audio (range requests), list files, serve covers, download |
-| `metadata.js` | `/api/*` | List works, search, sort, filter, get tags/VAs |
+| `metadata.js` | `/api/*` | List works, search, sort, filter; list tags/VAs/illustrators/script writers/series; `PUT /api/work/:id` admin metadata edit |
 | `review.js` | `/api/review/*` | Create/update/delete reviews, ratings, progress |
 | `play_histroy.js` | `/api/histroy/*` | Save/load playback state |
 
@@ -161,11 +167,14 @@ All routes mounted under `/api`:
 ## 3. Critical Conventions & Gotchas
 
 - **SQLite:** No concurrent writes. Busy timeout configured. Foreign keys enabled via `PRAGMA foreign_keys = ON` in `db.js`.
-- **Migrations:** Sequential, timestamp-prefixed files in `database/migrations/`. Run automatically on startup via `knex-migrate.js`.
+- **Migrations:** Sequential, timestamp-prefixed files in `database/migrations/`. Run automatically on startup via `knex-migrate.js`.`dbVersion` in `schema.js` must always equal the latest migration's timestamp prefix (asserted by `test/migration..js`).
 - **Config write protection:** `setConfig()` always overwrites `production`, `md5secret`, `jwtsecret` with current values — these cannot be changed through the admin panel.
 - **Error handling:** JWT errors → 401 with `WWW-Authenticate` header. Missing DB tables → 500 with "数据库结构尚未建立". Production mode sanitizes error messages (no stack traces).
 - **Child process IPC:** Uses `process.on('message')` / `process.send()`. Parent (Socket.IO) relays events to all connected clients.
-- **Scanner lock file:** A lock file prevents concurrent scans. Check `lockFileExists` in version endpoint response.
+- **Scanner concurrency:** Only one scanner child process runs at a time, guarded by the in-memory `scanner` variable in `socket.js` (not a lock file). Subsequent `PERFORM_*` events are ignored while a scan is in progress.
+- **Update lock file:** `upgrade.js` maintains `update.lock` in the config folder for the one-time upgrade/migration process (e.g. `fixVA`). Its state is surfaced as `lockFileExists` in the `/api/version` response — this is unrelated to scan concurrency.
+- **Metadata editing (admin only):** `PUT /api/work/:id` (`routes/metadata.js`) is gated by `config.auth && req.user.name !== 'admin'` → 403. When `config.auth` is false, all requests act as admin and editing is unrestricted. The handler validates the body with `express-validator` and delegates to `db.editWorkMetadata(workId, data)`, which runs in a single Knex transaction and **replaces** (not merges) the tag/VA/illustrator/script-writer/series relationships for the work, then re-fetches via `db.getWorkMetadata`.
+- **Label id conventions:** `t_va`, `t_illustrator`, and `t_script_writer` use **UUID** ids, resolved/created by `resolveUUIDLabel(trx, table, name)` in `db.js`. `t_series` uses **integer** ids, and user-created series get **negative** ids generated by `resolveSeries(trx, name)`. When editing metadata, list elements are normalized to `{id?, name}`, trimmed, and de-duplicated by name; `id` is optional (the server resolves or creates the row).
 
 ---
 
@@ -207,6 +216,8 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/auth/me` | GET | Get current user + auth status |
 | `/api/auth/login` | POST | Authenticate, get JWT |
 | `/api/works` | GET | List/search works (supports pagination, sort, filter) |
+| `/api/search` | GET | Keyword search
+| `/api/:fields/:id/works` | GET | Works filtered
 | `/api/work/:id` | GET | Get work metadata + playback state |
 | `/api/tags` | GET | List all tags |
 | `/api/circles` | GET | List all circles |
@@ -214,11 +225,18 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/media/:id/:file` | GET | Stream audio file (supports Range) |
 | `/api/cover/:id` | GET | Get cover image |
 | `/api/files/:id` | GET | List files in a work |
+| `/api/review` | GET | List works the user has reviewed/rated/progress-marked
 | `/api/review/:id` | GET/POST/PUT/DELETE | Work reviews |
+| `/api/histroy` | GET | List works the user has playback history for
 | `/api/histroy/:id` | GET/POST | Playback state (history) |
 | `/api/config/shared` | GET | Public config (seek times) |
 | `/api/version` | GET | Version + update info |
-| `/api/scanner` | POST | Trigger library scan |
+| `/api/work/:id` | PUT | Manually edit work metadata — title, nsfw, release, circle, tags[], vas[], illustrators[], scriptWriters[], series (admin only) |
+| `/api/illustrators` | GET | List all illustrators (autocomplete for metadata editor) |
+| `/api/script_writers` | GET | List all script writers (autocomplete for metadata editor) |
+| `/api/seriess` | GET | List all series (autocomplete for metadata editor) |
+
+> **Note:** Library scanning is **not** a REST endpoint. The frontend triggers it over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN`) and listens for the `SCAN_*` events above. The plural-list route `/:field(circle\|tag\|va\|illustrator\|script_writer\|series)s/` powers the `/api/illustrators`, `/api/script_writers`, and `/api/seriess` endpoints above (note the irregular plural `seriess`).
 
 ---
 
@@ -227,7 +245,10 @@ The following endpoints are consumed by the `frontend/` package:
 The frontend builds directly into `backend/dist/` (configured via `distDir` in `frontend/quasar.config.js`) and is served as static content by Express.
 
 - **Workspace scripts:** `npm run dev:backend` / `npm start` from root.
-- **Socket.IO events:** Server emits scan progress events (`SCAN_INIT_STATE`, `SCAN_DONE`, `SCAN_ERROR`, `SCAN_PROGRESS`). Client emits none.
+- **Socket.IO events (scanning):**
+  - Client → server: `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_LYRIC_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`
+  - Server → client (relayed from the scanner child process): `SCAN_INIT_STATE`, `SCAN_TASKS`, `SCAN_FAILED_TASKS`, `SCAN_MAIN_LOGS`, `SCAN_RESULTS`, `SCAN_FINISHED`, `SCAN_ERROR`
+  - Scanning is **not** exposed over REST; there is no `/api/scanner` endpoint.
 
 ---
 
@@ -239,7 +260,7 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 3. Routes under `/api` are automatically protected by JWT middleware in `api.js`.
 
 ### Adding a database migration
-1. Create file in `database/migrations/` with timestamp prefix (e.g., `20240101000000_my_migration.js`).
+1. Create file in `database/migrations/` with timestamp prefix (e.g., `20260802000000_my_migration.js`).
 2. Export `up` and `down` functions following existing patterns.
 3. Migration runs automatically on next server startup.
 
@@ -258,7 +279,9 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 
 - **Framework:** Mocha + Chai
 - **Linting:** ESLint (node plugin)
-- **Tests:** Located in `test/` directory
+- **Tests:** Located in `test/` directory:
+  - `edit-metadata.js` — covers the `PUT /api/work/:id` flow and `db.editWorkMetadata` (uses shared `db-test.sqlite3` singleton)
+  - `benchmark.js` — DB query benchmark; Skips if `backend/sqlite/db.sqlite3` is missing/empty; 
 - **Run:** `npm test` (sets `NODE_ENV=test`)
 
 ---

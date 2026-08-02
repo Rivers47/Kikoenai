@@ -102,23 +102,10 @@ router.get('/works',
     const shuffleSeed = req.query.seed ? req.query.seed : 7;
 
     try {
-      const query = () => db.nsfwFilter(nsfw, db.getWorksBy({username: username}));
-      const totalCount = await query().count('id as count');
-
-      let works = null;
-
-      if (order === 'random') {
-        // 随机排序+分页 hack
-        works = await query().offset(offset).limit(PAGE_SIZE).orderBy(db.knex.raw('id % ?', shuffleSeed));
-      } else if (order === 'betterRandom') {
-        // 随心听专用，不支持分页
-        works = await query().limit(1).orderBy(db.knex.raw('random()'));
-      } else {
-        works = await query().offset(offset).limit(PAGE_SIZE).orderBy(order, sort)
-        .orderBy([{ column: 'release', order: 'desc'}, { column: 'id', order: 'desc' }]);
-      }
-
-      works = normalize(works);
+      const { works, totalCount } = await db.getWorksBy({
+        username, nsfw, order, sort, limit: PAGE_SIZE, offset, seed: shuffleSeed
+      });
+      normalize(works);
     
       res.send({
         works,
@@ -177,20 +164,10 @@ router.get('/search', async (req, res, next) => {
   const shuffleSeed = req.query.seed ? req.query.seed : 7;
   
   try {
-    let query = () => db.nsfwFilter(nsfw, db.getWorksByKeyWord({keyword: keyword, username: username}));
-
-    const totalCount = await query().count('id as count');
-
-    let works = null;
-
-    if (order === 'random') {
-      works = await query().offset(offset).limit(PAGE_SIZE).orderBy(db.knex.raw('id % ?', shuffleSeed));
-    } else {
-      works = await query().offset(offset).limit(PAGE_SIZE).orderBy(order, sort)
-        .orderBy([{ column: 'release', order: 'desc'}, { column: 'id', order: 'desc' }]);
-    }
-
-    works = normalize(works);
+    const { works, totalCount } = await db.getWorksByKeyWord({
+      keyword, username, nsfw, order, sort, limit: PAGE_SIZE, offset, seed: shuffleSeed
+    });
+    normalize(works);
 
     res.send({
       works,
@@ -226,19 +203,12 @@ router.get('/:field(circle|tag|va|illustrator|script_writer|series)s/:id/works',
     const shuffleSeed = req.query.seed ? req.query.seed : 7;
 
     try {
-      const query = () => db.nsfwFilter(nsfw, db.getWorksBy({id: req.params.id, field: req.params.field, username: username}));
-      const totalCount = await query().count('id as count');
+      const { works, totalCount } = await db.getWorksBy({
+        id: req.params.id, field: req.params.field,
+        username, nsfw, order, sort, limit: PAGE_SIZE, offset, seed: shuffleSeed
+      });
 
-      let works = null;
-
-      if (order === 'random') {
-        works = await query().offset(offset).limit(PAGE_SIZE).orderBy(db.knex.raw('id % ?', shuffleSeed));
-      } else {
-        works = await query().offset(offset).limit(PAGE_SIZE).orderBy(order, sort)
-        .orderBy([{ column: 'release', order: 'desc'}, { column: 'id', order: 'desc' }]);
-      }
-
-      works = normalize(works);
+      normalize(works);
 
       res.send({
         works,

@@ -222,6 +222,10 @@ export default {
       // Freeze the scroller first
       this.stopLoad = true
       this.pagination = { currentPage:0, pageSize:12, totalCount:0 }
+      // Clear stale works synchronously so the new mode's template doesn't
+      // render items from the previous mode that lack the required fields
+      // (e.g. review items have no `state`, which histroy mode accesses).
+      this.works = []
       // Manually fetch first page content before enable scroller
       // Note: the internal API of the infinite scroller does not work well
       this.requestWorksQueue()
@@ -251,7 +255,7 @@ export default {
         params.filter = this.progressFilter;
       }
 
-      const requestUrl = this.mode == 'histroy' ? "/api/histroy" : 'api/review'
+      const requestUrl = this.mode == 'histroy' ? "/api/histroy" : '/api/review'
       return this.$axios.get(requestUrl, { params })
         .then((response) => {                  
           const works = response.data.works
