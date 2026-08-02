@@ -346,8 +346,9 @@ async function getCoverImage(cover_for_id, cover_from_id, types) {
 async function getFanzaCoverImage(id, types, coverUrls) {
   const cid = id; // e.g. d_215444
   // Fallback only: correct for many, but not all, Fanza doujin works.
+  // Fanza doujin only serves pl/pr cover variants (no ps), and pl == pr.
   const mainUrl = (coverUrls && coverUrls.main) || `https://doujin-assets.dmm.co.jp/digital/doujin/${cid}/${cid}pl.jpg`;
-  const samUrl = (coverUrls && coverUrls.sam) || `https://doujin-assets.dmm.co.jp/digital/doujin/${cid}/${cid}ps.jpg`;
+  const samUrl = (coverUrls && coverUrls.sam) || `https://doujin-assets.dmm.co.jp/digital/doujin/${cid}/${cid}pl.jpg`;
   LOG.task.info(id, `从 Fanza 下载封面...`);
   const results = await Promise.all(types.map(async (type) => {
     let url;
