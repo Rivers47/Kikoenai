@@ -353,7 +353,7 @@ async function getFanzaCoverImage(id, types, coverUrls) {
   if (!coverUrls) {
     try {
       const metadata = await scrapeWorkMetadataFromFanza(id);
-      coverUrls = metadata.coverUrls; // eslint-disable-line no-param-reassign
+      coverUrls = metadata.coverUrls;
     } catch (err) {
       LOG.task.warn(id, `重新抓取 Fanza 页面以获取封面 URL 失败: ${err.message}，将尝试推测的封面 URL`);
     }
