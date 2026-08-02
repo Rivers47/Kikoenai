@@ -15,14 +15,23 @@ exports.up = async function(knex) {
   await knex.raw('PRAGMA ignore_check_constraints=on');
 
   await knex.transaction(async (trx) => {
+    // Drop leftover tables from features that were removed from the codebase
+    // without a DROP migration. t_translate_task (AI translation, removed in
+    // 7703841) has an integer work_id FK to t_work whose values dangle once
+    // t_work.id becomes padded TEXT.
+    await trx.raw('DROP TABLE IF EXISTS t_translate_task');
+
     // ── Part A: Work id → TEXT ──
 
-    // Pre-compute old-to-new work id mapping for all existing rows
-    const oldWorks = await trx('t_work').select('id');
+    const oldWorks = await trx('t_work').select('*');
     console.log(`  [1/4] Rebuilding t_work with TEXT ids (${oldWorks.length} works)...`);
+
+    // Old id -> new padded TEXT id. Keys are normalized to strings because the
+    // same work id reads back as a number from INTEGER columns and as a string
+    // from TEXT columns (e.g. t_review.work_id).
     const workIdMap = new Map();
     for (const w of oldWorks) {
-      workIdMap.set(w.id, formatID(w.id));
+      workIdMap.set(String(w.id), formatID(w.id));
     }
 
     // Rebuild t_work with TEXT id
@@ -51,30 +60,26 @@ exports.up = async function(knex) {
     });
 
     // Copy data with transformed ids
-    for (const w of oldWorks) {
-      const oldRow = await trx('t_work').where('id', w.id).first();
-      if (oldRow) {
-        const newId = workIdMap.get(w.id);
-        await trx('t_work_tmp').insert({
-          id: newId,
-          created_at: oldRow.created_at,
-          updated_at: oldRow.updated_at,
-          root_folder: oldRow.root_folder,
-          dir: oldRow.dir,
-          title: oldRow.title,
-          circle_id: oldRow.circle_id, // will be updated in Part B
-          nsfw: oldRow.nsfw,
-          release: oldRow.release,
-          dl_count: oldRow.dl_count,
-          price: oldRow.price,
-          review_count: oldRow.review_count,
-          rate_count: oldRow.rate_count,
-          rate_average_2dp: oldRow.rate_average_2dp,
-          rate_count_detail: oldRow.rate_count_detail,
-          rank: oldRow.rank,
-          memo: oldRow.memo,
-        });
-      }
+    for (const oldRow of oldWorks) {
+      await trx('t_work_tmp').insert({
+        id: workIdMap.get(String(oldRow.id)),
+        created_at: oldRow.created_at,
+        updated_at: oldRow.updated_at,
+        root_folder: oldRow.root_folder,
+        dir: oldRow.dir,
+        title: oldRow.title,
+        circle_id: oldRow.circle_id, // will be remapped to a UUID in Part B
+        nsfw: oldRow.nsfw,
+        release: oldRow.release,
+        dl_count: oldRow.dl_count,
+        price: oldRow.price,
+        review_count: oldRow.review_count,
+        rate_count: oldRow.rate_count,
+        rate_average_2dp: oldRow.rate_average_2dp,
+        rate_count_detail: oldRow.rate_count_detail,
+        rank: oldRow.rank,
+        memo: oldRow.memo,
+      });
     }
 
     await trx.schema.dropTableIfExists('t_work');
@@ -82,90 +87,47 @@ exports.up = async function(knex) {
 
     console.log('  [2/4] Rebuilding work_id FK tables (r_*_work, t_play_histroy)...');
 
-    // Rebuild r_tag_work with TEXT work_id
-    const oldTagWork = await trx('r_tag_work').select('*');
-    await trx.schema.dropTableIfExists('r_tag_work');
-    await trx.schema.createTable('r_tag_work', (table) => {
-      table.integer('tag_id');
-      table.string('work_id');
-      table.foreign('tag_id').references('id').inTable('t_tag');
-      table.foreign('work_id').references('id').inTable('t_work');
-      table.primary(['tag_id', 'work_id']);
-    });
-    for (const row of oldTagWork) {
-      await trx('r_tag_work').insert({
-        tag_id: row.tag_id,
-        work_id: workIdMap.get(row.work_id) || formatID(row.work_id),
+    // Foreign keys were not enforced in all eras (the migration connection has
+    // them off), so link tables can contain rows pointing at deleted works or
+    // labels. Those orphan rows are dropped here and counted for the log.
+    let droppedLinks = 0;
+    const rebuildLinkTable = async (tableName, labelTable, labelCol, cascade) => {
+      const labelIds = new Set((await trx(labelTable).select('id')).map((r) => String(r.id)));
+      const oldRows = await trx(tableName).select('*');
+      await trx.schema.dropTableIfExists(tableName);
+      await trx.schema.createTable(tableName, (table) => {
+        table.string(labelCol);
+        table.string('work_id');
+        const labelFk = table.foreign(labelCol).references('id').inTable(labelTable);
+        const workFk = table.foreign('work_id').references('id').inTable('t_work');
+        if (cascade) {
+          labelFk.onUpdate('CASCADE').onDelete('CASCADE');
+          workFk.onUpdate('CASCADE').onDelete('CASCADE');
+        }
+        table.primary([labelCol, 'work_id']);
       });
+      for (const row of oldRows) {
+        const newWorkId = workIdMap.get(String(row.work_id));
+        if (!newWorkId || !labelIds.has(String(row[labelCol]))) {
+          droppedLinks += 1; // orphan: referenced work or label no longer exists
+          continue;
+        }
+        await trx(tableName).insert({ [labelCol]: row[labelCol], work_id: newWorkId });
+      }
+    };
+
+    await rebuildLinkTable('r_tag_work', 't_tag', 'tag_id', false);
+    await rebuildLinkTable('r_va_work', 't_va', 'va_id', true);
+    await rebuildLinkTable('r_illustrator_work', 't_illustrator', 'illustrator_id', true);
+    await rebuildLinkTable('r_script_writer_work', 't_script_writer', 'script_writer_id', true);
+    await rebuildLinkTable('r_series_work', 't_series', 'series_id', true);
+    if (droppedLinks > 0) {
+      console.log(`  ! Dropped ${droppedLinks} orphan link row(s) referencing missing works or labels`);
     }
 
-    // Rebuild r_va_work with TEXT work_id
-    const oldVaWork = await trx('r_va_work').select('*');
-    await trx.schema.dropTableIfExists('r_va_work');
-    await trx.schema.createTable('r_va_work', (table) => {
-      table.string('va_id');
-      table.string('work_id');
-      table.foreign('va_id').references('id').inTable('t_va').onUpdate('CASCADE').onDelete('CASCADE');
-      table.foreign('work_id').references('id').inTable('t_work').onUpdate('CASCADE').onDelete('CASCADE');
-      table.primary(['va_id', 'work_id']);
-    });
-    for (const row of oldVaWork) {
-      await trx('r_va_work').insert({
-        va_id: row.va_id,
-        work_id: workIdMap.get(row.work_id) || formatID(row.work_id),
-      });
-    }
-
-    // Rebuild r_illustrator_work with TEXT work_id
-    const oldIllusWork = await trx('r_illustrator_work').select('*');
-    await trx.schema.dropTableIfExists('r_illustrator_work');
-    await trx.schema.createTable('r_illustrator_work', (table) => {
-      table.string('illustrator_id');
-      table.string('work_id');
-      table.foreign('illustrator_id').references('id').inTable('t_illustrator').onUpdate('CASCADE').onDelete('CASCADE');
-      table.foreign('work_id').references('id').inTable('t_work').onUpdate('CASCADE').onDelete('CASCADE');
-      table.primary(['illustrator_id', 'work_id']);
-    });
-    for (const row of oldIllusWork) {
-      await trx('r_illustrator_work').insert({
-        illustrator_id: row.illustrator_id,
-        work_id: workIdMap.get(row.work_id) || formatID(row.work_id),
-      });
-    }
-
-    // Rebuild r_script_writer_work with TEXT work_id
-    const oldSwWork = await trx('r_script_writer_work').select('*');
-    await trx.schema.dropTableIfExists('r_script_writer_work');
-    await trx.schema.createTable('r_script_writer_work', (table) => {
-      table.string('script_writer_id');
-      table.string('work_id');
-      table.foreign('script_writer_id').references('id').inTable('t_script_writer').onUpdate('CASCADE').onDelete('CASCADE');
-      table.foreign('work_id').references('id').inTable('t_work').onUpdate('CASCADE').onDelete('CASCADE');
-      table.primary(['script_writer_id', 'work_id']);
-    });
-    for (const row of oldSwWork) {
-      await trx('r_script_writer_work').insert({
-        script_writer_id: row.script_writer_id,
-        work_id: workIdMap.get(row.work_id) || formatID(row.work_id),
-      });
-    }
-
-    // Rebuild r_series_work with TEXT work_id
-    const oldSeriesWork = await trx('r_series_work').select('*');
-    await trx.schema.dropTableIfExists('r_series_work');
-    await trx.schema.createTable('r_series_work', (table) => {
-      table.string('series_id');
-      table.string('work_id');
-      table.foreign('series_id').references('id').inTable('t_series').onUpdate('CASCADE').onDelete('CASCADE');
-      table.foreign('work_id').references('id').inTable('t_work').onUpdate('CASCADE').onDelete('CASCADE');
-      table.primary(['series_id', 'work_id']);
-    });
-    for (const row of oldSeriesWork) {
-      await trx('r_series_work').insert({
-        series_id: row.series_id,
-        work_id: workIdMap.get(row.work_id) || formatID(row.work_id),
-      });
-    }
+    // Existing users, for orphan detection in t_play_histroy / t_review
+    // (both reference t_user.name).
+    const userNames = new Set((await trx('t_user').select('name')).map((u) => u.name));
 
     // Rebuild t_play_histroy with TEXT work_id
     const oldPlayHist = await trx('t_play_histroy').select('*');
@@ -179,24 +141,42 @@ exports.up = async function(knex) {
       table.foreign('work_id').references('id').inTable('t_work').onDelete('CASCADE');
       table.primary(['user_name', 'work_id']);
     });
+    let droppedHistory = 0;
     for (const row of oldPlayHist) {
+      const newWorkId = workIdMap.get(String(row.work_id));
+      if (!newWorkId || !userNames.has(row.user_name)) {
+        droppedHistory += 1; // orphan: referenced work or user no longer exists
+        continue;
+      }
       await trx('t_play_histroy').insert({
         user_name: row.user_name,
-        work_id: workIdMap.get(row.work_id) || formatID(row.work_id),
+        work_id: newWorkId,
         created_at: row.created_at,
         updated_at: row.updated_at,
         state: row.state,
       });
     }
+    if (droppedHistory > 0) {
+      console.log(`  ! Dropped ${droppedHistory} t_play_histroy row(s) referencing missing works`);
+    }
 
-    // Update t_review.work_id in place (already TEXT, just needs padding)
-    console.log(`  [3/4] Padding t_review.work_id...`);
+    // Update t_review.work_id in place (already TEXT, just needs padding).
+    // Reviews of deleted works are dropped, matching the ON DELETE CASCADE FK.
+    console.log('  [3/4] Padding t_review.work_id...');
     const oldReviews = await trx('t_review').select('*');
+    let droppedReviews = 0;
     for (const row of oldReviews) {
-      const newWorkId = workIdMap.get(parseInt(row.work_id, 10)) || row.work_id;
-      if (newWorkId !== row.work_id) {
+      const newWorkId = workIdMap.get(String(row.work_id));
+      if (!newWorkId || !userNames.has(row.user_name)) {
+        // Review of a deleted work or user, matching the ON DELETE CASCADE FKs.
+        await trx('t_review').where('user_name', row.user_name).andWhere('work_id', row.work_id).del();
+        droppedReviews += 1;
+      } else if (newWorkId !== String(row.work_id)) {
         await trx('t_review').where('user_name', row.user_name).andWhere('work_id', row.work_id).update({ work_id: newWorkId });
       }
+    }
+    if (droppedReviews > 0) {
+      console.log(`  ! Dropped ${droppedReviews} t_review row(s) referencing missing works`);
     }
 
     // ── Part B: Circle/tag/series ids → name-based UUID ──
@@ -204,12 +184,22 @@ exports.up = async function(knex) {
 
     // --- t_circle ---
     const oldCircles = await trx('t_circle').select('*');
+    // Works whose circle_id dangles (FK not always enforced): create a
+    // placeholder circle so the work is preserved and the FK resolves.
+    const knownCircleIds = new Set(oldCircles.map((c) => String(c.id)));
+    const missingCircleIds = [...new Set(oldWorks.map((w) => String(w.circle_id)))]
+      .filter((id) => !knownCircleIds.has(id));
+    for (const id of missingCircleIds) {
+      console.log(`  ! circle_id ${id} has no t_circle row; creating a placeholder circle`);
+      oldCircles.push({ id, name: `Unknown circle #${id}` });
+    }
+
     const circleNameToUuid = new Map();
     const circleOldIdToNewId = new Map();
     for (const c of oldCircles) {
       const uuid = nameToUUID(c.name);
       circleNameToUuid.set(c.name, uuid);
-      circleOldIdToNewId.set(c.id, uuid);
+      circleOldIdToNewId.set(String(c.id), uuid);
     }
     await trx.schema.dropTableIfExists('t_circle_tmp');
     await trx.schema.createTable('t_circle_tmp', (table) => {
@@ -217,7 +207,7 @@ exports.up = async function(knex) {
       table.string('name').notNullable();
       table.primary('id');
     });
-    // Insert deduplicated by name
+    // Insert deduplicated by name (same name -> same UUID -> one row)
     const seenCircleNames = new Set();
     for (const c of oldCircles) {
       if (!seenCircleNames.has(c.name)) {
@@ -231,91 +221,71 @@ exports.up = async function(knex) {
     await trx.schema.dropTableIfExists('t_circle');
     await trx.raw('ALTER TABLE t_circle_tmp RENAME TO t_circle');
 
-    // Update t_work.circle_id to new UUID.
-    // The rebuilt t_work still carries the old integer circle_id copied in Part A.
+    // Update t_work.circle_id (still the old integer id copied in Part A) to the new UUID
     const newWorks = await trx('t_work').select('id', 'circle_id');
     for (const w of newWorks) {
-      const oldCircleId = parseInt(w.circle_id, 10);
-      const newCircleUuid = circleOldIdToNewId.get(oldCircleId);
+      const newCircleUuid = circleOldIdToNewId.get(String(w.circle_id));
       if (newCircleUuid) {
         await trx('t_work').where('id', w.id).update({ circle_id: newCircleUuid });
       }
     }
 
-    // --- t_tag ---
-    const oldTags = await trx('t_tag').select('*');
-    const tagNameToUuid = new Map();
-    const tagOldIdToNewId = new Map();
-    for (const t of oldTags) {
-      const uuid = nameToUUID(t.name);
-      tagNameToUuid.set(t.name, uuid);
-      tagOldIdToNewId.set(t.id, uuid);
-    }
-    await trx.schema.dropTableIfExists('t_tag_tmp');
-    await trx.schema.createTable('t_tag_tmp', (table) => {
-      table.string('id').notNullable();
-      table.string('name').notNullable();
-      table.primary('id');
-    });
-    const seenTagNames = new Set();
-    for (const t of oldTags) {
-      if (!seenTagNames.has(t.name)) {
-        seenTagNames.add(t.name);
-        await trx('t_tag_tmp').insert({
-          id: tagNameToUuid.get(t.name),
-          name: t.name,
-        });
+    // --- t_tag / t_series ---
+    // Labels with duplicate names merge into one UUID row; their link rows are
+    // rebuilt with dedup so merged labels don't violate the composite PK.
+    const rebuildLabelTable = async (labelTable, linkTable, labelCol) => {
+      const oldLabels = await trx(labelTable).select('*');
+      const nameToUuid = new Map();
+      const oldIdToNewId = new Map();
+      for (const l of oldLabels) {
+        const uuid = nameToUUID(l.name);
+        nameToUuid.set(l.name, uuid);
+        oldIdToNewId.set(String(l.id), uuid);
       }
-    }
-    await trx.schema.dropTableIfExists('t_tag');
-    await trx.raw('ALTER TABLE t_tag_tmp RENAME TO t_tag');
+      await trx.schema.dropTableIfExists(`${labelTable}_tmp`);
+      await trx.schema.createTable(`${labelTable}_tmp`, (table) => {
+        table.string('id').notNullable();
+        table.string('name').notNullable();
+        table.primary('id');
+      });
+      const seenNames = new Set();
+      for (const l of oldLabels) {
+        if (!seenNames.has(l.name)) {
+          seenNames.add(l.name);
+          await trx(`${labelTable}_tmp`).insert({ id: nameToUuid.get(l.name), name: l.name });
+        }
+      }
+      await trx.schema.dropTableIfExists(labelTable);
+      await trx.raw(`ALTER TABLE ${labelTable}_tmp RENAME TO ${labelTable}`);
 
-    // Update r_tag_work.tag_id to new UUID
-    // (r_tag_work was rebuilt in Part A with the old integer tag_id)
-    const curTagWork = await trx('r_tag_work').select('*');
-    for (const row of curTagWork) {
-      const newTagUuid = tagOldIdToNewId.get(row.tag_id);
-      if (newTagUuid) {
-        await trx('r_tag_work').where('tag_id', row.tag_id).andWhere('work_id', row.work_id).update({ tag_id: newTagUuid });
+      // Rebuild the link table with UUID label ids (r_*_work was rebuilt in
+      // Part A with the old label ids)
+      const oldLinks = await trx(linkTable).select('*');
+      await trx.schema.dropTableIfExists(linkTable);
+      await trx.schema.createTable(linkTable, (table) => {
+        table.string(labelCol);
+        table.string('work_id');
+        const labelFk = table.foreign(labelCol).references('id').inTable(labelTable);
+        const workFk = table.foreign('work_id').references('id').inTable('t_work');
+        if (linkTable !== 'r_tag_work') {
+          labelFk.onUpdate('CASCADE').onDelete('CASCADE');
+          workFk.onUpdate('CASCADE').onDelete('CASCADE');
+        }
+        table.primary([labelCol, 'work_id']);
+      });
+      const seenLinks = new Set();
+      for (const row of oldLinks) {
+        const uuid = oldIdToNewId.get(String(row[labelCol]));
+        if (!uuid) continue; // orphan (already dropped in Part A, but be safe)
+        const key = `${uuid}${row.work_id}`;
+        if (seenLinks.has(key)) continue; // duplicate label name merged into one row
+        seenLinks.add(key);
+        await trx(linkTable).insert({ [labelCol]: uuid, work_id: row.work_id });
       }
-    }
+    };
 
-    // --- t_series ---
-    const oldSeries = await trx('t_series').select('*');
-    const seriesNameToUuid = new Map();
-    const seriesOldIdToNewId = new Map();
-    for (const s of oldSeries) {
-      const uuid = nameToUUID(s.name);
-      seriesNameToUuid.set(s.name, uuid);
-      seriesOldIdToNewId.set(s.id, uuid);
-    }
-    await trx.schema.dropTableIfExists('t_series_tmp');
-    await trx.schema.createTable('t_series_tmp', (table) => {
-      table.string('id').notNullable();
-      table.string('name').notNullable();
-      table.primary('id');
-    });
-    const seenSeriesNames = new Set();
-    for (const s of oldSeries) {
-      if (!seenSeriesNames.has(s.name)) {
-        seenSeriesNames.add(s.name);
-        await trx('t_series_tmp').insert({
-          id: seriesNameToUuid.get(s.name),
-          name: s.name,
-        });
-      }
-    }
-    await trx.schema.dropTableIfExists('t_series');
-    await trx.raw('ALTER TABLE t_series_tmp RENAME TO t_series');
-
-    // Update r_series_work.series_id to new UUID
-    const curSeriesWork = await trx('r_series_work').select('*');
-    for (const row of curSeriesWork) {
-      const newSeriesUuid = seriesOldIdToNewId.get(row.series_id);
-      if (newSeriesUuid) {
-        await trx('r_series_work').where('series_id', row.series_id).andWhere('work_id', row.work_id).update({ series_id: newSeriesUuid });
-      }
-    }
+    await rebuildLabelTable('t_tag', 'r_tag_work', 'tag_id');
+    await rebuildLabelTable('t_series', 'r_series_work', 'series_id');
 
     // Clean up temp table if it somehow still exists
     await trx.schema.dropTableIfExists('t_work_tmp');
