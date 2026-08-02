@@ -55,7 +55,16 @@ async function knexMigrate(command, flags, progress) {
 
   // Config for knex.migrate: the directory is required; the table name is
   // already picked up from the knexfile env's migrations.tableName.
-  const migrateConfig = { directory: migrationDir };
+  // disableMigrationsListValidation: the knex_migrations table contains rows
+  // for migration files that were deleted (e.g. the AI translation feature
+  // removed in 7703841 deleted several migration files without cleaning up
+  // their knex_migrations entries). Without this flag knex aborts with
+  // 'migration directory is corrupt'. This mirrors the umzug fork's
+  // skipTargetMigrationCheck behaviour.
+  const migrateConfig = {
+    directory: migrationDir,
+    disableMigrationsListValidation: true,
+  };
 
   try {
     if (command === 'up') {
