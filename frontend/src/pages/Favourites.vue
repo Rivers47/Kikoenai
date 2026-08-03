@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
-    <div class="fit row wrap justify-between items-start q-px-sm">
-      <div class="col-lg-3 col-sm-12 col-xs-12">
+    <div class="fit row wrap justify-between items-center q-px-sm q-py-sm">
+      <div class="col-lg-3 col-sm-12 col-xs-6">
           <q-btn-toggle
             v-model="mode"
             @update:model-value="changeMode"
@@ -20,7 +20,7 @@
       </div>
 
       <!-- 排序选项 -->
-      <div v-if="mode != 'histroy'" class="col-auto row q-pt-md">
+      <div v-if="mode != 'histroy'" class="col-auto row">
         <q-select dense rounded outlined v-model="sortBy" :options="sortOptions"/>
         <q-btn
           :disable="sortButtonDisabled"
@@ -35,7 +35,7 @@
       </div>
 
       <!-- 历史模式：隐藏已听完筛选 -->
-      <div v-if="mode === 'histroy'" class="col-auto row q-pt-md q-gutter-sm">
+      <div v-if="mode === 'histroy'" class="col-auto row">
         <q-btn-toggle
           v-model="hideFinishedFilter"
           @update:model-value="onHideFinishedChange"
