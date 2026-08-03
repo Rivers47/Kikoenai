@@ -297,6 +297,7 @@ npm test           # Run ESLint
 | `/api/cover/:id` | GET | `CoverSFW.vue` | Get cover image |
 | `/api/files/:id` | GET | `Work.vue` | List files in a work |
 | `/api/review/:id` | GET/POST/PUT/DELETE | `WorkDetails.vue` | Work reviews. PUT with `progressOnly=true` and `autoMark=true` only writes `progress='listened'` if existing is not terminal (listened/replay/postponed). |
+| `/api/review/progress` | DELETE | `WorkDetails.vue` | Clear only `progress` (NULL), preserving rating/review_text. If the row has no rating/review_text, the whole row is deleted. Query `work_id`. |
 | `/api/histroy` | GET | `Favourites.vue`, `RecentWorks.vue` | List works with playback history. Optional `excludeFinished` (`all`|`listened`, default `listened`). Response items include nullable `progress`. |
 | `/api/histroy/:id` | GET/POST | `Work.vue` | Playback state (history) |
 | `/api/config/shared` | GET | `MainLayout.vue` | Public config (seek times) |

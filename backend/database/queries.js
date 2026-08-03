@@ -914,6 +914,24 @@ const makeQueries = (knex) => {
     .andWhere('work_id', '=', workid)
     .del());
 
+  // 只清除进度（progress），保留评分与评论。
+  // 如果该行除 progress 外没有评分也没有评论（例如仅由自动标记创建的 rating-null 行），
+  // 则整行删除，避免留下全 NULL 的空行。
+  // 没有对应行时为 no-op。
+  const resetUserProgress = async (username, workid) => knex.transaction(async (trx) => {
+    const rows = await trx.raw('SELECT rating, review_text FROM t_review WHERE user_name = ? AND work_id = ?;', [username, workid]);
+    const row = rows[0];
+    if (!row) return; // 无行可清
+    const hasRating = row.rating !== null && row.rating !== undefined;
+    const hasReview = row.review_text !== null && row.review_text !== '';
+    if (!hasRating && !hasReview) {
+      // 没有评分/评论可保留，整行删除
+      await trx.raw('DELETE FROM t_review WHERE user_name = ? AND work_id = ?;', [username, workid]);
+    } else {
+      await trx.raw('UPDATE t_review SET progress = NULL, updated_at = CURRENT_TIMESTAMP WHERE user_name = ? AND work_id = ?;', [username, workid]);
+    }
+  });
+
   // 读取星标及评语 + 作品元数据
   const getWorksWithReviews = async ({username = '', limit = 1000, offset = 0, orderBy = 'release', sortOption = 'desc', filter} = {}) => {
     let coreQ = knex('t_work')
@@ -1045,7 +1063,7 @@ const makeQueries = (knex) => {
     editWorkMetadata,
     getLabels, getMetadata,
     createUser, updateUserPassword, resetUserPassword, deleteUser,
-    getWorksWithReviews, updateUserReview, deleteUserReview,
+    getWorksWithReviews, updateUserReview, deleteUserReview, resetUserProgress,
     getPlayHistroy, updatePlayHistroy, deletePlayHistroy,
     getWorkMemo, setWorkMemo,
   };

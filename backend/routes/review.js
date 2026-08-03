@@ -98,4 +98,17 @@ router.delete('/',
       }).catch((err) => next(err));
 });
 
+// 只清除进度，保留评分与评论
+router.delete('/progress',
+  workIdQuery(),
+  (req, res, next) => {
+    if(!isValidRequest(req, res)) return;
+
+    let username = config.auth ? req.user.name : 'admin';
+    db.resetUserProgress(username, req.query.work_id)
+      .then(() => {
+        res.send({message: '清除进度成功'});
+      }).catch((err) => next(err));
+});
+
 module.exports = router;

@@ -191,6 +191,18 @@
               <q-item-label>搁置</q-item-label>
             </q-item-section>
           </q-item>
+
+          <q-separator />
+
+          <q-item clickable @click="clearProgress" class="q-pa-xs text-negative">
+            <q-item-section avatar>
+              <q-avatar icon="remove_circle_outline" />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label>清除进度</q-item-label>
+              <q-item-label caption>保留评分与评论</q-item-label>
+            </q-item-section>
+          </q-item>
         </q-list>
       </q-btn-dropdown>
 
@@ -364,6 +376,30 @@ export default {
             this.showErrNotif(error.message || error)
           }
         })
+    },
+
+    // 只清除进度，保留评分与评论。仅 progress 的行会被后端整行删除。
+    clearProgress () {
+      this.$q.dialog({
+        title: '清除进度',
+        message: '将清除该作品的进度标记，保留评分与评论。是否继续？',
+        cancel: '取消',
+        ok: '确定',
+        persistent: true
+      }).onOk(() => {
+        this.$axios.delete('/api/review/progress', { params: { work_id: this.metadata.id } })
+          .then((response) => {
+            this.showSuccNotif(response.data.message)
+            this.$emit('reset')
+          })
+          .catch((error) => {
+            if (error.response) {
+              this.showErrNotif(error.response.data.error || `${error.response.status} ${error.response.statusText}`)
+            } else {
+              this.showErrNotif(error.message || error)
+            }
+          })
+      })
     },
 
     setRating (newRating) {

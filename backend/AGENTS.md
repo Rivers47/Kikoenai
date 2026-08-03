@@ -235,6 +235,8 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/review` | GET | List works the user has reviewed/rated/progress-marked
 | `/api/review/:id` | GET/POST/PUT/DELETE | Work reviews
 | `/api/review` | PUT | Create/update review, rating, or progress. Optional query `autoMark` (boolean): when `progressOnly=true` and `autoMark=true`, only writes `progress='listened'` if existing progress is null/empty/marked/listening; no-op on listened/replay/postponed.
+| `/api/review` | DELETE | Delete the whole review row (rating + review_text + progress). Query `work_id`.
+| `/api/review/progress` | DELETE | Clear only `progress` (set NULL), preserving rating/review_text. If the row has no rating AND no review_text (e.g. an auto-marked rating-null row), the whole row is deleted to avoid an all-NULL empty row. Query `work_id`.
 | `/api/histroy` | GET | List works the user has playback history for. Optional query `excludeFinished` (`all`|`listened`, default `listened`): when `listened`, excludes rows where `t_review.progress='listened'`. Response items include nullable `progress` field.
 | `/api/histroy/:id` | GET/POST | Playback state (history) |
 | `/api/config/shared` | GET | Public config (seek times) |
