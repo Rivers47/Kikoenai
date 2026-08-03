@@ -104,7 +104,7 @@
 
                   <q-item-section>
                     <q-item-label v-if="item.logs.length > 0" class="ellipsis">{{item.logs[item.logs.length - 1].message}}</q-item-label>
-                    <q-item-label caption>{{`RJ${item.rjcode}`}}</q-item-label>
+                    <q-item-label caption>{{item.rjcode.startsWith('d_') ? item.rjcode : `RJ${item.rjcode}`}}</q-item-label>
                   </q-item-section>
                 </template>
                 
@@ -145,7 +145,7 @@
                     </q-item-label>
 
                     <q-item-label caption class="text-white">
-                      {{`RJ${item.rjcode}`}}
+                      {{item.rjcode.startsWith('d_') ? item.rjcode : `RJ${item.rjcode}`}}
                     </q-item-label>
                   </q-item-section>
                 </template>
@@ -264,11 +264,14 @@ export default {
     allLogs () {
       const resultLogs = this.results.map(res => {
         if (res.result === 'added') {
-          return { level: 'info', message: `[RJ${res.rjcode}] 添加成功! Added: ${res.count}` }
+          const prefix = res.rjcode.startsWith('d_') ? '' : 'RJ'
+          return { level: 'info', message: `[${prefix}${res.rjcode}] 添加成功! Added: ${res.count}` }
         } else if (res.result === 'updated') {
-          return { level: 'info', message: `[RJ${res.rjcode}] 更新成功! Updated: ${res.count}` }
+          const prefix = res.rjcode.startsWith('d_') ? '' : 'RJ'
+          return { level: 'info', message: `[${prefix}${res.rjcode}] 更新成功! Updated: ${res.count}` }
         } else {
-          return { level: 'error', message: `[RJ${res.rjcode}] 处理失败! Failed: ${res.count}` }
+          const prefix = res.rjcode.startsWith('d_') ? '' : 'RJ'
+          return { level: 'error', message: `[${prefix}${res.rjcode}] 处理失败! Failed: ${res.count}` }
         }
       })
       return this.mainLogs.concat(resultLogs)

@@ -1,195 +1,127 @@
-// 来自knex-migrate，用于解决knex migratio API和knex-migrate在Windows上打包后
-// 仍然使用绝对路径导致找不到文件的问题
+// Migration runner wrapping knex.migrate's built-in API.
+// Replaces the vendored @umonaca/umzug wrapper (fork of umzug/umzug 2.x
+// plus the knex-migrate CLI) with a direct dependency on knex's own
+// migration engine, which is already the standard for Knex-based apps.
 
 const { join } = require('path');
-const { existsSync} = require('fs');
-const Umzug = require('@umonaca/umzug');
-const { omitBy, isNil} = require('lodash');
-const Promise = require('bluebird');
+const { readdirSync } = require('fs');
 const knex = require('knex');
+const knexfile = require('./knexfile');
 
-function normalizeFlags (flags) {
-  flags.knexfile = flags.knexfile || 'knexfile.js';
-
-  flags.knexfile = join(__dirname, flags.knexfile);
-
-  flags.env =
-    flags.env || process.env.KNEX_ENV || process.env.NODE_ENV || 'upgrade';
+function getMigrationsDir() {
+  return join(__dirname, 'migrations');
 }
 
-function knexInit (flags) {
-  normalizeFlags(flags);
-
-  let config;
-
-  if (flags.config) {
-    config = flags.config;
-  } else {
-    try {
-      config = require(flags.knexfile);
-    } catch (err) {
-      if (/Cannot find module/.test(err.message)) {
-        console.error(`No knexfile at '${flags.knexfile}'`);
-        console.error("Please create one or bootstrap using 'knex init'");
-        process.exit(1);
-      }
-
-      throw err;
-    }
-  }
-
-  if (config[flags.env] && config[flags.env]) {
-    config = config[flags.env];
-  }
-
-  if (typeof config !== 'object') {
-    console.error(`Malformed knex config:`);
-    console.error(JSON.stringify(config, null, 2));
-    process.exit(1);
-  }
-
-  flags.migrations =
-    flags.migrations ||
-    (config.migrations && config.migrations.directory) ||
-    'migrations';
-  flags.migrations = join(__dirname, flags.migrations);
-
-  if (!existsSync(flags.migrations)) {
-    console.error(`No migrations directory at '${flags.migrations}'`);
-  }
-
+function getKnexInstance() {
+  const env = process.env.KNEX_ENV || process.env.NODE_ENV || 'upgrade';
+  const config = Object.assign({}, knexfile[env]);
   if (config.client === 'sqlite3') {
     config.useNullAsDefault = true;
   }
-
   config.pool = { max: 10, min: 0, idleTimeoutMillis: 1000 };
-
   return knex(config);
 }
 
-function umzugKnex (flags, connection) {
-  return new Umzug({
-    storage: join(__dirname, 'storage'),
-    storageOptions: { connection },
-    migrations: {
-      params: [connection, Promise],
-      path: flags.migrations,
-      pattern: /^\d+_.+\.[j|t]s$/,
-      wrap: fn => (knex, Promise) => {
-        if (flags.skip) {
-          // Non standard. Mark as executed without actually executing the migration
-          return Promise.resolve();
-        }
-        if (flags.raw) {
-          return Promise.resolve(fn(knex, Promise));
-        } else {
-          return knex.transaction(tx => Promise.resolve(fn(tx, Promise)));
-        }
-      }
-    },
-    skipTargetMigrationCheck: true
-  });
+/**
+ * Find a migration filename by prefix (e.g. '20210213233544' matches
+ * '20210213233544_fill_va_uuid.js'), matching the umzug fork's behaviour.
+ */
+function findMigrationFile(migrationDir, prefix) {
+  const files = readdirSync(migrationDir).filter(
+    (f) => /^\d+_.+\.js$/.test(f)
+  );
+  const match = files.find((f) => f.startsWith(prefix));
+  if (!match) {
+    throw new Error(
+      `Migration matching "${prefix}" not found in ${migrationDir}`
+    );
+  }
+  return match;
 }
 
-async function umzugOptions (command, flags, umzug) {
-  if (isNil(flags.to) && isNil(flags.from) && !isNil(flags.only)) {
-    return flags.only;
-  }
-
-  if (flags.to === '0') {
-    flags.to = 0;
-  }
-
-  if (flags.from === '0') {
-    flags.from = 0;
-  }
-
-  const opts = omitBy({ to: flags.to, from: flags.from }, isNil);
-
-  if (!isNil(flags.step)) {
-    await applyStepOption(command, umzug, opts, flags.step);
-  }
-
-  return opts;
-}
-
-async function applyStepOption (command, umzug, opts, steps) {
-  // Default to 1 step if no number is provided
-  if (steps === '') {
-    steps = 1;
-  }
-
-  // Use the list of pending or executed migrations to determine what would happen without --step
-  let migrations =
-    command === 'up'
-      ? await umzug.pending()
-      : await umzug.executed().then(m => m.reverse());
-
-  // Remove migrations prior to the one used in --from
-  // If it isn't in the list, the --from option has no effect
-  if (opts.from) {
-    const limit = migrations.find(m => m.file.startsWith(opts.to));
-    migrations = migrations.slice(Math.min(0, migrations.indexOf(limit)));
-  }
-
-  // Remove migrations after the one used in --to
-  // If it isn't in the list, we remove everything, causing a 'migration not pending' notice to show
-  if (opts.to) {
-    const limit = migrations.find(m => m.file.startsWith(opts.to));
-    migrations = migrations.slice(0, migrations.indexOf(limit) + 1);
-  }
-
-  // Limit to the number of migrations available
-  steps = Math.min(migrations.length, steps);
-
-  // Override the --to option to limit the number of steps taken
-  if (steps > 0) {
-    opts.to = migrations[steps - 1].file;
-  }
-}
-
-async function knexMigrate (command, flags, progress) {
+/**
+ * @param {string} command - 'up' or 'skipAll'
+ * @param {object} [flags]
+ * @param {object} [flags.to] - Only run up to / skip up to this migration
+ *                               (prefix matched by startsWith)
+ * @param {function} [progress] - Callback({action, migration}) per migration
+ */
+async function knexMigrate(command, flags, progress) {
   flags = flags || {};
   progress = progress || function () {};
 
-  const umzug = umzugKnex(flags, knexInit(flags));
+  const migrationDir = getMigrationsDir();
+  const db = getKnexInstance();
 
-  const debug = action => migration => {
-    progress({
-      action,
-      migration: join(flags.migrations, migration)
-    });
+  // Config for knex.migrate: the directory is required; the table name is
+  // already picked up from the knexfile env's migrations.tableName.
+  // disableMigrationsListValidation: the knex_migrations table contains rows
+  // for migration files that were deleted (e.g. the AI translation feature
+  // removed in 7703841 deleted several migration files without cleaning up
+  // their knex_migrations entries). Without this flag knex aborts with
+  // 'migration directory is corrupt'. This mirrors the umzug fork's
+  // skipTargetMigrationCheck behaviour.
+  const migrateConfig = {
+    directory: migrationDir,
+    disableMigrationsListValidation: true,
   };
-
-  umzug
-    .on('migrating', debug('migrate'))
-    .on('reverting', debug('revert'))
-    .on('debug', debug('debug'));
-
-  const api = {
-    up: async () => {
-      const opts = await umzugOptions('up', flags, umzug);
-      await umzug.storage.ensureTable();
-      return umzug.up(opts);
-    },
-    
-    // Non standard, used in this project only
-    skipAll: async () => {
-      flags.skip = true;
-      const opts = await umzugOptions('up', flags, umzug);
-      await umzug.storage.ensureTable();
-      return umzug.up(opts);
-    }
-  };
-
-  if (!(command in api)) {
-    throw new Error('Unknown command: ' + command);
-  }
 
   try {
-    return await api[command].apply(null, flags);
+    if (command === 'up') {
+      if (flags.to) {
+        // Run pending migrations one by one until we reach the target.
+        const targetFile = findMigrationFile(migrationDir, flags.to);
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const [, log] = await db.migrate.up(migrateConfig);
+          if (log.length === 0) break; // No more pending
+          progress({ action: 'migrate', migration: join(migrationDir, log[0]) });
+          if (log[0] === targetFile) break;
+        }
+      } else {
+        const [, log] = await db.migrate.latest(migrateConfig);
+        for (const name of log) {
+          progress({ action: 'migrate', migration: join(migrationDir, name) });
+        }
+      }
+    } else if (command === 'skipAll') {
+      // Mark migrations as executed without actually running them.
+      const tableName =
+        (db.client.config.migrations && db.client.config.migrations.tableName) ||
+        'knex_migrations';
+
+      const [completed, pending] = await db.migrate.list(migrateConfig);
+      const completedNames = completed.map((m) => m.name);
+      const pendingFiles = pending.map((m) => m.file);
+
+      let toSkip = [];
+      if (flags.to) {
+        const targetFile = findMigrationFile(migrationDir, flags.to);
+        const idx = pendingFiles.indexOf(targetFile);
+        if (idx !== -1) {
+          toSkip = pendingFiles.slice(0, idx + 1);
+        }
+        // If target is already completed, nothing to skip.
+      } else {
+        toSkip = pendingFiles;
+      }
+
+      if (toSkip.length > 0) {
+        const batchNo = await db(tableName)
+          .max('batch as max_batch')
+          .then((r) => (r[0].max_batch || 0) + 1);
+        const now = new Date();
+        for (const name of toSkip) {
+          await db(tableName).insert({
+            name,
+            batch: batchNo,
+            migration_time: now,
+          });
+        }
+      }
+    }
   } finally {
-    umzug.storage.knex.destroy();
+    db.destroy();
   }
 }
 

@@ -52,6 +52,7 @@ const defaultConfig = {
   retry: 5,
   dlsiteTimeout: 10000,
   hvdbTimeout: 10000,
+  fanzaTimeout: 10000,
   retryDelay: 2000,
   httpProxyHost: '',
   httpProxyPort: 0,

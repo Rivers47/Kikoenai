@@ -99,7 +99,7 @@ async function scrapeWorkMemo(work_id, dir, oldMemo) {
 /**
  * Returns list of playable tracks in a given folder. Track is an object
  * containing 'title', 'subtitle' and 'hash'.
- * @param {Number} id Work identifier. Currently, RJ/RE code.
+ * @param {String} id Work identifier (e.g. '123456', '01134567', 'd_215444').
  * @param {String} dir Work directory (absolute).
  * @param {readMemo} at least a empty object, or { duration: { "relative/path/audio.mp3": 33, "audio2.mp3": 22 }} for storage audio file duration
  */
@@ -265,7 +265,7 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
 };
 
 /**
- * 返回一个成员为指定根文件夹下所有包含 RJ 号的音声文件夹对象的数组，
+ * 返回一个成员为指定根文件夹下所有包含 RJ 号或 d_ 前缀的音声文件夹对象的数组，
  * 音声文件夹对象 { relativePath: '相对路径', rootFolderName: '根文件夹别名', id: '音声ID' }
  * @param {Object} rootFolder 根文件夹对象 { name: '别名', path: '绝对路径' }
  */
@@ -280,9 +280,14 @@ async function* getFolderList(rootFolder, current = '', depth = 0, logger = cons
     try {
     // eslint-disable-next-line no-await-in-loop
       if ((await fs.promises.stat(absolutePath)).isDirectory()) { // 检查是否为文件夹
-          if (folder.match(/RJ\d+/)) { // 检查文件夹名称中是否含有RJ号
-            // Found a work folder, don't go any deeper.
-            yield { absolutePath, relativePath, rootFolderName: rootFolder.name, id: parseInt(folder.match(/RJ(\d+)/)[1]) };
+          const rjMatch = folder.match(/RJ(\d+)/);
+          const fanzaMatch = folder.match(/d_(\d+)/);
+          if (rjMatch) {
+            // Found a DLsite work folder
+            yield { absolutePath, relativePath, rootFolderName: rootFolder.name, id: formatID(parseInt(rjMatch[1], 10)) };
+          } else if (fanzaMatch) {
+            // Found a Fanza work folder
+            yield { absolutePath, relativePath, rootFolderName: rootFolder.name, id: 'd_' + fanzaMatch[1] };
           } else if (depth + 1 < config.scannerMaxRecursionDepth) {
             // 若文件夹名称中不含有RJ号，就进入该文件夹内部
             // Found a folder that's not a work folder, go inside if allowed.
@@ -302,16 +307,32 @@ async function* getFolderList(rootFolder, current = '', depth = 0, logger = cons
 }
 
 /**
- * Deletes a work's cover image from disk.
- * @param {String} rjcode Work RJ code (only the 6 digits, zero-padded).
+ * Generate the cover filename for a given work id and type.
+ * @param {String} id Work id (e.g. '123456', '01134567', 'd_215444')
+ * @param {String} type Cover type: 'main', 'sam', '240x240', '360x360'
+ * @returns {String} Filename like 'RJ123456_img_main.jpg' or 'd_215444_img_main.jpg'
  */
-const deleteCoverImageFromDisk = rjcode => new Promise((resolve, reject) => {
+function coverFileName(id, type) {
+  if (String(id).startsWith('d_')) {
+    return `${id}_img_${type}.jpg`;
+  }
+  return `RJ${id}_img_${type}.jpg`;
+}
+
+/**
+ * Deletes a work's cover image from disk.
+ * @param {String} id Work id (e.g. '123456', '01134567', 'd_215444').
+ */
+const deleteCoverImageFromDisk = id => new Promise((resolve, reject) => {
   const types = ['main', 'sam', '240x240', '360x360'];
   types.forEach(type => {
     try {
-      fs.unlinkSync(path.join(config.coverFolderDir, `RJ${rjcode}_img_${type}.jpg`));
+      fs.unlinkSync(path.join(config.coverFolderDir, coverFileName(id, type)));
     } catch (err) {
-      reject(err);
+      // ENOENT is fine — file may not exist
+      if (err.code !== 'ENOENT') {
+        reject(err);
+      }
     }
   });
 
@@ -321,14 +342,14 @@ const deleteCoverImageFromDisk = rjcode => new Promise((resolve, reject) => {
 /**
  * Saves cover image to disk.
  * @param {ReadableStream} stream Image data stream.
- * @param {String} rjcode Work RJ code (only the 6 digits, zero-padded).
- * @param {String} types img type: ('main', 'sam', 'sam@2x', 'sam@3x', '240x240', '360x360').
+ * @param {String} id Work id (e.g. '123456', '01134567', 'd_215444').
+ * @param {String} type img type: ('main', 'sam', 'sam@2x', 'sam@3x', '240x240', '360x360').
  */
-const saveCoverImageToDisk = (stream, rjcode, type) => new Promise((resolve, reject) => {
+const saveCoverImageToDisk = (stream, id, type) => new Promise((resolve, reject) => {
   // TODO: don't assume image is a jpg?
   try {
     stream.pipe(
-      fs.createWriteStream(path.join(config.coverFolderDir, `RJ${rjcode}_img_${type}.jpg`))
+      fs.createWriteStream(path.join(config.coverFolderDir, coverFileName(id, type)))
         .on('close', () => resolve()),
     );
   } catch (err) {
@@ -336,23 +357,15 @@ const saveCoverImageToDisk = (stream, rjcode, type) => new Promise((resolve, rej
   }
 });
 
-
 /**
  * 格式化 id，适配 8 位、6 位 id
- * @param {number} id
+ * @param {number|string} id
  * @return {string}
  */
-
 function formatID(id) {
-  if (id >= 1000000) {
-    // 大于 7 位数，则补全为 8 位
-    id = `0${id}`.slice(-8);
-  } else {
-    // 否则补全为 6 位
-    id = `000000${id}`.slice(-6);
-  }
-
-  return id;
+  if (typeof id === 'string') return id; // already in final form ('123456', '01134567', 'd_215444')
+  const n = parseInt(id, 10);
+  return (n >= 1000000) ? `0${n}`.slice(-8) : `000000${n}`.slice(-6);
 }
 
 module.exports = {
@@ -362,5 +375,6 @@ module.exports = {
   deleteCoverImageFromDisk,
   saveCoverImageToDisk,
   formatID,
+  coverFileName,
   scrapeWorkMemo,
 };

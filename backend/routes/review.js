@@ -4,7 +4,7 @@ const { query, body } = require('express-validator');
 const { config } = require('../config');
 const db = require('../database/db');
 const normalize = require('./utils/normalize');
-const { isValidRequest } = require('./utils/validate');
+const { isValidRequest, workIdBody, workIdQuery } = require('./utils/validate');
 
 const PAGE_SIZE = config.pageSize || 12;
 
@@ -48,7 +48,7 @@ router.get('/',
 
 // 提交用户评价
 router.put('/',
-  body('work_id').isInt(),
+  workIdBody(),
   body('rating').optional().isInt(),
   body('progress').optional().isIn(['marked', 'listening', 'listened', 'replay', 'postponed']),
   body('starOnly').optional().isBoolean(),
@@ -82,7 +82,7 @@ router.put('/',
 
 // 删除用户标记
 router.delete('/',
-  query('work_id').isInt(),
+  workIdQuery(),
   (req, res, next) => {
     if(!isValidRequest(req, res)) return;
 

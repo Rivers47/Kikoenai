@@ -61,6 +61,7 @@ Per-package scripts still work inside each workspace (e.g. `npm run scan`, `npm 
 | Vue page/component, Vuex module, boot file, PWA, player UI | `frontend/AGENTS.md` |
 | Root scripts, release flow, CI, container | This file + `README.md` |
 | E2E browser tests | `tests/playwright.config.js` (needs frontend on :8080) |
+| Fanza scraping source | `backend/AGENTS.md` §6 + `scraper/fanza.js` — work ids are `d_`-prefixed strings; DLsite ids stored RJ-padded (6/8 digit); all label ids are UUIDs |
 
 Changes touching both packages (e.g. a new API endpoint used by a new Vue page): read **both** sub-guides and keep their API-contract tables in sync.
 

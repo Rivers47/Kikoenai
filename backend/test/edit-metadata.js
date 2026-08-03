@@ -59,11 +59,14 @@ describe('editWorkMetadata', function () {
     // Create schema
     await createSchema();
 
-    // Create a circle
-    [defaultCircleId] = await db.knex('t_circle').insert({ name: '测试社团' });
+    // Create a circle (UUID id)
+    defaultCircleId = nameToUUID('测试社团');
+    await db.knex.raw('INSERT OR IGNORE INTO t_circle(id, name) VALUES (?, ?)', [defaultCircleId, '测试社团']);
 
-    // Insert a work
-    [workId] = await db.knex('t_work').insert({
+    // Insert a work (explicit string id)
+    workId = '123456';
+    await db.knex('t_work').insert({
+      id: workId,
       root_folder: 'default',
       dir: 'test_dir',
       title: '原始标题',
@@ -80,7 +83,8 @@ describe('editWorkMetadata', function () {
     });
 
     // Tag
-    const [tagId] = await db.knex('t_tag').insert({ name: '测试标签' });
+    const tagId = nameToUUID('测试标签');
+    await db.knex.raw('INSERT OR IGNORE INTO t_tag(id, name) VALUES (?, ?)', [tagId, '测试标签']);
     await db.knex('r_tag_work').insert({ tag_id: tagId, work_id: workId });
 
     // VA
@@ -99,8 +103,9 @@ describe('editWorkMetadata', function () {
     await db.knex('r_script_writer_work').insert({ script_writer_id: swId, work_id: workId });
 
     // Series
-    await db.knex('t_series').insert({ id: 1001, name: '测试系列' });
-    await db.knex('r_series_work').insert({ series_id: 1001, work_id: workId });
+    const seriesId = nameToUUID('测试系列');
+    await db.knex.raw('INSERT OR IGNORE INTO t_series(id, name) VALUES (?, ?)', [seriesId, '测试系列']);
+    await db.knex('r_series_work').insert({ series_id: seriesId, work_id: workId });
   });
 
   it('1. Core fields: edit title/nsfw/release', async function () {
@@ -332,10 +337,13 @@ describe('updateWorkMetadata refresh merge semantics', function () {
 
   before('Setup work for refresh merge tests', async function () {
     // Create a circle
-    const [circleId] = await db.knex('t_circle').insert({ name: origCircleName });
+    const circleId = nameToUUID(origCircleName);
+    await db.knex.raw('INSERT OR IGNORE INTO t_circle(id, name) VALUES (?, ?)', [circleId, origCircleName]);
 
     // Insert a work with only basic fields, empty title placeholder, no release, no VAs
-    [workId] = await db.knex('t_work').insert({
+    workId = '654321';
+    await db.knex('t_work').insert({
+      id: workId,
       root_folder: 'default',
       dir: 'refresh_test_dir',
       title: '',
@@ -417,8 +425,11 @@ describe('updateWorkMetadata refresh merge semantics', function () {
   it('10. Refresh gap-fill: empty release gets filled, non-empty title stays', async function () {
     // release is already '2025-01-01' from previous test - non-empty stays
     // Create a new work with empty release
-    const [circleId] = await db.knex('t_circle').insert({ name: 'gap测试社团' });
-    const [gapWorkId] = await db.knex('t_work').insert({
+    const circleId = nameToUUID('gap测试社团');
+    await db.knex.raw('INSERT OR IGNORE INTO t_circle(id, name) VALUES (?, ?)', [circleId, 'gap测试社团']);
+    const gapWorkId = '789012';
+    await db.knex('t_work').insert({
+      id: gapWorkId,
       root_folder: 'default',
       dir: 'gap_test_dir',
       title: '已有标题',

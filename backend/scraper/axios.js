@@ -77,6 +77,8 @@ const retryGet = async (url, config) => {
     defaultTimeout = Config.dlsiteTimeout || defaultLimit;
   } else if (url.indexOf('hvdb') !== -1) {
     defaultTimeout = Config.hvdbTimeout || defaultLimit;
+  } else if (url.indexOf('dmm.co.jp') !== -1) {
+    defaultTimeout = Config.fanzaTimeout || defaultLimit;
   }
 
   config.retry = {

@@ -6,22 +6,23 @@ const db = require('../database/db');
 const { getTrackList, toTree } = require('../filesystem/utils');
 const { config } = require('../config');
 const normalize = require('./utils/normalize');
-const { isValidRequest } = require('./utils/validate');
-const { formatID, scrapeWorkMemo } = require('../filesystem/utils');
+const { isValidRequest, workIdParam } = require('./utils/validate');
+const { formatID, scrapeWorkMemo, coverFileName } = require('../filesystem/utils');
 const { scrapeWorkMetadataFromDLsite } = require('../scraper/dlsite');
+const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
 
 const PAGE_SIZE = config.pageSize || 12;
 const FIELDS = ['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series'];
 
 // GET work cover image
 router.get('/cover/:id',
-  param('id').isInt(),
+  workIdParam(),
   (req, res, next) => {
     if(!isValidRequest(req, res)) return;
 
-    const rjcode = formatID(req.params.id);
+    const workId = req.params.id;
     const type = req.query.type || 'main'; // 'main', 'sam', '240x240', '360x360'
-    res.sendFile(path.join(config.coverFolderDir, `RJ${rjcode}_img_${type}.jpg`), { dotfiles: 'allow' /* Express 5: preserve v4 behavior */ }, (err) => {
+    res.sendFile(path.join(config.coverFolderDir, coverFileName(workId, type)), { dotfiles: 'allow' /* Express 5: preserve v4 behavior */ }, (err) => {
       if (err) {
         res.sendFile(path.join(__dirname, '../static/no-image.jpg'), (err2) => {
           if (err2) {
@@ -34,7 +35,7 @@ router.get('/cover/:id',
 
 // GET work metadata
 router.get('/work/:id',
-  param('id').isInt(),
+  workIdParam(),
   (req, res, next) => {
     if(!isValidRequest(req, res)) return;
 
@@ -53,7 +54,7 @@ router.get('/work/:id',
 
 // GET track list in work folder
 router.get('/tracks/:id',
-  param('id').isInt(),
+  workIdParam(),
   async (req, res, next) => {
     if(!isValidRequest(req, res)) return;
     const work_id = req.params.id;
@@ -64,6 +65,10 @@ router.get('/tracks/:id',
         .where('id', '=', work_id)
         .first();
 
+      if (!work) {
+        res.status(404).send({error: `没有 id 为 "${work_id}" 的作品`});
+        return;
+      }
       const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
       if (rootFolder) {
         try {
@@ -241,7 +246,7 @@ for (const field of FIELDS) {
 
 // PUT - manually edit work metadata (admin only)
 router.put('/work/:id',
-  param('id').isInt(),
+  workIdParam(),
   body('title').isString().notEmpty(),
   body('nsfw').isBoolean(),
   body('release').optional().isString(),
@@ -259,7 +264,7 @@ router.put('/work/:id',
       return res.status(403).send({ error: '只有 admin 账号能编辑作品元数据.' });
     }
 
-    const workId = parseInt(req.params.id);
+    const workId = req.params.id;
 
     try {
       // Normalize input: coerce list elements to {id, name}, skip empty names, trim, deduplicate by name
@@ -301,16 +306,20 @@ router.put('/work/:id',
 
 // 刷新单个作品文件夹中的文件信息记录，例如音频文件发生变动后，通过这个请求重新扫描音频文件时长
 router.post('/work/scan/:id',
-  param('id').isInt(),
+  workIdParam(),
   async function(req, res) {
     if(!isValidRequest(req, res)) return;
 
-    const work_id = parseInt(req.params.id);
+    const work_id = req.params.id;
     try {
       const work = await db.knex('t_work')
         .select('root_folder', 'dir', 'memo')
         .where('id', '=', work_id)
         .first();
+      if (!work) {
+        res.status(404).send({error: `没有 id 为 "${work_id}" 的作品`});
+        return;
+      }
       const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
       if (!rootFolder) {
         res.status(500).send({error: "扫描作品文件失败，没有找到rootFolder: " + work.root_folder});
@@ -326,15 +335,20 @@ router.post('/work/scan/:id',
   } 
 );
 
-// refresh metadata of a work from DLsite, and update the database
+// refresh metadata of a work from DLsite or Fanza, and update the database
 router.post('/refresh/:id',
-  param('id').isInt(),
+  workIdParam(),
   async function(req, res) {
     if(!isValidRequest(req, res)) return;
 
-    const work_id = parseInt(req.params.id);
+    const work_id = req.params.id;
     try {
-      const metadata = await scrapeWorkMetadataFromDLsite(work_id);
+      let metadata;
+      if (String(work_id).startsWith('d_')) {
+        metadata = await scrapeWorkMetadataFromFanza(work_id);
+      } else {
+        metadata = await scrapeWorkMetadataFromDLsite(work_id);
+      }
       metadata.id = work_id;
       await db.updateWorkMetadata(metadata, { refreshAll: true });
       res.send({ message: 'Refresh metadata for work ' + work_id + ' successful', metadata });

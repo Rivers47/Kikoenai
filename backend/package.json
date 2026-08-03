@@ -1,6 +1,6 @@
 {
   "name": "kikoeru-express",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "A self-hosted media server for listening to your DLsite voice works.",
   "homepage": "https://github.com/kikoeru-project/kikoeru-express",
   "repository": {
@@ -42,7 +42,7 @@
     "dev": "nodemon --trace-warnings app.js",
     "scan": "node --trace-warnings ./filesystem/scanner.js",
     "build": "pkg package.json --out-path package",
-    "test": "cross-env eslint . && cross-env NODE_ENV=test mocha test/",
+    "test": "cross-env eslint . && cross-env NODE_ENV=test mocha test/ --ignore test/benchmark.js",
     "bench": "cross-env NODE_ENV=test mocha test/benchmark.js"
   },
   "author": "Watanuki-Kimihiro",
@@ -51,9 +51,7 @@
   ],
   "license": "GPL-3.0-or-later",
   "dependencies": {
-    "@umonaca/umzug": "^2.3.1",
     "axios": "^1.18.1",
-    "bluebird": "^3.7.2",
     "cheerio": "^1.0.0-rc.6",
     "compare-versions": "^3.6.0",
     "compression": "^1.7.4",
@@ -65,7 +63,6 @@
     "express-validator": "^7.0.0",
     "htmlparser2": "^4.1.0",
     "https": "^1.0.0",
-    "invariant": "^2.2.4",
     "jimp": "^1.6.1",
     "jschardet": "^3.0.0",
     "jsonwebtoken": "^9.0.3",

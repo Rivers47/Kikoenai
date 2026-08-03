@@ -8,12 +8,12 @@ const path = require('path');
 const jschardet = require('jschardet');
 const { getTrackList } = require('../filesystem/utils');
 const { joinFragments } = require('./utils/url');
-const { isValidRequest } = require('./utils/validate');
+const { isValidRequest, workIdParam } = require('./utils/validate');
 const { Jimp, JimpMime } = require('jimp');
 
 // GET (stream) a specific track from work folder
 router.get('/stream/:id/:index',
-  param('id').isInt(),
+  workIdParam(),
   param('index').isInt(),
   (req, res, next) => {
     if(!isValidRequest(req, res)) return;
@@ -23,6 +23,10 @@ router.get('/stream/:id/:index',
       .where('id', '=', req.params.id)
       .first()
       .then((work) => {
+        if (!work) {
+          res.status(404).send({error: `没有 id 为 "${req.params.id}" 的作品`});
+          return;
+        }
         const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
         if (rootFolder) {
           getTrackList(req.params.id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo))
@@ -73,7 +77,7 @@ router.get('/stream/:id/:index',
 });
 
 router.get('/download/:id/:index',
-  param('id').isInt(),
+  workIdParam(),
   param('index').isInt(),
   (req, res, next) => {
     if(!isValidRequest(req, res)) return;
@@ -83,6 +87,10 @@ router.get('/download/:id/:index',
       .where('id', '=', req.params.id)
       .first()
       .then((work) => {
+        if (!work) {
+          res.status(404).send({error: `没有 id 为 "${req.params.id}" 的作品`});
+          return;
+        }
         const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
         if (rootFolder) {
           getTrackList(req.params.id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo))
@@ -116,7 +124,7 @@ router.get('/download/:id/:index',
 });
 
 router.get('/check-lrc/:id/:index',
-  param('id').isInt(),
+  workIdParam(),
   param('index').isInt(),
   (req, res, next) => {
     if(!isValidRequest(req, res)) return;
@@ -126,6 +134,10 @@ router.get('/check-lrc/:id/:index',
       .where('id', '=', req.params.id)
       .first()
       .then((work) => {
+        if (!work) {
+          res.status(404).send({error: `没有 id 为 "${req.params.id}" 的作品`});
+          return;
+        }
         const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
         if (rootFolder) {
           getTrackList(req.params.id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo))
@@ -184,7 +196,7 @@ router.get('/check-lrc/:id/:index',
 
 // GET (stream) a specific track from work folder
 router.get('/small-img/:id/:index',
-  param('id').isInt(),
+  workIdParam(),
   param('index').isInt(),
   async (req, res) => {
     if(!isValidRequest(req, res)) return;
@@ -192,6 +204,10 @@ router.get('/small-img/:id/:index',
       .select('root_folder', 'dir')
       .where('id', '=', req.params.id)
       .first();
+    if (!work) {
+      res.status(404).send({error: `没有 id 为 "${req.params.id}" 的作品`});
+      return;
+    }
     const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
     if (rootFolder) {
       const tracks = await getTrackList(req.params.id, path.join(rootFolder.path, work.dir));

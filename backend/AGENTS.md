@@ -98,13 +98,13 @@ SQLite3 via Knex.js with the following tables:
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
-| `t_work` | Voice works (audio albums) | `id`, `title`, `dir`, `circle_id`, `nsfw`, `release`, `dl_count`, `price`, `rate_average_2dp`, `memo` (JSON) |
-| `t_circle` | Circles (artist groups) | `id`, `name` |
-| `t_tag` | Tags | `id`, `name` |
+| `t_work` | Voice works (audio albums) | `id` (TEXT — see id note below), `title`, `dir`, `circle_id`, `nsfw`, `release`, `dl_count`, `price`, `rate_average_2dp`, `memo` (JSON) |
+| `t_circle` | Circles (artist groups) | `id` (UUID), `name` |
+| `t_tag` | Tags | `id` (UUID), `name` |
 | `t_va` | Voice actors | `id` (UUID v5), `name` |
 | `t_illustrator` | Illustrators | `id` (UUID), `name` |
 | `t_script_writer` | Script writers | `id` (UUID), `name` |
-| `t_series` | Series (manual collections) | `id` (integer; **negative** for user-created), `name` |
+| `t_series` | Series (manual collections) | `id` (UUID), `name` |
 | `r_tag_work` | Tag-work many-to-many | `tag_id`, `work_id` |
 | `r_va_work` | VA-work many-to-many | `va_id`, `work_id` |
 | `r_illustrator_work` | Illustrator-work many-to-many | `illustrator_id`, `work_id` |
@@ -113,6 +113,8 @@ SQLite3 via Knex.js with the following tables:
 | `t_user` | Users | `name` (PK), `password`, `group` |
 | `t_review` | Reviews & progress | `user_name`, `work_id`, `rating`, `review_text`, `progress` |
 | `t_play_histroy` | Playback state | `user_name`, `work_id`, `state` (JSON) |
+
+**Work id / label id note (since migration `20260802000000`):** `t_work.id` and all `work_id` foreign keys are **TEXT**. A DLsite work id is stored already RJ-padded (`'123456'` 6-digit, or `'01134567'` 8-digit — matching `formatID`), so the work URL `/work/123456` shows the original RJ id directly; a Fanza (DMM doujin) work id is the content-id `'d_215444'`. The `d_` prefix distinguishes the source — there is no separate source column. **All** label ids (circle/tag/va/illustrator/script_writer/series) are name-based UUIDs (TEXT PK) resolved by `resolveLabel` in `queries.js`; DLsite RG/genre/SRI ids scraped from the storefront are no longer used as DB ids, and a label shared across DLsite + Fanza merges into one row.
 
 ### 2.4 Configuration (`config.js`)
 
@@ -138,6 +140,7 @@ Only one scanner process can run at a time (guarded by `scanner` variable in `so
 - **DLsite** (`dlsite.js`): Primary scraper. Fetches work pages, parses HTML with Cheerio.
 - **ASMR.one** (`asmrOne.js`): Secondary source.
 - **HVDB** (`hvdb.js`): Another metadata source.
+- **Fanza** (`fanza.js`): Scrapes Fanza (DMM) doujin detail pages. Uses age-check cookies to bypass the adult interstitial. Identifies works by `d_`-prefixed content ids.
 - All scrapers use a shared Axios instance (`axios.js`) with proxy support, retry logic, and configurable timeouts.
 
 ### 2.7 Routes (`routes/`)
@@ -168,7 +171,7 @@ All routes mounted under `/api`:
 ## 3. Critical Conventions & Gotchas
 
 - **SQLite:** No concurrent writes. Busy timeout configured. Foreign keys enabled via `PRAGMA foreign_keys = ON` in `db.js`.
-- **Migrations:** Sequential, timestamp-prefixed files in `database/migrations/`. Run automatically on startup via `knex-migrate.js`.`dbVersion` in `schema.js` must always equal the latest migration's timestamp prefix (asserted by `test/migration..js`).
+- **Migrations:** Sequential, timestamp-prefixed files in `database/migrations/`. Run automatically on **every** startup via `knex-migrate.js` (`init.js`); umzug tracks executed migrations in the `knex_migrations` table, so only pending ones run (idempotent — no version bump required for a migration to be picked up). The app-version comparison in `init.js` gates only the version-keyed upgrade tasks (`applyFix`/`fixMigrations` in `upgrade.js`, `updateConfig`) — those must run **before** `up` because they can mark migrations as executed (`skipAll`). `dbVersion` in `schema.js` must always equal the latest migration's timestamp prefix (asserted by `test/migration..js`).
 - **Config write protection:** `setConfig()` always overwrites `production`, `md5secret`, `jwtsecret` with current values — these cannot be changed through the admin panel.
 - **Error handling:** JWT errors → 401 with `WWW-Authenticate` header. Missing DB tables → 500 with "数据库结构尚未建立". Production mode sanitizes error messages (no stack traces).
 - **Child process IPC:** Uses `process.on('message')` / `process.send()`. Parent (Socket.IO) relays events to all connected clients.
@@ -176,7 +179,7 @@ All routes mounted under `/api`:
 - **Update lock file:** `upgrade.js` maintains `update.lock` in the config folder for the one-time upgrade/migration process (e.g. `fixVA`). Its state is surfaced as `lockFileExists` in the `/api/version` response — this is unrelated to scan concurrency.
 - **Express 5 migration notes:** `res.sendFile`/`express.static` now reject paths containing dot-segments unless `dotfiles: 'allow'` — `routes/media.js` passes `{ dotfiles: 'allow' }` to its `res.sendFile` calls to preserve v4 behavior for user audio paths. `express-validator` is on **v7**, where `.optional({ nullable: true })` became `.optional()`. `req.body` is `undefined` (not `{}`) before body parsing. Async route handlers have rejected promises forwarded to the error handler automatically.
 - **Metadata editing (admin only):** `PUT /api/work/:id` (`routes/metadata.js`) is gated by `config.auth && req.user.name !== 'admin'` → 403. When `config.auth` is false, all requests act as admin and editing is unrestricted. The handler validates the body with `express-validator` and delegates to `db.editWorkMetadata(workId, data)`, which runs in a single Knex transaction and **replaces** (not merges) the tag/VA/illustrator/script-writer/series relationships for the work, then re-fetches via `db.getWorkMetadata`.
-- **Label id conventions:** `t_va`, `t_illustrator`, and `t_script_writer` use **UUID** ids, resolved/created by `resolveUUIDLabel(trx, table, name)` in `db.js`. `t_series` uses **integer** ids, and user-created series get **negative** ids generated by `resolveSeries(trx, name)`. When editing metadata, list elements are normalized to `{id?, name}`, trimmed, and de-duplicated by name; `id` is optional (the server resolves or creates the row).
+- **Label id conventions:** **All** label tables (`t_circle`, `t_tag`, `t_va`, `t_illustrator`, `t_script_writer`, `t_series`) use **name-based UUID** ids, resolved/created by the unified `resolveLabel(trx, table, name)` helper in `queries.js` (deterministic `nameToUUID(name)` + `INSERT OR IGNORE`). Explicit numeric ids emitted by scrapers (DLsite RG/genre/SRI ids) are ignored. When editing metadata, list elements are normalized to `{id?, name}`, trimmed, and de-duplicated by name; `id` is optional (the server resolves or creates the row by name).
 
 ---
 
@@ -212,6 +215,8 @@ npm run build   # Package into standalone executable (pkg)
 ## 6. API Contract (Exposed to Frontend)
 
 The following endpoints are consumed by the `frontend/` package:
+
+**Id formats:** work-id route params (`:id` on `/api/work`, `/api/cover`, `/api/tracks`, `/api/media/*`, `/api/refresh`, `/api/work/scan`) are **strings** matching `^(\d{6,8}|d_\d+)$` — DLsite ids are already RJ-padded digit strings, Fanza ids are `d_`-prefixed (validated by `workIdParam`/`workIdBody` in `routes/utils/validate.js`). Label-id params (`/api/:fields/:id/works`) are UUID strings.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -264,7 +269,8 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 ### Adding a database migration
 1. Create file in `database/migrations/` with timestamp prefix (e.g., `20260802000000_my_migration.js`).
 2. Export `up` and `down` functions following existing patterns.
-3. Migration runs automatically on next server startup.
+3. Bump `dbVersion` in `database/schema.js` to the new timestamp prefix and update `createSchema` so a fresh DB matches the migrated one.
+4. Migration runs automatically on next server startup, logging `Doing migrate on <file>` (and `数据库迁移完成` when the startup is also a version upgrade). Pending migrations run on every boot regardless of version bumps — the `knex_migrations` table is the source of truth, not the app version.
 
 ### Adding a new scraper source
 1. Create scraper module in `scraper/` following `dlsite.js` pattern.

@@ -10,7 +10,7 @@
   >
     <div class="absolute-top-left transparent" style="padding: 0;">
       <q-chip dense square color="dark" text-color="white" class="q-ma-sm shadow-3">
-        {{`RJ${rjcode}`}}
+        {{code}}
       </q-chip>
     </div>
 
@@ -47,7 +47,7 @@ export default {
 
   props: {
     workid: {
-      type: Number,
+      type: [String, Number],
       required: true
     },
     
@@ -81,8 +81,15 @@ export default {
     },
 
     rjcode () {
-      // return (`000000${this.workid}`).slice(-6)
       return formatID(this.workid)
+    },
+
+    code () {
+      const id = String(this.workid)
+      if (id.startsWith('d_')) {
+        return id
+      }
+      return 'RJ' + id
     },
 
     imgClass () {
