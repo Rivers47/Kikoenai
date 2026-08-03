@@ -208,6 +208,54 @@ const extendedBlock = (which) =>
       Object.keys(extended).flatMap((n) => extendedVars(n, which)).join('\n')
     : '';
 
+// --- Utility classes for theme tokens ---
+// Quasar generates bg-*/text-on-* utilities only for its built-in brand
+// colors (primary, secondary, negative, ...). The M3 *-container / on-*
+// tokens below have no Quasar equivalent, so we emit the matching utility
+// classes here. This keeps `npm run theme` self-contained: replacing the
+// theme JSON and re-running produces a complete set of utilities, so a
+// container (e.g. error-container) can't be silently dropped the way it
+// was when these lived only in hand-maintained app.scss.
+//
+// Bare `text-on-<role>` for the M3 on-colors (also not all provided by
+// Quasar) and surface/on-surface helpers are included for the same reason.
+const containerRoles = ['primary', 'secondary', 'tertiary', 'error'];
+// Extended (semantic) colors are emitted only when present in extendedColors.
+const extendedContainerRoles = ['positive', 'info', 'warning'];
+const bareOnRoles = ['primary', 'secondary', 'tertiary', 'error', 'positive', 'info', 'warning'];
+
+const utilities = `${header}
+// Utility classes for Material theme tokens, generated alongside the CSS
+// variables above. Usable with Quasar color props, e.g.
+//   color="primary-container" text-color="on-primary-container"
+// Keep these in sync with the variables emitted above; do not hand-edit.
+
+// Container backgrounds + their on-colors
+${containerRoles
+  .map(
+    (r) => `.bg-${r}-container { background: var(--${r}-container) !important; }
+.text-on-${r}-container { color: var(--on-${r}-container) !important; }`
+  )
+  .join('\n')}
+${extendedContainerRoles
+  .filter((r) => extended[r])
+  .map(
+    (r) => `.bg-${r}-container { background: var(--${r}-container) !important; }
+.text-on-${r}-container { color: var(--on-${r}-container) !important; }`
+  )
+  .join('\n')}
+
+// Surface container helpers (only highest is used today)
+.bg-surface-container-highest { background: var(--surface-container-highest) !important; }
+
+// Bare on-color text helpers (on-<role>); Quasar provides some, but not all M3 roles
+${bareOnRoles
+  .filter((r) => extended[r] || ['primary', 'secondary', 'tertiary', 'error'].includes(r))
+  .map((r) => `.text-on-${r} { color: var(--on-${r}) !important; }`)
+  .join('\n')}
+.text-on-surface { color: var(--on-surface) !important; }
+`;
+
 const tokens = `${header}
 // Material roles Quasar doesn't have. Use as var(--primary-container) etc.
 :root {
@@ -221,4 +269,5 @@ ${contrastBlocks}`;
 
 writeFileSync(join(root, 'src/css/quasar.variables.scss'), quasarVars);
 writeFileSync(join(root, 'src/css/material-theme.scss'), tokens);
-console.log('Generated src/css/quasar.variables.scss and src/css/material-theme.scss');
+writeFileSync(join(root, 'src/css/theme-utilities.scss'), utilities);
+console.log('Generated src/css/quasar.variables.scss, material-theme.scss and theme-utilities.scss');
