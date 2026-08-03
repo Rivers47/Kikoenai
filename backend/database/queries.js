@@ -924,8 +924,11 @@ const makeQueries = (knex) => {
     }
 
     // Order by
+    // 'userRating' is what the Favourites page sends as its sort option key;
+    // 'rating' is the value used elsewhere (e.g. getWorksBy). Treat both as
+    // the user's review rating, which lives on t_review (aliased as userRating).
     let orderCol;
-    if (orderBy === 'rating') {
+    if (orderBy === 'rating' || orderBy === 'userRating') {
       orderCol = 't_review.rating';
     } else {
       orderCol = `t_work.${orderBy}`;

@@ -123,7 +123,7 @@ export default {
 
   props: {
       workid: {
-        type: Number,
+        type: [String, Number],
         required: true
       },
       metadata: {
