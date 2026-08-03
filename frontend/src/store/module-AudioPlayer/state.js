@@ -4,6 +4,7 @@ export const SWAP_SEEK_BUTTON_KEY = 'swap_seek_button'
 export const ENABLE_PIP_LYRICS = 'enable_pip_lyrics'
 export const AI_SERVER_URL_KEY = 'ai_server_url'
 export const OLD_WORK_CARD_UI_STYLE_KEY = 'old_work_card_ui_style_key'
+export const AUTO_MARK_LISTENED_KEY = 'auto_mark_listened'
 // sessionStorage 中持久化睡眠定时的键，值为 { type, stopAt, tracksLeft }
 export const SLEEP_TIMER_KEY = 'sleepTimer'
 
@@ -58,5 +59,11 @@ export default function () {
 
     // 是否切换回旧式的作品卡片，某些人需要直接展示所有tag，保留旧式UI的选项
     oldWorkCardUIStyle: LocalStorage.has(OLD_WORK_CARD_UI_STYLE_KEY) && LocalStorage.getItem(OLD_WORK_CARD_UI_STYLE_KEY),
+
+    // 当前播放的文件夹中最后一个音频文件的hash，用于自动标记为听完
+    workLastTrackHash: '',
+
+    // 是否自动标记为听完（默认开启）
+    autoMarkListened: LocalStorage.has(AUTO_MARK_LISTENED_KEY) ? LocalStorage.getItem(AUTO_MARK_LISTENED_KEY) : true,
   }
 }

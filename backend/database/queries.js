@@ -879,11 +879,26 @@ const makeQueries = (knex) => {
     .del());
 
   // 添加星标或评语或进度
-  const updateUserReview = async (username, workid, rating, review_text = '', progress = '', starOnly = true, progressOnly= false) => knex.transaction(async(trx) => {
-      //UPSERT
+  // autoMark: when progressOnly=true, only writes/inserts progress='listened' if the
+  // existing progress (if any) is not in the terminal set ('listened','replay','postponed').
+  // This prevents auto-marking from overwriting an explicit user state.
+  const updateUserReview = async (username, workid, rating, review_text = '', progress = '', starOnly = true, progressOnly = false, autoMark = false) => knex.transaction(async(trx) => {
+      // UPSERT
       if (starOnly) {
         await trx.raw('UPDATE t_review SET rating = ?, updated_at = CURRENT_TIMESTAMP WHERE user_name = ? AND work_id = ?;', [rating, username, workid]);
         await trx.raw('INSERT OR IGNORE INTO t_review (user_name, work_id, rating) VALUES (?, ?, ?);', [username, workid, rating]);
+      } else if (progressOnly && autoMark) {
+        // Auto-mark: only write/insert 'listened' if terminal state is not set.
+        const existing = await trx.raw('SELECT progress FROM t_review WHERE user_name = ? AND work_id = ?;', [username, workid]);
+        const existingProgress = existing[0] ? existing[0].progress : null;
+        const terminal = ['listened', 'replay', 'postponed'];
+        if (existingProgress && terminal.includes(existingProgress)) {
+          // No-op — user has explicitly set a terminal state, do not overwrite.
+          return;
+        }
+        // Fall through to normal progressOnly upsert.
+        await trx.raw('UPDATE t_review SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE user_name = ? AND work_id = ?;', [progress, username, workid]);
+        await trx.raw('INSERT OR IGNORE INTO t_review (user_name, work_id, progress) VALUES (?, ?, ?);', [username, workid, progress]);
       } else if (progressOnly) {
         await trx.raw('UPDATE t_review SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE user_name = ? AND work_id = ?;', [progress, username, workid]);
         await trx.raw('INSERT OR IGNORE INTO t_review (user_name, work_id, progress) VALUES (?, ?, ?);', [username, workid, progress]);
@@ -946,13 +961,17 @@ const makeQueries = (knex) => {
     return {works, totalCount};
   };
 
-  const getPlayHistroy = async ({username = '', sortOption = 'desc', limit = 1000, offset = 0}) => {
-    const coreQ = knex('t_work')
+  const getPlayHistroy = async ({username = '', sortOption = 'desc', limit = 1000, offset = 0, excludeFinished = 'listened'}) => {
+    let coreQ = knex('t_work')
       .join('t_play_histroy', function() {
         this.on('t_play_histroy.work_id', '=', 't_work.id')
           .andOn('t_play_histroy.user_name', '=', knex.raw('?', [username]));
       })
       .join('t_circle', 't_circle.id', 't_work.circle_id')
+      .leftJoin('t_review', function() {
+        this.on('t_review.work_id', '=', 't_work.id')
+          .andOn('t_review.user_name', '=', knex.raw('?', [username]));
+      })
       .select(
         't_work.id', 't_work.created_at', 't_work.updated_at',
         't_work.title', 't_work.circle_id', 't_circle.name',
@@ -960,13 +979,25 @@ const makeQueries = (knex) => {
         't_work.dl_count', 't_work.price', 't_work.review_count',
         't_work.rate_count', 't_work.rate_average_2dp',
         't_work.rate_count_detail', 't_work.rank',
-        't_play_histroy.state', 't_play_histroy.updated_at as play_updated_at')
+        't_play_histroy.state', 't_play_histroy.updated_at as play_updated_at',
+        't_review.progress')
       .orderBy('t_play_histroy.updated_at', sortOption);
+
+    if (excludeFinished === 'listened') {
+      coreQ = coreQ.where(function() {
+        this.whereNull('t_review.progress').orWhere('t_review.progress', '!=', 'listened');
+      });
+    }
 
     const countRow = await coreQ.clone().count('t_work.id as count').first();
     const totalCount = [{ count: countRow ? countRow.count : 0 }];
 
     const rows = await coreQ.clone().limit(limit).offset(offset);
+    // No reviewFields: the hide-finished filter is applied server-side above, and
+    // t_review.progress is already spread into each work item via the LEFT JOIN
+    // select. Passing reviewFields would run an extra t_review query and populate
+    // userRating/review_text, which would make star ratings appear in the history
+    // list — an unintended UI change.
     const works = await assembleWorks(rows, { username });
 
     return {works, totalCount};

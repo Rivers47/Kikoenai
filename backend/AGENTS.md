@@ -233,8 +233,9 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/cover/:id` | GET | Get cover image |
 | `/api/files/:id` | GET | List files in a work |
 | `/api/review` | GET | List works the user has reviewed/rated/progress-marked
-| `/api/review/:id` | GET/POST/PUT/DELETE | Work reviews |
-| `/api/histroy` | GET | List works the user has playback history for
+| `/api/review/:id` | GET/POST/PUT/DELETE | Work reviews
+| `/api/review` | PUT | Create/update review, rating, or progress. Optional query `autoMark` (boolean): when `progressOnly=true` and `autoMark=true`, only writes `progress='listened'` if existing progress is null/empty/marked/listening; no-op on listened/replay/postponed.
+| `/api/histroy` | GET | List works the user has playback history for. Optional query `excludeFinished` (`all`|`listened`, default `listened`): when `listened`, excludes rows where `t_review.progress='listened'`. Response items include nullable `progress` field.
 | `/api/histroy/:id` | GET/POST | Playback state (history) |
 | `/api/config/shared` | GET | Public config (seek times) |
 | `/api/version` | GET | Version + update info |

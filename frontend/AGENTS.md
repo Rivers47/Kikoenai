@@ -296,7 +296,8 @@ npm test           # Run ESLint
 | `/api/media/:id/:file` | GET | `AudioPlayer.vue` | Stream audio file (supports Range) |
 | `/api/cover/:id` | GET | `CoverSFW.vue` | Get cover image |
 | `/api/files/:id` | GET | `Work.vue` | List files in a work |
-| `/api/review/:id` | GET/POST/PUT/DELETE | `WorkDetails.vue` | Work reviews |
+| `/api/review/:id` | GET/POST/PUT/DELETE | `WorkDetails.vue` | Work reviews. PUT with `progressOnly=true` and `autoMark=true` only writes `progress='listened'` if existing is not terminal (listened/replay/postponed). |
+| `/api/histroy` | GET | `Favourites.vue`, `RecentWorks.vue` | List works with playback history. Optional `excludeFinished` (`all`|`listened`, default `listened`). Response items include nullable `progress`. |
 | `/api/histroy/:id` | GET/POST | `Work.vue` | Playback state (history) |
 | `/api/config/shared` | GET | `MainLayout.vue` | Public config (seek times) |
 | `/api/version` | GET | `MainLayout.vue` | Version + update info |

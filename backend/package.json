@@ -42,6 +42,7 @@
     "dev": "nodemon --trace-warnings app.js",
     "scan": "node --trace-warnings ./filesystem/scanner.js",
     "build": "pkg package.json --out-path package",
+    "backfill:progress": "node --trace-warnings ./scripts/backfill-progress.js",
     "lint": "eslint .",
     "test": "npm run lint && cross-env NODE_ENV=test mocha test/ --ignore test/benchmark.js",
     "bench": "cross-env NODE_ENV=test mocha test/benchmark.js"

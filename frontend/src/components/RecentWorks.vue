@@ -72,6 +72,7 @@ export default {
       const params = {
         page: this.pagination.currentPage + 1,
         sort: 'desc',
+        excludeFinished: localStorage.hideFinishedHistory || 'listened',
       };
 
       // console.warn('load more page on: ', params.page);
@@ -119,6 +120,7 @@ export default {
         index: work.state.index,
         resetPlaying: false,
         resumeHistroySeconds: work.state.seconds,
+        workLastTrackHash: work.state.queue.length ? work.state.queue[work.state.queue.length - 1].hash : ''
       })
       console.log(`resume seconds = ${work.state.seconds}`)
     }

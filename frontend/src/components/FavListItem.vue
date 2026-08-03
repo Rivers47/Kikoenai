@@ -268,6 +268,7 @@ export default {
         index: histroyState.index,
         resetPlaying: false,
         resumeHistroySeconds: histroyState.seconds,
+        workLastTrackHash: histroyState.queue.length ? histroyState.queue[histroyState.queue.length - 1].hash : ''
       })
       // this.$store.commit('AudioPlayer/SET_RESUME_HISTROY_SECONDS', histroyState.seconds)
     }

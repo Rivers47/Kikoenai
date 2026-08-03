@@ -222,7 +222,8 @@ export default {
           workId: this.metadata.id,
           queue: this.queue.concat(),
           index: this.queue.findIndex(file => file.hash === item.hash),
-          resetPlaying: true
+          resetPlaying: true,
+          workLastTrackHash: this.queue.length ? this.queue[this.queue.length - 1].hash : ''
         })
       }
     },
@@ -235,7 +236,8 @@ export default {
           workId: this.metadata.id,
           queue: this.queue.concat(),
           index: this.queue.findIndex(file => file.hash === hash),
-          resetPlaying: true
+          resetPlaying: true,
+          workLastTrackHash: this.queue.length ? this.queue[this.queue.length - 1].hash : ''
         })
       }
     },

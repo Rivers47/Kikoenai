@@ -105,6 +105,7 @@ export default {
         index: this.metadata.state.index,
         resetPlaying: false,
         resumeHistroySeconds: this.metadata.state.seconds,
+        workLastTrackHash: this.metadata.state.queue.length ? this.metadata.state.queue[this.metadata.state.queue.length - 1].hash : ''
       })
       console.log(`resume seconds = ${this.metadata.state.seconds}`)
     }

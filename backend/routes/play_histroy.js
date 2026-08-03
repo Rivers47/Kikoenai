@@ -12,6 +12,7 @@ const PAGE_SIZE = config.pageSize || 12;
 router.get('/',
   query('page').optional().isInt(),
   query('sort').optional().isIn(['desc', 'asc']),
+  query('excludeFinished').optional().isIn(['all', 'listened']),
   // eslint-disable-next-line no-unused-vars
   async (req, res, next) => {
     if(!isValidRequest(req, res)) return;
@@ -20,6 +21,7 @@ router.get('/',
     const sort = req.query.sort || 'desc';
     const offset = (currentPage - 1) * PAGE_SIZE;
     const username = config.auth ? req.user.name : 'admin';
+    const excludeFinished = req.query.excludeFinished || 'listened';
     
     try {
       const {works, totalCount} = await db.getPlayHistroy({
@@ -27,6 +29,7 @@ router.get('/',
         limit: PAGE_SIZE,
         offset: offset,
         sortOption: sort,
+        excludeFinished: excludeFinished,
       });
       // console.log(`works = ${works}, totalCount = ${totalCount[0]['count']}`)
 

@@ -1,6 +1,6 @@
 import { LocalStorage, SessionStorage } from 'quasar'
 import getters from './getters'
-import state, { SWAP_SEEK_BUTTON_KEY, ENABLE_PIP_LYRICS, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, SLEEP_TIMER_KEY } from './state'
+import state, { SWAP_SEEK_BUTTON_KEY, ENABLE_PIP_LYRICS, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, AUTO_MARK_LISTENED_KEY, SLEEP_TIMER_KEY } from './state'
 
 const mutations = {
   TOGGLE_HIDE (state) {
@@ -66,6 +66,7 @@ const mutations = {
       state.visualPlayerCoverUrl = coverUrl
     }
     state.playWorkId = workId
+    state.workLastTrackHash = payload.workLastTrackHash || ''
     if (Object.prototype.hasOwnProperty.call(payload, "resumeHistroySeconds")) {
       state.resumeHistroySeconds = payload.resumeHistroySeconds
     }
@@ -74,6 +75,7 @@ const mutations = {
     state.playing = false
     state.queue = []
     state.queueIndex = 0
+    state.workLastTrackHash = ''
   },
   ADD_TO_QUEUE: (state, file) => {
     state.queue.push(file)
@@ -219,6 +221,11 @@ const mutations = {
   SET_OLD_WORK_CARD_UI_STYLE: (state, value) => {
     state.oldWorkCardUIStyle = value
     LocalStorage.set(OLD_WORK_CARD_UI_STYLE_KEY, value)
+  },
+
+  SET_AUTO_MARK_LISTENED: (state, value) => {
+    state.autoMarkListened = value
+    LocalStorage.set(AUTO_MARK_LISTENED_KEY, value)
   },
 }
 

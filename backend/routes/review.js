@@ -53,6 +53,7 @@ router.put('/',
   body('progress').optional().isIn(['marked', 'listening', 'listened', 'replay', 'postponed']),
   body('starOnly').optional().isBoolean(),
   body('progressOnly').optional().isBoolean(),
+  query('autoMark').optional().isBoolean(),
   // eslint-disable-next-line no-unused-vars
   (req, res, next) => {
     if(!isValidRequest(req, res)) return;
@@ -60,14 +61,18 @@ router.put('/',
     let username = config.auth ? req.user.name : 'admin';
     let starOnly = true;
     let progressOnly = false;
+    let autoMark = false;
     if (req.query.starOnly === 'false') {
       starOnly = false;
     }
     if (req.query.progressOnly === 'true') {
       progressOnly = true;
     }
+    if (req.query.autoMark === 'true') {
+      autoMark = true;
+    }
     
-    db.updateUserReview(username, req.body.work_id, req.body.rating, req.body.review_text, req.body.progress, starOnly, progressOnly)
+    db.updateUserReview(username, req.body.work_id, req.body.rating, req.body.review_text, req.body.progress, starOnly, progressOnly, autoMark)
         .then(() => {
           if (progressOnly) {
             res.send({ message: '更新进度成功' });

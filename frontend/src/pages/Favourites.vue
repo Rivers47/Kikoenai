@@ -30,7 +30,22 @@
           padding="sm"
           class="q-ml-sm"
           :icon="direction? 'arrow_downward' : 'arrow_upward'"
-          @click="switchSortMode" 
+          @click="switchSortMode"
+        />
+      </div>
+
+      <!-- 历史模式：隐藏已听完筛选 -->
+      <div v-if="mode === 'histroy'" class="col-auto row q-pt-md q-gutter-sm">
+        <q-btn-toggle
+          v-model="hideFinishedFilter"
+          @update:model-value="onHideFinishedChange"
+          toggle-color="primary"
+          rounded
+          class="outline-style"
+          :options="[
+            {label: '隐藏已听完', value: 'listened'},
+            {label: '全部', value: 'all'}
+          ]"
         />
       </div>
     </div>
@@ -115,6 +130,7 @@ export default {
     return {
       mode: 'histroy',
       progressFilter: 'marked',
+      hideFinishedFilter: localStorage.hideFinishedHistory || 'listened',
       works: [],
       stopLoad: false,
       pagination: { currentPage:0, pageSize:12, totalCount:0 },
@@ -255,6 +271,10 @@ export default {
         params.filter = this.progressFilter;
       }
 
+      if (this.mode === 'histroy') {
+        params.excludeFinished = this.hideFinishedFilter;
+      }
+
       const requestUrl = this.mode == 'histroy' ? "/api/histroy" : '/api/review'
       return this.$axios.get(requestUrl, { params })
         .then((response) => {                  
@@ -277,6 +297,12 @@ export default {
           }
           this.stopLoad = true
         })
+    },
+
+    onHideFinishedChange (newValue) {
+      localStorage.hideFinishedHistory = newValue
+      this.hideFinishedFilter = newValue
+      this.reset()
     },
   }
 }

@@ -110,6 +110,24 @@
               </q-item-label>
             </q-item-section>
           </q-item>
+
+          <q-item
+            clickable
+            v-ripple
+            exact
+            @click="$store.commit('AudioPlayer/SET_AUTO_MARK_LISTENED', !autoMarkListened)"
+          >
+            <q-item-section avatar>
+              <q-icon :name="autoMarkListened ? 'task_alt' : 'task'" />
+            </q-item-section>
+
+            <q-item-section>
+              <q-item-label class="text-subtitle1">
+                自动标记已听完
+              </q-item-label>
+              <q-item-label caption lines="2">{{ autoMarkListened ? '已开启' : '已关闭' }}</q-item-label>
+            </q-item-section>
+          </q-item>
         </q-list>
 
         <q-list>
@@ -294,6 +312,7 @@ export default {
     ...mapState('AudioPlayer', [
       'playWorkId',
       'enablePIPLyrics',
+      'autoMarkListened',
     ]),
 
     ...mapGetters('AudioPlayer', [

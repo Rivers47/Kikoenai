@@ -47,6 +47,8 @@ body.body--dark {
 .text-on-tertiary-container { color: var(--on-tertiary-container) !important; }
 .bg-surface-container-highest { background: var(--surface-container-highest) !important; }
 .text-on-surface { color: var(--on-surface) !important; }
+.bg-error-container { background: var(--error-container) !important; }
+.text-on-error-container { color: var(--on-error-container) !important; }
 
 // a {
 //   &:link { text-decoration:none; } // 未访问链接

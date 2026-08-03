@@ -94,6 +94,9 @@ export default {
 
       isChangingCurrentTime: false,
       changeCurrentTime: 0,
+
+      // 防止重复自动标记（同一次播放会话只提示一次）
+      workMarkedComplete: false,
     }
   },
 
@@ -132,6 +135,8 @@ export default {
       'newCurrentTime',
       'lyricOffsetSeconds',
       'enablePIPLyrics',
+      'workLastTrackHash',
+      'autoMarkListened',
     ]),
 
     ...mapGetters('AudioPlayer', [
@@ -155,6 +160,13 @@ export default {
     source (url, oldUrl) {
       if (url && url !== oldUrl) {
         this._onSourceChange(url)
+      }
+    },
+
+    playWorkId (newId, oldId) {
+      // 切换作品时重置自动标记提示状态
+      if (newId !== oldId) {
+        this.workMarkedComplete = false
       }
     },
 
@@ -268,6 +280,35 @@ export default {
       }
     },
 
+    // 当前播放文件夹的最后一首音频自然播放结束时，自动将进度标记为“听完”
+    // Phase 1：仅比较当前文件hash与workLastTrackHash（会话内快照，hash稳定）
+    // Phase 2：将替换这里的条件为“主系列全部曲目已完成”
+    maybeMarkWorkComplete () {
+      if (this.playWorkId === 0) return
+      if (!this.workLastTrackHash) return
+      if (!this.currentPlayingFile || this.currentPlayingFile.hash !== this.workLastTrackHash) return
+      if (!this.autoMarkListened) return
+      if (this.workMarkedComplete) return
+      this.workMarkedComplete = true
+      this.$axios.put('/api/review', {
+        work_id: this.playWorkId,
+        progress: 'listened'
+      }, {
+        params: { starOnly: false, progressOnly: true, autoMark: true }
+      })
+        .then(() => {
+          this.$q.notify({
+            message: '已自动标记为听完',
+            timeout: 1500,
+            color: 'primary',
+            icon: 'task_alt'
+          })
+        })
+        .catch((err) => {
+          console.error(err)
+        })
+    },
+
     _stopBySleepTimer () {
       this.PAUSE()
       this.CLEAR_SLEEP_MODE()
@@ -280,6 +321,7 @@ export default {
     },
 
     onEnded () {
+      this.maybeMarkWorkComplete()
       // 睡眠定时（按曲目）：剩余曲目数为 0 时在当前曲目结束后停止，否则扣减一首
       // 必须在切换曲目逻辑之前处理：一旦推进到下一曲，"当前曲目结束后停止" 就无法实现了
       if (this.sleepMode && this.sleepModeType === 'tracks') {
