@@ -279,6 +279,21 @@ export default {
       return c;
     },
 
+    isFanza() {
+      return String(this.metadata.id).startsWith('d_');
+    },
+
+    sourceLink() {
+      if (this.isFanza) {
+        return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${this.metadata.id}/`;
+      }
+      return `https://www.dlsite.com/home/work/=/product_id/RJ${this.metadata.id}.html`;
+    },
+
+    sourceLabel() {
+      return this.isFanza ? 'Fanza' : 'DLsite';
+    },
+
     currentHistoryTrack() {
       const state = this.metadata.state
       if (!state || !state.queue || state.queue.length === 0) return '—'
