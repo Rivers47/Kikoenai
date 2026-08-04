@@ -4,7 +4,7 @@ exports.up = async function(knex) {
     await knex.schema.createTable('t_track_progress', (table) => {
       table.string('user_name').notNullable();
       table.string('work_id').notNullable();
-      table.string('track_key').notNullable(); // SHA-256 hex
+      table.string('track_key').notNullable(); // CRC32 hex
       table.float('seconds').notNullable().defaultTo(0);
       table.boolean('completed').notNullable().defaultTo(false);
       table.timestamps(true, true);

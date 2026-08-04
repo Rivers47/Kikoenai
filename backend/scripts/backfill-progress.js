@@ -192,6 +192,7 @@ async function main() {
   if (DRY_RUN) {
     console.log('  (dry run — no writes performed)');
   }
+  process.exit(0);
 }
 
 main().catch((err) => {

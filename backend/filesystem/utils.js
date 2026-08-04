@@ -1,5 +1,5 @@
 const fs = require('fs');
-const crypto = require('crypto');
+const zlib = require('zlib');
 const path = require('path');
 // Replacement for recursive-readdir: returns all files recursively as absolute paths
 // Uses sync glob since the walked directories are bounded and the result is needed immediately.
@@ -41,16 +41,23 @@ async function getAudioFileDuration(filePath) {
 const getAudioFileDurationLimited = (filePath) => limitP.call(getAudioFileDuration, filePath);
 
 /**
- * Compute SHA-256 hex digest of a file's contents.
+ * Compute CRC32 hex digest of a file's contents, streamed chunk-by-chunk
+ * (zlib.crc32 takes a running CRC so this mirrors the old SHA-256 streaming).
+ * ponytail: CRC32 (2^32) is not collision-resistant globally, but it doesn't
+ * need to be — t_track_progress PK is (user, work, track_key) so uniqueness
+ * only needs to hold within one work (~tens of tracks, birthday ~3e-7).
+ * Benchmark on the self-hosted matrix (NFS+fast CPU warm): crc32 ~1.6s,
+ * xxh3 ~1.9s, sha256 ~4.5s, blake2s256 ~9s over 7.5GB — crc32 wins, ships with
+ * Node (no dep, no WASM to allow/disallow on locked-down embedded runtimes).
  * @param {String} filePath Absolute path to the file.
- * @returns {Promise<String>} SHA-256 hex string.
+ * @returns {Promise<String>} 8-char CRC32 hex string.
  */
 const getContentHash = (filePath) => {
   return new Promise((resolve, reject) => {
-    const hash = crypto.createHash('sha256');
+    let crc = 0;
     const stream = fs.createReadStream(filePath);
-    stream.on('data', (chunk) => hash.update(chunk));
-    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('data', (chunk) => { crc = zlib.crc32(chunk, crc); });
+    stream.on('end', () => resolve((crc >>> 0).toString(16).padStart(8, '0')));
     stream.on('error', (err) => reject(err));
   });
 };
@@ -59,7 +66,7 @@ const getContentHash = (filePath) => {
 const getContentHashLimited = (filePath) => limitP.call(getContentHash, filePath);
 
 /**
- * Lazily compute SHA-256 hashes for a work's audio files at tree-build time.
+ * Lazily compute CRC32 content hashes for a work's audio files at tree-build time.
  * Reuses memo.hash[relPath] when the file's mtime is unchanged; computes
  * and caches otherwise. Never called at scan time — hashing only happens on
  * first tree-build after the feature ships, or on genuine file modification.

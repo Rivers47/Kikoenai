@@ -10,7 +10,7 @@ const { isValidRequest, workIdBody } = require('./utils/validate');
 // already carries — no file read, no hash computation at write time.
 router.put('/',
   workIdBody(),
-  body('contentHash').isString().isLength({ min: 64, max: 64 }),
+  body('contentHash').isString().isLength({ min: 8, max: 8 }), // CRC32 hex
   body('seconds').isFloat({ min: 0 }),
   body('completed').isBoolean(),
   async (req, res, next) => {

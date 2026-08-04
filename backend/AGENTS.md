@@ -226,7 +226,7 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/search` | GET | Keyword search
 | `/api/:fields/:id/works` | GET | Works filtered
 | `/api/work/:id` | GET | Get work metadata + playback state |
-| `/api/work/:id/memo` | GET | Get work memo incl. lazily-computed content hashes (`{ contentHash: { relPath: contentHash } }`). Only endpoint that reads audio file bytes (SHA-256, mtime-invalidated, cached in `t_work.memo.contentHash`). Frontend fetches after tree renders and merges hashes onto nodes by relPath. |
+| `/api/work/:id/memo` | GET | Get work memo incl. lazily-computed content hashes (`{ contentHash: { relPath: contentHash } }`). Only endpoint that reads audio file bytes (CRC32 via zlib, mtime-invalidated, cached in `t_work.memo.contentHash`). Frontend fetches after tree renders and merges hashes onto nodes by relPath. |
 | `/api/tags` | GET | List all tags |
 | `/api/circles` | GET | List all circles |
 | `/api/vas` | GET | List all VAs |
