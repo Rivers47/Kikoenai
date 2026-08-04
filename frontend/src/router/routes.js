@@ -12,6 +12,7 @@ import Folders from 'pages/Dashboard/Folders'
 import Scanner from 'pages/Dashboard/Scanner'
 import Advanced from 'pages/Dashboard/Advanced'
 import UserManage from 'pages/Dashboard/UserManage'
+import Backfill from 'pages/Dashboard/Backfill'
 
 function prefixRoutes(prefix, routes) {
   return routes.map((route) => {
@@ -40,6 +41,10 @@ const routes = [
       {
         path: 'usermanage',
         component: UserManage
+      },
+      {
+        path: 'backfill',
+        component: Backfill
       }
     ]
   },
@@ -84,7 +89,7 @@ const routes = [
       ...prefixRoutes('favourites', [
         {
           path: '',
-          props: { route: 'histroy'},
+          props: { route: 'history'},
           component: Favourites,
         },
         {
@@ -130,8 +135,8 @@ const routes = [
           component: Favourites,
         },
         {
-          path: '/histroy',
-          props: { route: 'histroy'},
+          path: '/history',
+          props: { route: 'history'},
           component: Favourites,
         },
       ]),

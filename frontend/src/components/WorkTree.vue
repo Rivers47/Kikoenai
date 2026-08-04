@@ -42,8 +42,8 @@
           clickable
           v-ripple
           v-for="item in fatherFolder"
-          :key="item.hash"
-          :active="item.type === 'audio' && currentPlayingFile.hash === item.hash"
+          :key="item.trackId || item.hash"
+          :active="item.type === 'audio' && (currentPlayingFile.trackId || currentPlayingFile.hash) === item.trackId"
           active-class="text-on-primary bg-primary"
           @click="onClickItem(item)"
           class="non-selectable"
@@ -54,21 +54,22 @@
             <q-icon size="34px" v-else-if="item.type === 'image'" color="accent" name="photo" />
             <!-- <q-img width="34px" height="34px" v-else-if="item.type === 'image'" :src="imgSrc(item)" contain :ratio="1/1"  name="thumbnail" /> -->
             <q-icon size="34px" v-else-if="item.type === 'other'" color="info" name="description" />
-            <q-btn v-else round dense color="primary" :icon="playIcon(item.hash)" @click="onClickPlayButton(item.hash)" />
+            <q-btn v-else round dense color="primary" :icon="playIcon(item.trackId || item.hash)" @click="onClickPlayButton(item.trackId || item.hash)" />
 
           </q-item-section>
 
           <q-item-section>
-            <q-item-label>{{ item.title }}</q-item-label>
+            <q-item-label class="text-subtitle1">{{ item.title }}</q-item-label>
             <q-item-label v-if="item.children" caption lines="1">{{ `${item.children.length} 项目` }}</q-item-label>
+          </q-item-section>
 
-            <!--音频文件时长-->
-            <q-item-label
-              v-if="item.type === 'audio' && typeof(item.duration) === 'number'"
-              caption
-              lines="1"
-            >
-              <q-icon size="0.8rem" name="schedule" class="q-mr-xs"></q-icon>
+          <!--音频文件时长 + 已保存的播放进度-->
+          <q-item-section side v-if="item.type === 'audio' && typeof(item.duration) === 'number'">
+            <q-item-label>
+              <template v-if="savedPosition(item) > 0">
+                {{ formatSeconds(savedPosition(item)) }}
+                <span class="q-mx-xs">/</span>
+              </template>
               {{ formatSeconds(item.duration) }}
             </q-item-label>
           </q-item-section>
@@ -133,6 +134,10 @@ export default {
     metadata: {
       type: Object,
       required: true,
+    },
+    trackProgress: {
+      type: Object,
+      default: () => ({}),
     }
   },
 
@@ -187,8 +192,16 @@ export default {
   methods: {
     formatSeconds,
 
-    playIcon (hash) {
-      return this.playing && this.currentPlayingFile.hash === hash ? "pause" : "play_arrow"            
+    // 该曲目已保存的播放进度（秒），无记录返回 0（Phase 2）
+    savedPosition (item) {
+      if (!item || !item.contentHash) return 0
+      const rec = this.trackProgress[item.contentHash]
+      return rec && typeof rec.seconds === 'number' ? rec.seconds : 0
+    },
+
+    playIcon (trackId) {
+      const id = trackId || ''
+      return this.playing && (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) === id ? "pause" : "play_arrow"            
     },
 
     initPath () {
@@ -217,27 +230,32 @@ export default {
         this.openFile(item);
       } else if (item.type === 'other') {
         this.download(item);
-      } else if (this.currentPlayingFile.hash !== item.hash) {
+      } else if ((this.currentPlayingFile.trackId || this.currentPlayingFile.hash) !== item.trackId) {
+        const resumeSeconds = this.trackProgress[item.contentHash];
         this.$store.commit('AudioPlayer/SET_QUEUE', {
           workId: this.metadata.id,
           queue: this.queue.concat(),
-          index: this.queue.findIndex(file => file.hash === item.hash),
+          index: this.queue.findIndex(file => (file.trackId || file.hash) === item.trackId),
           resetPlaying: true,
-          workLastTrackHash: this.queue.length ? this.queue[this.queue.length - 1].hash : ''
+          resumeHistorySeconds: resumeSeconds ? resumeSeconds.seconds : -1,
+          workLastTrackId: this.queue.length ? (this.queue[this.queue.length - 1].trackId || this.queue[this.queue.length - 1].hash) : ''
         })
       }
     },
 
-    onClickPlayButton (hash) {
-      if (this.currentPlayingFile.hash === hash) {
+    onClickPlayButton (trackId) {
+      if ((this.currentPlayingFile.trackId || this.currentPlayingFile.hash) === trackId) {
         this.$store.commit('AudioPlayer/TOGGLE_PLAYING')
       } else {
+        const item = this.fatherFolder.find(i => (i.trackId || i.hash) === trackId);
+        const resumeSeconds = item && item.contentHash ? this.trackProgress[item.contentHash] : null;
         this.$store.commit('AudioPlayer/SET_QUEUE', {
           workId: this.metadata.id,
           queue: this.queue.concat(),
-          index: this.queue.findIndex(file => file.hash === hash),
+          index: this.queue.findIndex(file => (file.trackId || file.hash) === trackId),
           resetPlaying: true,
-          workLastTrackHash: this.queue.length ? this.queue[this.queue.length - 1].hash : ''
+          resumeHistorySeconds: resumeSeconds ? resumeSeconds.seconds : -1,
+          workLastTrackId: this.queue.length ? (this.queue[this.queue.length - 1].trackId || this.queue[this.queue.length - 1].hash) : ''
         })
       }
     },
@@ -253,7 +271,7 @@ export default {
     download (file) {
       const token = this.$q.localStorage.getItem('jwt-token') || '';
       // Fallback to old API for an old backend 
-      const url = file.mediaDownloadUrl ? `${file.mediaDownloadUrl}?token=${token}` : `/api/media/download/${file.hash}?token=${token}`;
+      const url = file.mediaDownloadUrl ? `${file.mediaDownloadUrl}?token=${token}` : `/api/media/download/${file.trackId || file.hash}?token=${token}`;
       const link = document.createElement('a');
       link.href = url;
       link.target="_blank";
@@ -262,7 +280,7 @@ export default {
 
     setVisualPlayerCover (imgFile) {
       if (!imgFile) return;
-      const urlWithoutToken = imgFile.mediaDownloadUrl ? `${imgFile.mediaDownloadUrl}` : `/api/media/download/${imgFile.hash}`;
+      const urlWithoutToken = imgFile.mediaDownloadUrl ? `${imgFile.mediaDownloadUrl}` : `/api/media/download/${imgFile.trackId || imgFile.hash}`;
       this.$store.commit('AudioPlayer/SET_VISUAL_PLAYER_COVER_URL', urlWithoutToken);
       this.$q.notify({
         message: "封面设置成功",
@@ -280,7 +298,7 @@ export default {
     openFile (file) {
       const token = this.$q.localStorage.getItem('jwt-token') || '';
       // Fallback to old API for an old backend 
-      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}?token=${token}` : `/api/media/stream/${file.hash}?token=${token}`;
+      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}?token=${token}` : `/api/media/stream/${file.trackId || file.hash}?token=${token}`;
       const link = document.createElement('a');
       link.href = url;
       link.target="_blank";
@@ -289,7 +307,7 @@ export default {
 
     imgSrc (imgItem) {
       const token = this.$q.localStorage.getItem('jwt-token') || '';
-      const url = `/api/media/small-img/${imgItem.hash}?token=${token}`;
+      const url = `/api/media/small-img/${imgItem.trackId || imgItem.hash}?token=${token}`;
       console.log('imgSrc called for ', imgItem.title);
       return url;
     },
@@ -297,7 +315,7 @@ export default {
     originalImgSrc (file) {
       const token = this.$q.localStorage.getItem('jwt-token') || '';
       // Fallback to old API for an old backend 
-      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}?token=${token}` : `/api/media/stream/${file.hash}?token=${token}`;
+      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}?token=${token}` : `/api/media/stream/${file.trackId || file.hash}?token=${token}`;
       return url
     },
 
@@ -305,7 +323,7 @@ export default {
       const preview_img_list = this.fatherFolder.filter(item => item.type === 'image')
       let preview_img_idx = -1;
       preview_img_list.forEach((i, idx) => {
-        if (i.hash === item.hash) {
+        if ((i.trackId || i.hash) === (item.trackId || item.hash)) {
           preview_img_idx = idx;
         }
       });
@@ -327,3 +345,12 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+/* ponytail: Quasar forces a grey on .q-item__section--side, which overrides the
+   active item's text-on-primary. Inherit only on the active item so the normal
+   grey side text is preserved. */
+.text-on-primary .q-item__section--side {
+  color: inherit;
+}
+</style>

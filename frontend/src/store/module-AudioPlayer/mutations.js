@@ -60,22 +60,23 @@ const mutations = {
       const localStorageName = `visual_cover_${workId}`
       let coverUrl = LocalStorage.getItem(localStorageName)
       if (!coverUrl) {
-        const hash = getters.currentPlayingFile(state).hash
-        coverUrl = `/api/cover/${hash.split('/')[0]}`
+        const file = getters.currentPlayingFile(state)
+        const trackId = file.trackId || file.hash
+        coverUrl = `/api/cover/${trackId.split('/')[0]}`
       }
       state.visualPlayerCoverUrl = coverUrl
     }
     state.playWorkId = workId
-    state.workLastTrackHash = payload.workLastTrackHash || ''
-    if (Object.prototype.hasOwnProperty.call(payload, "resumeHistroySeconds")) {
-      state.resumeHistroySeconds = payload.resumeHistroySeconds
+    state.workLastTrackId = payload.workLastTrackId || ''
+    if (Object.prototype.hasOwnProperty.call(payload, "resumeHistorySeconds")) {
+      state.resumeHistorySeconds = payload.resumeHistorySeconds
     }
   },
   EMPTY_QUEUE: (state) => {
     state.playing = false
     state.queue = []
     state.queueIndex = 0
-    state.workLastTrackHash = ''
+    state.workLastTrackId = ''
   },
   ADD_TO_QUEUE: (state, file) => {
     state.queue.push(file)
@@ -210,12 +211,12 @@ const mutations = {
     LocalStorage.set(ENABLE_PIP_LYRICS, state.enablePIPLyrics)
   },
 
-  SET_RESUME_HISTROY_SECONDS: (state, value) => {
-    state.resumeHistroySeconds = value
+  SET_RESUME_HISTORY_SECONDS: (state, value) => {
+    state.resumeHistorySeconds = value
   },
 
-  RESUME_HISTROY_SECONDS_DONE: (state) => {
-    state.resumeHistroySeconds = -1
+  RESUME_HISTORY_SECONDS_DONE: (state) => {
+    state.resumeHistorySeconds = -1
   },
 
   SET_OLD_WORK_CARD_UI_STYLE: (state, value) => {

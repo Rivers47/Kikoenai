@@ -41,7 +41,7 @@ describe('editWorkMetadata', function () {
         await db.knex.schema.raw('DROP TABLE IF EXISTS r_script_writer_work');
         await db.knex.schema.raw('DROP TABLE IF EXISTS r_series_work');
         await db.knex.schema.raw('DROP TABLE IF EXISTS t_review');
-        await db.knex.schema.raw('DROP TABLE IF EXISTS t_play_histroy');
+        await db.knex.schema.raw('DROP TABLE IF EXISTS t_play_history');
         await db.knex.schema.raw('DROP TABLE IF EXISTS t_work');
         await db.knex.schema.raw('DROP TABLE IF EXISTS t_tag');
         await db.knex.schema.raw('DROP TABLE IF EXISTS t_va');
@@ -526,7 +526,7 @@ after('Tear down test database', async function () {
     'DROP TABLE IF EXISTS r_script_writer_work',
     'DROP TABLE IF EXISTS r_series_work',
     'DROP TABLE IF EXISTS t_review',
-    'DROP TABLE IF EXISTS t_play_histroy',
+    'DROP TABLE IF EXISTS t_play_history',
     'DROP TABLE IF EXISTS t_work',
     'DROP TABLE IF EXISTS t_tag',
     'DROP TABLE IF EXISTS t_va',

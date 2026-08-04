@@ -80,6 +80,11 @@ export default {
           path: '/admin/usermanage'
         },
         {
+          title: '进度回填',
+          icon: 'history',
+          path: '/admin/backfill'
+        },
+        {
           title: '高级设置',
           icon: 'settings',
           path: '/admin/advanced'

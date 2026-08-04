@@ -113,7 +113,7 @@ describe('DB query benchmark', function () {
     this.sample.reviewUser = reviewUserRow ? reviewUserRow.user_name : null;
 
     // Username with play history
-    const historyUserRow = await myKnex('t_play_histroy').select('user_name').distinct().first();
+    const historyUserRow = await myKnex('t_play_history').select('user_name').distinct().first();
     this.sample.historyUser = historyUserRow ? historyUserRow.user_name : null;
 
     this.sample.username = 'admin';
@@ -240,9 +240,9 @@ describe('DB query benchmark', function () {
     expect(row).to.exist;
   });
 
-  it('getPlayHistroy (paged)', async function () {
+  it('getPlayHistory (paged)', async function () {
     if (!this.sample.historyUser) { this.skip('no history user'); return; }
-    const row = await bench('getPlayHistroy', () => Q.getPlayHistroy({
+    const row = await bench('getPlayHistory', () => Q.getPlayHistory({
       username: this.sample.historyUser, limit: PAGE_SIZE, offset: 0, sortOption: 'desc',
     }));
     expect(row).to.exist;

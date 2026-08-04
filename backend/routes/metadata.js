@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { param, query, body } = require('express-validator');
 const db = require('../database/db');
-const { getTrackList, toTree } = require('../filesystem/utils');
+const { getTrackList, toTree, scrapeWorkHashes } = require('../filesystem/utils');
 const { config } = require('../config');
 const normalize = require('./utils/normalize');
 const { isValidRequest, workIdParam } = require('./utils/validate');
@@ -52,6 +52,45 @@ router.get('/work/:id',
       .catch(err => next(err));
   });
 
+// GET work memo, lazily computing + caching per-file content hashes.
+// This is the only endpoint that reads audio file bytes (SHA-256, mtime-
+// invalidated, cached in t_work.memo.contentHash). The tree endpoint (GET /tracks/:id)
+// does NOT hash, so it returns instantly even for multi-GB works; the frontend
+// fetches this in parallel and merges hashes onto tree nodes by relPath.
+router.get('/work/:id/memo',
+  workIdParam(),
+  async (req, res, next) => {
+    if(!isValidRequest(req, res)) return;
+    const work_id = req.params.id;
+    try {
+      const work = await db.knex('t_work')
+        .select('root_folder', 'dir', 'memo')
+        .where('id', '=', work_id)
+        .first();
+      if (!work) {
+        res.status(404).send({error: `没有 id 为 "${work_id}" 的作品`});
+        return;
+      }
+      const rootFolder = config.rootFolders.find(rf => rf.name === work.root_folder);
+      if (!rootFolder) {
+        res.status(500).send({error: `找不到文件夹: "${work.root_folder}"`});
+        return;
+      }
+      const workDir = path.join(rootFolder.path, work.dir);
+      const oldMemo = JSON.parse(work.memo) || {};
+      const { memo, changed } = await scrapeWorkHashes(work_id, workDir, oldMemo);
+      if (changed) {
+        await db.setWorkMemo(work_id, memo);
+      }
+      // Return the hash map keyed by relPath — the frontend joins this onto
+      // tree audio nodes (which carry relPath) to populate contentHash.
+      res.send({ contentHash: memo.contentHash || memo.hash || {} });
+    } catch (err) {
+      console.error(err);
+      res.status(500).send({error: '计算文件哈希失败'});
+    }
+  });
+
 // GET track list in work folder
 router.get('/tracks/:id',
   workIdParam(),
@@ -72,10 +111,22 @@ router.get('/tracks/:id',
       const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
       if (rootFolder) {
         try {
-          const tracks = await getTrackList(work_id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo));
+          const workDir = path.join(rootFolder.path, work.dir);
+          const memo = JSON.parse(work.memo) || {};
+          // Build the tree from the directory listing + memo (durations). NO file
+          // reads here — content hashing (which reads every audio file's bytes)
+          // is deferred to GET /api/work/:id/memo so a multi-GB work doesn't
+          // stall the tree. Audio nodes get contentHash from memo.contentHash where
+          // already cached, null/undefined otherwise; the frontend merges the
+          // late-arriving hashes reactively by relPath.
+          const tracks = await getTrackList(work_id, workDir, memo);
           const tree = toTree(tracks, work.title, work.dir, rootFolder);
-          res.send(tree);
+          // Bundle per-track progress for the requesting user
+          const username = config.auth ? req.user.name : 'admin';
+          const trackProgress = await db.getTrackProgress(username, work_id);
+          res.send({ tree, trackProgress });
         } catch (err) {
+          console.error(err);
           res.status(500).send({error: '获取文件列表失败，请检查文件是否存在或重新扫描清理'});
         }
       } else {

@@ -252,7 +252,7 @@
               </q-item-section>
 
               <q-item-section avatar>
-                <q-img transition="fade" :src="samCoverUrl(track.hash)" style="height: 38px; width: 38px" class="rounded-borders" />
+                <q-img transition="fade" :src="samCoverUrl(track.trackId || track.hash)" style="height: 38px; width: 38px" class="rounded-borders" />
               </q-item-section>
 
               <q-item-section>
@@ -320,7 +320,7 @@ export default {
       editCurrentPlayList: false,
       queueCopy: [],
       isAndroid: navigator.userAgent.toLowerCase().indexOf('android') > -1,
-      histroyCheckIntervalId: -1,
+      historyCheckIntervalId: -1,
       latestUpdatedHistory: null, // 记录最近一次更新的历史记录，防止反复对同一个播放历史进行远程数据更新
 
       // 歌词偏移量修复工具
@@ -333,7 +333,7 @@ export default {
   },
 
   mounted () {
-    this.histroyCheckIntervalId = setInterval(() => {
+    this.historyCheckIntervalId = setInterval(() => {
       this.onUpdatePlayingStatus()
     }, 60 * 1000) // 每隔一段时间更新一次播放记录
 
@@ -350,7 +350,7 @@ export default {
     if (this.$q.platform.is.desktop) {
       window.removeEventListener('keydown', this.onKeyDown);
     }
-    clearInterval(this.histroyCheckIntervalId)
+    clearInterval(this.historyCheckIntervalId)
     document.removeEventListener('visibilitychange', this.onVisibilityChange)
   },
 
@@ -418,19 +418,28 @@ export default {
 
   computed: {
     showAudioPlayer () {
-      return this.currentPlayingFile.hash && !this.hide;
+      return (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) && !this.hide;
     },
 
     coverUrl () {
       // 从 LocalStorage 中读取 token
       const token = this.$q.localStorage.getItem('jwt-token') || ''
-      const hash = this.currentPlayingFile.hash
-      return hash ? `/api/cover/${hash.split('/')[0]}?token=${token}` : ""
+      // 与全屏播放器一致：优先使用用户手动设置或 SET_QUEUE 计算出的可视化封面。
+      // 之前的实现直接用 currentPlayingFile.trackId 推导，当 trackId 缺失（如从历史记录
+      // 恢复且快照项无 trackId）时返回空串，导致小窗播放器封面丢失而全屏正常。
+      if (this.visualPlayerCoverUrl) {
+        return `${this.visualPlayerCoverUrl}?token=${token}`
+      }
+      // 回退：按 workId 取标准封面。
+      if (this.playWorkId) {
+        return `/api/cover/${this.playWorkId}?token=${token}`
+      }
+      return ""
     },
 
     workDetailUrl () {
-      const hash = this.currentPlayingFile.hash
-      return hash ? `/work/${hash.split('/')[0]}` : ""
+      const id = this.currentPlayingFile.trackId || this.currentPlayingFile.hash
+      return id ? `/work/${id.split('/')[0]}` : ""
     },
 
     volume: {
@@ -554,11 +563,12 @@ export default {
       'forwardSeekMode',
       'hasLyric',
       'lyricOffsetSeconds',
+      'visualPlayerCoverUrl',
     ]),
     
     ...mapGetters('AudioPlayer', [
       'currentPlayingFile',
-      'resumeHistroyDone',
+      'resumeHistoryDone',
     ])
   },
 
@@ -604,10 +614,11 @@ export default {
       'SET_VOLUME',
     ]),
 
-    samCoverUrl (hash) {
+    samCoverUrl (trackId) {
       // 从 LocalStorage 中读取 token
       const token = this.$q.localStorage.getItem('jwt-token') || ''
-      return hash ? `/api/cover/${hash.split('/')[0]}?type=sam&token=${token}` : ""
+      const id = trackId || ''
+      return id ? `/api/cover/${id.split('/')[0]}?type=sam&token=${token}` : ""
     },
 
     onClickTrack (index) {
@@ -653,7 +664,7 @@ export default {
       if (ha.state.index != hb.state.index) return false;
       if (ha.state.queue.length != hb.state.queue.length) return false;
       for (let i = 0; i < ha.state.queue.length; ++i) {
-        if (ha.state.queue[i].hash != hb.state.queue[i].hash) return false;
+        if ((ha.state.queue[i].trackId || ha.state.queue[i].hash) != (hb.state.queue[i].trackId || hb.state.queue[i].hash)) return false;
       }
       return true;
     },
@@ -668,7 +679,7 @@ export default {
     // 使用 keepalive fetch 确保页面关闭时播放进度能够送达服务器
     flushHistoryOnHide() {
       if (this.queueCopy.length <= 0) return;
-      if (!this.resumeHistroyDone) return;
+      if (!this.resumeHistoryDone) return;
 
       const data = {
         work_id: this.playWorkId,
@@ -679,10 +690,33 @@ export default {
         }
       }
 
-      fetch('/api/histroy', {
+      fetch('/api/history', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
+        keepalive: true,
+      }).catch(() => {})
+
+      // Also report per-track progress (Phase 2)
+      this._flushTrackProgressOnHide()
+    },
+
+    // Fire-and-forget per-track progress on page hide (Phase 2)
+    _flushTrackProgressOnHide () {
+      const file = this.queueCopy[this.queueIndex]
+      if (!file || !file.contentHash || this.playWorkId === 0) return
+      const seconds = this.currentTime
+      const duration = file.duration
+      const completed = duration > 0 && seconds >= 0.95 * duration
+      fetch('/api/track-progress', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          work_id: this.playWorkId,
+          contentHash: file.contentHash,
+          seconds: Math.round(seconds * 100) / 100,
+          completed: completed
+        }),
         keepalive: true,
       }).catch(() => {})
     },
@@ -693,7 +727,7 @@ export default {
       if (this.queueCopy.length <= 0) return;
 
       // 尚处于恢复历史记录的阶段，为了避免此时将空状态写入远程服务器覆盖有效状态，跳过本次历史更新
-      if (!this.resumeHistroyDone) {
+      if (!this.resumeHistoryDone) {
         console.log("尚处于恢复历史记录的状态，跳过本次历史更新")
         return
       }
@@ -713,7 +747,7 @@ export default {
         return
       }
 
-      this.$axios.put('/api/histroy', data)
+      this.$axios.put('/api/history', data)
         .then((_) => {
           console.log("更新播放状态成功")
           this.latestUpdatedHistory = data;
@@ -721,6 +755,25 @@ export default {
         .catch((err) => {
           console.error(err.response.data.error)
         })
+
+      // Also report per-track progress (Phase 2)
+      this._reportTrackProgressOnUpdate()
+    },
+
+    _reportTrackProgressOnUpdate () {
+      const file = this.queueCopy[this.queueIndex]
+      if (!file || !file.contentHash || this.playWorkId === 0) return
+      const seconds = this.currentTime
+      const duration = file.duration
+      const completed = duration > 0 && seconds >= 0.95 * duration
+      this.$axios.put('/api/track-progress', {
+        work_id: this.playWorkId,
+        contentHash: file.contentHash,
+        seconds: Math.round(seconds * 100) / 100,
+        completed: completed
+      }).catch((err) => {
+        console.error('track progress report failed:', err)
+      })
     },
 
     gotoFullScreenPlayer() {

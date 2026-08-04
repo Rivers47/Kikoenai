@@ -21,7 +21,7 @@
 │   ├── credentials.js       # User CRUD (admin only)
 │   ├── media.js             # Audio streaming, file listing, covers, download
 │   ├── metadata.js          # Works listing, search, sort, filter, tag/VA queries
-│   ├── play_histroy.js      # Playback state persistence
+│   ├── play_history.js      # Playback state persistence
 │   ├── review.js            # Reviews, ratings, progress
 │   ├── version.js           # Version info, release notes
 │   └── utils/               # Shared route utilities (normalize, strftime, url, validate)
@@ -112,7 +112,7 @@ SQLite3 via Knex.js with the following tables:
 | `r_series_work` | Series-work many-to-many | `series_id`, `work_id` |
 | `t_user` | Users | `name` (PK), `password`, `group` |
 | `t_review` | Reviews & progress | `user_name`, `work_id`, `rating`, `review_text`, `progress` |
-| `t_play_histroy` | Playback state | `user_name`, `work_id`, `state` (JSON) |
+| `t_play_history` | Playback state | `user_name`, `work_id`, `state` (JSON) |
 
 **Work id / label id note (since migration `20260802000000`):** `t_work.id` and all `work_id` foreign keys are **TEXT**. A DLsite work id is stored already RJ-padded (`'123456'` 6-digit, or `'01134567'` 8-digit — matching `formatID`), so the work URL `/work/123456` shows the original RJ id directly; a Fanza (DMM doujin) work id is the content-id `'d_215444'`. The `d_` prefix distinguishes the source — there is no separate source column. **All** label ids (circle/tag/va/illustrator/script_writer/series) are name-based UUIDs (TEXT PK) resolved by `resolveLabel` in `queries.js`; DLsite RG/genre/SRI ids scraped from the storefront are no longer used as DB ids, and a label shared across DLsite + Fanza merges into one row.
 
@@ -158,7 +158,9 @@ All routes mounted under `/api`:
 
 > **Route note:** the plural field-list routes (`/api/circles`, `/api/tags`, `/api/vas`, `/api/illustrators`, `/api/script_writers`, `/api/seriess` — note the irregular double-`s` plural) are registered as **literal-path loops** over a `FIELDS` array in `metadata.js` (a `for...of` loop registering one `router.get` per field). Express 5 (path-to-regexp v8) no longer supports regex char-classes in route strings, so the old `/:field(circle|tag|va|...|series)s/...` single-regex-route form was replaced. Each handler receives its `field` via closure.
 | `review.js` | `/api/review/*` | Create/update/delete reviews, ratings, progress |
-| `play_histroy.js` | `/api/histroy/*` | Save/load playback state |
+| `play_history.js` | `/api/history/*` | Save/load playback state |
+| `track_progress.js` | `/api/track-progress/*` | Per-track playback progress (SHA-256 content-hashed) |
+| `backfill.js` | `/api/backfill/*` | Admin: replay play history to backfill listened markers + track progress (`POST /api/backfill/progress`, `{ dryRun?: bool }` → `{ logs[], summary }`) |
 
 ### 2.8 Media Streaming (`routes/media.js`)
 
@@ -226,6 +228,7 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/search` | GET | Keyword search
 | `/api/:fields/:id/works` | GET | Works filtered
 | `/api/work/:id` | GET | Get work metadata + playback state |
+| `/api/work/:id/memo` | GET | Get work memo incl. lazily-computed content hashes (`{ contentHash: { relPath: contentHash } }`). Only endpoint that reads audio file bytes (CRC32 via zlib, mtime-invalidated, cached in `t_work.memo.contentHash`). Frontend fetches after tree renders and merges hashes onto nodes by relPath. |
 | `/api/tags` | GET | List all tags |
 | `/api/circles` | GET | List all circles |
 | `/api/vas` | GET | List all VAs |
@@ -237,14 +240,18 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/review` | PUT | Create/update review, rating, or progress. Optional query `autoMark` (boolean): when `progressOnly=true` and `autoMark=true`, only writes `progress='listened'` if existing progress is null/empty/marked/listening; no-op on listened/replay/postponed.
 | `/api/review` | DELETE | Delete the whole review row (rating + review_text + progress). Query `work_id`.
 | `/api/review/progress` | DELETE | Clear only `progress` (set NULL), preserving rating/review_text. If the row has no rating AND no review_text (e.g. an auto-marked rating-null row), the whole row is deleted to avoid an all-NULL empty row. Query `work_id`.
-| `/api/histroy` | GET | List works the user has playback history for. Optional query `excludeFinished` (`all`|`listened`, default `listened`): when `listened`, excludes rows where `t_review.progress='listened'`. Response items include nullable `progress` field.
-| `/api/histroy/:id` | GET/POST | Playback state (history) |
+| `/api/history` | GET | List works the user has playback history for. Optional query `excludeFinished` (`all`|`listened`, default `listened`): when `listened`, excludes rows where `t_review.progress='listened'`. Response items include nullable `progress` field.
+| `/api/history/:id` | GET/POST | Playback state (history) |
 | `/api/config/shared` | GET | Public config (seek times) |
 | `/api/version` | GET | Version + update info |
 | `/api/work/:id` | PUT | Manually edit work metadata — title, nsfw, release, circle, tags[], vas[], illustrators[], scriptWriters[], series (admin only) |
 | `/api/illustrators` | GET | List all illustrators (autocomplete for metadata editor) |
 | `/api/script_writers` | GET | List all script writers (autocomplete for metadata editor) |
 | `/api/seriess` | GET | List all series (autocomplete for metadata editor) |
+| `/api/track-progress` | PUT | Report per-track playback progress. Accepts `{work_id, contentHash, seconds, completed}`. Upserts `t_track_progress` keyed by contentHash directly — no file read. |
+| `/api/backfill/progress` | POST | Admin: replay play history to mark finished works `listened` and seed `t_track_progress` (computes SHA-256 from disk). Body `{ dryRun?: bool }` → `{ logs[], summary }`. |
+
+> **Tracks response (Phase 2):** `GET /api/tracks/:id` returns `{ tree, trackProgress }` instead of a bare array. The tree is built from the directory listing + `t_work.memo` (durations) **without reading any audio file bytes** — `contentHash` on audio nodes is populated only from already-cached `memo.contentHash` (null/undefined where not yet hashed). Audio nodes carry `trackId` (session-stable file handle, was `hash`), `relPath` (relative path from work root), the stable key the frontend uses to merge late-arriving hashes. `trackProgress` is a `{contentHash: {seconds, completed}}` map. Content hashes are computed lazily by `GET /api/work/:id/memo` (the only endpoint that reads file bytes) and merged onto tree nodes reactively by `relPath`. This is a breaking response-shape change; `Work.vue` handles both via `response.data.tree || response.data`.
 
 > **Note:** Library scanning is **not** a REST endpoint. The frontend triggers it over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN`) and listens for the `SCAN_*` events above. The plural-list route `/:field(circle\|tag\|va\|illustrator\|script_writer\|series)s/` powers the `/api/illustrators`, `/api/script_writers`, and `/api/seriess` endpoints above (note the irregular plural `seriess`).
 

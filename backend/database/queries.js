@@ -67,7 +67,7 @@ const makeQueries = (knex) => {
         : Promise.resolve([]),
       // Play history (only if requested)
       historyFields
-        ? knex('t_play_histroy').select('work_id', 'state', 'updated_at as play_updated_at')
+        ? knex('t_play_history').select('work_id', 'state', 'updated_at as play_updated_at')
             .where('user_name', username).whereIn('work_id', ids)
         : Promise.resolve([]),
     ]);
@@ -547,7 +547,7 @@ const makeQueries = (knex) => {
       const scriptWriters = await trx('r_script_writer_work').select('script_writer_id').where('work_id', '=', id);
       const series = await trx('r_series_work').select('series_id').where('work_id', '=', id);
 
-      await trx('t_play_histroy').del().where('work_id', '=', id);
+      await trx('t_play_history').del().where('work_id', '=', id);
       await trx('r_tag_work').del().where('work_id', '=', id);
       await trx('r_va_work').del().where('work_id', '=', id);
       await trx('r_illustrator_work').del().where('work_id', '=', id);
@@ -979,11 +979,11 @@ const makeQueries = (knex) => {
     return {works, totalCount};
   };
 
-  const getPlayHistroy = async ({username = '', sortOption = 'desc', limit = 1000, offset = 0, excludeFinished = 'listened'}) => {
+  const getPlayHistory = async ({username = '', sortOption = 'desc', limit = 1000, offset = 0, excludeFinished = 'listened'}) => {
     let coreQ = knex('t_work')
-      .join('t_play_histroy', function() {
-        this.on('t_play_histroy.work_id', '=', 't_work.id')
-          .andOn('t_play_histroy.user_name', '=', knex.raw('?', [username]));
+      .join('t_play_history', function() {
+        this.on('t_play_history.work_id', '=', 't_work.id')
+          .andOn('t_play_history.user_name', '=', knex.raw('?', [username]));
       })
       .join('t_circle', 't_circle.id', 't_work.circle_id')
       .leftJoin('t_review', function() {
@@ -997,9 +997,9 @@ const makeQueries = (knex) => {
         't_work.dl_count', 't_work.price', 't_work.review_count',
         't_work.rate_count', 't_work.rate_average_2dp',
         't_work.rate_count_detail', 't_work.rank',
-        't_play_histroy.state', 't_play_histroy.updated_at as play_updated_at',
+        't_play_history.state', 't_play_history.updated_at as play_updated_at',
         't_review.progress')
-      .orderBy('t_play_histroy.updated_at', sortOption);
+      .orderBy('t_play_history.updated_at', sortOption);
 
     if (excludeFinished === 'listened') {
       coreQ = coreQ.where(function() {
@@ -1021,13 +1021,13 @@ const makeQueries = (knex) => {
     return {works, totalCount};
   };
 
-  const updatePlayHistroy = async (username, work_id, state) => knex.transaction(async(trx) => {
-    await trx.raw('INSERT OR IGNORE INTO t_play_histroy (user_name, work_id, state) VALUES (?, ?, ?);', [username, work_id, state]);
-    await trx.raw('UPDATE t_play_histroy SET state = ?, updated_at = CURRENT_TIMESTAMP WHERE user_name = ? AND work_id = ?;', [state, username, work_id]);
+  const updatePlayHistory = async (username, work_id, state) => knex.transaction(async(trx) => {
+    await trx.raw('INSERT OR IGNORE INTO t_play_history (user_name, work_id, state) VALUES (?, ?, ?);', [username, work_id, state]);
+    await trx.raw('UPDATE t_play_history SET state = ?, updated_at = CURRENT_TIMESTAMP WHERE user_name = ? AND work_id = ?;', [state, username, work_id]);
   });
 
-  async function deletePlayHistroy(username, work_id) {
-    await knex('t_play_histroy').where('work_id', '=', work_id).where('user_name', '=', username).del();
+  async function deletePlayHistory(username, work_id) {
+    await knex('t_play_history').where('work_id', '=', work_id).where('user_name', '=', username).del();
   }
 
   const getMetadata = ({field = 'circle', id} = {}) => {
@@ -1056,6 +1056,28 @@ const makeQueries = (knex) => {
       });
   }
 
+  // t_track_progress queries (Phase 2)
+  const getTrackProgress = async (username, work_id) => {
+    const rows = await knex('t_track_progress')
+      .select('track_key', 'seconds', 'completed')
+      .where('user_name', username)
+      .andWhere('work_id', work_id);
+    const map = {};
+    for (const row of rows) {
+      map[row.track_key] = { seconds: row.seconds, completed: !!row.completed };
+    }
+    return map;
+  };
+
+  const upsertTrackProgress = async (username, work_id, track_key, seconds, completed) => {
+    await knex.raw(`
+      INSERT INTO t_track_progress (user_name, work_id, track_key, seconds, completed, updated_at)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(user_name, work_id, track_key)
+      DO UPDATE SET seconds = excluded.seconds, completed = excluded.completed, updated_at = excluded.updated_at
+    `, [username, work_id, track_key, seconds, completed]);
+  };
+
   return {
     nsfwFilter,
     resolveLabel,
@@ -1064,8 +1086,9 @@ const makeQueries = (knex) => {
     getLabels, getMetadata,
     createUser, updateUserPassword, resetUserPassword, deleteUser,
     getWorksWithReviews, updateUserReview, deleteUserReview, resetUserProgress,
-    getPlayHistroy, updatePlayHistroy, deletePlayHistroy,
+    getPlayHistory, updatePlayHistory, deletePlayHistory,
     getWorkMemo, setWorkMemo,
+    getTrackProgress, upsertTrackProgress,
   };
 };
 

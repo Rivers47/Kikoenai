@@ -110,7 +110,7 @@ Three route groups:
 
 | Route | Layout | Description |
 |-------|--------|-------------|
-| `/admin` | `DashboardLayout` | Admin dashboard (folders, scanner, advanced, user mgmt) |
+| `/admin` | `DashboardLayout` | Admin dashboard (folders, scanner, advanced, user mgmt, backfill) |
 | `/` | `MainLayout` | Main app with persistent audio player at bottom |
 | `/login` | None | Standalone login page |
 
@@ -129,7 +129,7 @@ Main layout routes:
 | `/favourites/review` | — | Favourites | Review history |
 | `/favourites/progress/*` | — | Favourites | Progress (marked/listening/listened/replay/postponed) |
 | `/favourites/folder` | — | Favourites | Folder view |
-| `/favourites/histroy` | — | Favourites | Play history |
+| `/favourites/history` | — | Favourites | Play history |
 
 **Key detail:** The `Works` page is kept alive via `<keep-alive include="Works">` in `MainLayout`, preserving scroll position and state when navigating back.
 
@@ -164,7 +164,7 @@ Main layout routes:
   enableVideoSource: false,       // Use <video> for playback
   playWorkId: 0,                  // Currently playing work ID
   enablePIPLyrics: false,         // Picture-in-picture lyrics (disabled on Android)
-  resumeHistroySeconds: -1,       // Resume position from history
+  resumeHistorySeconds: -1,       // Resume position from history
   oldWorkCardUIStyle: false,      // Legacy card UI toggle
 }
 ```
@@ -290,6 +290,7 @@ npm test           # Run ESLint
 | `/api/auth/login` | POST | `Login.vue` | Authenticate, get JWT |
 | `/api/works` | GET | `Works.vue` | List/search works (paginated, sorted, filtered) |
 | `/api/work/:id` | GET | `Work.vue` | Get work metadata + playback state |
+| `/api/work/:id/memo` | GET | `Work.vue` | Get work memo incl. lazily-computed content hashes (`{ contentHash: { relPath: contentHash } }`). Only endpoint reading audio file bytes; fetched after tree renders, merged onto nodes by `relPath` to populate per-track badges. |
 | `/api/tags` | GET | `List.vue` | List all tags |
 | `/api/circles` | GET | `List.vue` | List all circles |
 | `/api/vas` | GET | `List.vue` | List all VAs |
@@ -298,14 +299,17 @@ npm test           # Run ESLint
 | `/api/files/:id` | GET | `Work.vue` | List files in a work |
 | `/api/review/:id` | GET/POST/PUT/DELETE | `WorkDetails.vue` | Work reviews. PUT with `progressOnly=true` and `autoMark=true` only writes `progress='listened'` if existing is not terminal (listened/replay/postponed). |
 | `/api/review/progress` | DELETE | `WorkDetails.vue` | Clear only `progress` (NULL), preserving rating/review_text. If the row has no rating/review_text, the whole row is deleted. Query `work_id`. |
-| `/api/histroy` | GET | `Favourites.vue`, `RecentWorks.vue` | List works with playback history. Optional `excludeFinished` (`all`|`listened`, default `listened`). Response items include nullable `progress`. |
-| `/api/histroy/:id` | GET/POST | `Work.vue` | Playback state (history) |
+| `/api/history` | GET | `Favourites.vue`, `RecentWorks.vue` | List works with playback history. Optional `excludeFinished` (`all`|`listened`, default `listened`). Response items include nullable `progress`. |
+| `/api/history/:id` | GET/POST | `Work.vue` | Playback state (history) |
 | `/api/config/shared` | GET | `MainLayout.vue` | Public config (seek times) |
 | `/api/version` | GET | `MainLayout.vue` | Version + update info |
 | `/api/work/:id` | PUT | `EditMetadata.vue` | Manually edit work metadata (admin only). Work id is a string: DLsite RJ-padded (`\d{6,8}`) or Fanza cid (`d_\d+`). |
 | `/api/illustrators` | GET | `EditMetadata.vue` | List illustrators (autocomplete) |
 | `/api/script_writers` | GET | `EditMetadata.vue` | List script writers (autocomplete) |
 | `/api/seriess` | GET | `EditMetadata.vue` | List series (autocomplete; irregular plural) |
+| `/api/track-progress` | PUT | `AudioElement.vue`, `AudioPlayer.vue` | Report per-track playback progress. Accepts `{work_id, contentHash, seconds, completed}`. Fire-and-forget write. |
+
+> **Tracks response (Phase 2):** `GET /api/tracks/:id` returns `{ tree, trackProgress }` (breaking shape change; `Work.vue` handles both via `response.data.tree || response.data`). The tree is built from the directory listing + `memo` **without reading audio file bytes** — `contentHash` on audio nodes is populated only from cached `memo.hash` (null/undefined where not yet hashed). Audio nodes carry `relPath` (relative path from work root) as the stable key the frontend uses to merge late-arriving hashes from `GET /api/work/:id/memo` (the only endpoint reading file bytes). `trackProgress` is a `{contentHash: {seconds, completed}}` map.
 
 > **Note:** Library scanning is **not** a REST endpoint. `Scanner.vue` triggers scans over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN` / `KILL_SCAN_PROCESS`) and listens for the `SCAN_*` events.
 
