@@ -24,7 +24,7 @@ router.get('/',
     const excludeFinished = req.query.excludeFinished || 'listened';
     
     try {
-      const {works, totalCount} = await db.getPlayHistroy({
+      const {works, totalCount} = await db.getPlayHistory({
         username: username,
         limit: PAGE_SIZE,
         offset: offset,
@@ -62,7 +62,7 @@ router.put('/',
     // console.log('update historoy =', username, req.body.work_id, req.body.state)
     // console.log(`config.auth = ${config.auth}`)
     
-    db.updatePlayHistroy(username, req.body.work_id, JSON.stringify(req.body.state))
+    db.updatePlayHistory(username, req.body.work_id, JSON.stringify(req.body.state))
         .then(() => {
           res.send({ message: '更新历史成功' });
         }).catch((err) =>{
@@ -79,7 +79,7 @@ router.delete('/',
 
     let username = config.auth ? req.user.name : 'admin';
     try {
-      await db.deletePlayHistroy(username, req.body.work_id);
+      await db.deletePlayHistory(username, req.body.work_id);
       res.send({message: '删除历史记录成功'});
     } catch (err) {
       console.error(err);

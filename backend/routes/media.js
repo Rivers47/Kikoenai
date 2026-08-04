@@ -179,11 +179,11 @@ router.get('/check-lrc/:id/:index',
                 // 文件名、子目录名相同
                 tracks.forEach(trackItem => {
                   if (trackItem.title === foundLyricFileName && subtitleToFind === trackItem.subtitle) {
-                      res.send({result: true, message:'找到歌词文件', hash: trackItem.hash, lyricExtension: foundLyricExtension});
+                      res.send({result: true, message:'找到歌词文件', trackId: trackItem.trackId, lyricExtension: foundLyricExtension});
                   }
                 });
               } else {
-                res.send({result: false, message:'不存在歌词文件', hash: ''});
+                res.send({result: false, message:'不存在歌词文件', trackId: ''});
               }
             })
             .catch(err => next(err));

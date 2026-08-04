@@ -11,7 +11,7 @@
             toggle-color="primary"
             class="text-bold outline-style"
             :options="[
-              {label: '播放历史', value: 'histroy'},
+              {label: '播放历史', value: 'history'},
               {label: '我的评价', value: 'review'},
               {label: '我的进度', value: 'progress'},
               {label: '分类整理', value: 'folder'},
@@ -20,7 +20,7 @@
       </div>
 
       <!-- 排序选项 -->
-      <div v-if="mode != 'histroy'" class="col-auto row">
+      <div v-if="mode != 'history'" class="col-auto row">
         <q-select dense rounded outlined v-model="sortBy" :options="sortOptions"/>
         <q-btn
           :disable="sortButtonDisabled"
@@ -35,7 +35,7 @@
       </div>
 
       <!-- 历史模式：隐藏已听完筛选 -->
-      <div v-if="mode === 'histroy'" class="col-auto row">
+      <div v-if="mode === 'history'" class="col-auto row">
         <q-btn-toggle
           v-model="hideFinishedFilter"
           @update:model-value="onHideFinishedChange"
@@ -128,7 +128,7 @@ export default {
 
   data() {
     return {
-      mode: 'histroy',
+      mode: 'history',
       progressFilter: 'marked',
       hideFinishedFilter: localStorage.hideFinishedHistory || 'listened',
       works: [],
@@ -240,7 +240,7 @@ export default {
       this.pagination = { currentPage:0, pageSize:12, totalCount:0 }
       // Clear stale works synchronously so the new mode's template doesn't
       // render items from the previous mode that lack the required fields
-      // (e.g. review items have no `state`, which histroy mode accesses).
+      // (e.g. review items have no `state`, which history mode accesses).
       this.works = []
       // Manually fetch first page content before enable scroller
       // Note: the internal API of the infinite scroller does not work well
@@ -271,11 +271,11 @@ export default {
         params.filter = this.progressFilter;
       }
 
-      if (this.mode === 'histroy') {
+      if (this.mode === 'history') {
         params.excludeFinished = this.hideFinishedFilter;
       }
 
-      const requestUrl = this.mode == 'histroy' ? "/api/histroy" : '/api/review'
+      const requestUrl = this.mode == 'history' ? "/api/history" : '/api/review'
       return this.$axios.get(requestUrl, { params })
         .then((response) => {                  
           const works = response.data.works

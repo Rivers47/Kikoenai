@@ -1,6 +1,6 @@
 const { knex } = require('./db');
 
-const dbVersion = '20260803000000';
+const dbVersion = '20260804000000';
 
 // 数据库结构
 const createSchema = () => knex.schema
@@ -110,7 +110,7 @@ const createSchema = () => knex.schema
     table.foreign('work_id').references('id').inTable('t_work').onDelete('CASCADE'); // FOREIGN KEY 
     table.primary(['user_name', 'work_id']); // PRIMARY KEY
   })
-  .createTable('t_play_histroy', (table) => {
+  .createTable('t_play_history', (table) => {
     table.string('user_name').notNullable();
     table.string('work_id').notNullable();
     table.timestamps(true, true); // 时间戳created_at, updated_at

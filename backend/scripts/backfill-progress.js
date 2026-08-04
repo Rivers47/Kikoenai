@@ -7,12 +7,12 @@
  * Phase 2 (additive): seed t_track_progress for the last-played track of each
  * work-with-history, computing its SHA-256 content hash from the file on disk.
  *
- * Rule per (user_name, work_id) in t_play_histroy:
+ * Rule per (user_name, work_id) in t_play_history:
  *   - Parse state → {queue, index, seconds}.
  *   - Phase 1: skip if t_review.progress is already terminal; if state.index
  *     === state.queue.length - 1 AND seconds >= 0.95 * lastTrack.duration
  *     → set progress='listened'.
- *   - Phase 2: resolve state.queue[state.index].hash to a file path, compute
+ *   - Phase 2: resolve state.queue[state.index].trackId to a file path, compute
  *     SHA-256, upsert t_track_progress with completed = seconds >= 0.95 * duration.
  *
  * Usage:
@@ -35,10 +35,10 @@ const DRY_RUN = process.argv.includes('--dry-run');
  * reimplementing it (e.g. with localeCompare) risks drift on edge cases.
  * Returns { fullPath, title } or null.
  */
-async function resolveTrackFile(workId, hash, workDir) {
-  const idx = hash.indexOf('/');
+async function resolveTrackFile(workId, trackId, workDir) {
+  const idx = trackId.indexOf('/');
   if (idx === -1) return null;
-  const index = parseInt(hash.slice(idx + 1), 10);
+  const index = parseInt(trackId.slice(idx + 1), 10);
   if (isNaN(index) || index < 0) return null;
 
   // getTrackList with an empty memo returns the sorted list with hash/title/
@@ -57,7 +57,7 @@ async function main() {
   console.log('');
 
   // Fetch all play history rows
-  const historyRows = await db.knex('t_play_histroy').select('user_name', 'work_id', 'state');
+  const historyRows = await db.knex('t_play_history').select('user_name', 'work_id', 'state');
 
   // Pre-fetch work directory info
   const workRows = await db.knex('t_work').select('id', 'root_folder', 'dir');
@@ -129,7 +129,7 @@ async function main() {
 
     // --- Phase 2: seed t_track_progress for the last-played track ---
     const currentTrack = queue[index];
-    if (!currentTrack || !currentTrack.hash) {
+    if (!currentTrack || !(currentTrack.trackId || currentTrack.hash)) {
       continue;
     }
 
@@ -141,14 +141,14 @@ async function main() {
 
     let resolved;
     try {
-      resolved = await resolveTrackFile(workId, currentTrack.hash, workDir);
+      resolved = await resolveTrackFile(workId, currentTrack.trackId || currentTrack.hash, workDir);
     } catch {
       // File may not exist on disk
     }
     if (!resolved) {
       p2SkippedNoFile++;
       if (DRY_RUN) {
-        console.log(`  [P2-DRY] ${username} / work ${workId} — file not found for hash ${currentTrack.hash}, skipping`);
+        console.log(`  [P2-DRY] ${username} / work ${workId} — file not found for trackId ${currentTrack.trackId || currentTrack.hash}, skipping`);
       }
       continue;
     }

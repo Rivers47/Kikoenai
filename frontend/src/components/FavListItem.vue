@@ -7,7 +7,7 @@
       </q-item-section>
 
 
-      <q-item-section class="q-gutter-y-xs column items-start" top v-on:click.self="showReviewDialog = true && mode != 'histroy' ">
+      <q-item-section class="q-gutter-y-xs column items-start" top v-on:click.self="showReviewDialog = true && mode != 'history' ">
         <q-item-label lines="2" class="text-body2">
           <router-link :to="`/work/${metadata.id}`" class="col-auto text-secondary">
             {{metadata.title}}
@@ -56,9 +56,9 @@
           </q-card>
         </q-item-label>
 
-        <div v-if="mode === 'histroy'" class="full-width">
+        <div v-if="mode === 'history'" class="full-width">
           <div class="full-width">
-            <q-btn color="primary" label="从历史播放"  class="full-width" @click="playHistroy(metadata.id, metadata.state)"/>
+            <q-btn color="primary" label="从历史播放"  class="full-width" @click="playHistory(metadata.id, metadata.state)"/>
           </div>
 
           <!--
@@ -261,16 +261,16 @@ export default {
         })
     },
 
-    playHistroy(workId, histroyState) {
+    playHistory(workId, historyState) {
       this.$store.commit('AudioPlayer/SET_QUEUE', {
         workId: workId,
-        queue: histroyState.queue,
-        index: histroyState.index,
+        queue: historyState.queue,
+        index: historyState.index,
         resetPlaying: false,
-        resumeHistroySeconds: histroyState.seconds,
-        workLastTrackHash: histroyState.queue.length ? histroyState.queue[histroyState.queue.length - 1].hash : ''
+        resumeHistorySeconds: historyState.seconds,
+        workLastTrackId: historyState.queue.length ? (historyState.queue[historyState.queue.length - 1].trackId || historyState.queue[historyState.queue.length - 1].hash) : ''
       })
-      // this.$store.commit('AudioPlayer/SET_RESUME_HISTROY_SECONDS', histroyState.seconds)
+      // this.$store.commit('AudioPlayer/SET_RESUME_HISTORY_SECONDS', historyState.seconds)
     }
   }
 

@@ -54,7 +54,7 @@ router.get('/work/:id',
 
 // GET work memo, lazily computing + caching per-file content hashes.
 // This is the only endpoint that reads audio file bytes (SHA-256, mtime-
-// invalidated, cached in t_work.memo.hash). The tree endpoint (GET /tracks/:id)
+// invalidated, cached in t_work.memo.contentHash). The tree endpoint (GET /tracks/:id)
 // does NOT hash, so it returns instantly even for multi-GB works; the frontend
 // fetches this in parallel and merges hashes onto tree nodes by relPath.
 router.get('/work/:id/memo',
@@ -84,7 +84,7 @@ router.get('/work/:id/memo',
       }
       // Return the hash map keyed by relPath — the frontend joins this onto
       // tree audio nodes (which carry relPath) to populate contentHash.
-      res.send({ hash: memo.hash || {} });
+      res.send({ contentHash: memo.contentHash || memo.hash || {} });
     } catch (err) {
       console.error(err);
       res.status(500).send({error: '计算文件哈希失败'});
@@ -116,7 +116,7 @@ router.get('/tracks/:id',
           // Build the tree from the directory listing + memo (durations). NO file
           // reads here — content hashing (which reads every audio file's bytes)
           // is deferred to GET /api/work/:id/memo so a multi-GB work doesn't
-          // stall the tree. Audio nodes get contentHash from memo.hash where
+          // stall the tree. Audio nodes get contentHash from memo.contentHash where
           // already cached, null/undefined otherwise; the frontend merges the
           // late-arriving hashes reactively by relPath.
           const tracks = await getTrackList(work_id, workDir, memo);

@@ -105,8 +105,8 @@ export default {
       const token = this.$q.localStorage.getItem('jwt-token') || ''
       if (this.currentPlayingFile.mediaStreamUrl) {
         return `${this.currentPlayingFile.mediaStreamUrl}?token=${token}`
-      } else if (this.currentPlayingFile.hash) {
-        return `/api/media/stream/${this.currentPlayingFile.hash}?token=${token}`
+      } else if (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) {
+        return `/api/media/stream/${this.currentPlayingFile.trackId || this.currentPlayingFile.hash}?token=${token}`
       } else {
         return ""
       }
@@ -127,7 +127,7 @@ export default {
       'forwardSeekTime',
       'rewindSeekMode',
       'forwardSeekMode',
-      'resumeHistroySeconds',
+      'resumeHistorySeconds',
       'playWorkId',
       'visualPlayerCoverUrl',
       'duration',
@@ -135,13 +135,13 @@ export default {
       'newCurrentTime',
       'lyricOffsetSeconds',
       'enablePIPLyrics',
-      'workLastTrackHash',
+      'workLastTrackId',
       'autoMarkListened',
     ]),
 
     ...mapGetters('AudioPlayer', [
       'currentPlayingFile',
-      'resumeHistroyDone',
+      'resumeHistoryDone',
     ]),
 
     displayCurrentTime() {
@@ -254,7 +254,7 @@ export default {
       'DECREMENT_SLEEP_TRACKS',
       'SET_REWIND_SEEK_MODE',
       'SET_FORWARD_SEEK_MODE',
-      'RESUME_HISTROY_SECONDS_DONE',
+      'RESUME_HISTORY_SECONDS_DONE',
       'SET_HAS_LYRIC',
       'SET_NEW_CURRENT_TIME',
     ]),
@@ -266,9 +266,9 @@ export default {
         this.plyr.play()
       }
 
-      if (!this.resumeHistroyDone) {
-        this.plyr.currentTime = this.resumeHistroySeconds;
-        this.RESUME_HISTROY_SECONDS_DONE()
+      if (!this.resumeHistoryDone) {
+        this.plyr.currentTime = this.resumeHistorySeconds;
+        this.RESUME_HISTORY_SECONDS_DONE()
         this.$q.notify({message: "已恢复播放历史", timeout: 1000})
       }
     },
@@ -283,12 +283,12 @@ export default {
     },
 
     // 当前播放文件夹的最后一首音频自然播放结束时，自动将进度标记为“听完”
-    // Phase 1：仅比较当前文件hash与workLastTrackHash（会话内快照，hash稳定）
+    // Phase 1：仅比较当前文件trackId与workLastTrackId（会话内快照，trackId稳定）
     // Phase 2：将替换这里的条件为“主系列全部曲目已完成”
     maybeMarkWorkComplete () {
       if (this.playWorkId === 0) return
-      if (!this.workLastTrackHash) return
-      if (!this.currentPlayingFile || this.currentPlayingFile.hash !== this.workLastTrackHash) return
+      if (!this.workLastTrackId) return
+      if (!this.currentPlayingFile || (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) !== this.workLastTrackId) return
       if (!this.autoMarkListened) return
       if (this.workMarkedComplete) return
       this.workMarkedComplete = true
@@ -453,8 +453,8 @@ export default {
 
     async loadLrcFile () {
       const token = this.$q.localStorage.getItem('jwt-token') || '';
-      const fileHash = this.queue[this.queueIndex].hash;
-      const url = `/api/media/check-lrc/${fileHash}?token=${token}`;
+      const trackId = (this.queue[this.queueIndex].trackId || this.queue[this.queueIndex].hash);
+      const url = `/api/media/check-lrc/${trackId}?token=${token}`;
 
       try {
         const check_response = await this.$axios.get(url)
@@ -464,7 +464,7 @@ export default {
 
         this.lrcAvailable = true;
         console.log('读入歌词');
-        const lrcUrl = `/api/media/stream/${check_response.data.hash}?token=${token}`;
+        const lrcUrl = `/api/media/stream/${check_response.data.trackId || check_response.data.hash}?token=${token}`;
         const lyricExtension = check_response.data.lyricExtension.toLowerCase();
 
         const response = await this.$axios.get(lrcUrl)

@@ -18,7 +18,7 @@ router.use('/version', require('./version'));
 router.use('/config', require('./config'));
 router.use('/media', require('./media'));
 router.use('/review', require('./review'));
-router.use('/histroy', require('./play_histroy'));
+router.use('/history', require('./play_history'));
 router.use('/track-progress', require('./track_progress'));
 // Other routes
 router.use('/', require('./metadata'));

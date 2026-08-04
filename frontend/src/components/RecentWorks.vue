@@ -2,7 +2,7 @@
   <div>
     <div class="row justify-between q-mt-lg q-ml-md">
       <div class="col text-h5 text-weight-regular">最近播放</div>
-      <q-btn flat icon="navigate_next" @click="$router.push('/favourites/histroy')"></q-btn>
+      <q-btn flat icon="navigate_next" @click="$router.push('/favourites/history')"></q-btn>
     </div>
     <q-virtual-scroll
       class="q-px-sm"
@@ -17,7 +17,7 @@
         <div
           class="q-pa-sm"
           style="width: 500px; max-width: 80vw;"
-          @click.stop.prevent="resumeThisHistroy(item)"
+          @click.stop.prevent="resumeThisHistory(item)"
         >
           <CoverSFW
             class="card q-mx-sm shadow-4"
@@ -77,7 +77,7 @@ export default {
 
       // console.warn('load more page on: ', params.page);
       try {
-        const response = await this.$axios.get('/api/histroy', { params });
+        const response = await this.$axios.get('/api/history', { params });
         this.works = this.works.concat(response.data.works);
         this.pagination = response.data.pagination;
         this.$refs.scroll.refresh();
@@ -113,14 +113,14 @@ export default {
       return lastPlayItem.title;
     },
 
-    resumeThisHistroy(work) {
+    resumeThisHistory(work) {
       this.$store.commit('AudioPlayer/SET_QUEUE', {
         workId: work.id,
         queue: work.state.queue,
         index: work.state.index,
         resetPlaying: false,
-        resumeHistroySeconds: work.state.seconds,
-        workLastTrackHash: work.state.queue.length ? work.state.queue[work.state.queue.length - 1].hash : ''
+        resumeHistorySeconds: work.state.seconds,
+        workLastTrackId: work.state.queue.length ? (work.state.queue[work.state.queue.length - 1].trackId || work.state.queue[work.state.queue.length - 1].hash) : ''
       })
       console.log(`resume seconds = ${work.state.seconds}`)
     }

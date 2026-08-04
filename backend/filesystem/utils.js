@@ -65,8 +65,8 @@ const getContentHashLimited = (filePath) => limitP.call(getContentHash, filePath
  * first tree-build after the feature ships, or on genuine file modification.
  * @param {String} work_id
  * @param {String} dir Work directory (absolute path).
- * @param {Object} oldMemo Existing memo ({ duration, mtime, hash }).
- * @returns {Promise<{memo: Object, changed: Boolean}>}
+ * @param {Object} oldMemo Existing memo ({ duration, mtime, contentHash }).
+ * @returns {Promise<{memo: Object, changed: Boolean, files: Array}>}
  */
 async function scrapeWorkHashes(work_id, dir, oldMemo) {
   const files = await recursiveReaddir(dir);
@@ -74,9 +74,13 @@ async function scrapeWorkHashes(work_id, dir, oldMemo) {
   // null-safe like getTrackList's readMemo.duration || {} pattern, otherwise
   // a single unscanned work throws and 500s the whole tree endpoint.
   const safeMemo = oldMemo || {};
-  const oldMemoHash = safeMemo.hash || {};
+  // Read-side compat: new memos store contentHash, old memos may have hash.
+  const oldMemoHash = safeMemo.contentHash || safeMemo.hash || {};
   const oldMemoMtime = safeMemo.mtime || {};
-  const memo = { ...safeMemo, hash: { ...oldMemoHash } };
+  const memo = { ...safeMemo, contentHash: { ...oldMemoHash } };
+  // Remove the old `hash` key if present (migrate to contentHash in-memory;
+  // the next setWorkMemo will persist the new key).
+  if (memo.hash) delete memo.hash;
   let changed = false;
 
   const audioFiles = files.filter((file) => {
@@ -96,7 +100,7 @@ async function scrapeWorkHashes(work_id, dir, oldMemo) {
       return; // cached and unchanged — reuse
     }
     const hash = await getContentHashLimited(file);
-    memo.hash[shortPath] = hash;
+    memo.contentHash[shortPath] = hash;
     memo.mtime[shortPath] = newMTime;
     changed = true;
   }));
@@ -165,7 +169,7 @@ async function scrapeWorkMemo(work_id, dir, oldMemo) {
 
 /**
  * Returns list of playable tracks in a given folder. Track is an object
- * containing 'title', 'subtitle' and 'hash'.
+ * containing 'title', 'subtitle' and 'trackId'.
  * @param {String} id Work identifier (e.g. '123456', '01134567', 'd_215444').
  * @param {String} dir Work directory (absolute).
  * @param {readMemo} at least a empty object, or { duration: { "relative/path/audio.mp3": 33, "audio2.mp3": 22 }} for storage audio file duration
@@ -202,12 +206,12 @@ const getTrackList = async function (id, dir, readMemo, files) {
       };
     }), [v => v.subtitle, v => v.title, v => v.ext]);
 
-    // Add hash to each file
+    // Add trackId (file handle) to each file
     const sortedHashedFiles = sortedFiles.map(
       (file, index) => ({
         title: file.title,
         subtitle: file.subtitle,
-        hash: `${id}/${index}`,
+        trackId: `${id}/${index}`,
         ext: file.ext,
         fullPath: file.fullPath, // 给后面获取音频时长提供文件的全路径
         shortFilePath: file.shortFilePath,
@@ -215,7 +219,7 @@ const getTrackList = async function (id, dir, readMemo, files) {
     );
 
     const durationMemo = readMemo.duration || { /* fallback */ };
-    const hashMemo = readMemo.hash || {};
+    const hashMemo = readMemo.contentHash || readMemo.hash || {};
     // add duration and contentHash for each audio
     const filesAddAudioDuration = await Promise.all(sortedHashedFiles.map(async (file) => {
       if (supportedMediaExtList.includes(file.ext)) {
@@ -292,15 +296,15 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
     const textBaseUrl = '/api/media/stream/';
     const mediaStreamBaseUrl = '/api/media/stream/';
     const mediaDownloadBaseUrl = '/api/media/download/';
-    const textStreamBaseUrl = textBaseUrl + track.hash;    // Handle charset detection internally with jschardet
-    const textDownloadBaseUrl = config.offloadMedia ? offloadDownloadUrl : mediaDownloadBaseUrl + track.hash;
-    const mediaStreamUrl = config.offloadMedia ? offloadStreamUrl : mediaStreamBaseUrl + track.hash;
-    const mediaDownloadUrl = config.offloadMedia ? offloadDownloadUrl : mediaDownloadBaseUrl + track.hash;
+    const textStreamBaseUrl = textBaseUrl + track.trackId;    // Handle charset detection internally with jschardet
+    const textDownloadBaseUrl = config.offloadMedia ? offloadDownloadUrl : mediaDownloadBaseUrl + track.trackId;
+    const mediaStreamUrl = config.offloadMedia ? offloadStreamUrl : mediaStreamBaseUrl + track.trackId;
+    const mediaDownloadUrl = config.offloadMedia ? offloadDownloadUrl : mediaDownloadBaseUrl + track.trackId;
 
     if (track.ext === '.txt' || track.ext === '.lrc' || track.ext === '.srt' || track.ext === '.ass' || track.ext === '.vtt') {
       fatherFolder.push({
         type: 'text',
-        hash: track.hash,
+        trackId: track.trackId,
         title: track.title,
         workTitle,
         mediaStreamUrl: textStreamBaseUrl,
@@ -309,7 +313,7 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
     } else if (track.ext === '.jpg' || track.ext === '.jpeg' || track.ext === '.png' || track.ext === '.webp' ) {
       fatherFolder.push({
         type: 'image',
-        hash: track.hash,
+        trackId: track.trackId,
         title: track.title,
         workTitle,
         mediaStreamUrl,
@@ -318,7 +322,7 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
     } else if (track.ext === '.pdf') {
       fatherFolder.push({
         type: 'other',
-        hash: track.hash,
+        trackId: track.trackId,
         title: track.title,
         workTitle,
         mediaStreamUrl,
@@ -327,7 +331,7 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
     } else {
       fatherFolder.push({
         type: 'audio',
-        hash: track.hash,
+        trackId: track.trackId,
         contentHash: track.contentHash,
         relPath: track.shortFilePath,
         title: track.title,

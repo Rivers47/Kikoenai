@@ -1,14 +1,14 @@
 const getters = {
   currentPlayingFile: (state) => {
     return state.queue[state.queueIndex] || {
-      hash: '',
+      trackId: '',
       title: '',
       workTitle: ''
     }
   },
 
-  resumeHistroyDone: (state) => {
-    return state.resumeHistroySeconds < 0
+  resumeHistoryDone: (state) => {
+    return state.resumeHistorySeconds < 0
   },
 
   isQueueEmpty: (state) => {

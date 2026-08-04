@@ -19,7 +19,7 @@ export default function () {
     queue: [
       // list of tracks. object format:
       /*
-        hash: null, // unique identifier for the file
+        trackId: null, // unique identifier for the file (workId/index, e.g. "01102492/17")
         title: null, // title to show in UI
         workTitle: null // workTitle to show in UI
        */
@@ -55,13 +55,13 @@ export default function () {
 
     // 当从历史记录播放时，这里记录当前queue[queueIndex]应当恢复到的seconds时间，
     // -1表示无需恢复，其他大于等于0的数字需要在onCanplay时间触发并完成时间跳转之后，再次设置为-1
-    resumeHistroySeconds: -1,
+    resumeHistorySeconds: -1,
 
     // 是否切换回旧式的作品卡片，某些人需要直接展示所有tag，保留旧式UI的选项
     oldWorkCardUIStyle: LocalStorage.has(OLD_WORK_CARD_UI_STYLE_KEY) && LocalStorage.getItem(OLD_WORK_CARD_UI_STYLE_KEY),
 
-    // 当前播放的文件夹中最后一个音频文件的hash，用于自动标记为听完
-    workLastTrackHash: '',
+    // 当前播放的文件夹中最后一个音频文件的trackId，用于自动标记为听完
+    workLastTrackId: '',
 
     // 是否自动标记为听完（默认开启）
     autoMarkListened: LocalStorage.has(AUTO_MARK_LISTENED_KEY) ? LocalStorage.getItem(AUTO_MARK_LISTENED_KEY) : true,

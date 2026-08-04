@@ -1,6 +1,6 @@
 <template>
   <div>
-    <WorkDetails :metadata="metadata" @reset="requestData()" @resumeHistroy="resumeMetadataPlayHistroy" />
+    <WorkDetails :metadata="metadata" @reset="requestData()" @resumeHistory="resumeMetadataPlayHistory" />
     <!-- <WorkQueue :queue="tracks" :editable="false" /> -->
     <WorkTree ref="workTree" :tree="tree" :metadata="metadata" :trackProgress="trackProgress" :editable="false" />
   </div>
@@ -66,7 +66,7 @@ export default {
         // 如果有播放状态记录
         // 同时当前尚未播放，则设置历史播放进度
         if (this.metadata.state && this.playWorkId == 0) {
-          this.resumeMetadataPlayHistroy()
+          this.resumeMetadataPlayHistory()
         }
       } catch (error ) {
         if (error.response) {
@@ -103,12 +103,12 @@ export default {
     async requestMemo() {
       try {
         const response = await this.$axios.get(`/api/work/${this.workid}/memo`);
-        const hashMap = response.data.hash || {};
-        if (Object.keys(hashMap).length === 0) return;
+        const contentHashMap = response.data.contentHash || {};
+        if (Object.keys(contentHashMap).length === 0) return;
         // Build a new tree (no in-place mutation — the nodes may be observed by
         // Vuex strict mode) with contentHash merged by relPath. Reassigning
         // this.tree triggers WorkTree's `tree` watcher -> internalTree rebuild.
-        this.tree = this.mergeContentHashes(this.tree, hashMap);
+        this.tree = this.mergeContentHashes(this.tree, contentHashMap);
       } catch (error) {
         // Hashing can be slow/expensive; fail silently — badges just won't show.
         console.error('fetch work memo failed:', error);
@@ -118,14 +118,14 @@ export default {
     // Return a new tree with contentHash set on audio nodes by matching relPath.
     // Purely functional — never mutates the input nodes (some are observed by
     // Vuex strict mode, which throws on outside-mutation).
-    mergeContentHashes(nodes, hashMap) {
+    mergeContentHashes(nodes, contentHashMap) {
       if (!Array.isArray(nodes)) return nodes;
       return nodes.map((node) => {
-        if (node.type === 'audio' && node.relPath && hashMap[node.relPath] !== undefined) {
-          return { ...node, contentHash: hashMap[node.relPath] };
+        if (node.type === 'audio' && node.relPath && contentHashMap[node.relPath] !== undefined) {
+          return { ...node, contentHash: contentHashMap[node.relPath] };
         }
         if (node.type === 'folder' && Array.isArray(node.children)) {
-          return { ...node, children: this.mergeContentHashes(node.children, hashMap) };
+          return { ...node, children: this.mergeContentHashes(node.children, contentHashMap) };
         }
         return node;
       });
@@ -136,7 +136,7 @@ export default {
       this.requestTracks();
     },
 
-    resumeMetadataPlayHistroy() {
+    resumeMetadataPlayHistory() {
       // 以最小化形式打开播放器
       this.$store.commit('AudioPlayer/TOGGLE_HIDE')
       this.$store.commit('AudioPlayer/SET_QUEUE', {
@@ -144,8 +144,8 @@ export default {
         queue: this.metadata.state.queue,
         index: this.metadata.state.index,
         resetPlaying: false,
-        resumeHistroySeconds: this.metadata.state.seconds,
-        workLastTrackHash: this.metadata.state.queue.length ? this.metadata.state.queue[this.metadata.state.queue.length - 1].hash : ''
+        resumeHistorySeconds: this.metadata.state.seconds,
+        workLastTrackId: this.metadata.state.queue.length ? (this.metadata.state.queue[this.metadata.state.queue.length - 1].trackId || this.metadata.state.queue[this.metadata.state.queue.length - 1].hash) : ''
       })
       console.log(`resume seconds = ${this.metadata.state.seconds}`)
     }

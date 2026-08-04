@@ -42,8 +42,8 @@
           clickable
           v-ripple
           v-for="item in fatherFolder"
-          :key="item.hash"
-          :active="item.type === 'audio' && currentPlayingFile.hash === item.hash"
+          :key="item.trackId || item.hash"
+          :active="item.type === 'audio' && (currentPlayingFile.trackId || currentPlayingFile.hash) === item.trackId"
           active-class="text-on-primary bg-primary"
           @click="onClickItem(item)"
           class="non-selectable"
@@ -54,7 +54,7 @@
             <q-icon size="34px" v-else-if="item.type === 'image'" color="accent" name="photo" />
             <!-- <q-img width="34px" height="34px" v-else-if="item.type === 'image'" :src="imgSrc(item)" contain :ratio="1/1"  name="thumbnail" /> -->
             <q-icon size="34px" v-else-if="item.type === 'other'" color="info" name="description" />
-            <q-btn v-else round dense color="primary" :icon="playIcon(item.hash)" @click="onClickPlayButton(item.hash)" />
+            <q-btn v-else round dense color="primary" :icon="playIcon(item.trackId || item.hash)" @click="onClickPlayButton(item.trackId || item.hash)" />
 
           </q-item-section>
 
@@ -208,8 +208,9 @@ export default {
       return rec && typeof rec.seconds === 'number' ? rec.seconds : 0
     },
 
-    playIcon (hash) {
-      return this.playing && this.currentPlayingFile.hash === hash ? "pause" : "play_arrow"            
+    playIcon (trackId) {
+      const id = trackId || ''
+      return this.playing && (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) === id ? "pause" : "play_arrow"            
     },
 
     initPath () {
@@ -238,32 +239,32 @@ export default {
         this.openFile(item);
       } else if (item.type === 'other') {
         this.download(item);
-      } else if (this.currentPlayingFile.hash !== item.hash) {
+      } else if ((this.currentPlayingFile.trackId || this.currentPlayingFile.hash) !== item.trackId) {
         const resumeSeconds = this.trackProgress[item.contentHash];
         this.$store.commit('AudioPlayer/SET_QUEUE', {
           workId: this.metadata.id,
           queue: this.queue.concat(),
-          index: this.queue.findIndex(file => file.hash === item.hash),
+          index: this.queue.findIndex(file => (file.trackId || file.hash) === item.trackId),
           resetPlaying: true,
-          resumeHistroySeconds: resumeSeconds ? resumeSeconds.seconds : -1,
-          workLastTrackHash: this.queue.length ? this.queue[this.queue.length - 1].hash : ''
+          resumeHistorySeconds: resumeSeconds ? resumeSeconds.seconds : -1,
+          workLastTrackId: this.queue.length ? (this.queue[this.queue.length - 1].trackId || this.queue[this.queue.length - 1].hash) : ''
         })
       }
     },
 
-    onClickPlayButton (hash) {
-      if (this.currentPlayingFile.hash === hash) {
+    onClickPlayButton (trackId) {
+      if ((this.currentPlayingFile.trackId || this.currentPlayingFile.hash) === trackId) {
         this.$store.commit('AudioPlayer/TOGGLE_PLAYING')
       } else {
-        const item = this.fatherFolder.find(i => i.hash === hash);
+        const item = this.fatherFolder.find(i => (i.trackId || i.hash) === trackId);
         const resumeSeconds = item && item.contentHash ? this.trackProgress[item.contentHash] : null;
         this.$store.commit('AudioPlayer/SET_QUEUE', {
           workId: this.metadata.id,
           queue: this.queue.concat(),
-          index: this.queue.findIndex(file => file.hash === hash),
+          index: this.queue.findIndex(file => (file.trackId || file.hash) === trackId),
           resetPlaying: true,
-          resumeHistroySeconds: resumeSeconds ? resumeSeconds.seconds : -1,
-          workLastTrackHash: this.queue.length ? this.queue[this.queue.length - 1].hash : ''
+          resumeHistorySeconds: resumeSeconds ? resumeSeconds.seconds : -1,
+          workLastTrackId: this.queue.length ? (this.queue[this.queue.length - 1].trackId || this.queue[this.queue.length - 1].hash) : ''
         })
       }
     },
@@ -279,7 +280,7 @@ export default {
     download (file) {
       const token = this.$q.localStorage.getItem('jwt-token') || '';
       // Fallback to old API for an old backend 
-      const url = file.mediaDownloadUrl ? `${file.mediaDownloadUrl}?token=${token}` : `/api/media/download/${file.hash}?token=${token}`;
+      const url = file.mediaDownloadUrl ? `${file.mediaDownloadUrl}?token=${token}` : `/api/media/download/${file.trackId || file.hash}?token=${token}`;
       const link = document.createElement('a');
       link.href = url;
       link.target="_blank";
@@ -288,7 +289,7 @@ export default {
 
     setVisualPlayerCover (imgFile) {
       if (!imgFile) return;
-      const urlWithoutToken = imgFile.mediaDownloadUrl ? `${imgFile.mediaDownloadUrl}` : `/api/media/download/${imgFile.hash}`;
+      const urlWithoutToken = imgFile.mediaDownloadUrl ? `${imgFile.mediaDownloadUrl}` : `/api/media/download/${imgFile.trackId || imgFile.hash}`;
       this.$store.commit('AudioPlayer/SET_VISUAL_PLAYER_COVER_URL', urlWithoutToken);
       this.$q.notify({
         message: "封面设置成功",
@@ -306,7 +307,7 @@ export default {
     openFile (file) {
       const token = this.$q.localStorage.getItem('jwt-token') || '';
       // Fallback to old API for an old backend 
-      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}?token=${token}` : `/api/media/stream/${file.hash}?token=${token}`;
+      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}?token=${token}` : `/api/media/stream/${file.trackId || file.hash}?token=${token}`;
       const link = document.createElement('a');
       link.href = url;
       link.target="_blank";
@@ -315,7 +316,7 @@ export default {
 
     imgSrc (imgItem) {
       const token = this.$q.localStorage.getItem('jwt-token') || '';
-      const url = `/api/media/small-img/${imgItem.hash}?token=${token}`;
+      const url = `/api/media/small-img/${imgItem.trackId || imgItem.hash}?token=${token}`;
       console.log('imgSrc called for ', imgItem.title);
       return url;
     },
@@ -323,7 +324,7 @@ export default {
     originalImgSrc (file) {
       const token = this.$q.localStorage.getItem('jwt-token') || '';
       // Fallback to old API for an old backend 
-      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}?token=${token}` : `/api/media/stream/${file.hash}?token=${token}`;
+      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}?token=${token}` : `/api/media/stream/${file.trackId || file.hash}?token=${token}`;
       return url
     },
 
@@ -331,7 +332,7 @@ export default {
       const preview_img_list = this.fatherFolder.filter(item => item.type === 'image')
       let preview_img_idx = -1;
       preview_img_list.forEach((i, idx) => {
-        if (i.hash === item.hash) {
+        if ((i.trackId || i.hash) === (item.trackId || item.hash)) {
           preview_img_idx = idx;
         }
       });
