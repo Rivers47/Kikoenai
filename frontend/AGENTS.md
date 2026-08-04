@@ -110,7 +110,7 @@ Three route groups:
 
 | Route | Layout | Description |
 |-------|--------|-------------|
-| `/admin` | `DashboardLayout` | Admin dashboard (folders, scanner, advanced, user mgmt) |
+| `/admin` | `DashboardLayout` | Admin dashboard (folders, scanner, advanced, user mgmt, backfill) |
 | `/` | `MainLayout` | Main app with persistent audio player at bottom |
 | `/login` | None | Standalone login page |
 

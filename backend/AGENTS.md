@@ -159,6 +159,8 @@ All routes mounted under `/api`:
 > **Route note:** the plural field-list routes (`/api/circles`, `/api/tags`, `/api/vas`, `/api/illustrators`, `/api/script_writers`, `/api/seriess` — note the irregular double-`s` plural) are registered as **literal-path loops** over a `FIELDS` array in `metadata.js` (a `for...of` loop registering one `router.get` per field). Express 5 (path-to-regexp v8) no longer supports regex char-classes in route strings, so the old `/:field(circle|tag|va|...|series)s/...` single-regex-route form was replaced. Each handler receives its `field` via closure.
 | `review.js` | `/api/review/*` | Create/update/delete reviews, ratings, progress |
 | `play_history.js` | `/api/history/*` | Save/load playback state |
+| `track_progress.js` | `/api/track-progress/*` | Per-track playback progress (SHA-256 content-hashed) |
+| `backfill.js` | `/api/backfill/*` | Admin: replay play history to backfill listened markers + track progress (`POST /api/backfill/progress`, `{ dryRun?: bool }` → `{ logs[], summary }`) |
 
 ### 2.8 Media Streaming (`routes/media.js`)
 
@@ -247,6 +249,7 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/script_writers` | GET | List all script writers (autocomplete for metadata editor) |
 | `/api/seriess` | GET | List all series (autocomplete for metadata editor) |
 | `/api/track-progress` | PUT | Report per-track playback progress. Accepts `{work_id, contentHash, seconds, completed}`. Upserts `t_track_progress` keyed by contentHash directly — no file read. |
+| `/api/backfill/progress` | POST | Admin: replay play history to mark finished works `listened` and seed `t_track_progress` (computes SHA-256 from disk). Body `{ dryRun?: bool }` → `{ logs[], summary }`. |
 
 > **Tracks response (Phase 2):** `GET /api/tracks/:id` returns `{ tree, trackProgress }` instead of a bare array. The tree is built from the directory listing + `t_work.memo` (durations) **without reading any audio file bytes** — `contentHash` on audio nodes is populated only from already-cached `memo.contentHash` (null/undefined where not yet hashed). Audio nodes carry `trackId` (session-stable file handle, was `hash`), `relPath` (relative path from work root), the stable key the frontend uses to merge late-arriving hashes. `trackProgress` is a `{contentHash: {seconds, completed}}` map. Content hashes are computed lazily by `GET /api/work/:id/memo` (the only endpoint that reads file bytes) and merged onto tree nodes reactively by `relPath`. This is a breaking response-shape change; `Work.vue` handles both via `response.data.tree || response.data`.
 
