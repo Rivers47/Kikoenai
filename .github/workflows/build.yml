@@ -50,7 +50,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha,prefix={{branch}}-,enable=${{ github.event_name == 'push' }}
+            type=sha,prefix={{branch}}-,enable=${{ github.event_name == 'push' && github.ref_type == 'branch' }}
             type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
 
@@ -62,7 +62,7 @@ jobs:
           tags: |
             type=ref,event=branch,suffix=-debug
             type=ref,event=pr,suffix=-debug
-            type=sha,prefix={{branch}}-,suffix=-debug,enable=${{ github.event_name == 'push' }}
+            type=sha,prefix={{branch}}-,suffix=-debug,enable=${{ github.event_name == 'push' && github.ref_type == 'branch' }}
             type=semver,pattern={{version}},suffix=-debug
             type=raw,value=latest-debug,enable={{is_default_branch}}
 
