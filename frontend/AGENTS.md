@@ -290,6 +290,7 @@ npm test           # Run ESLint
 | `/api/auth/login` | POST | `Login.vue` | Authenticate, get JWT |
 | `/api/works` | GET | `Works.vue` | List/search works (paginated, sorted, filtered) |
 | `/api/work/:id` | GET | `Work.vue` | Get work metadata + playback state |
+| `/api/work/:id/memo` | GET | `Work.vue` | Get work memo incl. lazily-computed content hashes (`{ hash: { relPath: contentHash } }`). Only endpoint reading audio file bytes; fetched after tree renders, merged onto nodes by `relPath` to populate per-track badges. |
 | `/api/tags` | GET | `List.vue` | List all tags |
 | `/api/circles` | GET | `List.vue` | List all circles |
 | `/api/vas` | GET | `List.vue` | List all VAs |
@@ -308,7 +309,7 @@ npm test           # Run ESLint
 | `/api/seriess` | GET | `EditMetadata.vue` | List series (autocomplete; irregular plural) |
 | `/api/track-progress` | PUT | `AudioElement.vue`, `AudioPlayer.vue` | Report per-track playback progress. Accepts `{work_id, contentHash, seconds, completed}`. Fire-and-forget write. |
 
-> **Tracks response change:** `GET /api/tracks/:id` now returns `{ tree, trackProgress }`. `trackProgress` is a `{contentHash: {seconds, completed}}` map bundled with the tree. Audio tree nodes include `contentHash` (SHA-256 hex). The frontend uses `contentHash` for per-track resume lookups. |
+> **Tracks response (Phase 2):** `GET /api/tracks/:id` returns `{ tree, trackProgress }` (breaking shape change; `Work.vue` handles both via `response.data.tree || response.data`). The tree is built from the directory listing + `memo` **without reading audio file bytes** — `contentHash` on audio nodes is populated only from cached `memo.hash` (null/undefined where not yet hashed). Audio nodes carry `relPath` (relative path from work root) as the stable key the frontend uses to merge late-arriving hashes from `GET /api/work/:id/memo` (the only endpoint reading file bytes). `trackProgress` is a `{contentHash: {seconds, completed}}` map.
 
 > **Note:** Library scanning is **not** a REST endpoint. `Scanner.vue` triggers scans over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN` / `KILL_SCAN_PROCESS`) and listens for the `SCAN_*` events.
 

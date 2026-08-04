@@ -226,6 +226,7 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/search` | GET | Keyword search
 | `/api/:fields/:id/works` | GET | Works filtered
 | `/api/work/:id` | GET | Get work metadata + playback state |
+| `/api/work/:id/memo` | GET | Get work memo incl. lazily-computed content hashes (`{ hash: { relPath: contentHash } }`). Only endpoint that reads audio file bytes (SHA-256, mtime-invalidated, cached in `t_work.memo.hash`). Frontend fetches after tree renders and merges hashes onto nodes by relPath. |
 | `/api/tags` | GET | List all tags |
 | `/api/circles` | GET | List all circles |
 | `/api/vas` | GET | List all VAs |
@@ -247,7 +248,7 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/seriess` | GET | List all series (autocomplete for metadata editor) |
 | `/api/track-progress` | PUT | Report per-track playback progress. Accepts `{work_id, contentHash, seconds, completed}`. Upserts `t_track_progress` keyed by contentHash directly — no file read. |
 
-> **Tracks response change:** `GET /api/tracks/:id` now returns `{ tree, trackProgress }` instead of a bare array. `tree` is the same tree structure; `trackProgress` is a `{contentHash: {seconds, completed}}` map. Audio tree nodes include a `contentHash` field (SHA-256 hex, lazily computed and cached in `t_work.memo.hash`). This is a breaking response-shape change; `Work.vue` handles both via `response.data.tree || response.data`.
+> **Tracks response (Phase 2):** `GET /api/tracks/:id` returns `{ tree, trackProgress }` instead of a bare array. The tree is built from the directory listing + `t_work.memo` (durations) **without reading any audio file bytes** — `contentHash` on audio nodes is populated only from already-cached `memo.hash` (null/undefined where not yet hashed). Audio nodes also carry `relPath` (relative path from work root), the stable key the frontend uses to merge late-arriving hashes. `trackProgress` is a `{contentHash: {seconds, completed}}` map. Content hashes are computed lazily by `GET /api/work/:id/memo` (the only endpoint that reads file bytes) and merged onto tree nodes reactively by `relPath`. This is a breaking response-shape change; `Work.vue` handles both via `response.data.tree || response.data`.
 
 > **Note:** Library scanning is **not** a REST endpoint. The frontend triggers it over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN`) and listens for the `SCAN_*` events above. The plural-list route `/:field(circle\|tag\|va\|illustrator\|script_writer\|series)s/` powers the `/api/illustrators`, `/api/script_writers`, and `/api/seriess` endpoints above (note the irregular plural `seriess`).
 

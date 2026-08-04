@@ -83,6 +83,10 @@ export default {
         const response = await this.$axios.get(`/api/tracks/${this.workid}`);
         this.tree = response.data.tree || response.data;
         this.trackProgress = response.data.trackProgress || {};
+        // Tree is rendered instantly from listing + memo (no file reads). Hashes
+        // are computed/cached separately and merged reactively here so the tree
+        // doesn't wait on hashing multi-GB works.
+        this.requestMemo();
       } catch (error) {
         if (error.response) {
           // 请求已发出，但服务器响应的状态码不在 2xx 范围内
@@ -91,6 +95,40 @@ export default {
           this.showErrNotif(error.message || error)
         }
       }
+    },
+
+    // Fetch lazily-computed content hashes and merge them onto the already-
+    // rendered tree nodes by relPath. Per-track progress badges populate
+    // reactively once contentHash is set (WorkTree reads trackProgress[contentHash]).
+    async requestMemo() {
+      try {
+        const response = await this.$axios.get(`/api/work/${this.workid}/memo`);
+        const hashMap = response.data.hash || {};
+        if (Object.keys(hashMap).length === 0) return;
+        // Build a new tree (no in-place mutation — the nodes may be observed by
+        // Vuex strict mode) with contentHash merged by relPath. Reassigning
+        // this.tree triggers WorkTree's `tree` watcher -> internalTree rebuild.
+        this.tree = this.mergeContentHashes(this.tree, hashMap);
+      } catch (error) {
+        // Hashing can be slow/expensive; fail silently — badges just won't show.
+        console.error('fetch work memo failed:', error);
+      }
+    },
+
+    // Return a new tree with contentHash set on audio nodes by matching relPath.
+    // Purely functional — never mutates the input nodes (some are observed by
+    // Vuex strict mode, which throws on outside-mutation).
+    mergeContentHashes(nodes, hashMap) {
+      if (!Array.isArray(nodes)) return nodes;
+      return nodes.map((node) => {
+        if (node.type === 'audio' && node.relPath && hashMap[node.relPath] !== undefined) {
+          return { ...node, contentHash: hashMap[node.relPath] };
+        }
+        if (node.type === 'folder' && Array.isArray(node.children)) {
+          return { ...node, children: this.mergeContentHashes(node.children, hashMap) };
+        }
+        return node;
+      });
     },
     
     requestData () {

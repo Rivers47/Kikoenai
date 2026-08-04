@@ -424,8 +424,17 @@ export default {
     coverUrl () {
       // 从 LocalStorage 中读取 token
       const token = this.$q.localStorage.getItem('jwt-token') || ''
-      const hash = this.currentPlayingFile.hash
-      return hash ? `/api/cover/${hash.split('/')[0]}?token=${token}` : ""
+      // 与全屏播放器一致：优先使用用户手动设置或 SET_QUEUE 计算出的可视化封面。
+      // 之前的实现直接用 currentPlayingFile.hash 推导，当 hash 缺失（如从历史记录
+      // 恢复且快照项无 hash）时返回空串，导致小窗播放器封面丢失而全屏正常。
+      if (this.visualPlayerCoverUrl) {
+        return `${this.visualPlayerCoverUrl}?token=${token}`
+      }
+      // 回退：按 workId 取标准封面。
+      if (this.playWorkId) {
+        return `/api/cover/${this.playWorkId}?token=${token}`
+      }
+      return ""
     },
 
     workDetailUrl () {
@@ -554,6 +563,7 @@ export default {
       'forwardSeekMode',
       'hasLyric',
       'lyricOffsetSeconds',
+      'visualPlayerCoverUrl',
     ]),
     
     ...mapGetters('AudioPlayer', [

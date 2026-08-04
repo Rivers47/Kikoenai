@@ -71,6 +71,16 @@
               <q-icon size="0.8rem" name="schedule" class="q-mr-xs"></q-icon>
               {{ formatSeconds(item.duration) }}
             </q-item-label>
+
+            <!-- 已保存的播放进度（Phase 2）-->
+            <q-item-label
+              v-if="item.type === 'audio' && savedPosition(item) > 0"
+              caption
+              lines="1"
+            >
+              <q-icon size="0.8rem" name="history" class="q-mr-xs"></q-icon>
+              已播放至 {{ formatSeconds(savedPosition(item)) }}
+            </q-item-label>
           </q-item-section>
 
           <!-- 上下文菜单 -->
@@ -190,6 +200,13 @@ export default {
 
   methods: {
     formatSeconds,
+
+    // 该曲目已保存的播放进度（秒），无记录返回 0（Phase 2）
+    savedPosition (item) {
+      if (!item || !item.contentHash) return 0
+      const rec = this.trackProgress[item.contentHash]
+      return rec && typeof rec.seconds === 'number' ? rec.seconds : 0
+    },
 
     playIcon (hash) {
       return this.playing && this.currentPlayingFile.hash === hash ? "pause" : "play_arrow"            

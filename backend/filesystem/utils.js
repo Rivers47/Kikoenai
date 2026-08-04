@@ -86,7 +86,10 @@ async function scrapeWorkHashes(work_id, dir, oldMemo) {
 
   await Promise.all(audioFiles.map(async (file) => {
     const shortPath = file.replace(path.join(dir, '/'), '');
-    const fstat = fs.statSync(file);
+    // Async stat (not statSync): on a network mount each stat is a network
+    // round-trip, and a sync stat blocks the event loop per file — serializing
+    // N RTTs and stalling the parallel hash reads. Promise.all lets them overlap.
+    const fstat = await fs.promises.stat(file);
     const newMTime = Math.round(fstat.mtime.getTime());
     const oldMTime = oldMemoMtime[shortPath];
     if (oldMemoHash[shortPath] !== undefined && oldMTime === newMTime) {
@@ -213,7 +216,7 @@ const getTrackList = async function (id, dir, readMemo, files) {
 
     const durationMemo = readMemo.duration || { /* fallback */ };
     const hashMemo = readMemo.hash || {};
-    // add duration and contentHash for each audio 
+    // add duration and contentHash for each audio
     const filesAddAudioDuration = await Promise.all(sortedHashedFiles.map(async (file) => {
       if (supportedMediaExtList.includes(file.ext)) {
         if (undefined !== durationMemo[file.shortFilePath]) {
@@ -223,9 +226,10 @@ const getTrackList = async function (id, dir, readMemo, files) {
           file.contentHash = hashMemo[file.shortFilePath];
         }
       }
-      // 移除fullPath信息
+      // relPath (shortFilePath) is kept on the track so toTree can expose it
+      // on audio nodes — the frontend uses it as the stable key to merge
+      // late-arriving contentHash values from the /api/work/:id/memo endpoint.
       delete file.fullPath;
-      delete file.shortFilePath;
 
       return file;
     }));
@@ -325,6 +329,7 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
         type: 'audio',
         hash: track.hash,
         contentHash: track.contentHash,
+        relPath: track.shortFilePath,
         title: track.title,
         duration: track.duration,
         workTitle,
