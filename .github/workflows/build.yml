@@ -2,8 +2,6 @@ name: Build All (Frontend + Backend Container)
 
 on:
   push:
-  pull_request:
-    branches: [main, master]
   workflow_dispatch:
 
 env:
@@ -51,6 +49,7 @@ jobs:
           images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
+            type=ref,event=pr
             type=sha,prefix={{branch}}-,enable=${{ github.event_name == 'push' }}
             type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
@@ -62,6 +61,7 @@ jobs:
           images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch,suffix=-debug
+            type=ref,event=pr,suffix=-debug
             type=sha,prefix={{branch}}-,suffix=-debug,enable=${{ github.event_name == 'push' }}
             type=semver,pattern={{version}},suffix=-debug
             type=raw,value=latest-debug,enable={{is_default_branch}}
