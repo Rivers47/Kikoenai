@@ -59,13 +59,13 @@
           </q-item-section>
 
           <q-item-section>
-            <q-item-label>{{ item.title }}</q-item-label>
+            <q-item-label class="text-subtitle1">{{ item.title }}</q-item-label>
             <q-item-label v-if="item.children" caption lines="1">{{ `${item.children.length} 项目` }}</q-item-label>
           </q-item-section>
 
           <!--音频文件时长 + 已保存的播放进度-->
           <q-item-section side v-if="item.type === 'audio' && typeof(item.duration) === 'number'">
-            <q-item-label caption>
+            <q-item-label>
               <template v-if="savedPosition(item) > 0">
                 {{ formatSeconds(savedPosition(item)) }}
                 <span class="q-mx-xs">/</span>
@@ -345,3 +345,12 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+/* ponytail: Quasar forces a grey on .q-item__section--side, which overrides the
+   active item's text-on-primary. Inherit only on the active item so the normal
+   grey side text is preserved. */
+.text-on-primary .q-item__section--side {
+  color: inherit;
+}
+</style>
