@@ -133,6 +133,10 @@ export default {
     metadata: {
       type: Object,
       required: true,
+    },
+    trackProgress: {
+      type: Object,
+      default: () => ({}),
     }
   },
 
@@ -218,11 +222,13 @@ export default {
       } else if (item.type === 'other') {
         this.download(item);
       } else if (this.currentPlayingFile.hash !== item.hash) {
+        const resumeSeconds = this.trackProgress[item.contentHash];
         this.$store.commit('AudioPlayer/SET_QUEUE', {
           workId: this.metadata.id,
           queue: this.queue.concat(),
           index: this.queue.findIndex(file => file.hash === item.hash),
           resetPlaying: true,
+          resumeHistroySeconds: resumeSeconds ? resumeSeconds.seconds : -1,
           workLastTrackHash: this.queue.length ? this.queue[this.queue.length - 1].hash : ''
         })
       }
@@ -232,11 +238,14 @@ export default {
       if (this.currentPlayingFile.hash === hash) {
         this.$store.commit('AudioPlayer/TOGGLE_PLAYING')
       } else {
+        const item = this.fatherFolder.find(i => i.hash === hash);
+        const resumeSeconds = item && item.contentHash ? this.trackProgress[item.contentHash] : null;
         this.$store.commit('AudioPlayer/SET_QUEUE', {
           workId: this.metadata.id,
           queue: this.queue.concat(),
           index: this.queue.findIndex(file => file.hash === hash),
           resetPlaying: true,
+          resumeHistroySeconds: resumeSeconds ? resumeSeconds.seconds : -1,
           workLastTrackHash: this.queue.length ? this.queue[this.queue.length - 1].hash : ''
         })
       }

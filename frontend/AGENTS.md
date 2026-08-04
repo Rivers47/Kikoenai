@@ -306,6 +306,9 @@ npm test           # Run ESLint
 | `/api/illustrators` | GET | `EditMetadata.vue` | List illustrators (autocomplete) |
 | `/api/script_writers` | GET | `EditMetadata.vue` | List script writers (autocomplete) |
 | `/api/seriess` | GET | `EditMetadata.vue` | List series (autocomplete; irregular plural) |
+| `/api/track-progress` | PUT | `AudioElement.vue`, `AudioPlayer.vue` | Report per-track playback progress. Accepts `{work_id, contentHash, seconds, completed}`. Fire-and-forget write. |
+
+> **Tracks response change:** `GET /api/tracks/:id` now returns `{ tree, trackProgress }`. `trackProgress` is a `{contentHash: {seconds, completed}}` map bundled with the tree. Audio tree nodes include `contentHash` (SHA-256 hex). The frontend uses `contentHash` for per-track resume lookups. |
 
 > **Note:** Library scanning is **not** a REST endpoint. `Scanner.vue` triggers scans over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN` / `KILL_SCAN_PROCESS`) and listens for the `SCAN_*` events.
 

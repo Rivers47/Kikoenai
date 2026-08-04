@@ -1,4 +1,5 @@
 const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 // Replacement for recursive-readdir: returns all files recursively as absolute paths
 // Uses sync glob since the walked directories are bounded and the result is needed immediately.
@@ -38,6 +39,69 @@ async function getAudioFileDuration(filePath) {
   return NaN;
 }
 const getAudioFileDurationLimited = (filePath) => limitP.call(getAudioFileDuration, filePath);
+
+/**
+ * Compute SHA-256 hex digest of a file's contents.
+ * @param {String} filePath Absolute path to the file.
+ * @returns {Promise<String>} SHA-256 hex string.
+ */
+const getContentHash = (filePath) => {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('error', (err) => reject(err));
+  });
+};
+// Bound concurrency the same way getAudioFileDurationLimited does, so a work
+// with many tracks doesn't spike disk I/O by hashing everything at once.
+const getContentHashLimited = (filePath) => limitP.call(getContentHash, filePath);
+
+/**
+ * Lazily compute SHA-256 hashes for a work's audio files at tree-build time.
+ * Reuses memo.hash[relPath] when the file's mtime is unchanged; computes
+ * and caches otherwise. Never called at scan time — hashing only happens on
+ * first tree-build after the feature ships, or on genuine file modification.
+ * @param {String} work_id
+ * @param {String} dir Work directory (absolute path).
+ * @param {Object} oldMemo Existing memo ({ duration, mtime, hash }).
+ * @returns {Promise<{memo: Object, changed: Boolean}>}
+ */
+async function scrapeWorkHashes(work_id, dir, oldMemo) {
+  const files = await recursiveReaddir(dir);
+  // oldMemo may be null for works never scraped (t_work.memo NULL). Be
+  // null-safe like getTrackList's readMemo.duration || {} pattern, otherwise
+  // a single unscanned work throws and 500s the whole tree endpoint.
+  const safeMemo = oldMemo || {};
+  const oldMemoHash = safeMemo.hash || {};
+  const oldMemoMtime = safeMemo.mtime || {};
+  const memo = { ...safeMemo, hash: { ...oldMemoHash } };
+  let changed = false;
+
+  const audioFiles = files.filter((file) => {
+    const ext = path.extname(file).toLowerCase();
+    return supportedMediaExtList.includes(ext);
+  });
+
+  await Promise.all(audioFiles.map(async (file) => {
+    const shortPath = file.replace(path.join(dir, '/'), '');
+    const fstat = fs.statSync(file);
+    const newMTime = Math.round(fstat.mtime.getTime());
+    const oldMTime = oldMemoMtime[shortPath];
+    if (oldMemoHash[shortPath] !== undefined && oldMTime === newMTime) {
+      return; // cached and unchanged — reuse
+    }
+    const hash = await getContentHashLimited(file);
+    memo.hash[shortPath] = hash;
+    memo.mtime[shortPath] = newMTime;
+    changed = true;
+  }));
+
+  // Return the walked file list so the caller can hand it to getTrackList and
+  // avoid a second recursiveReaddir of the same directory.
+  return { memo, changed, files };
+}
 
 // 从文件系统，抓取单个作品本地文件的杂项信息：
 //  * 音频文件对应的时长
@@ -103,11 +167,13 @@ async function scrapeWorkMemo(work_id, dir, oldMemo) {
  * @param {String} dir Work directory (absolute).
  * @param {readMemo} at least a empty object, or { duration: { "relative/path/audio.mp3": 33, "audio2.mp3": 22 }} for storage audio file duration
  */
-const getTrackList = async function (id, dir, readMemo) {
+const getTrackList = async function (id, dir, readMemo, files) {
   try {
-    const files = await recursiveReaddir(dir);
+    // Reuse a caller-provided file list (e.g. from scrapeWorkHashes) to avoid
+    // walking the same directory twice during a single tree-build.
+    const walkedFiles = files || (await recursiveReaddir(dir));
     // Filter out any files not matching these extensions
-    const filteredFiles = files.filter((file) => {
+    const filteredFiles = walkedFiles.filter((file) => {
       const ext = path.extname(file).toLowerCase();
 
       return (
@@ -146,10 +212,16 @@ const getTrackList = async function (id, dir, readMemo) {
     );
 
     const durationMemo = readMemo.duration || { /* fallback */ };
-    // add duration for each audio 
+    const hashMemo = readMemo.hash || {};
+    // add duration and contentHash for each audio 
     const filesAddAudioDuration = await Promise.all(sortedHashedFiles.map(async (file) => {
-      if (supportedMediaExtList.includes(file.ext) && (undefined !== durationMemo[file.shortFilePath])) {
-        file.duration = durationMemo[file.shortFilePath];
+      if (supportedMediaExtList.includes(file.ext)) {
+        if (undefined !== durationMemo[file.shortFilePath]) {
+          file.duration = durationMemo[file.shortFilePath];
+        }
+        if (undefined !== hashMemo[file.shortFilePath]) {
+          file.contentHash = hashMemo[file.shortFilePath];
+        }
       }
       // 移除fullPath信息
       delete file.fullPath;
@@ -252,6 +324,7 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
       fatherFolder.push({
         type: 'audio',
         hash: track.hash,
+        contentHash: track.contentHash,
         title: track.title,
         duration: track.duration,
         workTitle,
@@ -377,4 +450,6 @@ module.exports = {
   formatID,
   coverFileName,
   scrapeWorkMemo,
+  getContentHash,
+  scrapeWorkHashes,
 };

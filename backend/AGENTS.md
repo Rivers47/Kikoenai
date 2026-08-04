@@ -245,6 +245,9 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/illustrators` | GET | List all illustrators (autocomplete for metadata editor) |
 | `/api/script_writers` | GET | List all script writers (autocomplete for metadata editor) |
 | `/api/seriess` | GET | List all series (autocomplete for metadata editor) |
+| `/api/track-progress` | PUT | Report per-track playback progress. Accepts `{work_id, contentHash, seconds, completed}`. Upserts `t_track_progress` keyed by contentHash directly — no file read. |
+
+> **Tracks response change:** `GET /api/tracks/:id` now returns `{ tree, trackProgress }` instead of a bare array. `tree` is the same tree structure; `trackProgress` is a `{contentHash: {seconds, completed}}` map. Audio tree nodes include a `contentHash` field (SHA-256 hex, lazily computed and cached in `t_work.memo.hash`). This is a breaking response-shape change; `Work.vue` handles both via `response.data.tree || response.data`.
 
 > **Note:** Library scanning is **not** a REST endpoint. The frontend triggers it over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN`) and listens for the `SCAN_*` events above. The plural-list route `/:field(circle\|tag\|va\|illustrator\|script_writer\|series)s/` powers the `/api/illustrators`, `/api/script_writers`, and `/api/seriess` endpoints above (note the irregular plural `seriess`).
 

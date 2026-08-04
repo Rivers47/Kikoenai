@@ -1,6 +1,6 @@
 const { knex } = require('./db');
 
-const dbVersion = '20260802000000';
+const dbVersion = '20260803000000';
 
 // 数据库结构
 const createSchema = () => knex.schema
@@ -120,6 +120,18 @@ const createSchema = () => knex.schema
     table.foreign('work_id').references('id').inTable('t_work').onDelete('CASCADE'); // FOREIGN KEY 外键
 
     table.primary(['user_name', 'work_id']); // PRIMARY KEY
+  })
+  .createTable('t_track_progress', (table) => {
+    table.string('user_name').notNullable();
+    table.string('work_id').notNullable();
+    table.string('track_key').notNullable(); // SHA-256 hex
+    table.float('seconds').notNullable().defaultTo(0);
+    table.boolean('completed').notNullable().defaultTo(false);
+    table.timestamps(true, true);
+
+    table.foreign('user_name').references('name').inTable('t_user').onDelete('CASCADE');
+    table.foreign('work_id').references('id').inTable('t_work').onDelete('CASCADE');
+    table.primary(['user_name', 'work_id', 'track_key']);
   })
   .then(() => {
     console.log(' * 成功构建数据库结构.');

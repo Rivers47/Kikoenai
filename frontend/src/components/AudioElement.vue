@@ -229,6 +229,8 @@ export default {
     onPause() {
       this.playLrc(false)
       this.PAUSE()
+      // Fire-and-forget per-track progress on pause (Phase 2)
+      this._reportTrackProgress()
     },
     onPlaying() {
       this.playLrc(true)
@@ -309,6 +311,24 @@ export default {
         })
     },
 
+    // Fire-and-forget per-track progress report (Phase 2).
+    // Reports the current track's position via contentHash.
+    _reportTrackProgress () {
+      const file = this.currentPlayingFile
+      if (!file || !file.contentHash || this.playWorkId === 0) return
+      const seconds = this.plyr ? this.plyr.currentTime : 0
+      const duration = this.plyr ? this.plyr.duration : 0
+      const completed = duration > 0 && seconds >= 0.95 * duration
+      this.$axios.put('/api/track-progress', {
+        work_id: this.playWorkId,
+        contentHash: file.contentHash,
+        seconds: Math.round(seconds * 100) / 100,
+        completed: completed
+      }).catch((err) => {
+        console.error('track progress report failed:', err)
+      })
+    },
+
     _stopBySleepTimer () {
       this.PAUSE()
       this.CLEAR_SLEEP_MODE()
@@ -322,6 +342,10 @@ export default {
 
     onEnded () {
       this.maybeMarkWorkComplete()
+      // Fire-and-forget per-track progress report (Phase 2).
+      // Must run before the switch below so currentPlayingFile still
+      // refers to the track that just ended.
+      this._reportTrackProgress()
       // 睡眠定时（按曲目）：剩余曲目数为 0 时在当前曲目结束后停止，否则扣减一首
       // 必须在切换曲目逻辑之前处理：一旦推进到下一曲，"当前曲目结束后停止" 就无法实现了
       if (this.sleepMode && this.sleepModeType === 'tracks') {

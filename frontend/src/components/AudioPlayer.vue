@@ -685,6 +685,29 @@ export default {
         body: JSON.stringify(data),
         keepalive: true,
       }).catch(() => {})
+
+      // Also report per-track progress (Phase 2)
+      this._flushTrackProgressOnHide()
+    },
+
+    // Fire-and-forget per-track progress on page hide (Phase 2)
+    _flushTrackProgressOnHide () {
+      const file = this.queueCopy[this.queueIndex]
+      if (!file || !file.contentHash || this.playWorkId === 0) return
+      const seconds = this.currentTime
+      const duration = file.duration
+      const completed = duration > 0 && seconds >= 0.95 * duration
+      fetch('/api/track-progress', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          work_id: this.playWorkId,
+          contentHash: file.contentHash,
+          seconds: Math.round(seconds * 100) / 100,
+          completed: completed
+        }),
+        keepalive: true,
+      }).catch(() => {})
     },
 
     
@@ -721,6 +744,25 @@ export default {
         .catch((err) => {
           console.error(err.response.data.error)
         })
+
+      // Also report per-track progress (Phase 2)
+      this._reportTrackProgressOnUpdate()
+    },
+
+    _reportTrackProgressOnUpdate () {
+      const file = this.queueCopy[this.queueIndex]
+      if (!file || !file.contentHash || this.playWorkId === 0) return
+      const seconds = this.currentTime
+      const duration = file.duration
+      const completed = duration > 0 && seconds >= 0.95 * duration
+      this.$axios.put('/api/track-progress', {
+        work_id: this.playWorkId,
+        contentHash: file.contentHash,
+        seconds: Math.round(seconds * 100) / 100,
+        completed: completed
+      }).catch((err) => {
+        console.error('track progress report failed:', err)
+      })
     },
 
     gotoFullScreenPlayer() {

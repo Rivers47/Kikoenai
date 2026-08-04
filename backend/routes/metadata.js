@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { param, query, body } = require('express-validator');
 const db = require('../database/db');
-const { getTrackList, toTree } = require('../filesystem/utils');
+const { getTrackList, toTree, scrapeWorkHashes } = require('../filesystem/utils');
 const { config } = require('../config');
 const normalize = require('./utils/normalize');
 const { isValidRequest, workIdParam } = require('./utils/validate');
@@ -72,10 +72,22 @@ router.get('/tracks/:id',
       const rootFolder = config.rootFolders.find(rootFolder => rootFolder.name === work.root_folder);
       if (rootFolder) {
         try {
-          const tracks = await getTrackList(work_id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo));
+          const workDir = path.join(rootFolder.path, work.dir);
+          const oldMemo = JSON.parse(work.memo);
+          // Lazy content hashing: compute/cache SHA-256 per audio file, mtime-invalidated
+          const { memo, changed, files: walkedFiles } = await scrapeWorkHashes(work_id, workDir, oldMemo);
+          if (changed) {
+            await db.setWorkMemo(work_id, memo);
+          }
+          // Reuse the file list scrapeWorkHashes already walked — no second readdir.
+          const tracks = await getTrackList(work_id, workDir, memo, walkedFiles);
           const tree = toTree(tracks, work.title, work.dir, rootFolder);
-          res.send(tree);
+          // Bundle per-track progress for the requesting user
+          const username = config.auth ? req.user.name : 'admin';
+          const trackProgress = await db.getTrackProgress(username, work_id);
+          res.send({ tree, trackProgress });
         } catch (err) {
+          console.error(err);
           res.status(500).send({error: '获取文件列表失败，请检查文件是否存在或重新扫描清理'});
         }
       } else {

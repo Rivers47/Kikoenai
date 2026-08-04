@@ -1056,6 +1056,28 @@ const makeQueries = (knex) => {
       });
   }
 
+  // t_track_progress queries (Phase 2)
+  const getTrackProgress = async (username, work_id) => {
+    const rows = await knex('t_track_progress')
+      .select('track_key', 'seconds', 'completed')
+      .where('user_name', username)
+      .andWhere('work_id', work_id);
+    const map = {};
+    for (const row of rows) {
+      map[row.track_key] = { seconds: row.seconds, completed: !!row.completed };
+    }
+    return map;
+  };
+
+  const upsertTrackProgress = async (username, work_id, track_key, seconds, completed) => {
+    await knex.raw(`
+      INSERT INTO t_track_progress (user_name, work_id, track_key, seconds, completed, updated_at)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(user_name, work_id, track_key)
+      DO UPDATE SET seconds = excluded.seconds, completed = excluded.completed, updated_at = excluded.updated_at
+    `, [username, work_id, track_key, seconds, completed]);
+  };
+
   return {
     nsfwFilter,
     resolveLabel,
@@ -1066,6 +1088,7 @@ const makeQueries = (knex) => {
     getWorksWithReviews, updateUserReview, deleteUserReview, resetUserProgress,
     getPlayHistroy, updatePlayHistroy, deletePlayHistroy,
     getWorkMemo, setWorkMemo,
+    getTrackProgress, upsertTrackProgress,
   };
 };
 

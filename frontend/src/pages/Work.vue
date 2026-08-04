@@ -2,7 +2,7 @@
   <div>
     <WorkDetails :metadata="metadata" @reset="requestData()" @resumeHistroy="resumeMetadataPlayHistroy" />
     <!-- <WorkQueue :queue="tracks" :editable="false" /> -->
-    <WorkTree ref="workTree" :tree="tree" :metadata="metadata" :editable="false" />
+    <WorkTree ref="workTree" :tree="tree" :metadata="metadata" :trackProgress="trackProgress" :editable="false" />
   </div>
 </template>
 
@@ -31,7 +31,8 @@ export default {
         id: this.$route.params.id,
         circle: {}
       },
-      tree: []
+      tree: [],
+      trackProgress: {},
     }
   },
 
@@ -80,7 +81,8 @@ export default {
     async requestTracks() {
       try {
         const response = await this.$axios.get(`/api/tracks/${this.workid}`);
-        this.tree = response.data;
+        this.tree = response.data.tree || response.data;
+        this.trackProgress = response.data.trackProgress || {};
       } catch (error) {
         if (error.response) {
           // 请求已发出，但服务器响应的状态码不在 2xx 范围内
