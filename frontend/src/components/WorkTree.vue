@@ -61,25 +61,16 @@
           <q-item-section>
             <q-item-label>{{ item.title }}</q-item-label>
             <q-item-label v-if="item.children" caption lines="1">{{ `${item.children.length} 项目` }}</q-item-label>
+          </q-item-section>
 
-            <!--音频文件时长-->
-            <q-item-label
-              v-if="item.type === 'audio' && typeof(item.duration) === 'number'"
-              caption
-              lines="1"
-            >
-              <q-icon size="0.8rem" name="schedule" class="q-mr-xs"></q-icon>
+          <!--音频文件时长 + 已保存的播放进度-->
+          <q-item-section side v-if="item.type === 'audio' && typeof(item.duration) === 'number'">
+            <q-item-label caption>
+              <template v-if="savedPosition(item) > 0">
+                {{ formatSeconds(savedPosition(item)) }}
+                <span class="q-mx-xs">/</span>
+              </template>
               {{ formatSeconds(item.duration) }}
-            </q-item-label>
-
-            <!-- 已保存的播放进度（Phase 2）-->
-            <q-item-label
-              v-if="item.type === 'audio' && savedPosition(item) > 0"
-              caption
-              lines="1"
-            >
-              <q-icon size="0.8rem" name="history" class="q-mr-xs"></q-icon>
-              已播放至 {{ formatSeconds(savedPosition(item)) }}
             </q-item-label>
           </q-item-section>
 
