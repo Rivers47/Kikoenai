@@ -1,6 +1,6 @@
 # Kikoenai Frontend — AGENTS Guide
 
-**Kikoenai** is a self-hosted web media player for [DLsite](https://www.dlsite.com) voice works (doujin audio). This is the Quasar-based frontend SPA/PWA; the Express API server lives in sibling package `backend/`.
+This is the Quasar-based frontend PWA; the Express API server lives in sibling package `backend/`.
 
 - **Language:** Vue 3 (Options API style)
 - **Framework:** Quasar 2 (Material Design)

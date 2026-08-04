@@ -130,7 +130,7 @@ The frontend builds directly into `backend/dist/`, which is served as static con
 - [x] iOS support for opus
 - [ ] Migrate frontend to shadcn
 - [ ] metadata cache server to replace hvdb/asmrone
-- [ ] Smarter Play status, hide finished work in history
+- [x] Smarter Play status, hide finished work in history
 
 ## License
 

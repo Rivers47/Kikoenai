@@ -11,7 +11,7 @@ async function updateAsmrOneApiUrl() {
   try {
     const response = await axios.retryGet(url, {
       retry: {},
-      headers: { "cookie": 'locale=zh-cn' },
+      headers: { "cookie": 'locale=ja_JP' },
     });
 
     const $ = cheerio.load(response.data);
@@ -31,7 +31,7 @@ async function scrapeWorkMetadataFromAsmrOne(id) {
   const url = `https://api.asmr-200.com/api/workInfo/${rjcode}`;
   const response = await axios.retryGet(url, {
     retry: {},
-    headers: { "cookie": 'locale=zh-cn' },
+    headers: { "cookie": 'locale=ja_JP' },
   });
   // console.log(`RJ${rjcode} asmr one data = `, response.data);
   // const data = JSON.parse(response.data);

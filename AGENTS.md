@@ -1,6 +1,6 @@
 # Kikoenai — Agent Guide (root)
 
-**Kikoenai** is a self-hosted media streaming server for [DLsite](https://www.dlsite.com) voice works. This is the top-level agent guide for the monorepo; it covers layout, workspace commands, and cross-package integration. For package-specific architecture, conventions, and gotchas, read the sub-guides:
+**Kikoenai** is a self-hosted media streaming server for ASMR voice works. This is the top-level agent guide for the monorepo; it covers layout, workspace commands, and cross-package integration. For package-specific architecture, conventions, and gotchas, read the sub-guides:
 
 - **Backend work → [`backend/AGENTS.md`](backend/AGENTS.md)** (Express API, SQLite/Knex, JWT, Socket.IO, scraping)
 - **Frontend work → [`frontend/AGENTS.md`](frontend/AGENTS.md)** (Vue 3 / Quasar PWA, Vuex, Plyr, Socket.IO client)
