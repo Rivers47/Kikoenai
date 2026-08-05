@@ -1,4 +1,4 @@
-name: Package Windows portable
+name: Package Windows single-exe
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
 jobs:
   package-windows:
     runs-on: windows-latest
-    name: Build Windows portable zip
+    name: Build Windows single-exe (pkg)
     env:
       # Tag-triggered builds name the zip after the tag (vX.Y.Z -> X.Y.Z), the
       # source of truth for releases; backend/package.json may lag behind tags.
@@ -33,17 +33,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # scripts/package.js: builds frontend (prod), prunes dev deps, stages a
-      # self-contained Kikoenai/ folder (bundled Node 24 + Windows-native sqlite3
-      # + ffmpeg/ffprobe + backend source), and zips it.
-      - name: Package Windows portable
+      # scripts/pkg-package.js: builds frontend (prod), prunes dev deps, stages
+      # the sqlite3 binding at pkg's first-candidate path, builds ONE Kikoenai.exe
+      # via @yao-pkg/pkg (Node 24 win-x64 base), then stages it beside standalone
+      # ffmpeg/ffprobe + the launcher bat + data dirs, and zips it.
+      - name: Package Windows single-exe
         run: npm run package:windows
 
-      - name: Upload portable folder artifact
+      - name: Upload staged folder artifact
         uses: actions/upload-artifact@v4
         with:
           name: Kikoenai-windows-x64
-          path: package/windows/Kikoenai
+          path: package/windows-exe/Kikoenai
           if-no-files-found: error
           retention-days: 30
 
@@ -52,7 +53,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: package/dist/Kikoenai-windows-x64-*.zip
+          files: package/dist/Kikoenai-exe-windows-x64-*.zip
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

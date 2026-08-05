@@ -13,7 +13,7 @@
  * Windows-native sqlite3 .node binding is fetched by prebuild-install. Stdlib
  * only -- no deps.
  *
- *   npm run package:windows:exe
+ *   npm run package:windows
  *
  * Output: package/dist/Kikoenai-exe-windows-x64-<version>.zip
  *
@@ -41,8 +41,8 @@ const DIST_DIR = path.join(ROOT, 'package', 'dist');
 const ZIP_OUT = path.join(DIST_DIR, `Kikoenai-exe-windows-x64-${VERSION}.zip`);
 
 if (process.platform !== 'win32') {
-  console.error('package:windows:exe must run on a Windows host (needs Windows-native sqlite3 bindings).');
-  console.error('Use the .github/workflows/package-windows-exe.yml workflow on windows-latest.');
+  console.error('package:windows must run on a Windows host (needs Windows-native sqlite3 bindings).');
+  console.error('Use the .github/workflows/package-windows.yml workflow on windows-latest.');
   process.exit(1);
 }
 
