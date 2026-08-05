@@ -8,6 +8,9 @@ Another heavily modified [closed source version](https://asmr.one) seems to exis
 
 So this repo is created to make the project monorepo again and to continue the development of the project.
 
+## Project screenshot
+![](./demo.png)
+
 ## Structure
 
 ```
