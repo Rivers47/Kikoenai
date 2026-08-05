@@ -70,7 +70,19 @@ module.exports = function (ctx) {
       modern: true,
       sourceMap: true,
       devtool: 'source-map',
-      minify: true
+      minify: true,
+
+      // Force the pure-JS `sass` compiler for .scss/.sass. sass-loader v16
+      // otherwise auto-prefers `sass-embedded`, whose native binary ships as a
+      // platform-specific optionalDependency that npm 11 mishandles on Windows
+      // (npm/cli#8777, sass/embedded-host-node#404): `npm ci` silently skips
+      // sass-embedded-win32-x64, sass-embedded falls back to pure-JS `sass`
+      // with `--embedded`, and the build dies with "sass --embedded is
+      // unavailable in pure JS mode". Passing the implementation as a string
+      // makes sass-loader require('sass') in its own CJS context -- the
+      // compiler runs in-process, with no native binary or platform package.
+      scssLoaderOptions: { implementation: 'sass' },
+      sassLoaderOptions: { implementation: 'sass' }
     },
 
 

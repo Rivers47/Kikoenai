@@ -33,11 +33,11 @@ jobs:
       - name: Package Windows portable
         run: npm run package:windows
 
-      - name: Upload zip artifact
+      - name: Upload portable folder artifact
         uses: actions/upload-artifact@v4
         with:
           name: Kikoenai-windows-x64
-          path: package/dist/Kikoenai-windows-x64-*.zip
+          path: package/windows/Kikoenai
           if-no-files-found: error
           retention-days: 30
 
