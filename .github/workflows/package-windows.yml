@@ -1,0 +1,51 @@
+name: Package Windows portable
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  package-windows:
+    runs-on: windows-latest
+    name: Build Windows portable zip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      # Full install (dev + prod) -- needed to build the frontend (Quasar toolchain).
+      - name: Install dependencies
+        run: npm ci
+
+      # scripts/package.js: builds frontend (prod), prunes dev deps, stages a
+      # self-contained Kikoenai/ folder (bundled Node 22 + Windows-native sqlite3
+      # + ffmpeg/ffprobe + backend source), and zips it.
+      - name: Package Windows portable
+        run: npm run package:windows
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kikoenai-windows-x64
+          path: package/dist/Kikoenai-windows-x64-*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      # Attach the zip to a GitHub release when building from a tag.
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: package/dist/Kikoenai-windows-x64-*.zip
+          draft: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

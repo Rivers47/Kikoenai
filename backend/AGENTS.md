@@ -201,7 +201,6 @@ All routes mounted under `/api`:
 | `jschardet` | Text encoding detection for LRC files |
 | `natural-orderby` | Natural sorting of filenames |
 | `compare-versions` | Version comparison for config migration |
-| `pkg` | Packaging into standalone executable |
 
 ---
 
@@ -212,8 +211,13 @@ npm start       # Start server (production)
 npm run dev     # Start with nodemon (development)
 npm run scan    # Run scanner manually
 npm test        # ESLint + Mocha tests
-npm run build   # Package into standalone executable (pkg)
 ```
+
+> **Packaging:** the deprecated `pkg` single-executable path has been removed. A
+> Windows portable build (bundled Node + Windows-native sqlite3 + ffmpeg) is now
+> produced from the repo root via `npm run package:windows` (see root `README.md`
+> and `.github/workflows/package-windows.yml`). Data folders resolve to
+> `KIKO_DATA_DIR || __dirname` (see `config.js`).
 
 ---
 

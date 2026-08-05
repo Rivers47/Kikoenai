@@ -2,7 +2,11 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const configFolderDir = process.pkg ? path.join(process.execPath, '..', 'config') : path.join(__dirname, 'config');
+// KIKO_DATA_DIR lets the portable Windows build point data folders
+// (config/sqlite/covers/VoiceWork) at the launcher directory instead of app/.
+// Unset -> __dirname, identical to the old behavior.
+const dataRoot = process.env.KIKO_DATA_DIR || __dirname;
+const configFolderDir = path.join(dataRoot, 'config');
 const configPath = path.join(configFolderDir, 'config.json');
 const pjson = require('./package.json');
 const compareVersions = require('compare-versions');
@@ -17,10 +21,8 @@ let config = {};
 const voiceWorkDefaultPath = () => {
   if (process.env.IS_DOCKER) {
     return '/usr/src/kikoeru/VoiceWork';
-  } else if (process.pkg) {
-    return path.join(process.execPath, '..', 'VoiceWork');
   } else {
-    return path.join(__dirname, 'VoiceWork');
+    return path.join(dataRoot, 'VoiceWork');
   }
 };
 
@@ -37,8 +39,8 @@ const defaultConfig = {
     //   path: ''
     // }
   ],
-  coverFolderDir: process.pkg ? path.join(process.execPath, '..', 'covers') : path.join(__dirname, 'covers'),
-  databaseFolderDir: process.pkg ? path.join(process.execPath, '..', 'sqlite') : path.join(__dirname, 'sqlite'),
+  coverFolderDir: path.join(dataRoot, 'covers'),
+  databaseFolderDir: path.join(dataRoot, 'sqlite'),
   coverUseDefaultPath: false, // Ignores coverFolderDir if set to true
   dbUseDefaultPath: true, // Ignores databaseFolderDir if set to true
   voiceWorkDefaultPath: voiceWorkDefaultPath(),
@@ -109,18 +111,18 @@ const readConfig = () => {
   // Support reading relative path
   // When config is saved in admin panel, it will still be stored as absolute path 
   if(!path.isAbsolute(config.coverFolderDir)) {
-    config.coverFolderDir = process.pkg ? path.join(process.execPath, '..', config.coverFolderDir) : path.join(__dirname, config.coverFolderDir);
+    config.coverFolderDir = path.join(dataRoot, config.coverFolderDir);
   }
   if(!path.isAbsolute(config.databaseFolderDir)) {
-    config.databaseFolderDir = process.pkg ? path.join(process.execPath, '..', config.databaseFolderDir) : path.join(__dirname, config.databaseFolderDir);
+    config.databaseFolderDir = path.join(dataRoot, config.databaseFolderDir);
   }
 
   // Use ./covers and ./sqlite to override settings, ignoring corresponding fields in config
   if (config.coverUseDefaultPath) {
-    config.coverFolderDir = process.pkg ? path.join(process.execPath, '..', 'covers') : path.join(__dirname, 'covers');
+    config.coverFolderDir = path.join(dataRoot, 'covers');
   }
   if (config.dbUseDefaultPath) {
-    config.databaseFolderDir = process.pkg ? path.join(process.execPath, '..', 'sqlite') : path.join(__dirname, 'sqlite');
+    config.databaseFolderDir = path.join(dataRoot, 'sqlite');
   }
 
   if (process.env.NODE_ENV === 'production' || config.production) {

@@ -13,22 +13,14 @@
   "engines": {
     "node": ">=22.0.0"
   },
-  "bin": {
-    "kikoeru-express": "app.js"
-  },
-  "pkg": {
-    "scripts": [
-      "filesystem/scanner.js",
-      "filesystem/updater.js",
-      "dist/**/*.js",
-      "database/migrations/*",
-      "database/knexfile.js",
-      "database/storage.js"
-    ],
-    "assets": [
-      "dist/**/*",
-      "static/**/*"
-    ]
+  "scripts": {
+    "start": "node --trace-warnings app.js",
+    "dev": "nodemon --trace-warnings app.js",
+    "scan": "node --trace-warnings ./filesystem/scanner.js",
+    "backfill:progress": "node --trace-warnings ./scripts/backfill-progress.js",
+    "lint": "eslint .",
+    "test": "npm run lint && cross-env NODE_ENV=test mocha test/ --ignore test/benchmark.js",
+    "bench": "cross-env NODE_ENV=test mocha test/benchmark.js"
   },
   "nodemonConfig": {
     "ignore": [
@@ -36,16 +28,6 @@
       "sqlite/*"
     ],
     "delay": "2500"
-  },
-  "scripts": {
-    "start": "node --trace-warnings app.js",
-    "dev": "nodemon --trace-warnings app.js",
-    "scan": "node --trace-warnings ./filesystem/scanner.js",
-    "build": "pkg package.json --out-path package",
-    "backfill:progress": "node --trace-warnings ./scripts/backfill-progress.js",
-    "lint": "eslint .",
-    "test": "npm run lint && cross-env NODE_ENV=test mocha test/ --ignore test/benchmark.js",
-    "bench": "cross-env NODE_ENV=test mocha test/benchmark.js"
   },
   "author": "Watanuki-Kimihiro",
   "contributors": [

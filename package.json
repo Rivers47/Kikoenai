@@ -18,6 +18,7 @@
     "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev:backend\" \"npm run dev:frontend\"",
     "build:frontend": "npm run build -w frontend",
     "build": "npm run build:frontend",
+    "package:windows": "node scripts/package.js --windows",
     "start": "npm start -w backend",
     "lint": "npm run lint -w backend && npm run test -w frontend",
     "release:patch": "npm version patch -w backend && npm run version:sync",
