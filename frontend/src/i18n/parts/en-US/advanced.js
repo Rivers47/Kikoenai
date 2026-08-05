@@ -1,7 +1,5 @@
 export default {
   webPrefsTitle: 'Web preferences (per-browser, independent across browsers)',
-  language: 'Interface language',
-  languageCaption: 'Choose the display language. Browser language is auto-detected on first visit.',
   legacyCardUi: 'Use legacy work card UI',
   legacyCardUiCaption: 'Show works on the search page using the old card style; legacy cards display all tags directly.',
   playerSettings: 'Player settings',
@@ -56,8 +54,4 @@ export default {
   dbDefaultPathCaption: 'Use the sqlite folder next to the program and ignore databaseFolderDir (avoid changing unless needed; requires a restart).',
   coverDefaultPath: 'Cover default path',
   coverDefaultPathCaption: 'Use the covers folder next to the program and ignore the cover folder setting',
-  langZhCN: '简体中文',
-  langEnUS: 'English',
-  langJaJP: '日本語',
-  langZhTW: '繁體中文',
 }

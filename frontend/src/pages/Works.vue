@@ -102,7 +102,7 @@
     </div>
 
     <div :class="`row justify-center ${listMode ? 'list' : 'q-mx-md'}`">
-      <q-infinite-scroll @load="onLoad" :offset="250" :disable="stopLoad" class="col">
+      <q-infinite-scroll @load="onLoad" :offset="500" :disable="stopLoad" class="col">
 
         <q-list v-if="listMode" bordered separator class="shadow-2">
           <WorkListItem v-for="work in works" :key="work.id" :metadata="work" :showLabel="showLabel && $q.screen.width > 700" />

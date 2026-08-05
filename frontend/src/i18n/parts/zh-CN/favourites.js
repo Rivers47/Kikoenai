@@ -1,9 +1,9 @@
 export default {
   playHistory: '播放历史',
-  myReviews: '我的评价',
+  myReviews: '已标记',
   myProgress: '我的进度',
   folder: '分类整理',
-  hideFinished: '隐藏已听完',
+  hideFinished: '在听',
   all: '全部',
   marked: '想听',
   listening: '在听',
@@ -17,6 +17,6 @@ export default {
   sortByRelease: '发布时间',
   sortByReviewCount: '评论数量',
   sortByDlCount: '售出数量',
-  sortByAllAge: '全年龄新作',
-  sortByNsfw: '18禁新作',
+  sortByAllAge: '全年龄',
+  sortByNsfw: '18禁',
 }

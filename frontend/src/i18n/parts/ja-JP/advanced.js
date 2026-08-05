@@ -1,7 +1,5 @@
 export default {
   webPrefsTitle: 'Web設定（ブラウザごとに独立します）',
-  language: 'インターフェース言語',
-  languageCaption: '表示言語を選択。初回アクセス時にブラウザ言語を自動検出します。',
   legacyCardUi: '旧式作品カードUIを使用',
   legacyCardUiCaption: '検索ページの作品を旧カードスタイルで表示。旧カードはすべてのタグを直接表示します。',
   playerSettings: 'プレイヤー設定',
@@ -56,8 +54,4 @@ export default {
   dbDefaultPathCaption: 'プログラム横のsqliteフォルダを使用しdatabaseFolderDirを無視（不要なら変更しないでください。再起動が必要です）。',
   coverDefaultPath: 'カバーデフォルトパス',
   coverDefaultPathCaption: 'プログラム横のcoversフォルダを使用しカバーフォルダ設定を無視',
-  langZhCN: '简体中文',
-  langEnUS: 'English',
-  langJaJP: '日本語',
-  langZhTW: '繁體中文',
 }

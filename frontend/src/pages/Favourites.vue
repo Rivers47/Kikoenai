@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
     <div class="fit row wrap justify-between items-center q-px-sm q-py-sm">
-      <div class="col-lg-3 col-sm-12 col-xs-6">
+      <div class="col-lg-6 col-md-6 col-xs-7">
           <q-btn-toggle
             v-model="mode"
             @update:model-value="changeMode"
@@ -247,19 +247,24 @@ export default {
 
     requestWorksQueue () {
       const params = {
-        order: this.sortBy.order,
-        sort: this.sortMode,
         page: this.pagination.currentPage + 1 || 1
       }
 
-      if (this.sortBy.order === 'allage') {
-        params.order = 'nsfw'
-        params.sort = 'asc'
-      }
+      // History mode has no sort UI (it's always most-recent-first server-side);
+      // don't leak the persisted review-mode sort options into /api/history.
+      if (this.mode !== 'history') {
+        params.order = this.sortBy.order
+        params.sort = this.sortMode
 
-      if (this.sortBy.order === 'nsfw') {
-        params.order = 'nsfw'
-        params.sort = 'desc'
+        if (this.sortBy.order === 'allage') {
+          params.order = 'nsfw'
+          params.sort = 'asc'
+        }
+
+        if (this.sortBy.order === 'nsfw') {
+          params.order = 'nsfw'
+          params.sort = 'desc'
+        }
       }
 
       if (this.mode === 'progress') {

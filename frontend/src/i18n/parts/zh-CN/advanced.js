@@ -1,7 +1,5 @@
 export default {
   webPrefsTitle: '网页偏好设置（每个浏览器之间，此部分配置相互独立）',
-  language: '界面语言',
-  languageCaption: '选择界面显示语言，首次访问时自动检测浏览器语言',
   legacyCardUi: '切换回旧式作品卡片UI',
   legacyCardUiCaption: '搜索页面展示作品使用旧的卡片样式，旧式卡片可以直接显示所有标签',
   playerSettings: '播放器设置',
@@ -56,8 +54,4 @@ export default {
   dbDefaultPathCaption: '使用程序所在位置下的sqlite文件夹，并忽略databaseFolderDir设置（如无必要请勿修改，更改此设置需要重启程序）',
   coverDefaultPath: '封面使用默认路径',
   coverDefaultPathCaption: '使用程序所在位置下的covers文件夹，并忽略封面文件夹路径设置',
-  langZhCN: '简体中文',
-  langEnUS: 'English',
-  langJaJP: '日本語',
-  langZhTW: '繁體中文',
 }

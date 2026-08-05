@@ -256,7 +256,7 @@ Two separate translation layers, kept apart:
 
 **Locale resolution (per-user):** on boot, `getInitialLocale()` checks LocalStorage `app_language` → else matches `navigator.language` (exact, then prefix; `zh-TW`/`zh-HK` → `zh-CN`) → else `zh-CN`. The choice is persisted in LocalStorage `app_language`.
 
-**Language switcher:** a `q-select` in `Dashboard/Advanced.vue` ("网页偏好设置" card) calls `changeLanguage(locale)` from `src/boot/i18n.js`, which updates `vue-i18n`, the Quasar lang pack (`Quasar.lang.set`), and LocalStorage. The dead server `tagLanguage` config and its radio group were **removed** (scrapers always fetch Japanese; tag language is now a display concern, resolved client-side).
+**Language switcher:** a clickable item in the `MainLayout.vue` sidebar (icon `language`) cycles through locales on click, calling `changeLanguage(locale)` from `src/boot/i18n.js`, which updates `vue-i18n`, the Quasar lang pack (`Quasar.lang.set`), and LocalStorage. The dead server `tagLanguage` config and its radio group were **removed** (scrapers always fetch Japanese; tag language is now a display concern, resolved client-side).
 
 **Quasar lang sync:** `src/boot/i18n.js` dynamically imports the matching `quasar/lang/*` pack (`zh-CN`, `en-US`, `ja`; `zh-TW` reuses `zh-CN`) and falls back to `en-US` on load failure. `quasar.config.js` `framework.lang: 'en-US'` remains the build-time default and is overridden at boot.
 
@@ -281,7 +281,7 @@ Two separate translation layers, kept apart:
   | `enable_video_source` | boolean | Use `<video>` element for playback |
   | `ai_server_url` | string | AI server URL (unused?) |
   | `old_work_card_ui_style_key` | boolean | Legacy card UI toggle |
-  | `app_language` | string | UI locale (`zh-CN`/`en-US`/`ja-JP`/`zh-TW`); set by the Advanced page switcher, auto-detected from browser on first load |
+  | `app_language` | string | UI locale (`zh-CN`/`en-US`/`ja-JP`/`zh-TW`); set by the MainLayout sidebar language switcher, auto-detected from browser on first load |
 
 ---
 

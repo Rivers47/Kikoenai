@@ -17,6 +17,6 @@ export default {
   sortByRelease: 'Release date',
   sortByReviewCount: 'Review count',
   sortByDlCount: 'Sales count',
-  sortByAllAge: 'All-age new',
-  sortByNsfw: '18+ new',
+  sortByAllAge: 'All-age',
+  sortByNsfw: '18+',
 }

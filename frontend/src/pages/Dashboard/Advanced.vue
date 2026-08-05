@@ -6,26 +6,6 @@
       </q-toolbar>
 
       <q-list>
-        <q-item>
-          <q-item-section>
-            <q-item-label>{{ $t('advanced.language') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.languageCaption') }}</q-item-label>
-          </q-item-section>
-
-          <q-item-section avatar>
-            <q-select
-              v-model="currentLanguage"
-              :options="languageOptions"
-              emit-value
-              map-options
-              dense
-              outlined
-              style="min-width: 160px;"
-              @update:model-value="onLanguageChange"
-            />
-          </q-item-section>
-        </q-item>
-
         <q-item style="height: 70px;">
           <q-item-section>
             <q-item-label>{{ $t('advanced.legacyCardUi') }}</q-item-label>
@@ -399,7 +379,6 @@
 <script>
 import NotifyMixin from '../../mixins/Notification.js'
 import { mapState } from 'vuex'
-import { changeLanguage, getCurrentLocale } from '../../boot/i18n.js'
 
 export default {
   name: 'Advanced',
@@ -412,7 +391,6 @@ export default {
       loading: false,
       rewindSeekTime: '5',
       forwardSeekTime: '30',
-      currentLanguage: getCurrentLocale(),
     }
   },
 
@@ -420,14 +398,6 @@ export default {
     ...mapState('AudioPlayer', [
       'oldWorkCardUIStyle',
     ]),
-    languageOptions () {
-      return [
-        { value: 'zh-CN', label: this.$t('advanced.langZhCN') },
-        { value: 'en-US', label: this.$t('advanced.langEnUS') },
-        { value: 'ja-JP', label: this.$t('advanced.langJaJP') },
-        { value: 'zh-TW', label: this.$t('advanced.langZhTW') },
-      ]
-    },
   },
 
   methods: {
@@ -480,10 +450,6 @@ export default {
       this.$store.commit('AudioPlayer/SET_OLD_WORK_CARD_UI_STYLE', value);
     },
 
-    async onLanguageChange (locale) {
-      await changeLanguage(locale)
-      this.currentLanguage = locale
-    },
   },
 
   created () {

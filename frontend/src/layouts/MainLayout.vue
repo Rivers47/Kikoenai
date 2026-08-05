@@ -115,6 +115,24 @@
             clickable
             v-ripple
             exact
+            @click="cycleLanguage"
+          >
+            <q-item-section avatar>
+              <q-icon name="language" />
+            </q-item-section>
+
+            <q-item-section>
+              <q-item-label class="text-subtitle1">
+                {{ currentLanguageLabel }}
+              </q-item-label>
+              <q-item-label caption lines="2">{{ $t('mainlayout.language') }}</q-item-label>
+            </q-item-section>
+          </q-item>
+
+          <q-item
+            clickable
+            v-ripple
+            exact
             @click="$store.commit('AudioPlayer/SET_AUTO_MARK_LISTENED', !autoMarkListened)"
           >
             <q-item-section avatar>
@@ -202,6 +220,7 @@ import NotifyMixin from '../mixins/Notification.js'
 import { mapMutations, mapState, mapGetters } from 'vuex'
 import { Dark } from 'quasar'
 import { CONTRAST_MODES, getContrastMode, setContrastMode } from 'src/utils/contrast'
+import { changeLanguage, getCurrentLocale } from 'src/boot/i18n.js'
 
 export default {
   name: 'MainLayout',
@@ -224,6 +243,7 @@ export default {
       randId: null,
       showScroller: false,
       contrastMode: getContrastMode(),
+      currentLanguage: getCurrentLocale(),
       links: [
         { titleKey: 'mediaLibrary', icon: 'widgets', path: '/' },
         { titleKey: 'fullScreenMode', icon: 'play_circle', path: '/fullScreenPlayer' },
@@ -265,6 +285,20 @@ export default {
         'contrast-high': this.$t('mainlayout.contrastHigh'),
       }
       return labels[this.contrastMode] || ''
+    },
+
+    languageOptions () {
+      return [
+        { value: 'zh-CN', label: this.$t('mainlayout.langZhCN') },
+        { value: 'en-US', label: this.$t('mainlayout.langEnUS') },
+        { value: 'ja-JP', label: this.$t('mainlayout.langJaJP') },
+        { value: 'zh-TW', label: this.$t('mainlayout.langZhTW') },
+      ]
+    },
+
+    currentLanguageLabel () {
+      const opt = this.languageOptions.find(o => o.value === this.currentLanguage)
+      return opt ? opt.label : this.currentLanguage
     },
 
     isNotAtHomePage () {
@@ -431,6 +465,14 @@ export default {
       const next = CONTRAST_MODES[(CONTRAST_MODES.indexOf(this.contrastMode) + 1) % CONTRAST_MODES.length]
       setContrastMode(next)
       this.contrastMode = next
+    },
+
+    async cycleLanguage () {
+      const opts = this.languageOptions
+      const idx = opts.findIndex(o => o.value === this.currentLanguage)
+      const next = opts[(idx + 1) % opts.length]
+      await changeLanguage(next.value)
+      this.currentLanguage = next.value
     },
 
     getLinks() {

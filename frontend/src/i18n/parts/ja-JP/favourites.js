@@ -1,9 +1,9 @@
 export default {
   playHistory: '再生履歴',
-  myReviews: 'レビュー',
+  myReviews: 'マイリスト',
   myProgress: '進捗',
   folder: 'フォルダ',
-  hideFinished: '視聴済みを隠す',
+  hideFinished: '視聴中',
   all: 'すべて',
   marked: '聴きたい',
   listening: '聴いてる',
@@ -17,6 +17,6 @@ export default {
   sortByRelease: 'リリース日',
   sortByReviewCount: 'レビュー数',
   sortByDlCount: '販売数',
-  sortByAllAge: '全年齢新作',
-  sortByNsfw: '18禁新作',
+  sortByAllAge: '全年齢',
+  sortByNsfw: '18禁',
 }
