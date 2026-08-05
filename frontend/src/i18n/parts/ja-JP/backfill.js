@@ -1,0 +1,18 @@
+export default {
+  title: '進捗バックフィル',
+  description: '再生が完了した作品を自動的に「聴いた」とマークします。実行前にプレビュー（dry-run）で確認してください。',
+  dryRun: 'プレビュー（dry-run）',
+  run: '実行',
+  log: '実行ログ',
+  summary: 'サマリー',
+  total: '総処理数',
+  marked: '聴いたとマーク',
+  seeded: '進捗データ追加',
+  skippedTerminal: 'スキップ（最終状態）',
+  skippedNoFile: 'スキップ（ファイルなし）',
+  skippedAlreadySeeded: 'スキップ（既に追加済み）',
+  dryRunBanner: 'これはプレビュー結果です。データは書き込まれていません。',
+  dryRunComplete: 'プレビュー完了',
+  backfillComplete: 'バックフィル完了',
+  requestFailed: 'バックフィルリクエストに失敗しました',
+}

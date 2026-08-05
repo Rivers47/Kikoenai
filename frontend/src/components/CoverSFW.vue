@@ -28,7 +28,7 @@
         :to="`/works?tagId=${tag.id}`"
         >
         <q-chip dense square class="shadow-3">
-          {{ tag.name }}
+          {{ $tTag(tag.name) }}
         </q-chip>
       </router-link>
     </div>

@@ -1,0 +1,17 @@
+export default {
+  changeAdminPassword: '修改管理员密码',
+  newPassword: '新密码',
+  confirmPassword: '确认密码',
+  passwordMinLength: '密码长度至少为 5',
+  passwordsDoNotMatch: '两次密码输入不一致',
+  change: '修改',
+  addNewUser: '添加新用户',
+  userGroup: '用户组',
+  username: '用户名',
+  usernameMinLength: '用户名长度至少为 5',
+  usernameExists: '该名称已存在，用户名不能重复',
+  password: '密码',
+  allUsers: '所有用户',
+  confirmDeleteUsers: '确认删除选中用户？',
+  selectedRecords: '{count} 条记录已选择，共 {total} 条',
+}

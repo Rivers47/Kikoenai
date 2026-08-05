@@ -1,0 +1,17 @@
+export default {
+  changeAdminPassword: '管理者パスワードを変更',
+  newPassword: '新しいパスワード',
+  confirmPassword: 'パスワード確認',
+  passwordMinLength: 'パスワードは5文字以上必要です',
+  passwordsDoNotMatch: 'パスワードが一致しません',
+  change: '変更',
+  addNewUser: 'ユーザーを追加',
+  userGroup: 'ユーザーグループ',
+  username: 'ユーザー名',
+  usernameMinLength: 'ユーザー名は5文字以上必要です',
+  usernameExists: 'このユーザー名は既に存在します',
+  password: 'パスワード',
+  allUsers: '全ユーザー',
+  confirmDeleteUsers: '選択したユーザーを削除しますか？',
+  selectedRecords: '{count} 件中 {total} 件を選択',
+}

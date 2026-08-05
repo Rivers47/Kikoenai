@@ -2,14 +2,34 @@
   <q-form @submit="onSubmit">
     <q-card class="q-ma-md">
       <q-toolbar>
-        <q-toolbar-title>网页偏好设置（每个浏览器之间，此部分配置相互独立）</q-toolbar-title>
+        <q-toolbar-title>{{ $t('advanced.webPrefsTitle') }}</q-toolbar-title>
       </q-toolbar>
 
       <q-list>
+        <q-item>
+          <q-item-section>
+            <q-item-label>{{ $t('advanced.language') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.languageCaption') }}</q-item-label>
+          </q-item-section>
+
+          <q-item-section avatar>
+            <q-select
+              v-model="currentLanguage"
+              :options="languageOptions"
+              emit-value
+              map-options
+              dense
+              outlined
+              style="min-width: 160px;"
+              @update:model-value="onLanguageChange"
+            />
+          </q-item-section>
+        </q-item>
+
         <q-item style="height: 70px;">
           <q-item-section>
-            <q-item-label>切换回旧式作品卡片UI</q-item-label>
-            <q-item-label caption>搜索页面展示作品使用旧的卡片样式，旧式卡片可以直接显示所有标签</q-item-label>
+            <q-item-label>{{ $t('advanced.legacyCardUi') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.legacyCardUiCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -20,36 +40,36 @@
     </q-card>
     <q-card class="q-ma-md">
       <q-toolbar>
-        <q-toolbar-title>播放器设置</q-toolbar-title>
+        <q-toolbar-title>{{ $t('advanced.playerSettings') }}</q-toolbar-title>
       </q-toolbar>
 
       <q-list>
         <q-item style="height: 70px;">
           <q-item-section>
-            <q-item-label>后退按钮跳跃秒数</q-item-label>
-            <q-item-label caption>播放时后退按钮跳跃秒数</q-item-label>
+            <q-item-label>{{ $t('advanced.rewindSeconds') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.rewindSecondsCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
             <div class="q-gutter-sm">
-              <q-radio dense v-model="rewindSeekTime" val=5 label="5 秒" />
-              <q-radio dense v-model="rewindSeekTime" val=10 label="10 秒" />
-              <q-radio dense v-model="rewindSeekTime" val=30 label="30 秒" />
+              <q-radio dense v-model="rewindSeekTime" :val="5" :label="`5 ${$t('advanced.secondsUnit')}`" />
+              <q-radio dense v-model="rewindSeekTime" :val="10" :label="`10 ${$t('advanced.secondsUnit')}`" />
+              <q-radio dense v-model="rewindSeekTime" :val="30" :label="`30 ${$t('advanced.secondsUnit')}`" />
             </div>
           </q-item-section>
         </q-item>
 
         <q-item>
           <q-item-section>
-            <q-item-label>前进按钮跳跃秒数</q-item-label>
-            <q-item-label caption>播放时前进按钮跳跃秒数</q-item-label>
+            <q-item-label>{{ $t('advanced.forwardSeconds') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.forwardSecondsCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
             <div class="q-gutter-sm">
-              <q-radio dense v-model="forwardSeekTime" val="5" label="5 秒" />
-              <q-radio dense v-model="forwardSeekTime" val="10" label="10 秒" />
-              <q-radio dense v-model="forwardSeekTime" val="30" label="30 秒" />
+              <q-radio dense v-model="forwardSeekTime" val="5" :label="`5 ${$t('advanced.secondsUnit')}`" />
+              <q-radio dense v-model="forwardSeekTime" val="10" :label="`10 ${$t('advanced.secondsUnit')}`" />
+              <q-radio dense v-model="forwardSeekTime" val="30" :label="`30 ${$t('advanced.secondsUnit')}`" />
             </div>
           </q-item-section>
         </q-item>
@@ -58,29 +78,14 @@
 
     <q-card class="q-ma-md">
       <q-toolbar>
-        <q-toolbar-title>爬虫相关设置</q-toolbar-title>
+        <q-toolbar-title>{{ $t('advanced.scraperSettings') }}</q-toolbar-title>
       </q-toolbar>
 
       <q-list>
-        <q-item style="height: 70px;">
-          <q-item-section>
-            <q-item-label>标签语言</q-item-label>
-            <q-item-label caption>从 DLSite 爬取的标签元数据的语言</q-item-label>
-          </q-item-section>
-
-          <q-item-section avatar>
-            <div class="q-gutter-sm">
-              <q-radio dense v-model="config.tagLanguage" val="zh-cn" label="简" />
-              <q-radio dense v-model="config.tagLanguage" val="zh-tw" label="繁" />
-              <q-radio dense v-model="config.tagLanguage" val="ja-jp" label="日" />
-            </div>
-          </q-item-section>
-        </q-item>
-
         <q-item>
           <q-item-section>
-            <q-item-label>DLsite 超时时间</q-item-label>
-            <q-item-label caption>默认 10000 毫秒</q-item-label>
+            <q-item-label>{{ $t('advanced.dlsiteTimeout') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.dlsiteTimeoutCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -95,8 +100,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>HVDB 超时时间</q-item-label>
-            <q-item-label caption>默认 10000 毫秒</q-item-label>
+            <q-item-label>{{ $t('advanced.hvdbTimeout') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.hvdbTimeoutCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -111,8 +116,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>重新请求间隔时间</q-item-label>
-            <q-item-label caption>默认 2000 毫秒</q-item-label>
+            <q-item-label>{{ $t('advanced.retryDelay') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.retryDelayCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -127,8 +132,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>请求最大尝试次数</q-item-label>
-            <q-item-label caption>默认 5</q-item-label>
+            <q-item-label>{{ $t('advanced.maxRetry') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.maxRetryCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -143,8 +148,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>爬虫并行任务数量</q-item-label>
-            <q-item-label caption>默认 16</q-item-label>
+            <q-item-label>{{ $t('advanced.parallelism') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.parallelismCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -159,8 +164,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>HTTP 代理服务主机 IP</q-item-label>
-            <q-item-label caption>此项为空时默认为本机</q-item-label>
+            <q-item-label>{{ $t('advanced.proxyHost') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.proxyHostCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -174,8 +179,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>HTTP 代理服务端口号 </q-item-label>
-            <q-item-label caption>此项为 0 时默认不使用代理</q-item-label>
+            <q-item-label>{{ $t('advanced.proxyPort') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.proxyPortCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -192,14 +197,14 @@
 
     <q-card class="q-ma-md">
       <q-toolbar>
-        <q-toolbar-title>文件夹扫描相关设置</q-toolbar-title>
+        <q-toolbar-title>{{ $t('advanced.scannerSettings') }}</q-toolbar-title>
       </q-toolbar>
 
       <q-list>
         <q-item style="height: 70px;">
           <q-item-section>
-            <q-item-label>最大递归扫描深度</q-item-label>
-            <q-item-label caption>默认 2</q-item-label>
+            <q-item-label>{{ $t('advanced.maxDepth') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.maxDepthCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -213,8 +218,8 @@
         </q-item>
         <q-item>
           <q-item-section>
-            <q-item-label>扫描时跳过清理音声库</q-item-label>
-            <q-item-label caption>是否跳过清理不存在的音声（不推荐，默认不跳过）</q-item-label>
+            <q-item-label>{{ $t('advanced.skipCleanup') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.skipCleanupCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section side>
@@ -226,15 +231,15 @@
 
     <q-card class="q-ma-md">
       <q-toolbar>
-        <q-toolbar-title>Web 服务器相关设置</q-toolbar-title>
-        <div class="q-pr-xs">更改此设置需要重启程序</div>
+        <q-toolbar-title>{{ $t('advanced.webServerSettings') }}</q-toolbar-title>
+        <div class="q-pr-xs">{{ $t('advanced.restartNotice') }}</div>
       </q-toolbar>
 
       <q-list>
         <q-item style="height: 70px;">
           <q-item-section>
-            <q-item-label>用户验证</q-item-label>
-            <q-item-label caption>是否启用用户验证（生产环境下无法修改此设置）</q-item-label>
+            <q-item-label>{{ $t('advanced.auth') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.authCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -244,8 +249,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>启用Gzip</q-item-label>
-            <q-item-label caption>对网络传输启用Gzip压缩</q-item-label>
+            <q-item-label>{{ $t('advanced.gzip') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.gzipCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -255,8 +260,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>设置端口号</q-item-label>
-            <q-item-label caption>服务器监听端口号</q-item-label>
+            <q-item-label>{{ $t('advanced.port') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.portCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -271,8 +276,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>屏蔽远程连接</q-item-label>
-            <q-item-label caption>只允许本地访问，默认为false。更改此设置需要重启程序</q-item-label>
+            <q-item-label>{{ $t('advanced.blockRemote') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.blockRemoteCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -282,8 +287,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>token 过期时间</q-item-label>
-            <q-item-label caption>默认 2592000 秒</q-item-label>
+            <q-item-label>{{ $t('advanced.tokenExpiry') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.tokenExpiryCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -298,8 +303,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>每页显示的音声数量</q-item-label>
-            <q-item-label caption>默认 12</q-item-label>
+            <q-item-label>{{ $t('advanced.pageSize') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.pageSizeCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -316,14 +321,14 @@
 
     <q-card class="q-ma-md">
       <q-toolbar>
-        <q-toolbar-title>安全设置</q-toolbar-title>
+        <q-toolbar-title>{{ $t('advanced.securitySettings') }}</q-toolbar-title>
       </q-toolbar>
 
       <q-list>
         <q-item style="height: 70px;">
           <q-item-section>
-            <q-item-label>生产环境</q-item-label>
-            <q-item-label caption>此设置无法在网页端修改，详情请查阅GitHub Wiki中关于配置文件的说明</q-item-label>
+            <q-item-label>{{ $t('advanced.production') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.productionCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -335,14 +340,14 @@
 
     <q-card class="q-ma-md">
       <q-toolbar>
-        <q-toolbar-title>其它设置</q-toolbar-title>
+        <q-toolbar-title>{{ $t('advanced.otherSettings') }}</q-toolbar-title>
       </q-toolbar>
 
       <q-list>
         <q-item style="height: 70px;">
           <q-item-section>
-            <q-item-label>检查更新</q-item-label>
-            <q-item-label caption>打开网页时是否检查更新</q-item-label>
+            <q-item-label>{{ $t('advanced.checkUpdate') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.checkUpdateCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -352,8 +357,8 @@
 
         <q-item v-if="config.checkUpdate">
           <q-item-section>
-            <q-item-label>检查测试版更新</q-item-label>
-            <q-item-label caption>是否检查测试版更新</q-item-label>
+            <q-item-label>{{ $t('advanced.checkBeta') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.checkBetaCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -363,8 +368,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>数据库使用默认路径</q-item-label>
-            <q-item-label caption>使用程序所在位置下的sqlite文件夹，并忽略databaseFolderDir设置（如无必要请勿修改，更改此设置需要重启程序）</q-item-label>
+            <q-item-label>{{ $t('advanced.dbDefaultPath') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.dbDefaultPathCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -374,8 +379,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>封面使用默认路径</q-item-label>
-            <q-item-label caption>使用程序所在位置下的covers文件夹，并忽略封面文件夹路径设置</q-item-label>
+            <q-item-label>{{ $t('advanced.coverDefaultPath') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.coverDefaultPathCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -386,7 +391,7 @@
     </q-card>
 
     <div class="q-ma-lg row justify-end">
-      <q-btn :loading="loading" label="保存" type="submit" color="primary" />
+      <q-btn :loading="loading" :label="$t('common.save')" type="submit" color="primary" />
     </div>
   </q-form>
 </template>
@@ -394,6 +399,7 @@
 <script>
 import NotifyMixin from '../../mixins/Notification.js'
 import { mapState } from 'vuex'
+import { changeLanguage, getCurrentLocale } from '../../boot/i18n.js'
 
 export default {
   name: 'Advanced',
@@ -406,7 +412,7 @@ export default {
       loading: false,
       rewindSeekTime: '5',
       forwardSeekTime: '30',
-      
+      currentLanguage: getCurrentLocale(),
     }
   },
 
@@ -414,6 +420,14 @@ export default {
     ...mapState('AudioPlayer', [
       'oldWorkCardUIStyle',
     ]),
+    languageOptions () {
+      return [
+        { value: 'zh-CN', label: this.$t('advanced.langZhCN') },
+        { value: 'en-US', label: this.$t('advanced.langEnUS') },
+        { value: 'ja-JP', label: this.$t('advanced.langJaJP') },
+        { value: 'zh-TW', label: this.$t('advanced.langZhTW') },
+      ]
+    },
   },
 
   methods: {
@@ -464,6 +478,11 @@ export default {
     changeOldWorkCardUIStyle(value) {
       console.log("change old work card ui to: ", value, typeof(value));
       this.$store.commit('AudioPlayer/SET_OLD_WORK_CARD_UI_STYLE', value);
+    },
+
+    async onLanguageChange (locale) {
+      await changeLanguage(locale)
+      this.currentLanguage = locale
     },
   },
 

@@ -269,7 +269,7 @@ export default {
       if (!this.resumeHistoryDone) {
         this.plyr.currentTime = this.resumeHistorySeconds;
         this.RESUME_HISTORY_SECONDS_DONE()
-        this.$q.notify({message: "已恢复播放历史", timeout: 1000})
+        this.$q.notify({message: this.$t('audioelement.resumeHistory'), timeout: 1000})
       }
     },
 
@@ -300,7 +300,7 @@ export default {
       })
         .then(() => {
           this.$q.notify({
-            message: '已自动标记为听完',
+            message: this.$t('audioelement.autoMarkedListened'),
             timeout: 1500,
             color: 'primary',
             icon: 'task_alt'
@@ -333,7 +333,7 @@ export default {
       this.PAUSE()
       this.CLEAR_SLEEP_MODE()
       this.$q.notify({
-        message: '睡眠定时已到，停止播放',
+        message: this.$t('audioelement.sleepTimerStopped'),
         color: 'primary',
         icon: 'bedtime',
         timeout: 5000

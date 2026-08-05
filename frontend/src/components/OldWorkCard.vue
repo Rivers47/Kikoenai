@@ -36,9 +36,9 @@
 
           <!-- 评价分布明细 -->
           <q-tooltip content-class="text-subtitle1" v-if=metadata.rate_count_detail>
-            <div>平均: {{ metadata.rate_average_2dp }}</div>
+            <div>{{ $t('oldworkcard.average', { avg: metadata.rate_average_2dp }) }}</div>
             <div v-for="(rate, index) in sortedRatings" :key=index class="row items-center">
-              <div class="col">{{ rate.review_point }}星</div>
+              <div class="col">{{ $t('oldworkcard.stars', { n: rate.review_point }) }}</div>
 
               <!-- 评价占比 -->
               <q-linear-progress
@@ -74,9 +74,9 @@
 
       <!-- 价格&售出数 -->
       <div v-show="metadata.title">
-        <span class="q-mx-sm text-weight-medium text-h6 text-negative">{{ metadata.price }} 日元</span>
-        <span>售出数: {{ metadata.dl_count }}</span>
-        <span v-if="!metadata.nsfw" class="q-mx-sm sfw-badge">全年龄</span>
+        <span class="q-mx-sm text-weight-medium text-h6 text-negative">{{ $t('oldworkcard.priceYen', { price: metadata.price }) }}</span>
+        <span>{{ $t('oldworkcard.dlCount', { count: metadata.dl_count }) }}</span>
+        <span v-if="!metadata.nsfw" class="q-mx-sm sfw-badge">{{ $t('oldworkcard.allAges') }}</span>
       </div>
 
       <!-- 标签 -->
@@ -87,7 +87,7 @@
           :key=index
         >
           <q-chip size="md" class="shadow-2">
-            {{ tag.name }}
+            {{ $tTag(tag.name) }}
           </q-chip>
         </router-link>
       </div>

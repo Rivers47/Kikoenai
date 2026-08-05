@@ -3,27 +3,27 @@
     <q-card class="q-ma-md">
       <q-form @submit="updateAdminPassword()">
         <q-toolbar>
-          <q-toolbar-title>修改管理员密码</q-toolbar-title>
+          <q-toolbar-title>{{ $t('usermanage.changeAdminPassword') }}</q-toolbar-title>
         </q-toolbar>
 
         <div class="q-pa-sm">
-          <q-input outlined dense type="password" label="新密码"
+          <q-input outlined dense type="password" :label="$t('usermanage.newPassword')"
             v-model="adminNewPassword"
             lazy-rules
-            :rules="[ val => val.length >= 5 || '密码长度至少为 5' ]"
+            :rules="[ val => val.length >= 5 || $t('usermanage.passwordMinLength') ]"
           />
 
-          <q-input outlined dense type="password" label="确认密码"
+          <q-input outlined dense type="password" :label="$t('usermanage.confirmPassword')"
             v-model="adminConfirmPassword"
             lazy-rules
             :rules="[
-              val => val.length >= 5 || '密码长度至少为 5',
-              val => val === adminNewPassword || '两次密码输入不一致'
+              val => val.length >= 5 || $t('usermanage.passwordMinLength'),
+              val => val === adminNewPassword || $t('usermanage.passwordsDoNotMatch')
             ]"
           />
 
           <div class="row justify-end">
-            <q-btn :loading="loadingUpdateAdminPassword" type="submit" color="primary" label="修改" />
+            <q-btn :loading="loadingUpdateAdminPassword" type="submit" color="primary" :label="$t('usermanage.change')" />
           </div>
         </div>
       </q-form>
@@ -32,30 +32,30 @@
     <q-card class="q-ma-md">
       <q-form @submit="addNewUser()">
         <q-toolbar>
-          <q-toolbar-title>添加新用户</q-toolbar-title>
+          <q-toolbar-title>{{ $t('usermanage.addNewUser') }}</q-toolbar-title>
         </q-toolbar>
 
         <div class="q-pa-sm">
-          <q-select dense outlined label="用户组" v-model="newuser.group" :options="groups" class="q-mb-md" />
+          <q-select dense outlined :label="$t('usermanage.userGroup')" v-model="newuser.group" :options="groups" class="q-mb-md" />
 
           <q-input outlined dense
-            v-model="newuser.name" label="用户名"
+            v-model="newuser.name" :label="$t('usermanage.username')"
             required
             lazy-rules
             :rules="[
-                val => val.length >= 5 || '用户名长度至少为 5',
-                val => !users.find(user => user.name === val) || '该名称已存在，用户名不能重复',
+                val => val.length >= 5 || $t('usermanage.usernameMinLength'),
+                val => !users.find(user => user.name === val) || $t('usermanage.usernameExists'),
               ]" 
           />
 
-          <q-input outlined dense label="密码"
+          <q-input outlined dense :label="$t('usermanage.password')"
             v-model="newuser.password"
             lazy-rules
-            :rules="[ val => val.length >= 5 || '密码长度至少为 5' ]"
+            :rules="[ val => val.length >= 5 || $t('usermanage.passwordMinLength') ]"
           />
 
           <div class="row justify-end">
-            <q-btn :loading="loadingAddNewUser" type="submit" color="primary" label="添加" />
+            <q-btn :loading="loadingAddNewUser" type="submit" color="primary" :label="$t('common.add')" />
           </div>
         </div>
       </q-form>
@@ -63,28 +63,28 @@
 
     <q-card class="q-ma-md q-pa-sm">
       <q-table
-        title="所有用户"
+        :title="$t('usermanage.allUsers')"
         :data="users"
-        :columns="columns"
+        :columns="columnsWithLabels"
         row-key="name"
         :selected-rows-label="getSelectedString"
         selection="multiple"
         :selected.sync="selected"
       />
       <div class="row justify-end">
-        <q-btn :loading="loadingDeleteUsers" :disable="selected.length === 0" @click="confirm = true" color="primary" label="删除" />
+        <q-btn :loading="loadingDeleteUsers" :disable="selected.length === 0" @click="confirm = true" color="primary" :label="$t('common.delete')" />
       </div>
     </q-card>
 
     <q-dialog v-model="confirm" persistent>
       <q-card>
         <q-card-section class="row items-center">
-          <span class="q-ma-sm text-h6">确认删除选中用户？</span>
+          <span class="q-ma-sm text-h6">{{ $t('usermanage.confirmDeleteUsers') }}</span>
         </q-card-section>
 
         <q-card-actions align="right">
-          <q-btn flat label="取消" color="primary" v-close-popup />
-          <q-btn flat label="确认" color="primary" @click="deleteUsers()" v-close-popup />
+          <q-btn flat :label="$t('common.cancel')" color="primary" v-close-popup />
+          <q-btn flat :label="$t('common.confirm')" color="primary" @click="deleteUsers()" v-close-popup />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -101,8 +101,8 @@ export default {
     return {
       selected: [],
       columns: [
-        { name: 'desc', required: true, label: '用户名', align: 'left', field: 'name', sortable: true },
-        { name: 'calories', required: true, label: '用户组', align: 'center', field: 'group', sortable: true },
+        { name: 'desc', required: true, label: '', align: 'left', field: 'name', sortable: true },
+        { name: 'calories', required: true, label: '', align: 'center', field: 'group', sortable: true },
       ],
       users: [],
       loadingDeleteUsers: false,
@@ -124,9 +124,20 @@ export default {
     }
   },
 
+  computed: {
+    columnsWithLabels () {
+      return this.columns.map(col => {
+        if (col.field === 'name') return { ...col, label: this.$t('usermanage.username') }
+        if (col.field === 'group') return { ...col, label: this.$t('usermanage.userGroup') }
+        return col
+      })
+    }
+  },
+
   methods: {
     getSelectedString () {
-      return this.selected.length === 0 ? '' : `${this.selected.length} record${this.selected.length > 1 ? 's' : ''} selected of ${this.users.length}`
+      if (this.selected.length === 0) return ''
+      return this.$t('usermanage.selectedRecords', { count: this.selected.length, total: this.users.length })
     },
 
     addNewUser () {

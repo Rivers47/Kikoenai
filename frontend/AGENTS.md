@@ -24,10 +24,22 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 │   │   └── quasar.variables.scss         # Quasar SCSS variables
 │   ├── boot/                             # App boot files (run before mount)
 │   │   ├── axios.js                      # Axios instance + JWT header setup
+│   │   ├── i18n.js                       # vue-i18n registration + Quasar lang sync + $tTag
 │   │   ├── plyr.js                       # Plyr audio player boot
 │   │   ├── slider.js                     # Vue slider component boot
 │   │   ├── socket.io.js                  # Socket.IO client setup
 │   │   └── store.js                      # Vuex store initialization
+│   ├── i18n/                             # Localization
+│   │   ├── index.js                      # createI18n + locale resolution + auto-discover partials
+│   │   ├── CONVENTIONS.md                # i18n key/file conventions (read before editing)
+│   │   ├── tags/                         # Dynamic tag-name translation maps (JSON)
+│   │   │   ├── index.js                  # translateTag(name, locale) helper
+│   │   │   └── zh-CN.json, en-US.json, zh-TW.json
+│   │   └── parts/                        # Per-scope vue-i18n message partials (auto-discovered)
+│   │       ├── zh-CN/                    # e.g. workdetails.js, advanced.js, common.js …
+│   │       ├── en-US/
+│   │       ├── ja-JP/
+│   │       └── zh-TW/
 │   ├── router/
 │   │   ├── index.js                      # Router initialization
 │   │   └── routes.js                     # Route definitions
@@ -184,6 +196,7 @@ Main layout routes:
 | Boot File | File | Purpose |
 |-----------|------|---------|
 | `axios.js` | `src/boot/axios.js` | Configures Axios defaults (Content-Type, JWT Bearer token from LocalStorage); exposes `$axios` globally |
+| `i18n.js` | `src/boot/i18n.js` | Registers `vue-i18n`, syncs the Quasar lang pack to the current locale, exposes `$tTag(name)` globally, exports `changeLanguage(locale)` |
 | `store.js` | `src/boot/store.js` | Initializes Vuex store |
 | `slider.js` | `src/boot/slider.js` | Registers Vue Slider Component (`vue-slider-component`) |
 | `plyr.js` | `src/boot/plyr.js` | Registers Plyr audio player component (`vue-plyr`) |
@@ -227,8 +240,27 @@ MainLayout
 4. **Dark Mode:** Toggled via Quasar's `Dark` plugin, persisted in browser across sessions.
 5. **Progress Tracking:** Users can mark works as `listening`, `listened`, `replay`, or `postponed`.
 6. **Work Card Variants:** Two card styles — modern `WorkCard.vue` (hover-reveal tags) and legacy `OldWorkCard.vue` (always-show tags), toggleable via LocalStorage key `old_work_card_ui_style_key`.
-7. **Metadata Editing (admin only):** `WorkDetails.vue` shows an "编辑元数据" button only when the current user is an admin (computed `isAdmin`: auth disabled, or `group === 'administrator'`, or `name === 'admin'`). It opens `EditMetadata.vue`, which PUTs to `/api/work/:id` with `{title, nsfw, release, circle, tags[], vas[], illustrators[], scriptWriters[], series}`. Tag/VA/illustrator/script-writer/series inputs use Quasar `q-select` with `use-input` autocomplete, fetching options from `/api/tags`, `/api/vas`, `/api/illustrators`, `/api/script_writers`, `/api/seriess` (note the irregular plural `seriess`). On save, the dialog emits `saved` and `WorkDetails.vue` re-reads the work metadata.
+7. **Metadata Editing (admin only):** `WorkDetails.vue` shows an "edit metadata" button (i18n key) only when the current user is an admin (computed `isAdmin`: auth disabled, or `group === 'administrator'`, or `name === 'admin'`). It opens `EditMetadata.vue`, which PUTs to `/api/work/:id` with `{title, nsfw, release, circle, tags[], vas[], illustrators[], scriptWriters[], series}` — **tag names sent are the canonical Japanese names** (the backend canonicalizes them again via `resolveTagLabel`). Tag/VA/illustrator/script-writer/series inputs use Quasar `q-select` with `use-input` autocomplete, fetching options from `/api/tags`, `/api/vas`, `/api/illustrators`, `/api/script_writers`, `/api/seriess` (note the irregular plural `seriess`). For tags, the option **label** is the translated name (`$tTag`) but the bound **value** is the canonical Japanese name, so users can search in their language while storage stays canonical. On save, the dialog emits `saved` and `WorkDetails.vue` re-reads the work metadata.
 8. **Keyboard Shortcuts:** Space for play/pause, arrow keys for seeking, etc. (handled in AudioPlayer).
+
+### 2.8 Internationalization (i18n)
+
+Two separate translation layers, kept apart:
+
+1. **Static UI strings** → `vue-i18n` v9 (legacy mode, Options API). `$t('scope.key')` in templates, `this.$t(...)` in script. The instance is created in `src/i18n/index.js` and registered by `src/boot/i18n.js` (in the `boot` array, `quasar.config.js`).
+2. **Dynamic tag names** → `translateTag(name, locale)` in `src/i18n/tags/index.js`, exposed as `$tTag(name)` via the i18n boot. Tag names are DATA (canonical Japanese from the backend), so they live in hand-maintained JSON maps (`src/i18n/tags/{zh-CN,en-US,zh-TW}.json`), NOT in the vue-i18n catalog. `ja-JP` is the identity (no map). Unmapped tags fall back to the Japanese name.
+
+**Locales:** `zh-CN` (base/`fallbackLocale`, complete), `en-US`, `ja-JP` (complete), `zh-TW` (stub, falls back to `zh-CN`).
+
+**Catalog layout:** per-scope partial files under `src/i18n/parts/<locale>/<scope>.js` (scope = `.vue` filename lowercased), auto-discovered by `require.context` in `src/i18n/index.js` — adding a partial file is enough; do NOT edit `index.js` per scope. Shared strings live under scope `common` (`parts/<locale>/common.js`). Conventions are documented in `src/i18n/CONVENTIONS.md` (read before editing).
+
+**Locale resolution (per-user):** on boot, `getInitialLocale()` checks LocalStorage `app_language` → else matches `navigator.language` (exact, then prefix; `zh-TW`/`zh-HK` → `zh-CN`) → else `zh-CN`. The choice is persisted in LocalStorage `app_language`.
+
+**Language switcher:** a `q-select` in `Dashboard/Advanced.vue` ("网页偏好设置" card) calls `changeLanguage(locale)` from `src/boot/i18n.js`, which updates `vue-i18n`, the Quasar lang pack (`Quasar.lang.set`), and LocalStorage. The dead server `tagLanguage` config and its radio group were **removed** (scrapers always fetch Japanese; tag language is now a display concern, resolved client-side).
+
+**Quasar lang sync:** `src/boot/i18n.js` dynamically imports the matching `quasar/lang/*` pack (`zh-CN`, `en-US`, `ja`; `zh-TW` reuses `zh-CN`) and falls back to `en-US` on load failure. `quasar.config.js` `framework.lang: 'en-US'` remains the build-time default and is overridden at boot.
+
+**Tag identity vs display:** the backend stores canonical Japanese tag names (canonicalized via `backend/scraper/tag-aliases.json` — see `backend/AGENTS.md` §2.3). The frontend's tag-translation maps are keyed by that canonical name, so the frontend never deals with renames. Display sites use `$tTag(tag.name)`; the editor (`EditMetadata.vue`) keeps canonical `tag.name` as the stored/bound value.
 
 ---
 
@@ -249,6 +281,7 @@ MainLayout
   | `enable_video_source` | boolean | Use `<video>` element for playback |
   | `ai_server_url` | string | AI server URL (unused?) |
   | `old_work_card_ui_style_key` | boolean | Legacy card UI toggle |
+  | `app_language` | string | UI locale (`zh-CN`/`en-US`/`ja-JP`/`zh-TW`); set by the Advanced page switcher, auto-detected from browser on first load |
 
 ---
 
@@ -259,6 +292,7 @@ MainLayout
 | `quasar` | UI framework (Material Design components) |
 | `@quasar/app-webpack` | Build toolchain (webpack-based) |
 | `vue` + `vue-router` + `vuex` | Core SPA framework (Vue 3) |
+| `vue-i18n` | UI string internationalization (v9, legacy mode) |
 | `axios` | HTTP client for REST API |
 | `socket.io-client` | WebSocket client for scan progress |
 | `plyr` + `vue-plyr` | Audio player UI |
@@ -331,10 +365,12 @@ Build output goes directly into `backend/dist/` (configured via `distDir` in `qu
 1. Create a Vue component in `src/pages/` (or `src/pages/Dashboard/`).
 2. Add a route entry in `router/routes.js`.
 3. Add a navigation link in `MainLayout.vue`'s `links` array if needed.
+4. **i18n:** create `src/i18n/parts/{zh-CN,en-US,ja-JP}/<scope>.js` (scope = filename lowercased) with the page's keys, and use `$t('scope.key')` for all user-visible strings. See `src/i18n/CONVENTIONS.md`.
 
 ### Adding a new component
 1. Create a Vue component in `src/components/`.
 2. Import and register it in the parent component.
+3. **i18n:** same as adding a page — create the three per-scope partials and use `$t`/`$tTag`. Do NOT edit `src/i18n/index.js` (partials are auto-discovered).
 
 ### Adding a new Vuex store module
 1. Create a directory under `src/store/module-<Name>/` with `index.js`, `state.js`, `getters.js`, `mutations.js`, `actions.js`.
@@ -343,7 +379,6 @@ Build output goes directly into `backend/dist/` (configured via `distDir` in `qu
 ### Adding a new boot file
 1. Create file in `src/boot/` following the Quasar boot pattern.
 2. Add the filename (without extension) to the `boot` array in `quasar.config.js`.
-
 ### Adding a persisted setting (LocalStorage)
 1. Add a new key constant in `module-AudioPlayer/state.js` (see existing pattern with `SWAP_SEEK_BUTTON_KEY` etc.).
 2. Add the state field with initialization from `LocalStorage.getItem()`.

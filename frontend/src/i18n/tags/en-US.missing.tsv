@@ -1,0 +1,69 @@
+# Missing en-US tag translations
+# Format: <id>	<canonical ja name>	<your en-US here>	<hint>
+# Add each as an entry in frontend/src/i18n/tags/en-US.json:
+#   "<canonical ja name>": "<en-US translation>"
+# Total: 62 of 298 canonical tags missing en-US
+# "ascii/acronym" = SF/SM/ASMR etc.; English users read as-is, probably no fill needed
+
+10	SF		ascii/acronym (likely fine as-is)
+40	襲い受		needs translation
+53	健全		needs translation
+113	レイプ		needs translation
+114	強制/無理矢理		needs translation
+115	逆レイプ		needs translation
+120	近親相姦		needs translation
+121	輪姦		needs translation
+134	陵辱		needs translation
+136	SM		ascii/acronym (likely fine as-is)
+139	痴漢		needs translation
+140	調教		needs translation
+147	奴隷		needs translation
+151	監禁		needs translation
+154	鬼畜		needs translation
+157	催眠		needs translation
+163	獣姦		needs translation
+164	機械姦		needs translation
+201	拷問		needs translation
+207	ロリ		needs translation
+274	兄		needs translation
+289	誘い受け		needs translation
+290	クール攻め		needs translation
+292	クール受け		needs translation
+293	執事		needs translation
+296	シリーズもの		needs translation
+304	おやじ		needs translation
+314	催眠音声		needs translation
+324	異種姦		needs translation
+326	洗脳		needs translation
+413	ヤリチン/プレイボーイ		needs translation
+424	上司		needs translation
+427	王子様/王子系		needs translation
+454	動物/ペット		needs translation
+490	蟲姦		needs translation
+495	睡眠姦		needs translation
+497	ASMR		ascii/acronym (likely fine as-is)
+499	クンニ		needs translation
+519	異世界転生		needs translation
+520	悪役令嬢		needs translation
+521	執着攻め		needs translation
+522	メス堕ち		needs translation
+525	メスガキ		needs translation
+531	ロリババア		needs translation
+536	女性優位		needs translation
+539	体格差		needs translation
+540	赤ちゃんプレイ		needs translation
+541	獣人		needs translation
+636	添い寝		needs translation
+637	キス		needs translation
+638	耳ふー		needs translation
+639	睡眠導入		needs translation
+641	ゲップ		needs translation
+643	人格排泄		needs translation
+644	BSS		ascii/acronym (likely fine as-is)
+648	淫紋		needs translation
+652	溺愛		needs translation
+653	両片思い		needs translation
+659	マッサージ		needs translation
+660	ダウナー		needs translation
+661	常識改変		needs translation
+10000	AI		ascii/acronym (likely fine as-is)

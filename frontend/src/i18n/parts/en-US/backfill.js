@@ -1,0 +1,18 @@
+export default {
+  title: 'Progress backfill',
+  description: 'Auto-mark fully played works as listened. Run dry-run first to verify before executing.',
+  dryRun: 'Preview (dry-run)',
+  run: 'Execute',
+  log: 'Run log',
+  summary: 'Summary',
+  total: 'Total processed',
+  marked: 'Marked listened',
+  seeded: 'Seeded progress',
+  skippedTerminal: 'Skipped (terminal)',
+  skippedNoFile: 'Skipped (no file)',
+  skippedAlreadySeeded: 'Skipped (already seeded)',
+  dryRunBanner: 'This is a dry-run result. No data was written.',
+  dryRunComplete: 'Dry-run complete',
+  backfillComplete: 'Backfill complete',
+  requestFailed: 'Backfill request failed',
+}

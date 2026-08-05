@@ -42,9 +42,9 @@
 
             <!-- 评价分布明细 -->
             <q-tooltip v-if=metadata.rate_count_detail content-class="text-subtitle1">
-              <div>平均: {{metadata.rate_average_2dp}}</div>
+              <div>{{ $t('workdetails.average') }}: {{metadata.rate_average_2dp}}</div>
               <div v-for="(rate, index) in sortedRatings" :key=index class="row items-center">
-                <div class="col"> {{rate.review_point}}星 </div>
+                <div class="col"> {{ $t('workdetails.stars', { n: rate.review_point }) }} </div>
 
                 <!-- 评价占比 -->
                 <q-linear-progress
@@ -78,7 +78,7 @@
 
       <!-- 价格&售出数 -->
       <div class="q-pt-sm q-pb-none">
-        <span class="q-mx-sm text-weight-medium text-h6 text-negative">{{metadata.price}} 日元</span> 售出数: {{metadata.dl_count}}
+        <span class="q-mx-sm text-weight-medium text-h6 text-negative">{{ $t('workdetails.priceYen', { price: metadata.price }) }}</span> {{ $t('workdetails.dlCount', { count: metadata.dl_count }) }}
       </div>
 
       <!-- 标签 -->
@@ -89,7 +89,7 @@
           :key=index
         >
           <q-chip size="md" class="shadow-4">
-            {{tag.name}}
+            {{ $tTag(tag.name) }}
           </q-chip>
         </router-link>
       </div>
@@ -156,7 +156,7 @@
               <q-icon name="headset" v-show="progress === 'marked'" />
             </q-item-section>
             <q-item-section>
-              <q-item-label>想听</q-item-label>
+              <q-item-label>{{ $t('workdetails.marked') }}</q-item-label>
             </q-item-section>
           </q-item>
 
@@ -165,7 +165,7 @@
               <q-icon name="headset" v-show="progress === 'listening'" />
             </q-item-section>
             <q-item-section>
-              <q-item-label>在听</q-item-label>
+              <q-item-label>{{ $t('workdetails.listening') }}</q-item-label>
             </q-item-section>
           </q-item>
           <q-item clickable @click="setProgress('listened')">
@@ -173,7 +173,7 @@
               <q-icon name="headset" v-show="progress === 'listened'" />
             </q-item-section>
             <q-item-section>
-              <q-item-label>听过</q-item-label>
+              <q-item-label>{{ $t('workdetails.listened') }}</q-item-label>
             </q-item-section>
           </q-item>
           <q-item clickable @click="setProgress('replay')">
@@ -181,7 +181,7 @@
               <q-icon name="headset" v-show="progress === 'replay'" />
             </q-item-section>
             <q-item-section>
-              <q-item-label>重听</q-item-label>
+              <q-item-label>{{ $t('workdetails.replay') }}</q-item-label>
             </q-item-section>
           </q-item>
           <q-item clickable @click="setProgress('postponed')">
@@ -189,7 +189,7 @@
               <q-icon name="headset" v-show="progress === 'postponed'" />
             </q-item-section>
             <q-item-section>
-              <q-item-label>搁置</q-item-label>
+              <q-item-label>{{ $t('workdetails.postponed') }}</q-item-label>
             </q-item-section>
           </q-item>
 
@@ -200,36 +200,36 @@
               <q-icon  name="remove_circle_outline" />
             </q-item-section>
             <q-item-section>
-              <q-item-label>清除进度</q-item-label>
+              <q-item-label>{{ $t('workdetails.clearProgress') }}</q-item-label>
             </q-item-section>
           </q-item>
         </q-list>
       </q-btn-dropdown>
 
-      <q-btn dense @click="showReviewDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" label="写评论" />
+      <q-btn dense @click="showReviewDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.writeReview')" />
 
       <div v-if="metadata.state" class="q-mt-sm q-px-sm">
-        <div class="text-caption text-weight-medium text-on-surface-variant">上次播放记录</div>
+        <div class="text-caption text-weight-medium text-on-surface-variant">{{ $t('workdetails.lastPlayback') }}</div>
         <div class="text-body2 text-secondary">
           <q-icon name="music_note" size="xs" class="q-mr-xs" />
           {{ currentHistoryTrack }}
         </div>
         <div class="text-caption text-on-surface0-variant">
-          播放至 {{ formatSeconds(historySeconds) }}
+          {{ $t('workdetails.playedTo', { time: formatSeconds(historySeconds) }) }}
         </div>
       </div>
 
-      <q-btn v-if="metadata.state && playWorkId !== metadata.id" dense @click="resumeThisHistory" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" label="播放此作品的历史记录" />
-      <q-btn v-if="metadata.state" dense @click="clearThisHistory" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" label="删除播放记录">
-        <q-tooltip>当历史记录中有已被删除的音频文件，可能会无法正确播放文件，可通过此按钮解决</q-tooltip>
+      <q-btn v-if="metadata.state && playWorkId !== metadata.id" dense @click="resumeThisHistory" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" :label="$t('workdetails.resumeHistory')" />
+      <q-btn v-if="metadata.state" dense @click="clearThisHistory" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.deleteHistory')">
+        <q-tooltip>{{ $t('workdetails.deleteHistoryTooltip') }}</q-tooltip>
       </q-btn>
 
 
-      <q-btn dense @click="scanWorkFile" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" label="扫描本地文件" />
+      <q-btn dense @click="scanWorkFile" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.scanFiles')" />
 
-      <q-btn v-if="isAdmin" dense @click="showEditDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" label="编辑元数据" />
+      <q-btn v-if="isAdmin" dense @click="showEditDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.editMetadata')" />
 
-      <q-btn dense :loading="refreshMetadataLoading" @click="refreshMetadata" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" label="刷新元数据" />
+      <q-btn dense :loading="refreshMetadataLoading" @click="refreshMetadata" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.refreshMetadata')" />
 
       <WriteReview v-if="showReviewDialog" @closed="processReview" :workid="metadata.id" :metadata="metadata"></WriteReview>
 
@@ -294,13 +294,14 @@ export default {
     },
 
     progressLabel() {
-      return {
-        marked: '想听',
-        listening: '在听',
-        listened: '听过',
-        replay: '重听',
-        postponed: '搁置'
-      }[this.progress] || '标记进度';
+      const labels = {
+        marked: this.$t('workdetails.marked'),
+        listening: this.$t('workdetails.listening'),
+        listened: this.$t('workdetails.listened'),
+        replay: this.$t('workdetails.replay'),
+        postponed: this.$t('workdetails.postponed')
+      };
+      return labels[this.progress] || this.$t('workdetails.markProgress');
     },
     
     dlsiteCode() {
@@ -401,10 +402,10 @@ export default {
     // 只清除进度，保留评分与评论。仅 progress 的行会被后端整行删除。
     clearProgress () {
       this.$q.dialog({
-        title: '清除进度',
-        message: '将清除该作品的进度标记，保留评分与评论。是否继续？',
-        cancel: '取消',
-        ok: '确定',
+        title: this.$t('workdetails.clearProgress'),
+        message: this.$t('workdetails.clearProgressMessage'),
+        cancel: this.$t('common.cancel'),
+        ok: this.$t('common.ok'),
         persistent: true
       }).onOk(() => {
         this.$axios.delete('/api/review/progress', { params: { work_id: this.metadata.id } })
@@ -462,17 +463,17 @@ export default {
 
     clearThisHistory() {
       this.$q.dialog({
-        title: '注意',
-        message: '确定要删除这个作品的播放历史吗？',
-        cancel: "取消",
-        ok: "确定"
+        title: this.$t('common.notice'),
+        message: this.$t('workdetails.deleteHistoryConfirm'),
+        cancel: this.$t('common.cancel'),
+        ok: this.$t('common.ok')
       }).onOk(async () => {
         this.$axios.delete('/api/history', { data: { work_id: this.metadata.id } })
           .then((_) => {
-            this.$q.notify("删除历史成功")
+            this.$q.notify(this.$t('workdetails.deleteHistorySuccess'))
           })
           .catch((err) => {
-            this.$q.notify("删除历史失败：", err.message)
+            this.$q.notify(this.$t('workdetails.deleteHistoryFail') + err.message)
             console.error(err)
           })
       })
@@ -494,7 +495,7 @@ export default {
       this.refreshMetadataLoading = true;
       try {
         await this.$axios.post(`/api/refresh/${this.metadata.id}`);
-        this.showSuccNotif('元数据刷新成功');
+        this.showSuccNotif(this.$t('workdetails.refreshMetadataSuccess'));
         this.$emit('reset');
       } catch(err) {
         console.error(err);

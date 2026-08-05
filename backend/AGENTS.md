@@ -116,6 +116,8 @@ SQLite3 via Knex.js with the following tables:
 
 **Work id / label id note (since migration `20260802000000`):** `t_work.id` and all `work_id` foreign keys are **TEXT**. A DLsite work id is stored already RJ-padded (`'123456'` 6-digit, or `'01134567'` 8-digit — matching `formatID`), so the work URL `/work/123456` shows the original RJ id directly; a Fanza (DMM doujin) work id is the content-id `'d_215444'`. The `d_` prefix distinguishes the source — there is no separate source column. **All** label ids (circle/tag/va/illustrator/script_writer/series) are name-based UUIDs (TEXT PK) resolved by `resolveLabel` in `queries.js`; DLsite RG/genre/SRI ids scraped from the storefront are no longer used as DB ids, and a label shared across DLsite + Fanza merges into one row.
 
+**Tag canonicalization (rename protection):** tag names are canonicalized via `scraper/tag-aliases.json` before UUID resolution. `resolveTagLabel` in `queries.js` (the single choke point covering scan-insert, scan-update, and admin-edit) maps a scraped new Japanese tag name back to its canonical old name so a DLsite rename folds onto the existing `t_tag` row instead of splitting into two. The map is hand-maintained (`scraper/tag-aliases.json`, loaded once at require time — restart to apply); tags not in the map pass through unchanged. Other label tables (circle/va/illustrator/script_writer/series) are not canonicalized. The backend always serves canonical Japanese tag names; UI/tag translation is client-side (see `frontend/AGENTS.md` i18n).
+
 ### 2.4 Configuration (`config.js`)
 
 - Config file: `config/config.json` (auto-created with defaults on first run)
@@ -123,6 +125,7 @@ SQLite3 via Knex.js with the following tables:
 - `setConfig()` merges new values but **protects** these fields: `production`, `md5secret`, `jwtsecret` (cannot be changed at runtime).
 - `updateConfig()` adds missing keys with defaults on version upgrades.
 - `publicConfig` class exposes a subset to the frontend (e.g., `rewindSeekTime`, `forwardSeekTime`).
+- **Removed:** the legacy `tagLanguage` config key (was non-functional — scrapers always fetch Japanese). It is no longer in `defaultConfig`; a stale `tagLanguage` left in a pre-existing `config.json` is harmless and ignored. UI language is now per-user in the browser (see `frontend/AGENTS.md` i18n).
 
 ### 2.5 Scanning System (`filesystem/`)
 

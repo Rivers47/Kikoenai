@@ -2,7 +2,7 @@
   <div class="q-ma-md " style="">
     <q-breadcrumbs gutter="xs" v-if="path.length">
       <q-breadcrumbs-el   >
-        <q-btn no-caps flat dense size="md" icon="folder" @click="path = []">ROOT</q-btn>
+        <q-btn no-caps flat dense size="md" icon="folder" @click="path = []">{{ $t('worktree.root') }}</q-btn>
       </q-breadcrumbs-el>
       
       <q-breadcrumbs-el v-for="(folderName, index) in path"  :key="index"  class="cursor-pointer" >
@@ -19,7 +19,7 @@
               <div class="text-subtitle2">{{ preview_img_idx+1 }}/{{ preview_img_list.length }}</div>
             </div>
             <div v-if="playWorkId > 0" class="col-auto">
-              <q-btn outline @click="setVisualPlayerCover(preview_img_list[preview_img_idx])">用作可视化封面</q-btn>
+              <q-btn outline @click="setVisualPlayerCover(preview_img_list[preview_img_idx])">{{ $t('worktree.setAsCover') }}</q-btn>
             </div>
           </div>
         </q-card-section>
@@ -29,9 +29,9 @@
         </q-card-section>
 
         <q-card-actions align="around">
-          <q-btn flat label="上一个" color="primary" @click="changePreviewImg(false)" />
-          <q-btn flat label="关闭" color="negative" v-close-popup />
-          <q-btn flat label="下一个" color="primary" @click="changePreviewImg(true)" />
+          <q-btn flat :label="$t('worktree.previous')" color="primary" @click="changePreviewImg(false)" />
+          <q-btn flat :label="$t('common.close')" color="negative" v-close-popup />
+          <q-btn flat :label="$t('worktree.next')" color="primary" @click="changePreviewImg(true)" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -60,7 +60,7 @@
 
           <q-item-section>
             <q-item-label class="text-subtitle1">{{ item.title }}</q-item-label>
-            <q-item-label v-if="item.children" caption lines="1">{{ `${item.children.length} 项目` }}</q-item-label>
+            <q-item-label v-if="item.children" caption lines="1">{{ $t('worktree.items', { count: item.children.length }) }}</q-item-label>
           </q-item-section>
 
           <!--音频文件时长 + 已保存的播放进度-->
@@ -85,15 +85,15 @@
           >
             <q-list separator>
               <q-item clickable @click="addToQueue(item)" v-if="item.type === 'audio'">
-                <q-item-section>添加到播放列表</q-item-section>
+                <q-item-section>{{ $t('worktree.addToQueue') }}</q-item-section>
               </q-item>
 
               <q-item clickable @click="playNext(item)" v-if="item.type === 'audio'">
-                <q-item-section>下一曲播放</q-item-section>
+                <q-item-section>{{ $t('worktree.playNext') }}</q-item-section>
               </q-item>
 
               <q-item clickable @click="download(item)">
-                <q-item-section>下载文件</q-item-section>
+                <q-item-section>{{ $t('worktree.download') }}</q-item-section>
               </q-item>
 
 
@@ -283,9 +283,9 @@ export default {
       const urlWithoutToken = imgFile.mediaDownloadUrl ? `${imgFile.mediaDownloadUrl}` : `/api/media/download/${imgFile.trackId || imgFile.hash}`;
       this.$store.commit('AudioPlayer/SET_VISUAL_PLAYER_COVER_URL', urlWithoutToken);
       this.$q.notify({
-        message: "封面设置成功",
+        message: this.$t('worktree.coverSetSuccess'),
         actions: [
-          { label: "前往大屏页面",
+          { label: this.$t('worktree.goToFullScreen'),
             handler: () => {
               // this.$router.push(`/fullScreenPlayer/${this.playWorkId}`)
               this.$router.push(`/fullScreenPlayer`)

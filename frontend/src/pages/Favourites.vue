@@ -10,18 +10,13 @@
             rounded
             toggle-color="primary"
             class="text-bold outline-style"
-            :options="[
-              {label: '播放历史', value: 'history'},
-              {label: '我的评价', value: 'review'},
-              {label: '我的进度', value: 'progress'},
-              {label: '分类整理', value: 'folder'},
-            ]"
+            :options="modeOptions"
           />
       </div>
 
       <!-- 排序选项 -->
       <div v-if="mode != 'history'" class="col-auto row">
-        <q-select dense rounded outlined v-model="sortBy" :options="sortOptions"/>
+        <q-select dense rounded outlined v-model="sortBy" :options="sortOptionsWithLabels" option-value="order"/>
         <q-btn
           :disable="sortButtonDisabled"
           dense
@@ -42,10 +37,7 @@
           toggle-color="primary"
           rounded
           class="outline-style"
-          :options="[
-            {label: '隐藏已听完', value: 'listened'},
-            {label: '全部', value: 'all'}
-          ]"
+          :options="hideFinishedOptions"
         />
       </div>
     </div>
@@ -61,13 +53,7 @@
         toggle-color="primary"
         rounded
         class="outline-style"
-        :options="[
-          {label: '想听', value: 'marked'},
-          {label: '在听', value: 'listening'},
-          {label: '听过', value: 'listened'},
-          {label: '重听', value: 'replay'},
-          {label: '搁置', value: 'postponed'}
-        ]"
+        :options="progressOptions"
       />
     </div>
 
@@ -75,7 +61,7 @@
     <div>
       <div class="q-px-sm q-pt-md">
         <q-infinite-scroll @load="onLoad" :offset="500" :disable="stopLoad" ref="scroll" v-if="mode !=='folder'">
-          <div class="row justify-center text-muted" v-if="works.length === 0">在作品界面上点击星标、标记进度，标记的音声就会出现在这里啦</div>
+          <div class="row justify-center text-muted" v-if="works.length === 0">{{ $t('favourites.emptyHint') }}</div>
           <q-list bordered separator class="shadow-2" v-if="works.length">
              <FavListItem v-for="work in works" :key="work.id" :workid="work.id" :metadata="work" @reset="reset()" :mode="mode"></FavListItem> 
           </q-list>
@@ -86,7 +72,7 @@
           </template>
         </q-infinite-scroll>
 
-        <div v-else class="row justify-center text-muted">尚未实现，敬请期待</div>
+        <div v-else class="row justify-center text-muted">{{ $t('favourites.notImplemented') }}</div>
       </div>
     </div>
   </q-page>
@@ -123,7 +109,46 @@ export default {
 
     sortButtonDisabled () {
       return this.sortBy.order === 'allage' || this.sortBy.order === 'nsfw'
-    }
+    },
+
+    modeOptions () {
+      return [
+        { label: this.$t('favourites.playHistory'), value: 'history' },
+        { label: this.$t('favourites.myReviews'), value: 'review' },
+        { label: this.$t('favourites.myProgress'), value: 'progress' },
+        { label: this.$t('favourites.folder'), value: 'folder' },
+      ]
+    },
+
+    hideFinishedOptions () {
+      return [
+        { label: this.$t('favourites.hideFinished'), value: 'listened' },
+        { label: this.$t('favourites.all'), value: 'all' },
+      ]
+    },
+
+    progressOptions () {
+      return [
+        { label: this.$t('favourites.marked'), value: 'marked' },
+        { label: this.$t('favourites.listening'), value: 'listening' },
+        { label: this.$t('favourites.listened'), value: 'listened' },
+        { label: this.$t('favourites.replay'), value: 'replay' },
+        { label: this.$t('favourites.postponed'), value: 'postponed' },
+      ]
+    },
+
+    sortOptionsWithLabels () {
+      const labels = {
+        updated_at: this.$t('favourites.sortByUpdatedAt'),
+        userRating: this.$t('favourites.sortByRating'),
+        release: this.$t('favourites.sortByRelease'),
+        review_count: this.$t('favourites.sortByReviewCount'),
+        dl_count: this.$t('favourites.sortByDlCount'),
+        allage: this.$t('favourites.sortByAllAge'),
+        nsfw: this.$t('favourites.sortByNsfw'),
+      }
+      return Object.keys(labels).map(order => ({ label: labels[order], order }))
+    },
   },
 
   data() {
@@ -136,39 +161,9 @@ export default {
       pagination: { currentPage:0, pageSize:12, totalCount:0 },
       sortMode: 'desc',
       sortBy: {
-          label: '标记时间',
+          label: '',
           order: 'updated_at'
         },
-      sortOptions: [
-        {
-          label: '标记时间',
-          order: 'updated_at'
-        },
-        {
-          label: '评价',
-          order: 'userRating'
-        },
-        {
-          label: '发布时间',
-          order: 'release'
-        },
-        {
-          label: '评论数量',
-          order: 'review_count'
-        },
-        {
-          label: '售出数量',
-          order: 'dl_count'
-        },
-        {
-          label: '全年龄新作',
-          order: 'allage'
-        },
-        {
-          label: '18禁新作',
-          order: 'nsfw'
-        }
-      ]
     }
   },
 

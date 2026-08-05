@@ -25,7 +25,7 @@
         v-model="sortCategoryOption"
         :options="sortCategoryOptions"
         :option-label="humanReadableLabel"
-        label="排序属性"
+        :label="$t('works.sortBy')"
         class="col-auto"
       />
 
@@ -40,12 +40,12 @@
         v-model="nsfwOption"
         :options="nsfwOptions"
         :option-label="humanReadableLabel"
-        label="年龄分级"
+        :label="$t('works.nsfw')"
         class="col-auto"
       />
 
       <!-- 排序顺序 -->
-      <q-toggle v-model="sortInDesc" :label="sortInDesc ? '降序' : '升序'" />
+      <q-toggle v-model="sortInDesc" :label="sortInDesc ? $t('works.desc') : $t('works.asc')" />
 
       <!-- 切换显示模式按钮 -->
       <q-btn-toggle
@@ -138,7 +138,7 @@
           </div>
         </div>
 
-        <div v-show="stopLoad" class="q-mt-lg q-mb-xl text-h6 text-bold text-center">无更多作品</div>
+        <div v-show="stopLoad" class="q-mt-lg q-mb-xl text-h6 text-bold text-center">{{ $t('works.noMoreWorks') }}</div>
 
         <template v-slot:loading>
           <div class="row justify-center q-my-md">
@@ -387,22 +387,22 @@ export default {
 
             switch (restrict) {
               case 'tags':
-                pageTitle = '搜索标签：'
+                pageTitle = this.$t('works.searchTag')
                 break
               case 'vas':
-                pageTitle = '搜索声优：'
+                pageTitle = this.$t('works.searchVa')
                 break
               case 'circles':
-                pageTitle = '社团作品：'
+                pageTitle = this.$t('works.searchCircle')
                 break
               case 'illustrators':
-                pageTitle = 'イラスト：'
+                pageTitle = this.$t('works.searchIllustrator')
                 break
               case 'script_writers':
-                pageTitle = 'シナリオ：'
+                pageTitle = this.$t('works.searchScriptWriter')
                 break
               case 'seriess':
-                pageTitle = 'シリーズ作品：'
+                pageTitle = this.$t('works.searchSeries')
                 break
             }
             this.searchMetas = [name]
@@ -418,11 +418,11 @@ export default {
             }
           })
       } else if (this.$route.query.keyword) {
-        this.pageTitle = '搜索关键字：';
+        this.pageTitle = this.$t('works.searchKeyword');
         this.searchMetas = [this.$route.query.keyword];
 
       } else {
-        this.pageTitle = '所有作品'
+        this.pageTitle = this.$t('works.allWorks')
         this.searchMetas = [];
       }
     },
@@ -445,18 +445,18 @@ export default {
     // 通过这个函数可以将release转换成更加可阅读的文字标签“发售日期”
     humanReadableLabel(label) {
       switch(label) {
-        case "release": return "发售日期";
-        case "rating": return "我的评价";
-        case "dl_count": return "售出数量";
-        case "price": return "售出价格";
-        case "rate_average_2dp": return "听众评分";
-        case "review_count": return "评论数量";
-        case "id": return "作品番号";
-        case "created_at": return "添加时间";
-        case "random": return "随机排序";
-        case "nsfw_0": return "所有分级";
-        case "nsfw_1": return "全年龄";
-        case "nsfw_2": return "十八禁";
+        case "release": return this.$t('works.release');
+        case "rating": return this.$t('works.rating');
+        case "dl_count": return this.$t('works.dlCount');
+        case "price": return this.$t('works.price');
+        case "rate_average_2dp": return this.$t('works.rateAverage');
+        case "review_count": return this.$t('works.reviewCount');
+        case "id": return this.$t('works.workId');
+        case "created_at": return this.$t('works.createdAt');
+        case "random": return this.$t('works.random');
+        case "nsfw_0": return this.$t('works.nsfwAll');
+        case "nsfw_1": return this.$t('works.nsfwAllAges');
+        case "nsfw_2": return this.$t('works.nsfwAdult');
         default: return label;
       }
     },

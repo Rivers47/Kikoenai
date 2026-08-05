@@ -53,7 +53,7 @@
 
             <q-item-section>
               <q-item-label class="text-subtitle1">
-                {{link.title}}
+                {{ link.title }}
               </q-item-label>
             </q-item-section>
           </q-item>
@@ -71,7 +71,7 @@
 
             <q-item-section>
               <q-item-label class="text-subtitle1">
-                随心听
+                {{ $t('mainlayout.randomPlay') }}
               </q-item-label>
             </q-item-section>
           </q-item>
@@ -89,7 +89,7 @@
 
             <q-item-section>
               <q-item-label class="text-subtitle1">
-                夜间模式
+                {{ $t('mainlayout.darkMode') }}
               </q-item-label>
             </q-item-section>
           </q-item>
@@ -106,7 +106,7 @@
 
             <q-item-section>
               <q-item-label class="text-subtitle1">
-                对比度：{{ contrastModeLabel }}
+                {{ $t('mainlayout.contrastMode', { mode: contrastModeLabel }) }}
               </q-item-label>
             </q-item-section>
           </q-item>
@@ -123,9 +123,9 @@
 
             <q-item-section>
               <q-item-label class="text-subtitle1">
-                自动标记已听完
+                {{ $t('mainlayout.autoMarkListened') }}
               </q-item-label>
-              <q-item-label caption lines="2">{{ autoMarkListened ? '已开启' : '已关闭' }}</q-item-label>
+              <q-item-label caption lines="2">{{ autoMarkListened ? $t('mainlayout.enabled') : $t('mainlayout.disabled') }}</q-item-label>
             </q-item-section>
           </q-item>
         </q-list>
@@ -145,7 +145,7 @@
 
             <q-item-section>
               <q-item-label class="text-subtitle1">
-                登出
+                {{ $t('mainlayout.logout') }}
               </q-item-label>
               <q-item-label caption lines="2">{{ userName }}</q-item-label>
             </q-item-section>
@@ -158,12 +158,12 @@
       <q-card>
         <q-card-section class="row items-center">
           <q-avatar icon="power_settings_new" color="primary" text-color="white" />
-          <span class="q-ml-sm">是否退出登录？（若未开启用户验证，则操作无效）</span>
+          <span class="q-ml-sm">{{ $t('mainlayout.logoutConfirm') }}</span>
         </q-card-section>
 
         <q-card-actions align="right">
-          <q-btn flat label="取消" color="primary" v-close-popup />
-          <q-btn flat label="退出" color="primary" @click="logout()" v-close-popup />
+          <q-btn flat :label="$t('common.cancel')" color="primary" v-close-popup />
+          <q-btn flat :label="$t('mainlayout.logoutButton')" color="primary" @click="logout()" v-close-popup />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -225,41 +225,13 @@ export default {
       showScroller: false,
       contrastMode: getContrastMode(),
       links: [
-        {
-          title: '媒体库',
-          icon: 'widgets',
-          path: '/'
-        },
-        {
-          title: '大图模式',
-          icon: 'play_circle',
-          path: '/fullScreenPlayer'
-        },
-        {
-          title: '我的收藏',
-          icon: 'favorite',
-          path: '/favourites'
-        },
-        {
-          title: '社团',
-          icon: 'group',
-          path: '/circles'
-        },
-        {
-          title: '标签',
-          icon: 'label',
-          path: '/tags'
-        },
-        {
-          title: '声优',
-          icon: 'mic',
-          path: '/vas'
-        },
-        {
-          title: '设定',
-          icon: 'tune',
-          path: '/admin'
-        },
+        { titleKey: 'mediaLibrary', icon: 'widgets', path: '/' },
+        { titleKey: 'fullScreenMode', icon: 'play_circle', path: '/fullScreenPlayer' },
+        { titleKey: 'favourites', icon: 'favorite', path: '/favourites' },
+        { titleKey: 'circles', icon: 'group', path: '/circles' },
+        { titleKey: 'tags', icon: 'label', path: '/tags' },
+        { titleKey: 'voiceActors', icon: 'mic', path: '/vas' },
+        { titleKey: 'settings', icon: 'tune', path: '/admin' },
       ],
       sharedConfig: {}
     }
@@ -287,11 +259,12 @@ export default {
 
   computed: {
     contrastModeLabel () {
-      return {
-        '': '跟随系统',
-        'contrast-medium': '中',
-        'contrast-high': '高'
-      }[this.contrastMode]
+      const labels = {
+        '': this.$t('mainlayout.systemDefault'),
+        'contrast-medium': this.$t('mainlayout.contrastMedium'),
+        'contrast-high': this.$t('mainlayout.contrastHigh'),
+      }
+      return labels[this.contrastMode] || ''
     },
 
     isNotAtHomePage () {
@@ -356,14 +329,14 @@ export default {
         .then((res) => {
           if (res.data.update_available && res.data.notifyUser) {
             this.$q.notify({
-              message: 'GitHub上有新版本',
+              message: this.$t('mainlayout.updateAvailable'),
               color: 'primary',
               textColor: 'white',
               icon: 'cloud_download',
               timeout: 5000,
               actions: [
-                { label: '好', color: 'white' },
-                { label: '查看', color: 'white', handler: () => {
+                { label: this.$t('common.ok'), color: 'white' },
+                { label: this.$t('mainlayout.viewUpdate'), color: 'white', handler: () => {
                     Object.assign(document.createElement('a'), {
                       target: '_blank',
                       href: 'https://github.com/umonaca/kikoeru-express/releases',
@@ -380,8 +353,8 @@ export default {
               type: 'warning',
               timeout: 60000,
               actions: [
-                { label: '以后提醒我', color: 'black' },
-                { label: '前往扫描页', color: 'black', handler: () => this.$router.push('/admin/scanner')}
+                { label: this.$t('mainlayout.remindLater'), color: 'black' },
+                { label: this.$t('mainlayout.goToScanner'), color: 'black', handler: () => this.$router.push('/admin/scanner')}
               ],
             })
           }
@@ -462,19 +435,16 @@ export default {
 
     getLinks() {
       return this.links.filter(link => {
-        // 尚未播放时，不要显示fullScreenPlayer这个页面
         if (link.path === '/fullScreenPlayer' && this.playWorkId == 0)
           return false;
         return true;
       }).map(link => {
+        const copy = { ...link, title: this.$t('mainlayout.' + link.titleKey) }
         if (link.path === '/fullScreenPlayer') {
-          // fullScreenPlayer这个时候肯定有在播放作品，将playerWorkId添加到url中，方便刷新后依然能够找到对应的作品
-          link = {...link}; // copy
-          link.path += `/${this.playWorkId}`;
+          copy.path += `/${this.playWorkId}`
         }
-        return link;
-      });
-
+        return copy
+      })
     },
     
     onHeaderRevealChange(isReveal) {
@@ -492,6 +462,21 @@ export default {
     flex-direction: column;
     justify-content: space-between;
     height: 100%;
+  }
+
+// Lock the drawer's inner content to the expanded width (230px) so long EN/JP
+// nav labels (e.g. "Contrast: System Default") pre-wrap at the final width.
+// Without this, the mini→overlay width animation reflows the text every hover,
+// making labels flicker between wrapping and not wrapping.
+  aside.q-drawer .q-scrollarea {
+    width: 230px;
+    min-width: 230px;
+  }
+// ponytail: 230 matches :width on the q-drawer above; bump both together if the
+// drawer is widened.
+  aside.q-drawer .q-item__label {
+    white-space: normal;
+    word-break: break-word;
   }
 
 // 中心主要页面的尺寸样式

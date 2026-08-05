@@ -36,9 +36,9 @@
 
           <!-- 评价分布明细 -->
           <q-tooltip content-class="text-subtitle1" v-if=metadata.rate_count_detail>
-            <div>平均: {{ metadata.rate_average_2dp }}</div>
+            <div>{{ $t('workcard.average') }}: {{ metadata.rate_average_2dp }}</div>
             <div v-for="(rate, index) in sortedRatings" :key=index class="row items-center">
-              <div class="col">{{ rate.review_point }}星</div>
+              <div class="col">{{ $t('workcard.stars', { n: rate.review_point }) }}</div>
 
               <!-- 评价占比 -->
               <q-linear-progress
@@ -78,7 +78,7 @@
           {{ metadata.price }}¥
         </span>
         <q-chip size="sm" icon="sell">{{ metadata.dl_count }}</q-chip>
-        <q-chip v-if="!metadata.nsfw" class="q-mx-sm sfw-badge" dense>全年龄</q-chip>
+        <q-chip v-if="!metadata.nsfw" class="q-mx-sm sfw-badge" dense>{{ $t('workcard.allAges') }}</q-chip>
       </div>
 
       <!-- 声优 -->

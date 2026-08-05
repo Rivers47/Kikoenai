@@ -40,7 +40,7 @@
             :key=index
             class="col-auto text-muted"
           >
-            {{ tag.name }}
+            {{ $tTag(tag.name) }}
           </router-link>
         </div>
       </q-item-label>

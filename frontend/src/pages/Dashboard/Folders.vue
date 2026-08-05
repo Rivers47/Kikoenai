@@ -3,7 +3,7 @@
     <q-card class="q-ma-md">
       <q-form @submit="onSubmitRootFolder">
         <q-toolbar>
-          <q-toolbar-title>添加新文件夹</q-toolbar-title>
+          <q-toolbar-title>{{ $t('folders.addNewFolder') }}</q-toolbar-title>
         </q-toolbar>
 
         <div class="q-pa-sm">
@@ -13,8 +13,8 @@
             v-model="rootFolder.name"
             required
             lazy-rules
-            :rules="[val => !config.rootFolders.find(rootFolder => rootFolder.name === val) || '该别名已存在，文件夹别名不能重复']"
-            label="文件夹别名"
+            :rules="[val => !config.rootFolders.find(rootFolder => rootFolder.name === val) || $t('folders.aliasAlreadyExists')]"
+            :label="$t('folders.folderAlias')"
           />
 
           <q-input
@@ -23,12 +23,12 @@
             v-model="rootFolder.path"
             required
             lazy-rules
-            :rules="[val => !config.rootFolders.find(rootFolder => rootFolder.path === val) || '该路径已存在，文件夹路径不能重复']"
-            label="绝对路径"
+            :rules="[val => !config.rootFolders.find(rootFolder => rootFolder.path === val) || $t('folders.pathAlreadyExists')]"
+            :label="$t('folders.absolutePath')"
           />
 
           <div class="row justify-end">
-            <q-btn type="submit" color="primary" label="添加" />
+            <q-btn type="submit" color="primary" :label="$t('common.add')" />
           </div>
         </div>
       </q-form>
@@ -37,7 +37,7 @@
     <q-form @submit="onSubmit">
       <q-card class="q-ma-md" v-show="config.rootFolders.length">
         <q-toolbar>
-          <q-toolbar-title>文件夹列表</q-toolbar-title>
+          <q-toolbar-title>{{ $t('folders.folderList') }}</q-toolbar-title>
         </q-toolbar>
 
         <q-list>
@@ -60,15 +60,15 @@
 
       <q-card class="q-ma-md">
         <q-toolbar>
-          <q-toolbar-title>封面文件夹路径</q-toolbar-title>
+          <q-toolbar-title>{{ $t('folders.coverFolderPath') }}</q-toolbar-title>
         </q-toolbar>
 
-        <div v-if="config.coverUseDefaultPath" class="q-pa-md">已指定为默认路径，即程序所在位置下的covers文件夹。如需修改，请前往高级设置并取消“封面使用默认路径”。</div>
+        <div v-if="config.coverUseDefaultPath" class="q-pa-md">{{ $t('folders.usingDefaultCoverPath') }}</div>
         <q-input v-else outlined dense required v-model="config.coverFolderDir" class="q-pa-sm" />
       </q-card>
 
       <div class="q-ma-lg row justify-end">
-        <q-btn :loading="loading" label="保存" type="submit" color="primary" />
+        <q-btn :loading="loading" :label="$t('common.save')" type="submit" color="primary" />
       </div>
     </q-form>
   </div>

@@ -124,7 +124,7 @@ export default {
       this.$router.push(`/work/${this.workid}`);
     } else if (this.workid === undefined && this.playWorkId === 0) {
       this.$q.notify({
-        message: "当前没有播放任何作品，请先播放一个作品然后打开可视化页面",
+        message: this.$t('fullscreenplayer.noWorkPlaying'),
         color: "negative",
       });
       this.$router.push(`/works`);
