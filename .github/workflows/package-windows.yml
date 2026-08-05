@@ -15,19 +15,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 22 LTS
+      - name: Setup Node 24 LTS
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
       # Full install (dev + prod) -- needed to build the frontend (Quasar toolchain).
+      # Node 24 LTS (Krypton).
       - name: Install dependencies
         run: npm ci
 
       # scripts/package.js: builds frontend (prod), prunes dev deps, stages a
-      # self-contained Kikoenai/ folder (bundled Node 22 + Windows-native sqlite3
+      # self-contained Kikoenai/ folder (bundled Node 24 + Windows-native sqlite3
       # + ffmpeg/ffprobe + backend source), and zips it.
       - name: Package Windows portable
         run: npm run package:windows

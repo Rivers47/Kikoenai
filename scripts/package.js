@@ -3,7 +3,7 @@
 /*
  * Kikoenai Windows portable packager.
  *
- * Stages a self-contained Kikoenai/ folder (bundled Node 22 + Windows-native
+ * Stages a self-contained Kikoenai/ folder (bundled Node 24 + Windows-native
  * sqlite3 + ffmpeg/ffprobe + built frontend + backend source) and zips it.
  * The user unzips and double-clicks Kikoenai.bat; no Node/ffmpeg on PATH needed.
  *
@@ -23,8 +23,8 @@ const BACKEND = path.join(ROOT, 'backend');
 const VERSION = require(path.join(BACKEND, 'package.json')).version;
 
 // Pinned for reproducibility. Bump here when upgrading the shipped runtime.
-// Node 22 LTS (Jod).
-const NODE_VERSION = 'v22.23.2';
+// Node 24 LTS (Krypton).
+const NODE_VERSION = 'v24.19.0';
 const NODE_URL = `https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-win-x64.zip`;
 // BtbN GPL build -- license-compatible with GPL-3.0. `latest` tag is auto-refreshed;
 // only ffmpeg.exe + ffprobe.exe are extracted into ffmpeg/.
@@ -110,7 +110,7 @@ async function stageRuntime() {
   const tmp = path.join(ROOT, 'package', 'windows', '.tmp');
   rm(tmp); mkdir(tmp);
 
-  // Node 22 LTS win-x64
+  // Node 24 LTS win-x64
   const nodeZip = path.join(tmp, 'node.zip');
   await download(NODE_URL, nodeZip);
   const nodeExtracted = path.join(tmp, 'node');

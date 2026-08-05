@@ -112,7 +112,7 @@ npm run build:frontend # Build frontend only
 ### Windows Portable Build
 
 A self-contained Windows distribution that runs without installing Node or ffmpeg:
-the `Kikoenai/` folder bundles Node 22 LTS, Windows-native `sqlite3`, and
+the `Kikoenai/` folder bundles Node 24 LTS, Windows-native `sqlite3`, and
 `ffmpeg`/`ffprobe`. Unzip and double-click `Kikoenai.bat`.
 
 **Building (on a Windows host):**

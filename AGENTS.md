@@ -29,7 +29,7 @@ kikoenai/
 
 ## 2. Workspace Commands
 
-Run from repo root. Node **>= 22.0.0**.
+Run from repo root. Node **>= 24.0.0**.
 
 | Command | Purpose |
 |---------|---------|
