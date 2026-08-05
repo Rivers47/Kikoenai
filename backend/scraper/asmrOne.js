@@ -42,6 +42,17 @@ async function scrapeWorkMetadataFromAsmrOne(id) {
     va.id = nameToUUID(va.name);
   });
 
+  // ASMR.one returns id as a bare number (e.g. 1100616) with the leading zero
+  // stripped, but every other part of the app addresses works by the padded
+  // DLsite id ("01100616"). Normalize so the row is stored under the same key
+  // DLsite would use -- otherwise the work is orphaned (DB has 1100616,
+  // frontend/lookups ask for 01100616 -> 404).
+  data.id = rjcode;
+  // Match DLsite's shape: always-present arrays/objects the insert path guards
+  // on. ASMR.one omits these when empty.
+  if (!data.illustrators) data.illustrators = [];
+  if (!data.scriptWriters) data.scriptWriters = [];
+
   return data;
 }
 
