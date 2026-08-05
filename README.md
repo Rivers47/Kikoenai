@@ -116,7 +116,7 @@ The frontend builds directly into `backend/dist/`, which is served as static con
 
 ## TODO
 - [x] Migrate packages to their modern versions
-- [ ] Support multiple languages
+- [x] Support multiple languages
 - [x] Support other metadata websites
 - [ ] Unify code language to English
 - [x] Fix PWA issues
