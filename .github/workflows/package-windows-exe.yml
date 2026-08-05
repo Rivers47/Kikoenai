@@ -1,0 +1,43 @@
+name: Package Windows single-exe (pkg)
+
+# Manual-only until a Windows CI run proves the exe build. Once green on
+# windows-latest, flip this to also trigger on v* tags and retire/replace
+# the zip workflow. Until then the proven zip build stays the release path.
+on:
+  workflow_dispatch:
+
+jobs:
+  package-windows-exe:
+    runs-on: windows-latest
+    name: Build Windows single-exe (pkg)
+    env:
+      PACKAGE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # scripts/pkg-package.js: builds frontend (prod), prunes dev deps, stages
+      # the sqlite3 binding at pkg's first-candidate path, builds ONE Kikoenai.exe
+      # via @yao-pkg/pkg (Node 24 win-x64 base), then stages it beside standalone
+      # ffmpeg/ffprobe + the launcher bat + data dirs, and zips it.
+      - name: Package Windows single-exe
+        run: npm run package:windows:exe
+
+      - name: Upload staged folder artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kikoenai-exe-windows-x64
+          path: package/windows-exe/Kikoenai
+          if-no-files-found: error
+          retention-days: 30

@@ -20,7 +20,14 @@ const { execFileSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const BACKEND = path.join(ROOT, 'backend');
-const VERSION = require(path.join(BACKEND, 'package.json')).version;
+const pkgVersion = require(path.join(BACKEND, 'package.json')).version;
+// CI passes the triggering git tag (vX.Y.Z) via PACKAGE_VERSION for tag builds;
+// strip the leading "v" to match the package.json semver shape. Fall back to
+// backend/package.json for local / workflow_dispatch runs where tags drift.
+const tagVersion = process.env.PACKAGE_VERSION;
+const VERSION = tagVersion
+  ? (tagVersion.startsWith('v') ? tagVersion.slice(1) : tagVersion)
+  : pkgVersion;
 
 // Pinned for reproducibility. Bump here when upgrading the shipped runtime.
 // Node 24 LTS (Krypton).
@@ -96,14 +103,30 @@ function stageBackendSource() {
   });
 }
 
+// Non-runtime dirs shipped inside published npm packages (jimp's
+// __image_snapshots__ is the worst offender -- 175-char filenames that blow
+// past Windows' 260-char path limit on extraction and abort the unzip halfway,
+// leaving the app half-staged so node crashes on launch). None of these run.
+const NM_EXCLUDE = new Set([
+  '__image_snapshots__', '__tests__', '__mocks__', '__fixtures__',
+  'test', 'tests', 'docs', 'doc', 'example', 'examples', 'coverage',
+  'node_modules', // never recurse into a nested node_modules
+]);
+function nmFilter(src) {
+  const base = path.basename(src);
+  if (NM_EXCLUDE.has(base)) return false;
+  if (base.startsWith('.') && base !== '.') return false; // .bin, .package-lock, ...
+  return true;
+}
+
 function stageNodeModules() {
   console.log('staging node_modules (backend prod deps, Windows-native sqlite3)');
   const nm = path.join(APP_DIR, 'node_modules');
   // backend/node_modules (non-hoisted: sqlite3, knex, jsonwebtoken, jimp, ...)
-  fs.cpSync(path.join(BACKEND, 'node_modules'), nm, { recursive: true });
+  fs.cpSync(path.join(BACKEND, 'node_modules'), nm, { recursive: true, filter: nmFilter });
   // overlay root/node_modules (hoisted; root wins on overlaps -- e.g. mime@1.6.0
   // for express/send over mime@3.0.0 from jimp). Mirrors the Containerfile layering.
-  fs.cpSync(path.join(ROOT, 'node_modules'), nm, { recursive: true });
+  fs.cpSync(path.join(ROOT, 'node_modules'), nm, { recursive: true, filter: nmFilter });
 }
 
 async function stageRuntime() {

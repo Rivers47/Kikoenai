@@ -1,6 +1,6 @@
 {
   "name": "kikoeru-express",
-  "version": "0.8.0",
+  "version": "0.9.2",
   "description": "A self-hosted media server for listening to your DLsite voice works.",
   "homepage": "https://github.com/kikoeru-project/kikoeru-express",
   "repository": {
@@ -28,6 +28,24 @@
       "sqlite/*"
     ],
     "delay": "2500"
+  },
+  "bin": "app.js",
+  "pkg": {
+    "scripts": [
+      "filesystem/scanner.js",
+      "filesystem/updater.js",
+      "filesystem/workFileScanner.js",
+      "database/migrations/*.js",
+      "node_modules/jimp/dist/commonjs/**/*.js",
+      "node_modules/@jimp/**/dist/commonjs/**/*.js"
+    ],
+    "assets": [
+      "dist/**/*",
+      "static/**/*",
+      "scraper/tag-aliases.json",
+      "node_modules/sqlite3/build/node_sqlite3.node"
+    ],
+    "outputPath": "package"
   },
   "author": "Watanuki-Kimihiro",
   "contributors": [

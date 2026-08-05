@@ -1,6 +1,6 @@
 {
   "name": "kikoeru-quasar",
-  "version": "0.8.0",
+  "version": "0.9.2",
   "description": "A self-hosted web media player for listening to your DLsite voice works.",
   "homepage": "https://github.com/kikoeru-project/kikoeru-quasar",
   "productName": "Kikoeru",

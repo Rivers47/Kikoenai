@@ -10,6 +10,12 @@ jobs:
   package-windows:
     runs-on: windows-latest
     name: Build Windows portable zip
+    env:
+      # Tag-triggered builds name the zip after the tag (vX.Y.Z -> X.Y.Z), the
+      # source of truth for releases; backend/package.json may lag behind tags.
+      # workflow_dispatch (no tag) leaves this empty -> packager falls back to
+      # backend/package.json's version.
+      PACKAGE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
 
     steps:
       - name: Checkout

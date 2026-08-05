@@ -1,6 +1,6 @@
 {
   "name": "kikoeru",
-  "version": "0.8.0",
+  "version": "0.9.2",
   "private": true,
   "description": "A self-hosted media server for DLsite voice works — monorepo combining backend (kikoeru-express) and frontend (kikoeru-quasar).",
   "homepage": "https://github.com/kikoeru-project/kikoeru-express",
@@ -19,6 +19,7 @@
     "build:frontend": "npm run build -w frontend",
     "build": "npm run build:frontend",
     "package:windows": "node scripts/package.js --windows",
+    "package:windows:exe": "node scripts/pkg-package.js",
     "start": "npm start -w backend",
     "lint": "npm run lint -w backend && npm run test -w frontend",
     "release:patch": "npm version patch -w backend && npm run version:sync",
