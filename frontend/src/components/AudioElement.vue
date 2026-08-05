@@ -459,6 +459,9 @@ export default {
       try {
         const check_response = await this.$axios.get(url)
         if (!check_response.data.result) {
+          //new track has no lyric — clear the previous track's lyric
+          // state so its onPlay callback stops firing SET_CURRENT_LYRIC.
+          this.resetToNoLyricStatus();
           return;
         }
 
