@@ -3,34 +3,34 @@
     <q-dialog v-model="showEditDialog" @hide="closeDialog">
       <q-card style="width: 600px; max-width: 90vw">
         <q-card-section class="q-pb-sm">
-          <div class="text-body1">编辑元数据</div>
+          <div class="text-body1">{{ $t('editmetadata.title') }}</div>
         </q-card-section>
 
         <q-card-section class="q-pt-none scroll" style="max-height: 60vh">
           <!-- Title -->
           <q-input
             v-model="editable.title"
-            label="标题"
+            :label="$t('editmetadata.titleLabel')"
             filled
             class="q-mb-md"
           />
 
           <!-- NSFW toggle -->
           <div class="q-mb-md">
-            <q-toggle v-model="editable.nsfw" label="R18" />
+            <q-toggle v-model="editable.nsfw" :label="$t('editmetadata.nsfw')" />
           </div>
 
           <!-- Circle -->
           <q-input
             v-model="editable.circle"
-            label="社团名称"
+            :label="$t('editmetadata.circleLabel')"
             filled
             class="q-mb-md"
           />
 
           <!-- Tags -->
           <div class="q-mb-md">
-            <div class="text-subtitle2 q-mb-xs">标签</div>
+            <div class="text-subtitle2 q-mb-xs">{{ $t('editmetadata.tags') }}</div>
             <div class="q-gutter-xs q-mb-xs">
               <q-chip
                 v-for="(tag, idx) in editable.tags"
@@ -45,7 +45,7 @@
               v-model="tagInput"
               use-input
               input-debounce="300"
-              label="添加标签"
+              :label="$t('editmetadata.addTag')"
               filled
               dense
               clearable
@@ -53,8 +53,6 @@
               @update:model-value="addTag"
               @filter="filterTags"
               :options="tagOptions"
-              option-label="name"
-              option-value="name"
               emit-value
               map-options
               style="max-width: 400px"
@@ -62,7 +60,7 @@
               <template v-slot:no-option>
                 <q-item>
                   <q-item-section class="text-grey">
-                    输入后按回车创建
+                    {{ $t('editmetadata.createOnEnter') }}
                   </q-item-section>
                 </q-item>
               </template>
@@ -71,7 +69,7 @@
 
           <!-- VAs -->
           <div class="q-mb-md">
-            <div class="text-subtitle2 q-mb-xs">声优</div>
+            <div class="text-subtitle2 q-mb-xs">{{ $t('editmetadata.vas') }}</div>
             <div class="q-gutter-xs q-mb-xs">
               <q-chip
                 v-for="(va, idx) in editable.vas"
@@ -86,7 +84,7 @@
               v-model="vaInput"
               use-input
               input-debounce="300"
-              label="添加声优"
+              :label="$t('editmetadata.addVa')"
               filled
               dense
               clearable
@@ -103,7 +101,7 @@
               <template v-slot:no-option>
                 <q-item>
                   <q-item-section class="text-grey">
-                    输入后按回车创建
+                    {{ $t('editmetadata.createOnEnter') }}
                   </q-item-section>
                 </q-item>
               </template>
@@ -112,7 +110,7 @@
 
           <!-- Illustrators -->
           <div class="q-mb-md">
-            <div class="text-subtitle2 q-mb-xs">イラスト</div>
+            <div class="text-subtitle2 q-mb-xs">{{ $t('editmetadata.illustrators') }}</div>
             <div class="q-gutter-xs q-mb-xs">
               <q-chip
                 v-for="(illus, idx) in editable.illustrators"
@@ -127,7 +125,7 @@
               v-model="illustratorInput"
               use-input
               input-debounce="300"
-              label="添加イラスト"
+              :label="$t('editmetadata.addIllustrator')"
               filled
               dense
               clearable
@@ -144,7 +142,7 @@
               <template v-slot:no-option>
                 <q-item>
                   <q-item-section class="text-grey">
-                    输入后按回车创建
+                    {{ $t('editmetadata.createOnEnter') }}
                   </q-item-section>
                 </q-item>
               </template>
@@ -153,7 +151,7 @@
 
           <!-- Script Writers -->
           <div class="q-mb-md">
-            <div class="text-subtitle2 q-mb-xs">シナリオ</div>
+            <div class="text-subtitle2 q-mb-xs">{{ $t('editmetadata.scriptWriters') }}</div>
             <div class="q-gutter-xs q-mb-xs">
               <q-chip
                 v-for="(sw, idx) in editable.scriptWriters"
@@ -168,7 +166,7 @@
               v-model="scriptWriterInput"
               use-input
               input-debounce="300"
-              label="添加シナリオ"
+              :label="$t('editmetadata.addScriptWriter')"
               filled
               dense
               clearable
@@ -185,7 +183,7 @@
               <template v-slot:no-option>
                 <q-item>
                   <q-item-section class="text-grey">
-                    输入后按回车创建
+                    {{ $t('editmetadata.createOnEnter') }}
                   </q-item-section>
                 </q-item>
               </template>
@@ -194,12 +192,12 @@
 
           <!-- Series -->
           <div class="q-mb-md">
-            <div class="text-subtitle2 q-mb-xs">系列</div>
+            <div class="text-subtitle2 q-mb-xs">{{ $t('editmetadata.series') }}</div>
             <q-select
               v-model="editable.series"
               use-input
               input-debounce="300"
-              label="选择系列 (可清空)"
+              :label="$t('editmetadata.selectSeries')"
               filled
               dense
               clearable
@@ -211,7 +209,7 @@
               <template v-slot:no-option>
                 <q-item>
                   <q-item-section class="text-grey">
-                    无匹配系列
+                    {{ $t('editmetadata.noSeriesMatch') }}
                   </q-item-section>
                 </q-item>
               </template>
@@ -221,10 +219,10 @@
 
         <div class="row justify-between">
           <q-card-actions align="left">
-            <q-btn flat label="取消" @click="closeDialog()" />
+            <q-btn flat :label="$t('common.cancel')" @click="closeDialog()" />
           </q-card-actions>
           <q-card-actions align="right" class="text-primary">
-            <q-btn flat label="保存" :loading="saving" @click="submitEdit()" />
+            <q-btn flat :label="$t('common.save')" :loading="saving" @click="submitEdit()" />
           </q-card-actions>
         </div>
       </q-card>
@@ -305,7 +303,8 @@ export default {
     async filterTags(val, update) {
       const options = await this.fetchOptions('/api/tags');
       update(() => {
-        this.tagOptions = val ? options.filter(o => o.name.toLowerCase().includes(val.toLowerCase())) : options;
+        const filtered = val ? options.filter(o => o.name.toLowerCase().includes(val.toLowerCase())) : options;
+        this.tagOptions = filtered.map(o => ({ value: o.name, label: this.$tTag(o.name) }));
       });
     },
 
@@ -401,7 +400,7 @@ export default {
       this.saving = true;
       this.$axios.put(`/api/work/${this.metadata.id}`, payload)
         .then((response) => {
-          this.showSuccNotif(response.data.message || '元数据更新成功');
+          this.showSuccNotif(response.data.message || this.$t('editmetadata.saveSuccess'));
           this.$emit('saved');
         })
         .catch((error) => {

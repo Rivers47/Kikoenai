@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="row justify-between q-mt-lg q-ml-md">
-      <div class="col text-h5 text-weight-regular">最近播放</div>
+      <div class="col text-h5 text-weight-regular">{{ $t('recentworks.recentPlayed') }}</div>
       <q-btn flat icon="navigate_next" @click="$router.push('/favourites/history')"></q-btn>
     </div>
     <q-virtual-scroll

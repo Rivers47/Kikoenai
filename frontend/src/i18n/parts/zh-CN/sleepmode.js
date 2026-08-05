@@ -1,0 +1,16 @@
+export default {
+  title: '睡眠定时',
+  stopByMinutes: '按分钟停止',
+  stopByTracks: '按曲目停止',
+  minutesLabel: '{n} 分钟',
+  tracks: '{n} 首',
+  timerStatusMinutes: '约 {h}:{m} 停止（还剩 {remaining} 分钟）',
+  timerStatusMinutesShort: '约 {h}:{m} 停止',
+  timerStatusTracksCurrent: '当前曲目结束后停止',
+  timerStatusTracks: '再播放 {n} 首后停止',
+  clearTimer: '取消定时',
+  confirmMinutes: '将在 {n} 分钟后停止播放',
+  confirmTrackCurrent: '当前曲目结束后停止播放',
+  confirmTracks: '将在 {n} 首曲目后停止播放',
+  timerCleared: '已关闭睡眠模式',
+}

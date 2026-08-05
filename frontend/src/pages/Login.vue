@@ -1,16 +1,16 @@
 <template>
   <q-form @submit="onSubmit" style="width: 260px;" class="absolute-center	q-gutter-md">
-    <q-input filled v-model="name" label="用户名" class="fit"
+    <q-input filled v-model="name" :label="$t('login.username')" class="fit"
       lazy-rules
-      :rules="[ val => val.length >= 5 || '密码长度至少为 5' ]"
-    />
-    
-    <q-input filled type="password" v-model="password" label="密码"  class="fit"
-      lazy-rules
-      :rules="[ val => val.length >= 5 || '密码长度至少为 5' ]"
+      :rules="[ val => val.length >= 5 || $t('login.minLengthError') ]"
     />
 
-    <q-btn label="登录" type="submit" color="primary" class="fit" />
+    <q-input filled type="password" v-model="password" :label="$t('login.password')"  class="fit"
+      lazy-rules
+      :rules="[ val => val.length >= 5 || $t('login.minLengthError') ]"
+    />
+
+    <q-btn :label="$t('login.login')" type="submit" color="primary" class="fit" />
   </q-form>
 </template>
    
@@ -38,12 +38,10 @@ export default {
           try {
             this.$q.localStorage.set('jwt-token', res.data.token)
             setAxiosHeaders(res.data.token)
-            this.showSuccNotif('登录成功.')
+            this.showSuccNotif(this.$t('login.loginSuccess'))
             this.$router.push('/')
           } catch (error) {
-            // 由于Web Storage API错误，
-            // 数据未成功保存
-            this.showErrNotif(error.message)
+            this.showErrNotif(this.$t('login.storageError'))
           }
         })
         .catch((error) => {

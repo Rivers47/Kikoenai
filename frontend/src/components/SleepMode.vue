@@ -4,7 +4,7 @@
 
       <!-- Header: title + current timer status -->
       <q-card-section class="row items-center q-pb-sm">
-        <div class="text-h6">睡眠定时</div>
+        <div class="text-h6">{{ $t('sleepmode.title') }}</div>
         <div v-if="sleepMode" class="text-subtitle2 q-ml-auto">
           {{ timerStatusText }}
         </div>
@@ -22,10 +22,7 @@
             rounded
             unelevated
             v-model="currentMode"
-            :options="[
-              { label: '按分钟停止', value: 'minutes' },
-              { label: '按曲目停止', value: 'tracks' }
-            ]"
+            :options="modeOptions"
           />
         </div>
 
@@ -52,7 +49,7 @@
         <!-- Tracks mode -->
         <div v-else class="q-mt-md">
           <div class="text-center q-mb-sm">
-            <span class="text-body1 slider-label-value">{{ trackValue }} 首</span>
+            <span class="text-body1 slider-label-value">{{ $t('sleepmode.tracks', { n: trackValue }) }}</span>
           </div>
           <q-slider
             v-model="trackValue"
@@ -73,20 +70,20 @@
       <div class="row justify-between items-center q-px-lg q-pb-md">
         <q-btn
           flat
-          label="取消定时"
+          :label="$t('sleepmode.clearTimer')"
           color="primary"
           @click="clearSleepTimer"
           :disable="!sleepMode"
         />
         <q-btn
           flat
-          label="取消"
+          :label="$t('common.cancel')"
           color="primary"
           @click="close"
         />
         <q-btn
           flat
-          label="确定"
+          :label="$t('common.ok')"
           color="primary"
           @click="confirm"
         />
@@ -131,9 +128,16 @@ export default {
       }
     },
 
+    modeOptions() {
+      return [
+        { label: this.$t('sleepmode.stopByMinutes'), value: 'minutes' },
+        { label: this.$t('sleepmode.stopByTracks'), value: 'tracks' }
+      ]
+    },
+
     sliderLabel() {
       const mins = Math.round(this.sliderValue)
-      return `${mins} 分钟`
+      return this.$t('sleepmode.minutesLabel', { n: mins })
     },
 
     minutesHint() {
@@ -158,16 +162,16 @@ export default {
         const m = stopAt.getMinutes().toString().padStart(2, '0')
         const remaining = this.remainingMinutes
         if (remaining > 0) {
-          return `约 ${h}:${m} 停止（还剩 ${remaining} 分钟）`
+          return this.$t('sleepmode.timerStatusMinutes', { h, m, remaining })
         }
-        return `约 ${h}:${m} 停止`
+        return this.$t('sleepmode.timerStatusMinutesShort', { h, m })
       }
       if (this.sleepModeType === 'tracks') {
         const left = Math.max(0, this.sleepTracksLeft)
         if (left === 0) {
-          return '当前曲目结束后停止'
+          return this.$t('sleepmode.timerStatusTracksCurrent')
         }
-        return `再播放 ${left} 首后停止`
+        return this.$t('sleepmode.timerStatusTracks', { n: left })
       }
       return ''
     },
@@ -224,11 +228,11 @@ export default {
     confirmMsg() {
       if (this.currentMode === 'minutes') {
         const mins = Math.round(this.sliderValue)
-        return `将在 ${mins} 分钟后停止播放`
+        return this.$t('sleepmode.confirmMinutes', { n: mins })
       } else if (this.trackValue === 0) {
-        return '当前曲目结束后停止播放'
+        return this.$t('sleepmode.confirmTrackCurrent')
       }
-      return `将在 ${this.trackValue} 首曲目后停止播放`
+      return this.$t('sleepmode.confirmTracks', { n: this.trackValue })
     },
 
     close() {
@@ -237,7 +241,7 @@ export default {
 
     clearSleepTimer() {
       this.CLEAR_SLEEP_MODE()
-      this.showSuccNotif('已关闭睡眠模式')
+      this.showSuccNotif(this.$t('sleepmode.timerCleared'))
     },
 
     fnMarkerLabel(val) {

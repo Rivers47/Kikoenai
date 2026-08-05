@@ -58,7 +58,7 @@
 
         <div v-if="mode === 'history'" class="full-width">
           <div class="full-width">
-            <q-btn color="primary" label="从历史播放"  class="full-width" @click="playHistory(metadata.id, metadata.state)"/>
+            <q-btn color="primary" :label="$t('favlistitem.playFromHistory')"  class="full-width" @click="playHistory(metadata.id, metadata.state)"/>
           </div>
 
           <!--
@@ -71,7 +71,7 @@
           -->
 
           <div>
-            <span class="text-accent">进度：</span>
+            <span class="text-accent">{{ $t('favlistitem.progress') }}：</span>
             <q-badge color="tertiary-container" text-color="on-tertiary-container">{{ metadata.state.index+1 }} / {{ metadata.state.queue.length }}</q-badge>
             <q-badge color="primary-container" text-color="on-primary-container">{{ humanReadableSeconds(metadata.state.seconds) }}</q-badge>
             <span class="text-muted">
@@ -92,13 +92,7 @@
             color="white"
             text-color="black"
             class="q-pa-sm"
-            :options="[
-              {label: '想听', value: 'marked'},
-              {label: '在听', value: 'listening'},
-              {label: '听过', value: 'listened'},
-              {label: '重听', value: 'replay'},
-              {label: '搁置', value: 'postponed'}
-            ]"
+            :options="progressOptions"
           />
           </q-item-label>
       </q-item-section>
@@ -146,6 +140,16 @@ export default {
   },
 
   computed: {
+    progressOptions() {
+      return [
+        { label: this.$t('favlistitem.marked'), value: 'marked' },
+        { label: this.$t('favlistitem.listening'), value: 'listening' },
+        { label: this.$t('favlistitem.listened'), value: 'listened' },
+        { label: this.$t('favlistitem.replay'), value: 'replay' },
+        { label: this.$t('favlistitem.postponed'), value: 'postponed' }
+      ]
+    },
+
     coverUrl () {
       // 从 LocalStorage 中读取 token
       const token = this.$q.localStorage.getItem('jwt-token') || ''
@@ -167,15 +171,10 @@ export default {
 
   methods: {
     humanReadableSeconds(seconds) {
-      const hour = Math.floor(seconds / 3600)
-      const minute = Math.floor(seconds / 60)
-      const sec = Math.floor(seconds) % 60
-
-      let str = ""
-      if (hour > 0) str += `${hour}小时`
-      if (minute > 0) str += `${minute}分钟`
-      str += `${sec}秒`
-      return str
+      const h = Math.floor(seconds / 3600)
+      const m = Math.floor(seconds / 60)
+      const s = Math.floor(seconds) % 60
+      return this.$t('favlistitem.timeFormat', { h, m, s })
     },
 
     setMetadata () {

@@ -1,0 +1,16 @@
+export default {
+  title: 'Sleep timer',
+  stopByMinutes: 'Stop after minutes',
+  stopByTracks: 'Stop after tracks',
+  minutesLabel: '{n} min',
+  tracks: '{n} track(s)',
+  timerStatusMinutes: 'Stop around {h}:{m} ({remaining} min left)',
+  timerStatusMinutesShort: 'Stop around {h}:{m}',
+  timerStatusTracksCurrent: 'Stop after current track',
+  timerStatusTracks: 'Stop after {n} tracks',
+  clearTimer: 'Clear timer',
+  confirmMinutes: 'Will stop in {n} minutes',
+  confirmTrackCurrent: 'Will stop after current track',
+  confirmTracks: 'Will stop after {n} tracks',
+  timerCleared: 'Sleep timer disabled',
+}

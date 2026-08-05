@@ -2,17 +2,16 @@
   <div>
     <q-card class="q-ma-md">
       <q-card-section>
-        <div class="text-h6">进度回填</div>
+        <div class="text-h6">{{ $t('backfill.title') }}</div>
         <div class="text-caption text-grey">
-          自动标记完成播放的作品为听过。
-          先执行预览（dry-run）确认无误后再正式运行。
+          {{ $t('backfill.description') }}
         </div>
       </q-card-section>
 
       <q-card-actions align="left" class="q-px-md q-pb-md">
         <q-btn
           color="secondary"
-          label="预览（dry-run）"
+          :label="$t('backfill.dryRun')"
           icon="search"
           :loading="running"
           :disable="running"
@@ -20,7 +19,7 @@
         />
         <q-btn
           color="primary"
-          label="正式运行"
+          :label="$t('backfill.run')"
           icon="play_arrow"
           :loading="running"
           :disable="running"
@@ -34,7 +33,7 @@
         v-model="logExpanded"
         expand-separator
         icon="terminal"
-        label="运行日志"
+        :label="$t('backfill.log')"
       >
         <q-scroll-area style="height: 320px;" class="bg-dark text-white q-pa-md">
           <div v-for="(line, i) in logs" :key="i" class="log-line">➜ {{ line }}</div>
@@ -44,35 +43,35 @@
 
     <q-card v-if="summary" class="q-ma-md">
       <q-card-section>
-        <div class="text-subtitle1 q-mb-sm">汇总</div>
+        <div class="text-subtitle1 q-mb-sm">{{ $t('backfill.summary') }}</div>
         <div class="row q-gutter-md">
           <div class="col-auto">
-            <div class="text-caption text-grey">总处理数</div>
+            <div class="text-caption text-grey">{{ $t('backfill.total') }}</div>
             <div class="text-h6">{{ summary.total }}</div>
           </div>
           <div class="col-auto">
-            <div class="text-caption text-grey">标记已听</div>
+            <div class="text-caption text-grey">{{ $t('backfill.marked') }}</div>
             <div class="text-h6">{{ summary.marked }}</div>
           </div>
           <div class="col-auto">
-            <div class="text-caption text-grey">回填进度条目</div>
+            <div class="text-caption text-grey">{{ $t('backfill.seeded') }}</div>
             <div class="text-h6">{{ summary.p2Seeded }}</div>
           </div>
           <div class="col-auto">
-            <div class="text-caption text-grey">跳过（已终结）</div>
+            <div class="text-caption text-grey">{{ $t('backfill.skippedTerminal') }}</div>
             <div class="text-h6">{{ summary.skippedTerminal }}</div>
           </div>
           <div class="col-auto">
-            <div class="text-caption text-grey">跳过（无文件）</div>
+            <div class="text-caption text-grey">{{ $t('backfill.skippedNoFile') }}</div>
             <div class="text-h6">{{ summary.p2SkippedNoFile }}</div>
           </div>
           <div class="col-auto">
-            <div class="text-caption text-grey">跳过（已回填）</div>
+            <div class="text-caption text-grey">{{ $t('backfill.skippedAlreadySeeded') }}</div>
             <div class="text-h6">{{ summary.skippedAlreadySeeded }}</div>
           </div>
         </div>
         <q-banner v-if="summary.dryRun" class="bg-grey-2 q-mt-sm" dense>
-          以上为预览结果，未写入任何数据。
+          {{ $t('backfill.dryRunBanner') }}
         </q-banner>
       </q-card-section>
     </q-card>
@@ -105,9 +104,9 @@ export default {
         const { data } = await this.$axios.post('/api/backfill/progress', { dryRun })
         this.logs = data.logs || []
         this.summary = data.summary || null
-        this.showSuccNotif(dryRun ? '预览完成' : '回填完成')
+        this.showSuccNotif(this.$t(dryRun ? 'backfill.dryRunComplete' : 'backfill.backfillComplete'))
       } catch (err) {
-        const msg = err.response?.data?.error || '回填请求失败'
+        const msg = err.response?.data?.error || this.$t('backfill.requestFailed')
         // Server may still return partial logs on error
         this.logs = err.response?.data?.logs || []
         this.showErrNotif(msg)

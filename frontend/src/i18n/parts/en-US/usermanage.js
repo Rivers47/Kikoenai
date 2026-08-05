@@ -1,0 +1,17 @@
+export default {
+  changeAdminPassword: 'Change Admin Password',
+  newPassword: 'New Password',
+  confirmPassword: 'Confirm Password',
+  passwordMinLength: 'Password must be at least 5 characters',
+  passwordsDoNotMatch: 'Passwords do not match',
+  change: 'Change',
+  addNewUser: 'Add New User',
+  userGroup: 'User Group',
+  username: 'Username',
+  usernameMinLength: 'Username must be at least 5 characters',
+  usernameExists: 'This username already exists',
+  password: 'Password',
+  allUsers: 'All Users',
+  confirmDeleteUsers: 'Confirm delete selected users?',
+  selectedRecords: '{count} record(s) selected of {total}',
+}

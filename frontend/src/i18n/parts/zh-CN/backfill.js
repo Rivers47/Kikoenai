@@ -1,0 +1,18 @@
+export default {
+  title: '进度回填',
+  description: '自动标记完成播放的作品为听过。先执行预览（dry-run）确认无误后再正式运行。',
+  dryRun: '预览（dry-run）',
+  run: '正式运行',
+  log: '运行日志',
+  summary: '汇总',
+  total: '总处理数',
+  marked: '标记已听',
+  seeded: '回填进度条目',
+  skippedTerminal: '跳过（已终结）',
+  skippedNoFile: '跳过（无文件）',
+  skippedAlreadySeeded: '跳过（已回填）',
+  dryRunBanner: '以上为预览结果，未写入任何数据。',
+  dryRunComplete: '预览完成',
+  backfillComplete: '回填完成',
+  requestFailed: '回填请求失败',
+}

@@ -1,0 +1,16 @@
+export default {
+  title: 'スリープタイマー',
+  stopByMinutes: '分数で停止',
+  stopByTracks: '曲数で停止',
+  minutesLabel: '{n} 分',
+  tracks: '{n} 曲',
+  timerStatusMinutes: '約 {h}:{m} に停止（残り {remaining} 分）',
+  timerStatusMinutesShort: '約 {h}:{m} に停止',
+  timerStatusTracksCurrent: '現在の曲終了後に停止',
+  timerStatusTracks: 'あと {n} 曲で停止',
+  clearTimer: 'タイマー解除',
+  confirmMinutes: '{n} 分後に停止します',
+  confirmTrackCurrent: '現在の曲終了後に停止します',
+  confirmTracks: '{n} 曲後に停止します',
+  timerCleared: 'スリープモードを解除しました',
+}

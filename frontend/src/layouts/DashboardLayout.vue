@@ -3,7 +3,7 @@
     <q-header elevated class="bg-black">
       <q-toolbar>
         <q-btn flat @click="drawer = !drawer" round dense icon="menu" />
-        <q-toolbar-title>仪表盘</q-toolbar-title>
+        <q-toolbar-title>{{ $t('dashboardlayout.dashboard') }}</q-toolbar-title>
       </q-toolbar>
     </q-header>
 
@@ -63,35 +63,40 @@ export default {
     return {
       drawer: false,
       miniState: true,
-      links: [
+    }
+  },
+
+  computed: {
+    links () {
+      return [
         {
-          title: '音声库',
+          title: this.$t('dashboardlayout.library'),
           icon: 'folder',
           path: '/admin'
         },
         {
-          title: '扫描',
+          title: this.$t('dashboardlayout.scan'),
           icon: 'youtube_searched_for',
           path: '/admin/scanner'
         },
         {
-          title: '用户管理',
+          title: this.$t('dashboardlayout.userManage'),
           icon: 'person',
           path: '/admin/usermanage'
         },
         {
-          title: '进度回填',
+          title: this.$t('dashboardlayout.backfill'),
           icon: 'history',
           path: '/admin/backfill'
         },
         {
-          title: '高级设置',
+          title: this.$t('dashboardlayout.advancedSettings'),
           icon: 'settings',
           path: '/admin/advanced'
         },
-        
+
         {
-          title: '回到主页',
+          title: this.$t('dashboardlayout.backToHome'),
           icon: 'home',
           path: '/'
         }

@@ -8,6 +8,7 @@ module.exports = function (ctx) {
     // https://quasar.dev/quasar-cli-webpack/boot-files
     boot: [
       'axios',
+      'i18n',
       'store',
       'slider',
       'plyr',

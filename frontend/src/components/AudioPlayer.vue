@@ -45,7 +45,7 @@
               @click="showCurrentPlayList = !showCurrentPlayList" 
             >
               <q-tooltip anchor="top middle" self="bottom middle">
-                切换曲目
+                {{ $t('audioplayer.switchTrack') }}
               </q-tooltip>
             </q-btn>
 
@@ -61,7 +61,7 @@
               @click="setPIPLyrics" 
             >
               <q-tooltip anchor="top middle" self="bottom middle">
-                桌面歌词
+                {{ $t('audioplayer.desktopLyrics') }}
               </q-tooltip>
             </q-btn>
 
@@ -104,7 +104,7 @@
               @click="gotoFullScreenPlayer"
             >
               <q-tooltip anchor="top middle" self="bottom middle">
-                网页全屏
+                {{ $t('audioplayer.fullscreen') }}
               </q-tooltip>
             </q-btn>
 
@@ -117,7 +117,7 @@
               icon="more_horiz"
             >
               <q-tooltip anchor="top middle" self="bottom middle">
-                更多播放设置
+                {{ $t('audioplayer.moreSettings') }}
               </q-tooltip>
               <q-menu anchor="bottom right" self="top right">
                 <q-item clickable v-ripple @click="toggleSwapSeekButton">
@@ -125,7 +125,7 @@
                     <q-icon :name="swapSeekButton ? 'done' : ''" />
                   </q-item-section>
                   <q-item-section>
-                    交换进度按钮与切换按钮
+                    {{ $t('audioplayer.swapSeekButton') }}
                   </q-item-section>
                 </q-item>
                 
@@ -134,7 +134,7 @@
                     <!-- placeholder -->
                   </q-item-section>
                   <q-item-section>
-                    打开作品详情（或双击封面）
+                    {{ $t('audioplayer.openWorkDetail') }}
                   </q-item-section>
                 </q-item>
 
@@ -145,7 +145,7 @@
                       :model-value="lyricOffsetSeconds"
                       @update:model-value="lyricOffsetChange"
                       type="number"
-                      prefix="歌词偏移"
+                      :prefix="$t('audioplayer.lyricOffset')"
                       suffix="s"
                       style="max-width: 100%;"
                       outlined
@@ -267,29 +267,26 @@
     <q-dialog v-model="lyricSyncDialog"  seamless position="top">
       <q-card class="bg-primary text-white">
         <q-card-section>
-          <div class="text-h6">歌词同步辅助工具</div>
+          <div class="text-h6">{{ $t('audioplayer.lyricSyncTitle') }}</div>
         </q-card-section>
 
         <q-card-section class="q-pt-none">
-          这是一个辅助计算歌词偏移量的工具，当音频和歌词的时间出现不同步的时候，使用此工具来计算修复的歌词偏移量。
-          请在正常播放状态下播放音频和歌词，从声音和歌词中找到一个关键点A，对应声音A和歌词A，
-          判断先听到声音还是先看到歌词，当其中一个出现时，点击下方对应的按钮，接着在另一个元素出现时再次点击一次按钮。
-          这里将会计算两次点击之间的时间差，点击“应用偏移量”即可立即刚才两次点击的时间差作为歌词偏移量。
+          {{ $t('audioplayer.lyricSyncDesc') }}
         </q-card-section>
 
         <q-card-section v-if="fixState === 'ready'">
-          <q-btn @click="startFixLyricSync('lyric')">歌词先出现了</q-btn>
-          <q-btn @click="startFixLyricSync('audio')">先听到了声音</q-btn>
+          <q-btn @click="startFixLyricSync('lyric')">{{ $t('audioplayer.lyricFirst') }}</q-btn>
+          <q-btn @click="startFixLyricSync('audio')">{{ $t('audioplayer.audioFirst') }}</q-btn>
         </q-card-section>
 
         <q-card-section v-if="fixState === 'measure'">
-          <q-btn @click="stopFixLyricSync">{{ fixWhoStartFirst == "audio" ? "歌词这个时候出现了" : "这个时候才听到了声音" }}</q-btn>
+          <q-btn @click="stopFixLyricSync">{{ fixWhoStartFirst == 'audio' ? $t('audioplayer.lyricAppeared') : $t('audioplayer.audioHeard') }}</q-btn>
         </q-card-section>
 
         <q-card-actions align="right">
-          <q-btn @click="lyricSyncDialog = false">关闭</q-btn>
-          <q-btn v-if="fixState !== 'ready'" @click="fixState = 'ready'" >重新计量偏移量</q-btn>
-          <q-btn v-if="fixState === 'done'" @click="fixApply">应用偏移量 {{ showDeltaSeconds }}</q-btn>
+          <q-btn @click="lyricSyncDialog = false">{{ $t('common.close') }}</q-btn>
+          <q-btn v-if="fixState !== 'ready'" @click="fixState = 'ready'" >{{ $t('audioplayer.remeasureOffset') }}</q-btn>
+          <q-btn v-if="fixState === 'done'" @click="fixApply">{{ $t('audioplayer.applyOffset', { delta: showDeltaSeconds }) }}</q-btn>
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -474,13 +471,13 @@ export default {
     playModeString () {
       switch (this.playMode.name) {
         case "all repeat":
-          return "全部"
+          return this.$t('audioplayer.playModeAllRepeat')
         case "repeat once":
-          return "单曲循环"
+          return this.$t('audioplayer.playModeRepeatOnce')
         case "shuffle":
-          return "随机"
+          return this.$t('audioplayer.playModeShuffle')
         default:
-          return "列表播放"
+          return this.$t('audioplayer.playModeOrder')
       }
     },
 
@@ -490,20 +487,20 @@ export default {
 
     sleepTimerTooltip () {
       if (!this.sleepMode) {
-        return '睡眠定时'
+        return this.$t('audioplayer.sleepTimer')
       }
       if (this.sleepModeType === 'minutes' && this.sleepStopAt) {
         const stopAt = new Date(this.sleepStopAt)
         const h = stopAt.getHours().toString().padStart(2, '0')
         const m = stopAt.getMinutes().toString().padStart(2, '0')
-        return `睡眠定时：约 ${h}:${m} 停止`
+        return this.$t('audioplayer.sleepTimerStopAt', { hour: h, min: m })
       }
       if (this.sleepModeType === 'tracks') {
         return this.sleepTracksLeft > 0
-          ? `睡眠定时：再播放 ${this.sleepTracksLeft} 首后停止`
-          : '睡眠定时：当前曲目结束后停止'
+          ? this.$t('audioplayer.sleepTimerTracksLeft', { count: this.sleepTracksLeft })
+          : this.$t('audioplayer.sleepTimerTrackEnd')
       }
-      return '睡眠定时'
+      return this.$t('audioplayer.sleepTimer')
     },
 
     rewindIcon () {
@@ -590,7 +587,7 @@ export default {
       this.lyricOffsetChange(this.fixDeltaMills / 1000);
       this.lyricSyncDialog = false;
       this.fixState = "ready";
-      this.$q.notify({message: `歌词偏移量(${this.fixDeltaMills/1000}s)已应用`, timeout: 500})
+      this.$q.notify({message: this.$t('audioplayer.lyricOffsetApplied', { delta: (this.fixDeltaMills/1000).toFixed(2) }), timeout: 500})
     },
 
     ...mapMutations('AudioPlayer', {
@@ -649,7 +646,7 @@ export default {
 
     setPIPLyrics() {
       if (!this.enablePIPLyrics) {
-        this.$q.notify({message: "创建桌面歌词组件中，请稍等...", timeout: 500})
+        this.$q.notify({message: this.$t('audioplayer.creatingPIPLyrics'), timeout: 500})
       }
       this.setEnablePIPLyrics(!this.enablePIPLyrics)
     },

@@ -5,7 +5,7 @@
         <q-btn
           class="col"
           color="negative"
-          label="终止扫描进程"
+          :label="$t('scanner.killScan')"
           :disable="state !== 'running' || !(loggedIn || $socket.connected)"
           @click="killScanProceess()"
         />
@@ -15,7 +15,7 @@
         <q-btn
           class="col"
           color="primary"
-          label="扫描本地音声库"
+          :label="$t('scanner.scanLibrary')"
           :disable="state === 'running' || !(loggedIn || $socket.connected)"
           @click="performScan()"
         />
@@ -25,7 +25,7 @@
         <q-btn
           class="col"
           color="primary"
-          label="刷新音声库信息"
+          :label="$t('scanner.refreshLibrary')"
           :disable="state === 'running' || !(loggedIn || $socket.connected)"
           @click="performUpdate()"
         />
@@ -35,7 +35,7 @@
         <q-btn
           class="col"
           color="secondary"
-          label="扫描作品内文件变化"
+          :label="$t('scanner.scanFileChanges')"
           :disable="state === 'running' || !(loggedIn || $socket.connected)"
           @click="performWorkFileScan()"
         />
@@ -77,10 +77,10 @@
         align="justify"
         narrow-indicator
       >
-        <q-tab name="tasks" icon="hourglass_full" label="处理中">
+        <q-tab name="tasks" icon="hourglass_full" :label="$t('scanner.processing')">
           <q-badge v-show="tasks.length > 0" color="primary" floating>{{tasks.length}}</q-badge>
         </q-tab>
-        <q-tab name="failedTasks" icon="error_outline" label="处理失败">
+        <q-tab name="failedTasks" icon="error_outline" :label="$t('scanner.failed')">
           <q-badge v-show="failedTasks.length > 0" color="negative" floating>{{failedTasks.length}}</q-badge>
         </q-tab>
       </q-tabs>
@@ -180,8 +180,8 @@ export default {
       tab: 'tasks',
       state: null, // ['running', 'finished', 'error']
       loggedIn: false,
-      tasks: [], // 正在处理中的并行任务
-      failedTasks: [], // 处理失败的任务
+      tasks: [],
+      failedTasks: [],
       mainLogs: [],
       results: []
     }
@@ -256,22 +256,22 @@ export default {
       this.loggedIn = true
     },
     onConnectError () {
-      this.showErrNotif('连接Socket失败')
+      this.showErrNotif(this.$t('scanner.socketConnectFail'))
     },
   },
 
   computed: {
     allLogs () {
       const resultLogs = this.results.map(res => {
+        const prefix = res.rjcode.startsWith('d_') ? '' : 'RJ'
+        const code = `${prefix}${res.rjcode}`
+        const count = res.count
         if (res.result === 'added') {
-          const prefix = res.rjcode.startsWith('d_') ? '' : 'RJ'
-          return { level: 'info', message: `[${prefix}${res.rjcode}] 添加成功! Added: ${res.count}` }
+          return { level: 'info', message: this.$t('scanner.addedSuccess', { code, count }) }
         } else if (res.result === 'updated') {
-          const prefix = res.rjcode.startsWith('d_') ? '' : 'RJ'
-          return { level: 'info', message: `[${prefix}${res.rjcode}] 更新成功! Updated: ${res.count}` }
+          return { level: 'info', message: this.$t('scanner.updatedSuccess', { code, count }) }
         } else {
-          const prefix = res.rjcode.startsWith('d_') ? '' : 'RJ'
-          return { level: 'error', message: `[${prefix}${res.rjcode}] 处理失败! Failed: ${res.count}` }
+          return { level: 'error', message: this.$t('scanner.processFailed', { code, count }) }
         }
       })
       return this.mainLogs.concat(resultLogs)

@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { nameToUUID } = require('../scraper/utils');
+const { canonicalizeTagName } = require('../scraper/tag-aliases');
 
 /**
  * Format ID: pad DLsite numeric ids to RJ form (6 or 8 digits).
@@ -142,6 +143,12 @@ const makeQueries = (knex) => {
     return id;
   };
 
+  // Tag-specific resolver: canonicalizes the scraped name (new → old) before
+  // UUID resolution so a DLsite rename folds onto the existing t_tag row
+  // instead of splitting into two. See scraper/tag-aliases.json.
+  const resolveTagLabel = async (trx, name) =>
+    resolveLabel(trx, 't_tag', canonicalizeTagName(name));
+
   /**
    * Takes a work metadata object and inserts it into the database.
    * @param {Object} work Work object.
@@ -168,9 +175,9 @@ const makeQueries = (knex) => {
         rank: work.rank ? JSON.stringify(work.rank) : null,
       });
 
-    // Tags
+    // Tags (canonicalized: a renamed DLsite tag folds onto the old-name row)
     for (const tag of work.tags) {
-      const tagId = await resolveLabel(trx, 't_tag', tag.name);
+      const tagId = await resolveTagLabel(trx, tag.name);
       await trx.raw('INSERT OR IGNORE INTO r_tag_work(tag_id, work_id) VALUES (?, ?)', [tagId, work.id]);
     }
 
@@ -269,7 +276,7 @@ const makeQueries = (knex) => {
         await trx('r_tag_work').where('work_id', work.id).del();
       }
       for (const tag of work.tags) {
-        const tagId = await resolveLabel(trx, 't_tag', tag.name);
+        const tagId = await resolveTagLabel(trx, tag.name);
         await trx.raw('INSERT OR IGNORE INTO r_tag_work(tag_id, work_id) VALUES (?, ?)', [tagId, work.id]);
       }
     }
@@ -335,7 +342,7 @@ const makeQueries = (knex) => {
     await trx('r_tag_work').where('work_id', workId).del();
     const newTagIds = [];
     for (const tag of data.tags) {
-      const id = await resolveLabel(trx, 't_tag', tag.name);
+      const id = await resolveTagLabel(trx, tag.name);
       newTagIds.push(id);
       await trx.raw('INSERT OR IGNORE INTO r_tag_work(tag_id, work_id) VALUES (?, ?)', [id, workId]);
     }
@@ -1080,7 +1087,7 @@ const makeQueries = (knex) => {
 
   return {
     nsfwFilter,
-    resolveLabel,
+    resolveLabel, resolveTagLabel,
     insertWorkMetadata, getWorkMetadata, removeWork, getWorksBy, getWorksByKeyWord, updateWorkMetadata,
     editWorkMetadata,
     getLabels, getMetadata,
