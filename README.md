@@ -109,6 +109,65 @@ npm run dev:frontend   # Frontend only (quasar dev)
 npm run build:frontend # Build frontend only
 ```
 
+### Windows Portable Build
+
+A self-contained Windows distribution that runs without installing Node or ffmpeg:
+the `Kikoenai/` folder bundles Node 22 LTS, Windows-native `sqlite3`, and
+`ffmpeg`/`ffprobe`. Unzip and double-click `Kikoenai.bat`.
+
+**Building (on a Windows host):**
+
+```bash
+npm install
+npm run package:windows   # -> package/dist/Kikoenai-windows-x64-<version>.zip
+```
+
+Or via CI: pushing a `v*` tag runs `.github/workflows/package-windows.yml` on
+`windows-latest` and attaches the zip to a draft GitHub release. `workflow_dispatch`
+builds it manually without tagging.
+
+**First run:** Windows SmartScreen may warn because the build is unsigned — choose
+*More info* → *Run anyway*. Point your voice-work library at a folder via the admin
+panel (config → root folders); `VoiceWork/` next to the launcher is only a default
+fallback.
+
+**Where your data lives:** `config/`, `sqlite/`, `covers/`, and the `VoiceWork/`
+fallback are created next to `Kikoenai.bat` (the archive root), matching the
+legacy `pkg` build so migration is a folder copy.
+
+#### Migrating from the KirieHaruna / legacy pkg build
+
+The old fork shipped a single `kikoeru-express.exe` with `config/`, `sqlite/`,
+and `covers/` as its siblings. This build replaces the exe with a launcher +
+`node/` + `app/` + `ffmpeg/`, but keeps the four data folders at the same level.
+
+1. Unzip the new `Kikoenai/` folder.
+2. Copy your existing `config/`, `sqlite/`, and `covers/` (plus `VoiceWork/` if you
+   used it) from the old `kikoeru-win-x64-<ver>/` next to `Kikoenai.bat`.
+3. Start it. The app reads the same `config.json` (new keys are auto-filled on
+   startup), the same SQLite DB (Knex migrations apply on boot), and the same
+   `rootFolders` (absolute disk paths to your library — unaffected by the move).
+
+**Cover-path gotcha (pre-existing, not a regression):** `coverUseDefaultPath`
+defaults to `false`, so `coverFolderDir` follows the absolute path stored in
+`config.json`, which after a move still points at the old install's `covers/`. If
+covers don't appear, set `coverUseDefaultPath: true` (or re-point `coverFolderDir`
+in the admin panel) and copy `covers/` into the new root. The DB needs no such fix
+— `dbUseDefaultPath: true` always re-resolves `sqlite/` to the launcher root, so
+it's portable.
+
+> The legacy `pkg` single-executable packaging (`backend/package.json` `pkg`
+> block and `build` script) has been removed; it was deprecated (Node 18 cap) and
+> unused.
+
+#### macOS
+
+Deferred. The portable-folder approach ports cheaply (same `KIKO_DATA_DIR`
+design + a `.command` launcher + darwin Node + macOS ffmpeg), but distributing an
+unsigned Mac build forces recipients through a Terminal `xattr` workaround
+(Gatekeeper). A decent distributed-Mac experience effectively requires the
+$99/year Apple Developer ID + notarization — decide that before building Mac.
+
 ## Integration
 
 The frontend builds directly into `backend/dist/`, which is served as static content by the Express server. This is configured via `distDir` in `frontend/quasar.config.js`.
