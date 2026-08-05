@@ -468,7 +468,10 @@ export default {
 // nav labels (e.g. "Contrast: System Default") pre-wrap at the final width.
 // Without this, the mini→overlay width animation reflows the text every hover,
 // making labels flicker between wrapping and not wrapping.
-  aside.q-drawer .q-scrollarea {
+// Scoped to :not(.q-drawer--mini) so the folded (57px) view keeps its natural
+// width — otherwise Quasar centers the lone icon in a 230px q-item and the
+// 57px clip hides it, leaving the rail blank ("white/hidden" icons).
+  aside.q-drawer:not(.q-drawer--mini) .q-scrollarea {
     width: 230px;
     min-width: 230px;
   }
