@@ -64,7 +64,7 @@
     <q-card class="q-ma-md q-pa-sm">
       <q-table
         :title="$t('usermanage.allUsers')"
-        :data="users"
+        :rows="users"
         :columns="columnsWithLabels"
         row-key="name"
         :selected-rows-label="getSelectedString"
