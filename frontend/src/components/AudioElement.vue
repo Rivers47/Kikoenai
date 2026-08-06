@@ -137,6 +137,7 @@ export default {
       'enablePIPLyrics',
       'workLastTrackId',
       'autoMarkListened',
+      'flipLRChannel',
     ]),
 
     ...mapGetters('AudioPlayer', [
@@ -155,6 +156,11 @@ export default {
       if (this.plyr && this.plyr.duration) {
         flag ? this.plyr.play() : this.plyr.pause()
       }
+    },
+
+    // swap L/R channels; graph persists once built, toggle rewires it
+    flipLRChannel () {
+      this.applyFlipLRChannel()
     },
 
     source (url, oldUrl) {
@@ -624,13 +630,49 @@ export default {
     },
 
     initAudioAnalyzer () {
-      // Audio analyzer setup will be added when the reverse-channel UI is introduced.
-    }
+      // retained as a no-op hook; flip is applied lazily via applyFlipLRChannel
+    },
+
+    // createMediaElementSource 是单向门：一旦调用，媒体输出即被该 AudioContext
+    // 接管，无法回到原生路径。因此首启后整条路由保留，切换只改 splitter->merger
+    // 的接法（交叉 vs 正常），close 仅在组件卸载时执行。
+    applyFlipLRChannel () {
+      const media = this.plyr && this.plyr.media
+      if (!media) return
+
+      // 首次开启：构建路由并缓存节点
+      if (!this._lrCtx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext
+        if (!AudioCtx) return
+        const ctx = new AudioCtx()
+        const src = ctx.createMediaElementSource(media)
+        const splitter = ctx.createChannelSplitter(2)
+        const merger = ctx.createChannelMerger(2)
+        src.connect(splitter)
+        merger.connect(ctx.destination)
+        if (ctx.state === 'suspended') ctx.resume()
+        this._lrCtx = ctx
+        this._lrSrc = src
+        this._lrSplitter = splitter
+        this._lrMerger = merger
+      }
+
+      // 重接 splitter -> merger：开启时交叉，关闭时正常
+      try { this._lrSplitter.disconnect() } catch (e) { /* already disconnected */ }
+      if (this.flipLRChannel) {
+        this._lrSplitter.connect(this._lrMerger, 0, 1) // L -> right out
+        this._lrSplitter.connect(this._lrMerger, 1, 0) // R -> left out
+      } else {
+        this._lrSplitter.connect(this._lrMerger, 0, 0) // L -> left out
+        this._lrSplitter.connect(this._lrMerger, 1, 1) // R -> right out
+      }
+    },
   },
 
   mounted () {
     this.initPlyr();
     this.initAudioAnalyzer();
+    if (this.flipLRChannel) this.applyFlipLRChannel();
     this.createLrcObj();
     if (this.source) {
       this._loadSource(this.source);
@@ -645,6 +687,10 @@ export default {
       if (media) {
         media.removeEventListener('ended', this.onEnded);
       }
+    }
+    if (this._lrCtx) {
+      try { this._lrCtx.close() } catch (e) { /* already closed */ }
+      this._lrCtx = this._lrSrc = this._lrSplitter = this._lrMerger = null
     }
    },
 }

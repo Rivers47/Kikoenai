@@ -8,4 +8,6 @@ export default {
   autoMarkListenedCaption: 'Automatically mark a work as listened when its last track finishes',
   autoMarkEnabled: 'Auto-mark enabled',
   autoMarkDisabled: 'Auto-mark disabled',
+  swapSeekButton: 'Swap seek and skip buttons',
+  swapSeekButtonCaption: 'Use the previous/next buttons as rewind/forward seek buttons',
 }

@@ -8,4 +8,6 @@ export default {
   autoMarkListenedCaption: '播放到最后一轨时自动将作品标记为已听完',
   autoMarkEnabled: '已开启自动标记',
   autoMarkDisabled: '已关闭自动标记',
+  swapSeekButton: '交换进度按钮与切换按钮',
+  swapSeekButtonCaption: '将上一首/下一首按钮用作后退/前进快进按钮',
 }

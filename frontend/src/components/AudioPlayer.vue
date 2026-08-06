@@ -100,7 +100,7 @@
               dense 
               size="md" 
               padding="none sm" 
-              icon="fullscreen" 
+              :icon="isFullScreenPage ? 'fullscreen_exit' : 'fullscreen'"
               @click="gotoFullScreenPlayer"
             >
               <q-tooltip anchor="top middle" self="bottom middle">
@@ -120,15 +120,6 @@
                 {{ $t('audioplayer.moreSettings') }}
               </q-tooltip>
               <q-menu anchor="bottom right" self="top right">
-                <q-item clickable v-ripple @click="toggleSwapSeekButton">
-                  <q-item-section avatar>
-                    <q-icon :name="swapSeekButton ? 'done' : ''" />
-                  </q-item-section>
-                  <q-item-section>
-                    {{ $t('audioplayer.swapSeekButton') }}
-                  </q-item-section>
-                </q-item>
-                
                 <q-item clickable v-ripple @click="openWorkDetail()" v-close-popup>
                   <q-item-section avatar>
                     <!-- placeholder -->
@@ -170,6 +161,20 @@
                         </div>
                       </template>
                     </q-input>
+                  </q-item-section>
+                </q-item>
+
+                <q-item>
+                  <q-item-section>
+                    <q-item-label>{{ $t('audioplayer.flipLRChannel') }}</q-item-label>
+                    <q-item-label caption>{{ $t('audioplayer.flipLRChannelCaption') }}</q-item-label>
+                  </q-item-section>
+                  <q-item-section avatar>
+                    <q-toggle
+                      :model-value="flipLRChannel"
+                      @update:model-value="onFlipLRChannelChange"
+                      dense
+                    />
                   </q-item-section>
                 </q-item>
               </q-menu>
@@ -418,6 +423,10 @@ export default {
       return (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) && !this.hide;
     },
 
+    isFullScreenPage () {
+      return this.$route.path.startsWith('/fullScreenPlayer');
+    },
+
     coverUrl () {
       // 从 LocalStorage 中读取 token
       const token = this.$q.localStorage.getItem('jwt-token') || ''
@@ -553,7 +562,6 @@ export default {
       'sleepTracksLeft',
       'rewindSeekTime',
       'forwardSeekTime',
-      'swapSeekButton',
       'enablePIPLyrics',
       'playWorkId',
       'rewindSeekMode',
@@ -561,6 +569,7 @@ export default {
       'hasLyric',
       'lyricOffsetSeconds',
       'visualPlayerCoverUrl',
+      'flipLRChannel',
     ]),
     
     ...mapGetters('AudioPlayer', [
@@ -599,7 +608,6 @@ export default {
       setVolume: 'SET_VOLUME',
       rewind: 'SET_REWIND_SEEK_MODE',
       forward: 'SET_FORWARD_SEEK_MODE',
-      toggleSwapSeekButton: 'TOGGLE_SWAP_SEEK_BUTTON',
       setEnablePIPLyrics: 'SET_ENABLE_PIP_LYRICS',
       setLyricOffsetSeconds: 'SET_LYRIC_OFFSET_SECONDS',
     }),
@@ -774,7 +782,12 @@ export default {
     },
 
     gotoFullScreenPlayer() {
-      this.$router.push(`/fullScreenPlayer`)
+      // ponytail: 已在全屏页时再次点击则退出全屏，回到对应作品详情页
+      if (this.isFullScreenPage) {
+        this.$router.push(`/work/${this.playWorkId}`)
+      } else {
+        this.$router.push('/fullScreenPlayer')
+      }
     },
 
     lyricOffsetChange(seconds) {
@@ -782,6 +795,10 @@ export default {
       seconds = Math.round(seconds * 10000) / 10000; // 解决javascript小数点精度问题，比如0.9+0.1变成0.999999这种问题，在这里修复成1.0
       console.log("lyric offset change to ", seconds, typeof seconds)
       this.setLyricOffsetSeconds(seconds)
+    },
+
+    onFlipLRChannelChange(value) {
+      this.$store.commit('AudioPlayer/SET_FLIP_LR_CHANNEL', value)
     },
 
     onKeyDown(event) {

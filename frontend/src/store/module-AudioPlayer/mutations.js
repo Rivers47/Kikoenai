@@ -1,6 +1,6 @@
 import { LocalStorage, SessionStorage } from 'quasar'
 import getters from './getters'
-import state, { SWAP_SEEK_BUTTON_KEY, ENABLE_PIP_LYRICS, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, AUTO_MARK_LISTENED_KEY, REWIND_SEEK_TIME_KEY, FORWARD_SEEK_TIME_KEY, SLEEP_TIMER_KEY } from './state'
+import state, { SWAP_SEEK_BUTTON_KEY, FLIP_LR_CHANNEL_KEY, ENABLE_PIP_LYRICS, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, AUTO_MARK_LISTENED_KEY, REWIND_SEEK_TIME_KEY, FORWARD_SEEK_TIME_KEY, SLEEP_TIMER_KEY } from './state'
 
 const mutations = {
   TOGGLE_HIDE (state) {
@@ -199,14 +199,15 @@ const mutations = {
   //   state.audioElement = value
   // }
   
-  TOGGLE_SWAP_SEEK_BUTTON: (state) => {
-    state.swapSeekButton = !state.swapSeekButton
+  SET_SWAP_SEEK_BUTTON: (state, value) => {
+    state.swapSeekButton = value
     LocalStorage.set(SWAP_SEEK_BUTTON_KEY, state.swapSeekButton)
   },
 
-  SET_AUDIO_ANALYSER: (state, value) => {
-    state.audioAnalyser = value;
-  }, // kept: channel reversal relies on this mutation to store the analyser object
+  SET_FLIP_LR_CHANNEL: (state, value) => {
+    state.flipLRChannel = value
+    LocalStorage.set(FLIP_LR_CHANNEL_KEY, state.flipLRChannel)
+  },
 
   SET_ENABLE_PIP_LYRICS: (state, value) => {
     state.enablePIPLyrics = value

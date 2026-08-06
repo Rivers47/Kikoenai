@@ -56,6 +56,21 @@
         </q-item-section>
       </q-item>
 
+      <q-item style="height: 70px;">
+        <q-item-section>
+          <q-item-label>{{ $t('settings.swapSeekButton') }}</q-item-label>
+          <q-item-label caption>{{ $t('settings.swapSeekButtonCaption') }}</q-item-label>
+        </q-item-section>
+
+        <q-item-section avatar>
+          <q-toggle
+            :model-value="swapSeekButton"
+            @update:model-value="onSwapSeekChange"
+            dense
+          />
+        </q-item-section>
+      </q-item>
+
       <q-separator />
 
       <q-item style="height: 70px;">
@@ -111,6 +126,7 @@ export default {
     ...mapState('AudioPlayer', [
       'autoMarkListened',
       'oldWorkCardUIStyle',
+      'swapSeekButton',
       'rewindSeekTime',
       'forwardSeekTime',
     ]),
@@ -144,6 +160,10 @@ export default {
 
     onLegacyCardChange (value) {
       this.$store.commit('AudioPlayer/SET_OLD_WORK_CARD_UI_STYLE', value)
+    },
+
+    onSwapSeekChange (value) {
+      this.$store.commit('AudioPlayer/SET_SWAP_SEEK_BUTTON', value)
     },
 
     onRewindChange (value) {

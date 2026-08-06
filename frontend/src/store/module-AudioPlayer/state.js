@@ -1,6 +1,7 @@
 import { LocalStorage } from 'quasar'
 
 export const SWAP_SEEK_BUTTON_KEY = 'swap_seek_button'
+export const FLIP_LR_CHANNEL_KEY = 'flip_lr_channel'
 export const ENABLE_PIP_LYRICS = 'enable_pip_lyrics'
 export const AI_SERVER_URL_KEY = 'ai_server_url'
 export const OLD_WORK_CARD_UI_STYLE_KEY = 'old_work_card_ui_style_key'
@@ -48,8 +49,8 @@ export default function () {
     visualPlayerCoverUrl: '', // 可视化播放器的封面图
     playWorkId: 0, // 当前播放作品的id
 
-    audioAnalyser: null, // kept for AudioEqualizer.flipLeftRightChannel channel reversal; UI to be added later
-    // audioAnalyzerData: null, // 解析音频信息，可视化展示
+    // swap L/R; graph stays for the session once built, off = passthrough
+    flipLRChannel: LocalStorage.has(FLIP_LR_CHANNEL_KEY) && LocalStorage.getItem(FLIP_LR_CHANNEL_KEY),
 
     // 是否启用画中画歌词（桌面歌词）
     // 注意android chrome不支持画中画，firefox估计也不支持，因此在android设备上禁用这一功能
