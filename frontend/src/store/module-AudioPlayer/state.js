@@ -5,6 +5,8 @@ export const ENABLE_PIP_LYRICS = 'enable_pip_lyrics'
 export const AI_SERVER_URL_KEY = 'ai_server_url'
 export const OLD_WORK_CARD_UI_STYLE_KEY = 'old_work_card_ui_style_key'
 export const AUTO_MARK_LISTENED_KEY = 'auto_mark_listened'
+export const REWIND_SEEK_TIME_KEY = 'rewind_seek_time'
+export const FORWARD_SEEK_TIME_KEY = 'forward_seek_time'
 // sessionStorage 中持久化睡眠定时的键，值为 { type, stopAt, tracksLeft }
 export const SLEEP_TIMER_KEY = 'sleepTimer'
 
@@ -38,8 +40,8 @@ export default function () {
     sleepModeType: null,       // 'minutes' | 'tracks'
     sleepStopAt: null,         // minutes 模式：停止播放的时间戳 (ms)
     sleepTracksLeft: 0,        // tracks 模式：当前曲目之后还需播放的曲目数，为 0 时当前曲目结束即停止
-    rewindSeekTime: 5,
-    forwardSeekTime: 30,
+    rewindSeekTime: LocalStorage.has(REWIND_SEEK_TIME_KEY) ? LocalStorage.getItem(REWIND_SEEK_TIME_KEY) : 5,
+    forwardSeekTime: LocalStorage.has(FORWARD_SEEK_TIME_KEY) ? LocalStorage.getItem(FORWARD_SEEK_TIME_KEY) : 30,
     rewindSeekMode: false,
     forwardSeekMode: false,
     swapSeekButton: LocalStorage.has(SWAP_SEEK_BUTTON_KEY) && LocalStorage.getItem(SWAP_SEEK_BUTTON_KEY), // 交换进度按钮与切换按钮

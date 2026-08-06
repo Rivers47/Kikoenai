@@ -26,11 +26,11 @@
       v-model="drawerOpen"
       show-if-above
       :mini="miniState"
-      @mouseover="miniState = false"
-      @mouseout="miniState = true"
+      @mouseenter="miniState = false"
+      @mouseleave="miniState = true"
       mini-to-overlay
-
-      :width="230"
+      no-mini-animation
+      :width="220"
       :breakpoint="500"
       bordered
       content-class=""
@@ -94,7 +94,7 @@
             </q-item-section>
           </q-item>
 
-          <q-item
+          <!-- <q-item
             clickable
             v-ripple
             exact
@@ -109,43 +109,8 @@
                 {{ $t('mainlayout.contrastMode', { mode: contrastModeLabel }) }}
               </q-item-label>
             </q-item-section>
-          </q-item>
+          </q-item> -->
 
-          <q-item
-            clickable
-            v-ripple
-            exact
-            @click="cycleLanguage"
-          >
-            <q-item-section avatar>
-              <q-icon name="language" />
-            </q-item-section>
-
-            <q-item-section>
-              <q-item-label class="text-subtitle1">
-                {{ currentLanguageLabel }}
-              </q-item-label>
-              <q-item-label caption lines="2">{{ $t('mainlayout.language') }}</q-item-label>
-            </q-item-section>
-          </q-item>
-
-          <q-item
-            clickable
-            v-ripple
-            exact
-            @click="$store.commit('AudioPlayer/SET_AUTO_MARK_LISTENED', !autoMarkListened)"
-          >
-            <q-item-section avatar>
-              <q-icon :name="autoMarkListened ? 'task_alt' : 'task'" />
-            </q-item-section>
-
-            <q-item-section>
-              <q-item-label class="text-subtitle1">
-                {{ $t('mainlayout.autoMarkListened') }}
-              </q-item-label>
-              <q-item-label caption lines="2">{{ autoMarkListened ? $t('mainlayout.enabled') : $t('mainlayout.disabled') }}</q-item-label>
-            </q-item-section>
-          </q-item>
         </q-list>
 
         <q-list>
@@ -220,7 +185,6 @@ import NotifyMixin from '../mixins/Notification.js'
 import { mapMutations, mapState, mapGetters } from 'vuex'
 import { Dark } from 'quasar'
 import { CONTRAST_MODES, getContrastMode, setContrastMode } from 'src/utils/contrast'
-import { changeLanguage, getCurrentLocale } from 'src/boot/i18n.js'
 
 export default {
   name: 'MainLayout',
@@ -243,7 +207,6 @@ export default {
       randId: null,
       showScroller: false,
       contrastMode: getContrastMode(),
-      currentLanguage: getCurrentLocale(),
       links: [
         { titleKey: 'mediaLibrary', icon: 'widgets', path: '/' },
         { titleKey: 'fullScreenMode', icon: 'play_circle', path: '/fullScreenPlayer' },
@@ -253,7 +216,6 @@ export default {
         { titleKey: 'voiceActors', icon: 'mic', path: '/vas' },
         { titleKey: 'settings', icon: 'tune', path: '/admin' },
       ],
-      sharedConfig: {}
     }
   },
 
@@ -265,16 +227,11 @@ export default {
     randId () {
       this.$router.push(`/work/${this.randId}`)
     },
-    sharedConfig (config) {
-      this.SET_REWIND_SEEK_TIME(config.rewindSeekTime);
-      this.SET_FORWARD_SEEK_TIME(config.forwardSeekTime);
-    },
   },
 
   mounted () {
     this.initUser();
     this.checkUpdate();
-    this.readSharedConfig();
   },
 
   computed: {
@@ -285,20 +242,6 @@ export default {
         'contrast-high': this.$t('mainlayout.contrastHigh'),
       }
       return labels[this.contrastMode] || ''
-    },
-
-    languageOptions () {
-      return [
-        { value: 'zh-CN', label: this.$t('mainlayout.langZhCN') },
-        { value: 'en-US', label: this.$t('mainlayout.langEnUS') },
-        { value: 'ja-JP', label: this.$t('mainlayout.langJaJP') },
-        { value: 'zh-TW', label: this.$t('mainlayout.langZhTW') },
-      ]
-    },
-
-    currentLanguageLabel () {
-      const opt = this.languageOptions.find(o => o.value === this.currentLanguage)
-      return opt ? opt.label : this.currentLanguage
     },
 
     isNotAtHomePage () {
@@ -319,7 +262,6 @@ export default {
     ...mapState('AudioPlayer', [
       'playWorkId',
       'enablePIPLyrics',
-      'autoMarkListened',
     ]),
 
     ...mapGetters('AudioPlayer', [
@@ -329,8 +271,6 @@ export default {
 
   methods: {
     ...mapMutations('AudioPlayer', [
-      'SET_REWIND_SEEK_TIME',
-      'SET_FORWARD_SEEK_TIME',
       'SET_AI_SERVER_URL',
     ]),
     initUser () {
@@ -398,30 +338,6 @@ export default {
         })
     },
 
-    readSharedConfig(){
-      this.$axios.get('/api/config/shared')
-        .then((response) => {
-           this.sharedConfig = response.data.sharedConfig;
-        })
-        .catch((error) => {
-          if (error.response) {
-            // 请求已发出，但服务器响应的状态码不在 2xx 范围内
-            if (error.response.status === 401) {
-              // this.showWarnNotif(error.response.data.error)
-              // 验证失败，跳转到登录页面
-              const path = this.$router.currentRoute.path
-              if (path !=='/login') {
-                this.$router.push('/login');
-              }
-            } else {
-              this.showErrNotif(error.response.data.error || `${error.response.status} ${error.response.statusText}`)
-            }
-          } else {
-            this.showErrNotif(error.message || error)
-          }
-        })
-    },
-
     randomPlay() {
       this.requestRandomWork();
     },
@@ -467,14 +383,6 @@ export default {
       this.contrastMode = next
     },
 
-    async cycleLanguage () {
-      const opts = this.languageOptions
-      const idx = opts.findIndex(o => o.value === this.currentLanguage)
-      const next = opts[(idx + 1) % opts.length]
-      await changeLanguage(next.value)
-      this.currentLanguage = next.value
-    },
-
     getLinks() {
       return this.links.filter(link => {
         if (link.path === '/fullScreenPlayer' && this.playWorkId == 0)
@@ -513,16 +421,22 @@ export default {
 // Scoped to :not(.q-drawer--mini) so the folded (57px) view keeps its natural
 // width — otherwise Quasar centers the lone icon in a 230px q-item and the
 // 57px clip hides it, leaving the rail blank ("white/hidden" icons).
-  aside.q-drawer:not(.q-drawer--mini) .q-scrollarea {
-    width: 230px;
-    min-width: 230px;
+aside.q-drawer:not(.q-drawer--mini) .q-scrollarea {
+  width: 210px;
+  min-width: 210px;
+
+  // The vertical scrollbar steals ~15px of width, leaving the viewport
+  // narrower than the 230px content above -> Quasar shows a horizontal
+  // thumb. Nav labels never need horizontal scroll, so clip it.
+  //overflow-x: hidden;
+  //actually instead we set the above width to alight less than the q-drawer width
   }
 // ponytail: 230 matches :width on the q-drawer above; bump both together if the
 // drawer is widened.
   aside.q-drawer .q-item__label {
     white-space: normal;
     word-break: break-word;
-  }
+}
 
 // 中心主要页面的尺寸样式
 .page-container-style {

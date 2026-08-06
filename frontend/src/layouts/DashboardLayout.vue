@@ -15,7 +15,7 @@
       @mouseover="miniState = false"
       @mouseout="miniState = true"
       mini-to-overlay
-
+      no-mini-animation
       :width="200"
       :breakpoint="500"
       bordered
@@ -90,6 +90,11 @@ export default {
           path: '/admin/backfill'
         },
         {
+          title: this.$t('dashboardlayout.generalSettings'),
+          icon: 'tune',
+          path: '/admin/settings'
+        },
+        {
           title: this.$t('dashboardlayout.advancedSettings'),
           icon: 'settings',
           path: '/admin/advanced'
@@ -143,5 +148,16 @@ export default {
 <style lang="scss" scoped>
   a {
     text-decoration:none;
+  }
+
+  aside.q-drawer:not(.q-drawer--mini) .q-scrollarea {
+  width: 200px;
+  min-width: 200px;
+  }
+// ponytail: 230 matches :width on the q-drawer above; bump both together if the
+// drawer is widened.
+  aside.q-drawer .q-item__label {
+    white-space: normal;
+    word-break: break-word;
   }
 </style>

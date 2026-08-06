@@ -2,62 +2,6 @@
   <q-form @submit="onSubmit">
     <q-card class="q-ma-md">
       <q-toolbar>
-        <q-toolbar-title>{{ $t('advanced.webPrefsTitle') }}</q-toolbar-title>
-      </q-toolbar>
-
-      <q-list>
-        <q-item style="height: 70px;">
-          <q-item-section>
-            <q-item-label>{{ $t('advanced.legacyCardUi') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.legacyCardUiCaption') }}</q-item-label>
-          </q-item-section>
-
-          <q-item-section avatar>
-            <q-toggle :model-value="oldWorkCardUIStyle" @update:model-value="changeOldWorkCardUIStyle" dense/>
-          </q-item-section>
-        </q-item>
-      </q-list>
-    </q-card>
-    <q-card class="q-ma-md">
-      <q-toolbar>
-        <q-toolbar-title>{{ $t('advanced.playerSettings') }}</q-toolbar-title>
-      </q-toolbar>
-
-      <q-list>
-        <q-item style="height: 70px;">
-          <q-item-section>
-            <q-item-label>{{ $t('advanced.rewindSeconds') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.rewindSecondsCaption') }}</q-item-label>
-          </q-item-section>
-
-          <q-item-section avatar>
-            <div class="q-gutter-sm">
-              <q-radio dense v-model="rewindSeekTime" :val="5" :label="`5 ${$t('advanced.secondsUnit')}`" />
-              <q-radio dense v-model="rewindSeekTime" :val="10" :label="`10 ${$t('advanced.secondsUnit')}`" />
-              <q-radio dense v-model="rewindSeekTime" :val="30" :label="`30 ${$t('advanced.secondsUnit')}`" />
-            </div>
-          </q-item-section>
-        </q-item>
-
-        <q-item>
-          <q-item-section>
-            <q-item-label>{{ $t('advanced.forwardSeconds') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.forwardSecondsCaption') }}</q-item-label>
-          </q-item-section>
-
-          <q-item-section avatar>
-            <div class="q-gutter-sm">
-              <q-radio dense v-model="forwardSeekTime" val="5" :label="`5 ${$t('advanced.secondsUnit')}`" />
-              <q-radio dense v-model="forwardSeekTime" val="10" :label="`10 ${$t('advanced.secondsUnit')}`" />
-              <q-radio dense v-model="forwardSeekTime" val="30" :label="`30 ${$t('advanced.secondsUnit')}`" />
-            </div>
-          </q-item-section>
-        </q-item>
-      </q-list>
-    </q-card>
-
-    <q-card class="q-ma-md">
-      <q-toolbar>
         <q-toolbar-title>{{ $t('advanced.scraperSettings') }}</q-toolbar-title>
       </q-toolbar>
 
@@ -378,7 +322,6 @@
 
 <script>
 import NotifyMixin from '../../mixins/Notification.js'
-import { mapState } from 'vuex'
 
 export default {
   name: 'Advanced',
@@ -389,15 +332,7 @@ export default {
     return {
       config: {},
       loading: false,
-      rewindSeekTime: '5',
-      forwardSeekTime: '30',
     }
-  },
-
-  computed: {
-    ...mapState('AudioPlayer', [
-      'oldWorkCardUIStyle',
-    ]),
   },
 
   methods: {
@@ -405,9 +340,6 @@ export default {
       this.$axios.get('/api/config/admin')
         .then((response) => {
           this.config = response.data.config;
-          // Integer => String
-          this.rewindSeekTime = this.config.rewindSeekTime.toString()
-          this.forwardSeekTime = this.config.forwardSeekTime.toString()
         })
         .catch((error) => {
           if (error.response) {
@@ -422,11 +354,8 @@ export default {
     },
 
     onSubmit () {
-      // String => Integer
-      this.config.rewindSeekTime = parseInt(this.rewindSeekTime)
-      this.config.forwardSeekTime = parseInt(this.forwardSeekTime)
-
       this.loading = true
+
       this.$axios.put('/api/config/admin', {
         config: this.config
       })
@@ -443,11 +372,6 @@ export default {
             this.showErrNotif(error.message || error)
           }
         })
-    },
-
-    changeOldWorkCardUIStyle(value) {
-      console.log("change old work card ui to: ", value, typeof(value));
-      this.$store.commit('AudioPlayer/SET_OLD_WORK_CARD_UI_STYLE', value);
     },
 
   },

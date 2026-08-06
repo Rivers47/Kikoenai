@@ -1,6 +1,6 @@
 import { LocalStorage, SessionStorage } from 'quasar'
 import getters from './getters'
-import state, { SWAP_SEEK_BUTTON_KEY, ENABLE_PIP_LYRICS, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, AUTO_MARK_LISTENED_KEY, SLEEP_TIMER_KEY } from './state'
+import state, { SWAP_SEEK_BUTTON_KEY, ENABLE_PIP_LYRICS, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, AUTO_MARK_LISTENED_KEY, REWIND_SEEK_TIME_KEY, FORWARD_SEEK_TIME_KEY, SLEEP_TIMER_KEY } from './state'
 
 const mutations = {
   TOGGLE_HIDE (state) {
@@ -142,9 +142,11 @@ const mutations = {
   },
   SET_REWIND_SEEK_TIME: (state, value) => {
     state.rewindSeekTime = value
+    LocalStorage.set(REWIND_SEEK_TIME_KEY, value)
   },
   SET_FORWARD_SEEK_TIME: (state, value) => {
     state.forwardSeekTime = value
+    LocalStorage.set(FORWARD_SEEK_TIME_KEY, value)
   },
   SET_REWIND_SEEK_MODE: (state, value) => {
     state.rewindSeekMode = value
