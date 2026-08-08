@@ -31,6 +31,12 @@ import { formatSeconds } from '../utils'
 import { debounce } from 'quasar';
 import Plyr from 'plyr'
 
+// Every media session action this component registers; teardown walks this
+// list to unregister them one by one.
+const MEDIA_SESSION_ACTIONS = [
+  'play', 'pause', 'nexttrack', 'previoustrack', 'seekbackward', 'seekforward'
+]
+
 function convert_srt_vtt_to_lrc(text) {
   let lines = text.split("\n").map(l => l.trim())
   let isVtt = lines[0] == 'WEBVTT';
@@ -191,13 +197,15 @@ export default {
     },
     rewindSeekMode(rewind) {
       if (rewind && this.plyr) {
-        this.plyr.rewind(this.rewindSeekTime);
+        this.plyr.rewind(this._osRewindOffset || this.rewindSeekTime);
+        this._osRewindOffset = null;
         this.SET_REWIND_SEEK_MODE(false);
       }
     },
     forwardSeekMode(forward) {
       if (forward && this.plyr) {
-        this.plyr.forward(this.forwardSeekTime);
+        this.plyr.forward(this._osForwardOffset || this.forwardSeekTime);
+        this._osForwardOffset = null;
         this.SET_FORWARD_SEEK_MODE(false);
       }
     },
@@ -507,65 +515,79 @@ export default {
       this.SET_HAS_LYRIC(false);
     },
 
+    // setActionHandler throws TypeError for actions the browser doesn't
+    // support. Wrap each call so one unsupported action can't prevent the
+    // remaining handlers from being registered.
+    setMediaSessionHandler(action, handler) {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler)
+      } catch (e) {
+        console.warn(`mediasession: action "${action}" not supported`, e)
+      }
+    },
+
     updateMediaSessionMetadata() {
       console.log("try update media session")
-      try {
-        if (this.playWorkId == 0) {
-          navigator.mediaSession.metadata = null;
-          navigator.mediaSession.setActionHandler('play', null);
-          navigator.mediaSession.setActionHandler('pause', null);
-          navigator.mediaSession.setActionHandler('nexttrack', null);
-          navigator.mediaSession.setActionHandler('previoustrack', null);
-          navigator.mediaSession.setActionHandler('seekbackward', null);
-          navigator.mediaSession.setActionHandler('seekforward', null);
-        } else {
-          navigator.mediaSession.metadata = new window.MediaMetadata({
-            title: this.currentPlayingFile.title,
-            artist: "",
-            album: this.currentPlayingFile.workTitle,
-            artwork: [
-              {
-                src: this.genCoverUrl(this.playWorkId, "main"),
-                sizes: "560x560",
-                type: "image/jpeg",
-              },
-              {
-                src: this.genCoverUrl(this.playWorkId, "240x240"),
-                sizes: "240x240",
-                type: "image/jpeg",
-              },
-              {
-                src: this.genCoverUrl(this.playWorkId, "sam"),
-                sizes: "100x100",
-                type: "image/jpeg",
-              },
-            ]
-          })
+      if (!('mediaSession' in navigator) || !window.MediaMetadata) return
 
-          navigator.mediaSession.setActionHandler('play', () => {
-            this.PLAY()
-            if (this.plyr) this.plyr.play()
-          })
-          navigator.mediaSession.setActionHandler('pause', () => {
-            this.PAUSE()
-            if (this.plyr) this.plyr.pause()
-          })
-          navigator.mediaSession.setActionHandler('nexttrack', () => {
-            this.NEXT_TRACK()
-          })
-          navigator.mediaSession.setActionHandler('previoustrack', () => {
-            this.PREVIOUS_TRACK()
-          })
-          navigator.mediaSession.setActionHandler('seekbackward', () => {
-            this.SET_REWIND_SEEK_MODE(true)
-          })
-          navigator.mediaSession.setActionHandler('seekforward', () => {
-            this.SET_FORWARD_SEEK_MODE(true)
-          })
-        }
-      } catch (e) {
-        console.warn("set mediasession failed, because: ", e)
+      if (this.playWorkId == 0) {
+        navigator.mediaSession.metadata = null;
+        MEDIA_SESSION_ACTIONS.forEach(action => this.setMediaSessionHandler(action, null));
+        return
       }
+
+      try {
+        navigator.mediaSession.metadata = new window.MediaMetadata({
+          title: this.currentPlayingFile.title,
+          artist: "",
+          album: this.currentPlayingFile.workTitle,
+          artwork: [
+            {
+              src: this.genCoverUrl(this.playWorkId, "main"),
+              sizes: "560x560",
+              type: "image/jpeg",
+            },
+            {
+              src: this.genCoverUrl(this.playWorkId, "240x240"),
+              sizes: "240x240",
+              type: "image/jpeg",
+            },
+            {
+              src: this.genCoverUrl(this.playWorkId, "sam"),
+              sizes: "100x100",
+              type: "image/jpeg",
+            },
+          ]
+        })
+      } catch (e) {
+        console.warn("set mediasession metadata failed, because: ", e)
+      }
+
+      this.setMediaSessionHandler('play', () => {
+        this.PLAY()
+        if (this.plyr) this.plyr.play()
+      })
+      this.setMediaSessionHandler('pause', () => {
+        this.PAUSE()
+        if (this.plyr) this.plyr.pause()
+      })
+      this.setMediaSessionHandler('nexttrack', () => {
+        this.NEXT_TRACK()
+      })
+      this.setMediaSessionHandler('previoustrack', () => {
+        this.PREVIOUS_TRACK()
+      })
+      // details.seekOffset is the offset suggested by the OS; prefer it, and
+      // fall back to the user's configured rewind/forward seconds when the OS
+      // doesn't supply one.
+      this.setMediaSessionHandler('seekbackward', (details) => {
+        this._osRewindOffset = (details && details.seekOffset) || null
+        this.SET_REWIND_SEEK_MODE(true)
+      })
+      this.setMediaSessionHandler('seekforward', (details) => {
+        this._osForwardOffset = (details && details.seekOffset) || null
+        this.SET_FORWARD_SEEK_MODE(true)
+      })
     },
 
     genCoverUrl(workId, type) {

@@ -77,4 +77,4 @@ Changes touching both packages (e.g. a new API endpoint used by a new Vue page):
 
 ## 6. Code Style
 
-Always write comments in English. If an old comment is edited, replace the whole in English.
+Always write comments in English.
