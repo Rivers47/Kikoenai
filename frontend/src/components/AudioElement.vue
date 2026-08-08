@@ -159,8 +159,18 @@ export default {
 
   watch: {
     playing (flag) {
+      if (flag) this.resumeAudioContext()
       if (this.plyr && this.plyr.duration) {
-        flag ? this.plyr.play() : this.plyr.pause()
+        // Only touch the element when it actually disagrees with the state.
+        // Vue watchers are async, so a redundant play() from here lands a tick
+        // after the lock-screen tap, outside its activation context. iOS then
+        // leaves the element in a playing state whose clock never advances and
+        // whose audio session is never reactivated: silent, frozen currentTime.
+        if (flag) {
+          if (this.plyr.paused) this.plyr.play().catch(() => {})
+        } else if (!this.plyr.paused) {
+          this.plyr.pause()
+        }
       }
     },
 
@@ -247,8 +257,23 @@ export default {
       this._reportTrackProgress()
     },
     onPlaying() {
+      this.resumeAudioContext()
       this.playLrc(true)
       this.PLAY()
+    },
+
+    // Once the flip-LR graph exists, createMediaElementSource has permanently
+    // rerouted the element's output through the context, so a suspended
+    // context means silent playback. The resume() at graph construction is not
+    // enough on its own: applyFlipLRChannel runs from mounted() when the
+    // setting is persisted on, which is before any user activation, and
+    // autoplay policy rejects a resume() there. Retrying on each play covers
+    // that, and any later suspension (iOS suspends the context when the audio
+    // session is interrupted, and never resumes it by itself).
+    resumeAudioContext () {
+      if (this._lrCtx && this._lrCtx.state === 'suspended') {
+        this._lrCtx.resume().catch(() => {})
+      }
     },
     onWaiting() {
       this.playLrc(false)
@@ -564,13 +589,20 @@ export default {
         console.warn("set mediasession metadata failed, because: ", e)
       }
 
+      // Drive the element synchronously here, before the mutation: this call
+      // is inside the activation context of the lock-screen tap, which is what
+      // iOS needs in order to reactivate the audio session. The watcher the
+      // mutation wakes up runs a tick later and will no-op.
       this.setMediaSessionHandler('play', () => {
+        // Resume here as well as in onPlaying: a media session action counts as
+        // an activation gesture, which iOS requires to honour resume().
+        this.resumeAudioContext()
+        if (this.plyr && this.plyr.paused) this.plyr.play().catch(() => {})
         this.PLAY()
-        if (this.plyr) this.plyr.play()
       })
       this.setMediaSessionHandler('pause', () => {
+        if (this.plyr && !this.plyr.paused) this.plyr.pause()
         this.PAUSE()
-        if (this.plyr) this.plyr.pause()
       })
       this.setMediaSessionHandler('nexttrack', () => {
         this.NEXT_TRACK()
