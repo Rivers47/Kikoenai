@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { check, validationResult } = require('express-validator'); // 后端校验
 const { md5 } = require('../auth/utils');
+const { destroyUserSessions } = require('../auth/session');
 const { config} = require('../config');
 const db = require('../database/db');
 
@@ -75,6 +76,8 @@ router.put('/user', [
 
   if (!config.auth || req.user.name === 'admin' || req.user.name === user.name) {
     db.updateUserPassword(user, newPassword)
+      // 改密后立即注销该用户的所有会话（包括发起本次请求的会话）
+      .then(() => destroyUserSessions(user.name))
       .then(() => res.send({ message: '密码修改成功.' }))
       .catch((err) => {
         if (err.message.indexOf('用户名错误.') !== -1) {

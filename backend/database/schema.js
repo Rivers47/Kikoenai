@@ -1,6 +1,6 @@
 const { knex } = require('./db');
 
-const dbVersion = '20260804000000';
+const dbVersion = '20260808000000';
 
 // 数据库结构
 const createSchema = () => knex.schema
@@ -132,6 +132,19 @@ const createSchema = () => knex.schema
     table.foreign('user_name').references('name').inTable('t_user').onDelete('CASCADE');
     table.foreign('work_id').references('id').inTable('t_work').onDelete('CASCADE');
     table.primary(['user_name', 'work_id', 'track_key']);
+  })
+  .createTable('t_session', (table) => {
+    table.string('id').notNullable(); // sha256 of the session secret, never the secret itself
+    table.string('user_name').notNullable();
+    // Epoch milliseconds, not a datetime column: knex's sqlite3 dialect does not
+    // serialize Date objects consistently, so an integer keeps `where expires_at > ?`
+    // unambiguous.
+    table.bigInteger('expires_at').notNullable();
+    table.timestamps(true, true);
+
+    table.foreign('user_name').references('name').inTable('t_user').onDelete('CASCADE');
+    table.primary(['id']);
+    table.index('expires_at');
   })
   .then(() => {
     console.log(' * 成功构建数据库结构.');

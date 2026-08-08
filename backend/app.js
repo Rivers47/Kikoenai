@@ -3,6 +3,7 @@ const path = require('path');
 const express = require('express');
 
 const compression = require('compression');
+const cookieParser = require('cookie-parser');
 const history = require('connect-history-api-fallback');
 const http = require('http');
 const https = require('https');
@@ -21,12 +22,21 @@ const { initApp }= require('./database/init');
 const initSocket = require('./socket');
 const { config } = require('./config');
 const api = require('./api');
+const { sweepExpired } = require('./auth/session');
 const app = express();
 
 // Initialize database if not exists 
 // Init or migrate database and config
 // Note: non-blocking
-initApp().catch(err => console.error(err));
+initApp()
+  .then(() => {
+    // 定期清理过期会话，启动时先执行一次
+    // unref 使定时器不会阻止进程退出（测试环境下尤其重要）
+    const sweep = () => sweepExpired().catch(err => console.error('清理过期会话失败:', err));
+    sweep();
+    setInterval(sweep, 60 * 60 * 1000).unref();
+  })
+  .catch(err => console.error(err));
 
 if (config.behindProxy) {
   // Only useful if you are using a reverse proxy e.g. nginx
@@ -44,6 +54,8 @@ if (config.enableGzip) {
 app.use(express.urlencoded({ extended: true }));
 // parse application/json
 app.use(express.json());
+// 解析 cookie，会话 id 存放在 HttpOnly cookie 中
+app.use(cookieParser());
 
 // For dev purpose only
 if (process.env.NODE_ENV === 'development') {

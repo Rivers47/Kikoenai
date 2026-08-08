@@ -269,9 +269,8 @@ export default {
     },
 
     download (file) {
-      const token = this.$q.localStorage.getItem('jwt-token') || '';
-      // Fallback to old API for an old backend 
-      const url = file.mediaDownloadUrl ? `${file.mediaDownloadUrl}?token=${token}` : `/api/media/download/${file.trackId || file.hash}?token=${token}`;
+      // Fallback to old API for an old backend
+      const url = file.mediaDownloadUrl ? `${file.mediaDownloadUrl}` : `/api/media/download/${file.trackId || file.hash}`;
       const link = document.createElement('a');
       link.href = url;
       link.target="_blank";
@@ -296,9 +295,8 @@ export default {
     },
 
     openFile (file) {
-      const token = this.$q.localStorage.getItem('jwt-token') || '';
-      // Fallback to old API for an old backend 
-      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}?token=${token}` : `/api/media/stream/${file.trackId || file.hash}?token=${token}`;
+      // Fallback to old API for an old backend
+      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}` : `/api/media/stream/${file.trackId || file.hash}`;
       const link = document.createElement('a');
       link.href = url;
       link.target="_blank";
@@ -306,16 +304,14 @@ export default {
     },
 
     imgSrc (imgItem) {
-      const token = this.$q.localStorage.getItem('jwt-token') || '';
-      const url = `/api/media/small-img/${imgItem.trackId || imgItem.hash}?token=${token}`;
+      const url = `/api/media/small-img/${imgItem.trackId || imgItem.hash}`;
       console.log('imgSrc called for ', imgItem.title);
       return url;
     },
 
     originalImgSrc (file) {
-      const token = this.$q.localStorage.getItem('jwt-token') || '';
-      // Fallback to old API for an old backend 
-      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}?token=${token}` : `/api/media/stream/${file.trackId || file.hash}?token=${token}`;
+      // Fallback to old API for an old backend
+      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}` : `/api/media/stream/${file.trackId || file.hash}`;
       return url
     },
 

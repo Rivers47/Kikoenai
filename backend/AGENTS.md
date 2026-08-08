@@ -4,7 +4,7 @@
 
 - **Language:** Node.js (JavaScript, **Express 5**)
 - **Database:** SQLite3 via Knex.js
-- **Auth:** JWT (JSON Web Tokens)
+- **Auth:** Server-side sessions in an HttpOnly cookie
 - **Real-time:** Socket.IO
 - **Scraping:** Axios + Cheerio
 - **License:** GPL-3.0-or-later
@@ -26,7 +26,8 @@
 │   ├── version.js           # Version info, release notes
 │   └── utils/               # Shared route utilities (normalize, strftime, url, validate)
 ├── auth/
-│   └── utils.js             # JWT issuer/audience helpers
+│   ├── session.js           # Session create/lookup/destroy, cookie options
+│   └── utils.js             # Salted md5 password hashing
 ├── config/
 │   └── config.json          # Runtime config (auto-generated on first run)
 ├── covers/                  # Cached cover images
@@ -55,7 +56,7 @@
 ├── sqlite/
 │   └── db.sqlite3           # SQLite database file
 ├── static/                  # Static assets
-├── api.js                   # API setup: JWT middleware + route mounting
+├── api.js                   # API setup: session middleware + route mounting
 ├── app.js                   # Entry point: Express app, HTTP/HTTPS, Socket.IO
 ├── config.js                # Config file read/write, defaults, migration
 ├── socket.js                # Socket.IO initialization + scanner IPC
@@ -80,17 +81,25 @@
    - `connect-history-api-fallback` (SPA routing, except `/api/*`)
    - API routes (via `api.js`)
    - Static files from `dist/`
-   - Error handler (401 for JWT errors, 500 for others)
+   - Error handler (401 for `UnauthorizedError`, 500 for others)
 4. **Dual HTTP/HTTPS** server creation.
 5. **Socket.IO** attached to both servers.
 
-### 2.2 Authentication (`auth/utils.js`)
+### 2.2 Authentication (`auth/session.js`)
 
 Two modes:
-- **Auth enabled** (`config.auth: true`): JWT required. `express-jwt` middleware validates tokens on `/api/*` routes (except `/api/auth/me` and `/api/health`). Socket.IO uses `socketio-jwt-auth`.
+- **Auth enabled** (`config.auth: true`): a session is required. The `authenticate` middleware in `api.js` validates it on all `/api/*` routes except `POST /auth/me` (login) and `GET /health`. Socket.IO reads the same cookie off the handshake headers.
 - **Auth disabled** (`config.auth: false`): No authentication. All requests proceed as admin.
 
-JWT details: Algorithm is `HS256`, token extracted from `Authorization: Bearer <token>` header or `?token=` query param. `audience` and `issuer` derived from `auth/utils.js`.
+Session details:
+
+- The client holds a 32-byte random secret; `t_session.id` stores only its SHA-256, so a leaked database file does not yield live sessions.
+- Read from the `kikoeru_sid` cookie (`HttpOnly`, `SameSite=Lax`, `Secure` only when `config.httpsEnabled`), falling back to `Authorization: Bearer <secret>` for non-browser clients. `POST /api/auth/me` returns the secret as `session` in the body for exactly that case; the web app ignores it and relies on the cookie.
+- **There is no `?token=` query parameter.** It was removed with the JWT migration — a credential in a URL leaks into access logs, browser history, and Cache Storage keys.
+- `group` is read live from `t_user` on every request, so demoting an administrator takes effect immediately.
+- Revocation: `DELETE /api/credentials/user` relies on the `ON DELETE CASCADE` FK; `PUT /api/credentials/user` (password change) calls `destroyUserSessions`. Expired rows are swept hourly from `app.js`.
+
+**CSRF:** `SameSite=Lax` is the only defense, and it is sufficient *only* because every state-changing route is POST/PUT/DELETE. Adding a GET with side effects would reintroduce CSRF.
 
 ### 2.3 Database Schema
 
@@ -177,8 +186,8 @@ All routes mounted under `/api`:
 
 - **SQLite:** No concurrent writes. Busy timeout configured. Foreign keys enabled via `PRAGMA foreign_keys = ON` in `db.js`.
 - **Migrations:** Sequential, timestamp-prefixed files in `database/migrations/`. Run automatically on **every** startup via `knex-migrate.js` (`init.js`); umzug tracks executed migrations in the `knex_migrations` table, so only pending ones run (idempotent — no version bump required for a migration to be picked up). The app-version comparison in `init.js` gates only the version-keyed upgrade tasks (`applyFix`/`fixMigrations` in `upgrade.js`, `updateConfig`) — those must run **before** `up` because they can mark migrations as executed (`skipAll`). `dbVersion` in `schema.js` must always equal the latest migration's timestamp prefix (asserted by `test/migration..js`).
-- **Config write protection:** `setConfig()` always overwrites `production`, `md5secret`, `jwtsecret` with current values — these cannot be changed through the admin panel.
-- **Error handling:** JWT errors → 401 with `WWW-Authenticate` header. Missing DB tables → 500 with "数据库结构尚未建立". Production mode sanitizes error messages (no stack traces).
+- **Config write protection:** `setConfig()` always overwrites `production`, `md5secret`, `jwtsecret` with current values — these cannot be changed through the admin panel. (`jwtsecret` is now unused: sessions are opaque random strings, not signed tokens. It is retained only so the config file shape does not change.)
+- **Error handling:** auth failures are raised as an `Error` with `name = 'UnauthorizedError'` → 401 with `WWW-Authenticate` header. Missing DB tables → 500 with "数据库结构尚未建立". Production mode sanitizes error messages (no stack traces).
 - **Child process IPC:** Uses `process.on('message')` / `process.send()`. Parent (Socket.IO) relays events to all connected clients.
 - **Scanner concurrency:** Only one scanner child process runs at a time, guarded by the in-memory `scanner` variable in `socket.js` (not a lock file). Subsequent `PERFORM_*` events are ignored while a scan is in progress.
 - **Update lock file:** `upgrade.js` maintains `update.lock` in the config folder for the one-time upgrade/migration process (e.g. `fixVA`). Its state is surfaced as `lockFileExists` in the `/api/version` response — this is unrelated to scan concurrency.
@@ -195,7 +204,7 @@ All routes mounted under `/api`:
 | `knex` + `knex-migrate` | Query building and programmatic migrations |
 | `sqlite3` | Database driver |
 | `axios` + `cheerio` | HTTP scraping + HTML parsing |
-| `jsonwebtoken` + `express-jwt` | JWT auth |
+| `cookie-parser` + `cookie` | Session cookie parsing (Express and Socket.IO) |
 | `socket.io` | Real-time events (scan progress) |
 | `jimp` | Image processing for cover thumbnails |
 | `jschardet` | Text encoding detection for LRC files |
@@ -230,7 +239,8 @@ The following endpoints are consumed by the `frontend/` package:
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/api/auth/me` | GET | Get current user + auth status |
-| `/api/auth/login` | POST | Authenticate, get JWT |
+| `/api/auth/me` | POST | Log in; sets the session cookie, returns `{ user, session }` |
+| `/api/auth/logout` | POST | Destroy the server-side session and clear the cookie |
 | `/api/works` | GET | List/search works (supports pagination, sort, filter) |
 | `/api/search` | GET | Keyword search
 | `/api/:fields/:id/works` | GET | Works filtered
@@ -281,7 +291,7 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 ### Adding a new route
 1. Create route file in `routes/` exporting an Express Router.
 2. Add it to `routes/index.js` with `router.use('/path', require('./newRoute'))`.
-3. Routes under `/api` are automatically protected by JWT middleware in `api.js`.
+3. Routes under `/api` are automatically protected by the session middleware in `api.js`. Note its skip list is matched against `req.path`, which is **relative to the `/api` mount** (`/auth/me`, not `/api/auth/me`).
 
 ### Adding a database migration
 1. Create file in `database/migrations/` with timestamp prefix (e.g., `20260802000000_my_migration.js`).

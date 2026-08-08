@@ -110,10 +110,7 @@ export default {
   },
 
   created () {
-    // 从 LocalStorage 中读取 token
-    const token = this.$q.localStorage.getItem('jwt-token') || ''
-    this.$socket.auth = { auth_token: token }
-    
+    // 会话 cookie 会随同源握手请求自动发送，无需在此附加凭证
     this.$socket.on('success', this.onSocketSuccess)
     this.$socket.on('error', this.onSocketError)
     

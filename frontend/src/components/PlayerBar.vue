@@ -91,10 +91,8 @@ export default {
   },
   computed: {
     samCoverUrl () {
-      // 从 LocalStorage 中读取 token
-      const token = this.$q.localStorage.getItem('jwt-token') || ''
       const id = this.currentPlayingFile.trackId || this.currentPlayingFile.hash
-      return id ? `/api/cover/${id.split('/')[0]}?type=sam&token=${token}` : ""
+      return id ? `/api/cover/${id.split('/')[0]}?type=sam` : ""
     },
 
     showPlayBar () {

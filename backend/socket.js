@@ -1,39 +1,37 @@
 const path = require('path');
 const socket = require('socket.io');
-const jwt = require('jsonwebtoken'); // 用于 JWT 验证
+const cookie = require('cookie');
 const child_process = require('child_process'); // 子进程
 const { config } = require('./config');
+const { SESSION_COOKIE, getSession } = require('./auth/session');
 
 const initSocket = (server) => {
   const io = socket(server);
   if (config.auth) {
     io.use((socket, next) => {
-      // socket.io-client v4 通过 auth 发送 token，同时也支持 query 方式以兼容旧客户端
-      const token = socket.handshake.auth && socket.handshake.auth.auth_token
-        || socket.handshake.query && socket.handshake.query.auth_token;
+      // 会话 id 在 HttpOnly cookie 中，浏览器会自动带上同源的握手请求
+      const cookies = cookie.parse(socket.handshake.headers.cookie || '');
+      const secret = cookies[SESSION_COOKIE];
 
-      if (!token) {
-        return next(new Error('No auth token'));
+      if (!secret) {
+        return next(new Error('未登录'));
       }
 
-      jwt.verify(token, config.jwtsecret, (err, payload) => {
-        if (err) {
-          return next(new Error('认证失败: ' + err.message));
-        }
+      getSession(secret)
+        .then((user) => {
+          if (!user) {
+            return next(new Error('认证失败: 登录状态已失效'));
+          }
 
-        const user = {
-          name: payload.name,
-          group: payload.group
-        };
+          if (user.name !== 'admin') {
+            return next(new Error('只有 admin 账号能登录管理后台.'));
+          }
 
-        if (user.name !== 'admin') {
-          return next(new Error('只有 admin 账号能登录管理后台.'));
-        }
-
-        // 兼容代码中 socket.request.user 的引用
-        socket.request.user = user;
-        next();
-      });
+          // 兼容代码中 socket.request.user 的引用
+          socket.request.user = user;
+          next();
+        })
+        .catch((err) => next(new Error('认证失败: ' + err.message)));
     });
   }
 

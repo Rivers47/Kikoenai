@@ -151,9 +151,7 @@ export default {
     },
 
     coverUrl () {
-      // 从 LocalStorage 中读取 token
-      const token = this.$q.localStorage.getItem('jwt-token') || ''
-      return this.workid ? `/api/cover/${this.workid}?type=240x240&token=${token}` : ""
+      return this.workid ? `/api/cover/${this.workid}?type=240x240` : ""
     },
   },
 

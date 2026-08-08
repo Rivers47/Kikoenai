@@ -15,7 +15,6 @@
 </template>
    
 <script>
-import { setAxiosHeaders } from 'boot/axios'
 import NotifyMixin from '../mixins/Notification.js'
 
 export default {
@@ -34,15 +33,11 @@ export default {
         name: this.name,
         password: this.password
       })
-        .then((res) => {
-          try {
-            this.$q.localStorage.set('jwt-token', res.data.token)
-            setAxiosHeaders(res.data.token)
-            this.showSuccNotif(this.$t('login.loginSuccess'))
-            this.$router.push('/')
-          } catch (error) {
-            this.showErrNotif(this.$t('login.storageError'))
-          }
+        .then(() => {
+          // 会话 cookie 已由服务端通过 Set-Cookie 下发，前端无需保存任何凭证
+          // （响应中的 session 字段只供非浏览器客户端使用）
+          this.showSuccNotif(this.$t('login.loginSuccess'))
+          this.$router.push('/')
         })
         .catch((error) => {
           if (error.response) {

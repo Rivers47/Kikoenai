@@ -428,17 +428,15 @@ export default {
     },
 
     coverUrl () {
-      // 从 LocalStorage 中读取 token
-      const token = this.$q.localStorage.getItem('jwt-token') || ''
       // 与全屏播放器一致：优先使用用户手动设置或 SET_QUEUE 计算出的可视化封面。
       // 之前的实现直接用 currentPlayingFile.trackId 推导，当 trackId 缺失（如从历史记录
       // 恢复且快照项无 trackId）时返回空串，导致小窗播放器封面丢失而全屏正常。
       if (this.visualPlayerCoverUrl) {
-        return `${this.visualPlayerCoverUrl}?token=${token}`
+        return `${this.visualPlayerCoverUrl}`
       }
       // 回退：按 workId 取标准封面。
       if (this.playWorkId) {
-        return `/api/cover/${this.playWorkId}?token=${token}`
+        return `/api/cover/${this.playWorkId}`
       }
       return ""
     },
@@ -620,10 +618,8 @@ export default {
     ]),
 
     samCoverUrl (trackId) {
-      // 从 LocalStorage 中读取 token
-      const token = this.$q.localStorage.getItem('jwt-token') || ''
       const id = trackId || ''
-      return id ? `/api/cover/${id.split('/')[0]}?type=sam&token=${token}` : ""
+      return id ? `/api/cover/${id.split('/')[0]}?type=sam` : ""
     },
 
     onClickTrack (index) {

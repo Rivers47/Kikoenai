@@ -1,8 +1,14 @@
 const express = require('express');
 const { check, validationResult } = require('express-validator'); // 后端校验
-const { expressjwt: expressJwt } = require('express-jwt'); // 把 JWT 的 payload 部分赋值于 req.user
 
-const { signToken, md5 } = require('../auth/utils');
+const { md5 } = require('../auth/utils');
+const {
+  SESSION_COOKIE,
+  getSessionSecret,
+  sessionCookieOptions,
+  createSession,
+  destroySession,
+} = require('../auth/session');
 const db = require('../database/db');
 
 const { config } = require('../config');
@@ -17,8 +23,7 @@ router.post('/me', [
   check('password')
     .isLength({ min: 5 })
     .withMessage('密码长度至少为 5')
-// eslint-disable-next-line no-unused-vars
-], (req, res, next) => {
+], async (req, res) => {
   // Finds the validation errors in this request and wraps them in an object with handy functions
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -28,33 +33,51 @@ router.post('/me', [
   const name = req.body.name;
   const password = req.body.password;
 
-  db.knex('t_user')
-    .where('name', '=', name)
-    .andWhere('password', '=', md5(password))
-    .first()
-    .then((user) => {
-      if (!user) {
-        res.set("WWW-Authenticate", "Bearer realm=\"Authorization Required\"");
-        res.status(401).send({error: '用户名或密码错误.'});
-      } else {
-        const token = signToken(user);
-        res.send({ token });
-      }
-    })
-    .catch((err) => {
-      console.error(err);
-      res.status(500).send({error: '服务器错误'});
-      // next(err);
+  try {
+    const user = await db.knex('t_user')
+      .where('name', '=', name)
+      .andWhere('password', '=', md5(password))
+      .first();
+
+    if (!user) {
+      res.set("WWW-Authenticate", "Bearer realm=\"Authorization Required\"");
+      return res.status(401).send({ error: '用户名或密码错误.' });
+    }
+
+    const secret = await createSession(user.name);
+    res.cookie(SESSION_COOKIE, secret, {
+      ...sessionCookieOptions(),
+      maxAge: config.expiresIn * 1000,
     });
+
+    // `session` is only for non-browser clients, which send it back as
+    // `Authorization: Bearer <session>`. The web app ignores this field and
+    // authenticates with the HttpOnly cookie instead.
+    res.send({
+      user: { name: user.name, group: user.group },
+      session: secret,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ error: '服务器错误' });
+  }
 });
 
-if (config.auth) {
-  router.get('/me', expressJwt({ secret: config.jwtsecret, algorithms: ['HS256'], requestProperty: 'user' }));
-}
+// 退出登录：销毁服务端会话并清除 cookie
+router.post('/logout', async (req, res) => {
+  try {
+    await destroySession(getSessionSecret(req));
+    res.clearCookie(SESSION_COOKIE, sessionCookieOptions());
+    res.send({ message: '已退出登录.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ error: '服务器错误' });
+  }
+});
 
 // 获取用户信息
-// eslint-disable-next-line no-unused-vars
-router.get('/me', (req, res, next) => {
+// 鉴权由 api.js 的中间件统一处理（GET /auth/me 不在公开路由内）
+router.get('/me', (req, res) => {
   // 同时告诉客户端，服务器是否启用用户验证
   const auth = config.auth;
   const user = config.auth

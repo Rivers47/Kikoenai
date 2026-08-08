@@ -204,12 +204,7 @@ export default {
       })
         .then((response) => {
           this.loadingUpdateAdminPassword = false
-          try {
-            // 删除旧 token
-            this.$q.localStorage.set('jwt-token', '')
-          } catch (err) {
-            this.showErrNotif(err.message)
-          }
+          // 服务端已在改密时销毁该用户的所有会话，前端无需清理凭证
           this.showSuccNotif(response.data.message)
 
           // 仅当启用鉴权时跳转到登录页面

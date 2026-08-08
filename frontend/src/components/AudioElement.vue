@@ -102,11 +102,10 @@ export default {
 
   computed: {
     source () {
-      const token = this.$q.localStorage.getItem('jwt-token') || ''
       if (this.currentPlayingFile.mediaStreamUrl) {
-        return `${this.currentPlayingFile.mediaStreamUrl}?token=${token}`
+        return `${this.currentPlayingFile.mediaStreamUrl}`
       } else if (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) {
-        return `/api/media/stream/${this.currentPlayingFile.trackId || this.currentPlayingFile.hash}?token=${token}`
+        return `/api/media/stream/${this.currentPlayingFile.trackId || this.currentPlayingFile.hash}`
       } else {
         return ""
       }
@@ -458,9 +457,8 @@ export default {
     },
 
     async loadLrcFile () {
-      const token = this.$q.localStorage.getItem('jwt-token') || '';
       const trackId = (this.queue[this.queueIndex].trackId || this.queue[this.queueIndex].hash);
-      const url = `/api/media/check-lrc/${trackId}?token=${token}`;
+      const url = `/api/media/check-lrc/${trackId}`;
 
       try {
         const check_response = await this.$axios.get(url)
@@ -473,7 +471,7 @@ export default {
 
         this.lrcAvailable = true;
         console.log('读入歌词');
-        const lrcUrl = `/api/media/stream/${check_response.data.trackId || check_response.data.hash}?token=${token}`;
+        const lrcUrl = `/api/media/stream/${check_response.data.trackId || check_response.data.hash}`;
         const lyricExtension = check_response.data.lyricExtension.toLowerCase();
 
         const response = await this.$axios.get(lrcUrl)
@@ -571,14 +569,10 @@ export default {
     },
 
     genCoverUrl(workId, type) {
-      const token = this.$q.localStorage.getItem('jwt-token') || ''
-
       if (type == "visualPlayerCover") {
-        return this.visualPlayerCoverUrl
-          ? `${this.visualPlayerCoverUrl}?token=${token}`
-          : ""
+        return this.visualPlayerCoverUrl || ""
       } else if (workId != 0) {
-        return `/api/cover/${workId}?type=${type}&token=${token}`
+        return `/api/cover/${workId}?type=${type}`
       } else {
         return ""
       }

@@ -364,8 +364,10 @@ export default {
     },
 
     logout () {
-      this.$q.localStorage.set('jwt-token', '')
-      this.$router.push('/login')
+      // 无论服务端是否成功销毁会话（例如会话已过期而返回 401），都跳转到登录页
+      this.$axios.post('/api/auth/logout')
+        .catch(() => {})
+        .then(() => this.$router.push('/login'))
     },
 
     back () {
