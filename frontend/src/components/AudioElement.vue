@@ -12,7 +12,7 @@
       label
       :label-value="formatSeconds(displayCurrentTime)"
       />
-    <!--使用audio组件来播放音频文件，同时隐藏原生的vue-plyr组件，这里的组件只会留下一个进度条的功能-->
+
     <div ref="plyrContainer" style="display: none;">
       <!-- media src is managed imperatively (see _loadSource): a <source :src>
            binding only takes effect via media.load() and races with the

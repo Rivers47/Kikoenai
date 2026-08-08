@@ -10,7 +10,6 @@ module.exports = function (ctx) {
       'axios',
       'i18n',
       'store',
-      'slider',
       'plyr',
       'socket.io',
       'contrast'

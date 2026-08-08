@@ -6,7 +6,7 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 - **Framework:** Quasar 2 (Material Design)
 - **State:** Vuex 4
 - **Router:** Vue Router 4 (history mode)
-- **Audio:** Plyr (`vue-plyr` wrapper)
+- **Audio:** Plyr (used directly, no Vue wrapper)
 - **Real-time:** Socket.IO Client
 - **License:** GPL-3.0-only
 
@@ -19,15 +19,20 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 │   ├── App.vue                           # Root component
 │   ├── index.template.html               # HTML template
 │   ├── utils.js                          # Shared utility functions
+│   ├── material-theme.json               # Generated Material color tokens (see scripts/generate-theme.mjs)
+│   ├── utils/
+│   │   └── contrast.js                   # Contrast-ratio helpers for theme-aware text colors
 │   ├── css/
 │   │   ├── app.scss                      # Global styles
+│   │   ├── material-theme.scss           # Generated Material theme tokens
+│   │   ├── theme-utilities.scss          # Theme helper classes/mixins
 │   │   └── quasar.variables.scss         # Quasar SCSS variables
 │   ├── boot/                             # App boot files (run before mount)
 │   │   ├── axios.js                      # Axios instance + JWT header setup
 │   │   ├── i18n.js                       # vue-i18n registration + Quasar lang sync + $tTag
 │   │   ├── plyr.js                       # Plyr audio player boot
-│   │   ├── slider.js                     # Vue slider component boot
 │   │   ├── socket.io.js                  # Socket.IO client setup
+│   │   ├── contrast.js                   # Contrast helper boot
 │   │   └── store.js                      # Vuex store initialization
 │   ├── i18n/                             # Localization
 │   │   ├── index.js                      # createI18n + locale resolution + auto-discover partials
@@ -58,10 +63,12 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 │   │       ├── Folders.vue               # Library folder management
 │   │       ├── Scanner.vue               # Scan controls + progress
 │   │       ├── Advanced.vue              # Advanced settings
+│   │       ├── Settings.vue              # General settings
+│   │       ├── Backfill.vue              # Metadata backfill progress
 │   │       └── UserManage.vue            # User management (admin)
 │   ├── components/
 │   │   ├── AudioPlayer.vue               # Main audio player (floating panel)
-│   │   ├── AudioEqualizer.vue            # Audio visualizer
+│   │   ├── AudioElement.vue              # Playback engine: hidden <audio> + Plyr + mediaSession
 │   │   ├── PlayerBar.vue                 # Mini player bar (bottom of screen)
 │   │   ├── LyricsBar.vue                 # Lyrics display below player
 │   │   ├── PIPLyrics.vue                 # Picture-in-picture lyrics overlay
@@ -76,8 +83,7 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 │   │   ├── Scrollable.vue                # Scrollable container helper
 │   │   ├── SleepMode.vue                 # Sleep timer dialog
 │   │   ├── WriteReview.vue               # Review/rating form dialog
-│   │   ├── FavListItem.vue               # Favorites list row item
-│   │   └── FavList.vue                   # Favorites list component
+│   │   └── FavListItem.vue               # Favorites list row item
 │   ├── store/
 │   │   ├── index.js                      # Vuex store creation (createStore)
 │   │   ├── module-AudioPlayer/           # Audio player Vuex module
@@ -113,7 +119,7 @@ Built with **Quasar CLI** (`@quasar/app-webpack`) targeting **PWA mode**. The ap
 - **Vuex 4** — two modules: `AudioPlayer` and `User`
 - **Vue Router 4** — history mode, SPA routing with backend fallback
 - **Quasar 2** — Material Design UI components
-- **Plyr** — audio player UI (`vue-plyr` wrapper)
+- **Plyr** — instantiated directly (`new Plyr(...)`) on a hidden `<audio>`; its own UI is unused
 - **Socket.IO Client** — real-time scan progress events
 
 ### 2.2 Routing (`router/routes.js`)
@@ -122,7 +128,7 @@ Three route groups:
 
 | Route | Layout | Description |
 |-------|--------|-------------|
-| `/admin` | `DashboardLayout` | Admin dashboard (folders, scanner, advanced, user mgmt, backfill) |
+| `/admin` | `DashboardLayout` | Admin dashboard (folders, scanner, advanced, settings, backfill, user mgmt) |
 | `/` | `MainLayout` | Main app with persistent audio player at bottom |
 | `/login` | None | Standalone login page |
 
@@ -130,18 +136,22 @@ Main layout routes:
 
 | Route | Name | Page | Description |
 |-------|------|------|-------------|
-| `/` | — | redirect→works | Root redirect |
-| `/works` | `works` | Works | Media library (grid/list, sort, filter, search) |
+| `/` | `works` | Works | Media library (grid/list, sort, filter, search) — this is the real route |
+| `/works` | — | redirect→`/` | Legacy path, redirects to `/` preserving query. Deliberate: the reverse direction caused a `replaceState` loop that broke back navigation |
 | `/work/:id` | — | Work | Work detail + track list |
 | `/fullScreenPlayer/:id?` | — | FullScreenPlayer | Full-screen player mode |
 | `/circles` | — | List | Browse by circle (artist group) |
 | `/tags` | — | List | Browse by tag |
 | `/vas` | — | List | Browse by voice actor |
-| `/favourites` | — | Favourites | History, reviews |
+| `/favourites` | — | Favourites | Defaults to the history view (`props.route = 'history'`) |
 | `/favourites/review` | — | Favourites | Review history |
-| `/favourites/progress/*` | — | Favourites | Progress (marked/listening/listened/replay/postponed) |
+| `/favourites/progress` | — | Favourites | Progress; bare path defaults to `marked` |
+| `/favourites/progress/{marked,listening,listened,replay,postponed}` | — | Favourites | Progress by state |
 | `/favourites/folder` | — | Favourites | Folder view |
 | `/favourites/history` | — | Favourites | Play history |
+| `/:pathMatch(.*)*` | — | Error404 | Catch-all, appended unless `MODE === 'ssr'` |
+
+The `/favourites/*` children are generated by the `prefixRoutes` helper at the top of `routes.js`; each one renders the same `Favourites` page with different `props`.
 
 **Key detail:** The `Works` page is kept alive via `<keep-alive include="Works">` in `MainLayout`, preserving scroll position and state when navigating back.
 
@@ -171,12 +181,16 @@ Main layout routes:
   sleepTracksLeft: 0,               // tracks mode: tracks left after current one
   rewindSeekTime: 5,
   forwardSeekTime: 30,
+  rewindSeekMode: false,          // Set true to request a rewind; AudioElement performs it and resets
+  forwardSeekMode: false,         // Same, for forward seek
   swapSeekButton: false,          // Swap seek/next buttons
-  enableVisualizer: false,        // Audio visualizer
-  enableVideoSource: false,       // Use <video> for playback
+  flipLRChannel: false,           // Swap left/right channels (WebAudio, see AudioElement)
+  visualPlayerCoverUrl: '',       // Override cover for the full-screen player
   playWorkId: 0,                  // Currently playing work ID
-  enablePIPLyrics: false,         // Picture-in-picture lyrics (disabled on Android)
-  resumeHistorySeconds: -1,       // Resume position from history
+  workLastTrackId: '',            // Last track of the playing folder; drives auto-mark-listened
+  autoMarkListened: true,         // Auto-mark the work listened when workLastTrackId ends
+  enablePIPLyrics: false,         // Picture-in-picture lyrics (force-disabled on Android)
+  resumeHistorySeconds: -1,       // Resume position from history (-1 = none; cleared in onCanplay)
   oldWorkCardUIStyle: false,      // Legacy card UI toggle
 }
 ```
@@ -198,8 +212,8 @@ Main layout routes:
 | `axios.js` | `src/boot/axios.js` | Configures Axios defaults (Content-Type, JWT Bearer token from LocalStorage); exposes `$axios` globally |
 | `i18n.js` | `src/boot/i18n.js` | Registers `vue-i18n`, syncs the Quasar lang pack to the current locale, exposes `$tTag(name)` globally, exports `changeLanguage(locale)` |
 | `store.js` | `src/boot/store.js` | Initializes Vuex store |
-| `slider.js` | `src/boot/slider.js` | Registers Vue Slider Component (`vue-slider-component`) |
-| `plyr.js` | `src/boot/plyr.js` | Registers Plyr audio player component (`vue-plyr`) |
+| `contrast.js` | `src/boot/contrast.js` | Contrast-ratio helpers for picking theme-aware text colors (`src/utils/contrast.js`) |
+| `plyr.js` | `src/boot/plyr.js` | Imports Plyr + its CSS, exposes the `Plyr` class as `$Plyr` (no component is registered) |
 | `socket.io.js` | `src/boot/socket.io.js` | Creates Socket.IO client (autoConnect: false); exposes `$socket` globally |
 
 ### 2.5 Audio Player Architecture
@@ -210,15 +224,20 @@ The audio player is a multi-component system fixed at the bottom of `MainLayout`
 MainLayout
 ├── PlayerBar        # Mini bar (always visible at bottom)
 ├── AudioPlayer      # Floating panel (toggle-able, shows cover + controls)
+│   └── AudioElement # The actual playback engine (hidden <audio> + Plyr + mediaSession)
 ├── LyricsBar        # Lyrics display (below player)
 └── PIPLyrics        # Picture-in-picture lyrics overlay
 ```
 
-- **AudioPlayer.vue** — Floating card at bottom-right with cover art, track controls, seek bar, volume, playback mode. Uses Plyr under the hood (supports both `<audio>` and `<video>` elements).
+- **AudioPlayer.vue** — Floating card at bottom-right with cover art, track controls, seek bar, volume, playback mode. Presentational only: it renders `AudioElement` and drives it through Vuex.
+- **AudioElement.vue** — The playback engine, and the only component that touches the media element. Holds a `display:none` `<audio crossorigin>` with `Plyr` instantiated on it directly (`controls: ['progress']`); Plyr's own UI is never shown, so it acts purely as an event/property façade over the native element. Also owns:
+  - `navigator.mediaSession` metadata and lock-screen action handlers (`updateMediaSessionMetadata`), which map play/pause/next/prev/seek back onto Vuex mutations.
+  - Optional L/R channel swap (`applyFlipLRChannel`) via a WebAudio `createMediaElementSource → ChannelSplitter → ChannelMerger → destination` graph. `createMediaElementSource` is a one-way door — once called, that `AudioContext` owns the element's output permanently — so the graph is built lazily on first use and only *rewired* on toggle, never torn down until unmount.
+  - **Background playback (Android):** `ended` is bound as a direct native listener on the media element, *not* `player.on('ended')` — Plyr proxies the same native event, and registering both advanced the queue two tracks at a time. The next track's source is loaded imperatively (`_loadSource`) **synchronously inside the `ended` handler**, because Chrome freezes hidden pages and the `nextTick`-deferred `source` watcher can lag by minutes. `_loadSource` compares `media.currentSrc` and no-ops when the watcher later fires with the same URL. Do not reintroduce a `<source :src>` binding here; see commit `6fb856c`.
 - **PlayerBar.vue** — Compact mini-bar always visible when a track is playing (contains basic controls).
 - **LyricsBar.vue** — Parses LRC files and syncs with playback position.
 - **PIPLyrics.vue** — Picture-in-picture mode for desktop browsers (disabled on Android).
-- Configuration like seek times, visualizer toggle, and PIP lyrics are persisted in `LocalStorage`.
+- Configuration like seek times, L/R channel flip, auto-mark-listened, and PIP lyrics are persisted in `LocalStorage` (keys are exported from `store/module-AudioPlayer/state.js`).
 
 ### 2.6 Communication with Backend
 
@@ -229,7 +248,7 @@ MainLayout
     : ''
   ```
 - **WebSocket (Socket.IO):** Used for real-time scan progress updates. The client connects after auth and **both emits and listens**: it emits `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_LYRIC_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`, and listens for `SCAN_INIT_STATE`, `SCAN_TASKS`, `SCAN_FAILED_TASKS`, `SCAN_MAIN_LOGS`, `SCAN_RESULTS`, `SCAN_FINISHED`, `SCAN_ERROR` (all handled in `pages/Dashboard/Scanner.vue`).
-- **Public config:** `GET /api/config/shared` retrieves `rewindSeekTime` and `forwardSeekTime` on app mount (`MainLayout.vue` → `readSharedConfig()`).
+- **Seek times are client-side:** `rewindSeekTime` / `forwardSeekTime` are read from `LocalStorage` in `module-AudioPlayer/state.js` (defaults 5s / 30s), not fetched from the server.
 
 ### 2.7 Key Frontend Features
 
@@ -276,9 +295,11 @@ Two separate translation layers, kept apart:
   |-----|------|---------|
   | `jwt-token` | string | JWT Bearer token |
   | `swap_seek_button` | boolean | Swap seek/next buttons |
-  | `enable_visualizer` | boolean | Audio visualizer toggle |
-  | `enable_pip_lyrics` | boolean | Picture-in-picture lyrics |
-  | `enable_video_source` | boolean | Use `<video>` element for playback |
+  | `flip_lr_channel` | boolean | Swap left/right audio channels |
+  | `auto_mark_listened` | boolean | Auto-mark a work as listened on last track end (default `true`) |
+  | `rewind_seek_time` | number | Rewind step in seconds (default 5) |
+  | `forward_seek_time` | number | Forward step in seconds (default 30) |
+  | `enable_pip_lyrics` | boolean | Picture-in-picture lyrics (force-disabled on Android) |
   | `ai_server_url` | string | AI server URL (unused?) |
   | `old_work_card_ui_style_key` | boolean | Legacy card UI toggle |
   | `app_language` | string | UI locale (`zh-CN`/`en-US`/`ja-JP`/`zh-TW`); set by the MainLayout sidebar language switcher, auto-detected from browser on first load |
@@ -295,12 +316,12 @@ Two separate translation layers, kept apart:
 | `vue-i18n` | UI string internationalization (v9, legacy mode) |
 | `axios` | HTTP client for REST API |
 | `socket.io-client` | WebSocket client for scan progress |
-| `plyr` + `vue-plyr` | Audio player UI |
+| `plyr` | Façade over the hidden `<audio>` element (its own UI is unused) |
 | `lrc-file-parser` | LRC lyrics file parser |
-| `vue-slider-component` | Slider component (volume, seek bar) |
-| `vuedraggable` | Drag-and-drop queue reordering |
+| `@quasar/extras` | Roboto font + Material icons (see `extras` in `quasar.config.js`) |
 | `register-service-worker` | PWA service worker registration |
 | `sass` | SCSS preprocessing |
+| `@material/material-color-utilities` | (dev) Generates `material-theme.json` via `npm run theme` |
 
 ---
 
@@ -309,10 +330,17 @@ Two separate translation layers, kept apart:
 ```bash
 npm install        # Install dependencies
 
-npm run build      # Build for production (default: SPA)
+npm run dev        # quasar dev -m pwa (proxies /api + /socket.io to localhost:8888)
+
+npm run build      # quasar build -m pwa --debug  (NOTE: debug build)
+npm run build:prod # quasar build -m pwa          (use this for releases)
 
 npm test           # Run ESLint
+npm run theme      # Regenerate material-theme.json / .scss from the seed color
 ```
+
+Both build targets are **PWA**, not SPA, and output to `../backend/dist` (`distDir` in
+`quasar.config.js`) so the backend serves them as static content.
 
 ---
 
@@ -321,22 +349,31 @@ npm test           # Run ESLint
 | Endpoint | Method | Used In | Purpose |
 |----------|--------|---------|---------|
 | `/api/auth/me` | GET | `MainLayout.vue` | Get current user + auth status |
-| `/api/auth/login` | POST | `Login.vue` | Authenticate, get JWT |
+| `/api/auth/me` | POST | `Login.vue` | Authenticate, get JWT. **Login POSTs to `/api/auth/me`** — there is no `/api/auth/login` |
 | `/api/works` | GET | `Works.vue` | List/search works (paginated, sorted, filtered) |
 | `/api/work/:id` | GET | `Work.vue` | Get work metadata + playback state |
 | `/api/work/:id/memo` | GET | `Work.vue` | Get work memo incl. lazily-computed content hashes (`{ contentHash: { relPath: contentHash } }`). Only endpoint reading audio file bytes; fetched after tree renders, merged onto nodes by `relPath` to populate per-track badges. |
 | `/api/tags` | GET | `List.vue` | List all tags |
 | `/api/circles` | GET | `List.vue` | List all circles |
 | `/api/vas` | GET | `List.vue` | List all VAs |
-| `/api/media/:id/:file` | GET | `AudioPlayer.vue` | Stream audio file (supports Range) |
-| `/api/cover/:id` | GET | `CoverSFW.vue` | Get cover image |
-| `/api/files/:id` | GET | `Work.vue` | List files in a work |
-| `/api/review/:id` | GET/POST/PUT/DELETE | `WorkDetails.vue` | Work reviews. PUT with `progressOnly=true` and `autoMark=true` only writes `progress='listened'` if existing is not terminal (listened/replay/postponed). |
+| `/api/media/stream/:trackId` | GET | `AudioElement.vue`, `WorkTree.vue` | Stream a track (supports Range). Token is passed as a `?token=` query param, not a header, since it feeds `<audio src>` |
+| `/api/media/download/:trackId` | GET | `WorkTree.vue` | Download a file |
+| `/api/media/small-img/:trackId` | GET | `WorkTree.vue` | Thumbnail for image files in the tree |
+| `/api/media/check-lrc/:trackId` | GET | `AudioElement.vue` | Check whether a track has lyrics; returns `{result, trackId, lyricExtension}` |
+| `/api/cover/:id` | GET | `CoverSFW.vue`, `AudioElement.vue` | Get cover image (`?type=main\|240x240\|sam`) |
+| `/api/tracks/:id` | GET | `Work.vue` | Track tree for a work (see Phase 2 note below) |
+| `/api/review` | GET/PUT/DELETE | `WorkDetails.vue`, `Favourites.vue`, `AudioElement.vue` | Work reviews; the work is identified by a `work_id` body field or query param, not a path segment. PUT with `progressOnly=true` and `autoMark=true` only writes `progress='listened'` if existing is not terminal (listened/replay/postponed). |
 | `/api/review/progress` | DELETE | `WorkDetails.vue` | Clear only `progress` (NULL), preserving rating/review_text. If the row has no rating/review_text, the whole row is deleted. Query `work_id`. |
 | `/api/history` | GET | `Favourites.vue`, `RecentWorks.vue` | List works with playback history. Optional `excludeFinished` (`all`|`listened`, default `listened`). Response items include nullable `progress`. |
-| `/api/history/:id` | GET/POST | `Work.vue` | Playback state (history) |
-| `/api/config/shared` | GET | `MainLayout.vue` | Public config (seek times) |
+| `/api/search` | GET | `Works.vue` | Keyword search |
 | `/api/version` | GET | `MainLayout.vue` | Version + update info |
+| `/api/config/admin` | GET/PUT | `Folders.vue`, `Advanced.vue` | Admin config read/write |
+| `/api/credentials/user` | POST/PUT/DELETE | `UserManage.vue` | Create / update / delete a user |
+| `/api/credentials/users` | GET | `UserManage.vue` | List users (admin) |
+| `/api/backfill/progress` | GET | `Backfill.vue` | Metadata backfill progress |
+| `/api/refresh/:id` | POST | `WorkDetails.vue` | Re-fetch metadata for one work |
+| `/api/work/scan/:id` | POST | `WorkDetails.vue` | Rescan a single work |
+| `/api/{tags,circles,vas,illustrators,script_writers,seriess}/:id/works` | GET | `List.vue`, `Works.vue` | Works filtered by that entity |
 | `/api/work/:id` | PUT | `EditMetadata.vue` | Manually edit work metadata (admin only). Work id is a string: DLsite RJ-padded (`\d{6,8}`) or Fanza cid (`d_\d+`). |
 | `/api/illustrators` | GET | `EditMetadata.vue` | List illustrators (autocomplete) |
 | `/api/script_writers` | GET | `EditMetadata.vue` | List script writers (autocomplete) |
@@ -389,7 +426,7 @@ Build output goes directly into `backend/dist/` (configured via `distDir` in `qu
 ## 9. Testing
 
 - **Linting:** ESLint with Vue plugin
-- **Run:** `npm test` (from repo root)
+- **Run:** `npm test` from `frontend/`, or `npm run lint` from the repo root (there is no root `npm test`). The root script lints the backend first and **currently fails** on a pre-existing `backend/app.js` hashbang error, so run the frontend lint directly when checking frontend changes.
 
 ---
 
