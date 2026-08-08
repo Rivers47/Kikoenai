@@ -11,6 +11,15 @@ const { formatID, scrapeWorkMemo, coverFileName } = require('../filesystem/utils
 const { scrapeWorkMetadataFromDLsite } = require('../scraper/dlsite');
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
 
+// Covers come from DLsite/Fanza and effectively never change, so cache them
+// for a long time rather than paying a conditional request every time (a 304
+// carries no image data but still costs a round trip).
+// `public` is deliberate: covers are site-wide content with nothing user-specific
+// in them, so a shared cache storing one leaks nothing. Per-user JSON is covered
+// by the `private, no-cache` default in api.js.
+const COVER_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
+const COVER_FALLBACK_MAX_AGE = 5 * 60;   // 5 minutes
+
 const PAGE_SIZE = config.pageSize || 12;
 const FIELDS = ['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series'];
 
@@ -22,8 +31,19 @@ router.get('/cover/:id',
 
     const workId = req.params.id;
     const type = req.query.type || 'main'; // 'main', 'sam', '240x240', '360x360'
-    res.sendFile(path.join(config.coverFolderDir, coverFileName(workId, type)), { dotfiles: 'allow' /* Express 5: preserve v4 behavior */ }, (err) => {
+    // Must be set manually: sendFile's maxAge option only applies when the
+    // response has no Cache-Control yet (send/index.js:
+    // `if (this._cacheControl && !res.getHeader('Cache-Control'))`), and api.js
+    // already sets a default on every /api response -- so the option is a no-op here.
+    res.setHeader('Cache-Control', `public, max-age=${COVER_MAX_AGE}`);
+    res.sendFile(path.join(config.coverFolderDir, coverFileName(workId, type)), {
+      dotfiles: 'allow', /* Express 5: preserve v4 behavior */
+    }, (err) => {
       if (err) {
+        // The placeholder must be cached briefly, not for the full 30 days: the
+        // real cover appears once the work is scraped or rescanned, and a long
+        // max-age would leave no-image.jpg stuck in place until it expires.
+        res.setHeader('Cache-Control', `public, max-age=${COVER_FALLBACK_MAX_AGE}`);
         res.sendFile(path.join(__dirname, '../static/no-image.jpg'), (err2) => {
           if (err2) {
             next(err2);

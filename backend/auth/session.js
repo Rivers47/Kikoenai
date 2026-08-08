@@ -35,7 +35,7 @@ const sessionCookieOptions = () => ({
   path: '/',
 });
 
-// 新建会话，返回发给客户端的 secret（数据库中只保存其哈希）
+// Create a session and return the secret handed to the client (only its hash is stored)
 const createSession = async (userName) => {
   const secret = crypto.randomBytes(32).toString('hex');
   await knex('t_session').insert({
@@ -70,7 +70,7 @@ const destroySession = (secret) => {
   return knex('t_session').where('id', '=', hashSecret(secret)).del();
 };
 
-// 用于修改密码后使该用户的其他会话立即失效
+// Used after a password change to invalidate that user's other sessions immediately
 const destroyUserSessions = (userName) => knex('t_session').where('user_name', '=', userName).del();
 
 const sweepExpired = () => knex('t_session').where('expires_at', '<=', Date.now()).del();

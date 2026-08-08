@@ -76,7 +76,7 @@ router.put('/user', [
 
   if (!config.auth || req.user.name === 'admin' || req.user.name === user.name) {
     db.updateUserPassword(user, newPassword)
-      // 改密后立即注销该用户的所有会话（包括发起本次请求的会话）
+      // A password change revokes every session for that user, including this one
       .then(() => destroyUserSessions(user.name))
       .then(() => res.send({ message: '密码修改成功.' }))
       .catch((err) => {

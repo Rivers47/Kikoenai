@@ -364,7 +364,8 @@ export default {
     },
 
     logout () {
-      // 无论服务端是否成功销毁会话（例如会话已过期而返回 401），都跳转到登录页
+      // Redirect to /login regardless of whether the server destroyed the session
+      // (an already-expired session returns 401, which is fine here)
       this.$axios.post('/api/auth/logout')
         .catch(() => {})
         .then(() => this.$router.push('/login'))

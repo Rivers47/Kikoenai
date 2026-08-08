@@ -204,7 +204,8 @@ export default {
       })
         .then((response) => {
           this.loadingUpdateAdminPassword = false
-          // 服务端已在改密时销毁该用户的所有会话，前端无需清理凭证
+          // The server destroys all of this user's sessions on password change,
+          // so there is no client-side credential to clear
           this.showSuccNotif(response.data.message)
 
           // 仅当启用鉴权时跳转到登录页面

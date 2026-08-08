@@ -34,8 +34,9 @@ export default {
         password: this.password
       })
         .then(() => {
-          // 会话 cookie 已由服务端通过 Set-Cookie 下发，前端无需保存任何凭证
-          // （响应中的 session 字段只供非浏览器客户端使用）
+          // The server already issued the session cookie via Set-Cookie, so there is
+          // no credential for the frontend to store. (The `session` field in the
+          // response body exists only for non-browser clients.)
           this.showSuccNotif(this.$t('login.loginSuccess'))
           this.$router.push('/')
         })

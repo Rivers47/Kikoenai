@@ -12,7 +12,7 @@ const { getSession, getSessionSecret } = require('./auth/session');
 // The method matters: POST /auth/me is the login endpoint and must be public,
 // while GET /auth/me returns the current user and must not be.
 const PUBLIC_ROUTES = [
-  { method: 'POST', path: '/auth/me' }, // 登录
+  { method: 'POST', path: '/auth/me' }, // login
   { method: 'GET', path: '/health' },
 ];
 
@@ -20,14 +20,15 @@ const isPublic = (req) => PUBLIC_ROUTES.some(
   (route) => route.method === req.method && route.path === req.path
 );
 
-// app.js 的错误处理中间件按 err.name 识别验证错误并返回 401
+// The error handler in app.js keys off err.name to return a 401
 const unauthorized = (message) => {
   const err = new Error(message);
   err.name = 'UnauthorizedError';
   return err;
 };
 
-// 校验会话，通过后把 { name, group } 挂到 req.user 上（与原 JWT 中间件的形状一致）
+// Validate the session, then attach { name, group } to req.user
+// (same shape the old JWT middleware produced, so no route needs changing)
 const authenticate = async (req, res, next) => {
   if (isPublic(req)) {
     return next();
@@ -45,7 +46,32 @@ const authenticate = async (req, res, next) => {
   }
 };
 
+/**
+ * Default cache policy for every /api response.
+ *
+ * `private` is the load-bearing part: it stops a shared cache (e.g. an nginx
+ * proxy_cache in front of the app) from storing the response. RFC 9111's
+ * protection for authenticated requests only covers the Authorization header,
+ * NOT cookies -- and this app is cookie-authenticated. Without an explicit
+ * `private`, a shared cache could store per-user responses like /api/auth/me,
+ * /api/history or /api/review and serve one user's data to another, since
+ * nginx does not key on Cookie by default.
+ *
+ * `no-cache` rather than `no-store`: the browser may still store the response
+ * but must revalidate before using it, which preserves the 304s from Express's
+ * default ETag instead of forcing a full re-download every time.
+ *
+ * Routes wanting real caching (e.g. covers) override this with res.setHeader.
+ */
+const apiCacheDefaults = (req, res, next) => {
+  res.setHeader('Cache-Control', 'private, no-cache');
+  next();
+};
+
 module.exports = (app) => {
+  // Mounted before auth so 401 responses carry the header too
+  app.use('/api', apiCacheDefaults);
+
   if (config.auth) {
     // CSRF: the session cookie is SameSite=Lax, which still allows top-level
     // cross-site GET navigation. That is safe only because every state-changing

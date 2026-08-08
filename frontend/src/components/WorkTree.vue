@@ -52,7 +52,6 @@
             <q-icon size="34px" v-if="item.type === 'folder'" color="info" name="folder" />
             <q-icon size="34px" v-else-if="item.type === 'text'" color="info" name="description" />
             <q-icon size="34px" v-else-if="item.type === 'image'" color="accent" name="photo" />
-            <!-- <q-img width="34px" height="34px" v-else-if="item.type === 'image'" :src="imgSrc(item)" contain :ratio="1/1"  name="thumbnail" /> -->
             <q-icon size="34px" v-else-if="item.type === 'other'" color="info" name="description" />
             <q-btn v-else round dense color="primary" :icon="playIcon(item.trackId || item.hash)" @click="onClickPlayButton(item.trackId || item.hash)" />
 
@@ -301,12 +300,6 @@ export default {
       link.href = url;
       link.target="_blank";
       link.click();
-    },
-
-    imgSrc (imgItem) {
-      const url = `/api/media/small-img/${imgItem.trackId || imgItem.hash}`;
-      console.log('imgSrc called for ', imgItem.title);
-      return url;
     },
 
     originalImgSrc (file) {

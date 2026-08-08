@@ -355,7 +355,6 @@ Both build targets are **PWA**, not SPA, and output to `../backend/dist` (`distD
 | `/api/vas` | GET | `List.vue` | List all VAs |
 | `/api/media/stream/:trackId` | GET | `AudioElement.vue`, `WorkTree.vue` | Stream a track (supports Range). Feeds `<audio src>` directly; the session cookie authenticates it, so the URL carries no credential |
 | `/api/media/download/:trackId` | GET | `WorkTree.vue` | Download a file |
-| `/api/media/small-img/:trackId` | GET | `WorkTree.vue` | Thumbnail for image files in the tree |
 | `/api/media/check-lrc/:trackId` | GET | `AudioElement.vue` | Check whether a track has lyrics; returns `{result, trackId, lyricExtension}` |
 | `/api/cover/:id` | GET | `CoverSFW.vue`, `AudioElement.vue` | Get cover image (`?type=main\|240x240\|sam`) |
 | `/api/tracks/:id` | GET | `Work.vue` | Track tree for a work (see Phase 2 note below) |

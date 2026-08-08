@@ -63,7 +63,7 @@ router.post('/me', [
   }
 });
 
-// 退出登录：销毁服务端会话并清除 cookie
+// Log out: destroy the server-side session and clear the cookie
 router.post('/logout', async (req, res) => {
   try {
     await destroySession(getSessionSecret(req));
@@ -76,7 +76,7 @@ router.post('/logout', async (req, res) => {
 });
 
 // 获取用户信息
-// 鉴权由 api.js 的中间件统一处理（GET /auth/me 不在公开路由内）
+// Auth is handled by the middleware in api.js -- GET /auth/me is not a public route
 router.get('/me', (req, res) => {
   // 同时告诉客户端，服务器是否启用用户验证
   const auth = config.auth;

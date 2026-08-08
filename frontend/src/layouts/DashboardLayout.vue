@@ -110,7 +110,8 @@ export default {
   },
 
   created () {
-    // 会话 cookie 会随同源握手请求自动发送，无需在此附加凭证
+    // The session cookie is sent with the same-origin handshake automatically,
+    // so no credential needs attaching here
     this.$socket.on('success', this.onSocketSuccess)
     this.$socket.on('error', this.onSocketError)
     

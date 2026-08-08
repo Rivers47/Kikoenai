@@ -9,7 +9,8 @@ const initSocket = (server) => {
   const io = socket(server);
   if (config.auth) {
     io.use((socket, next) => {
-      // 会话 id 在 HttpOnly cookie 中，浏览器会自动带上同源的握手请求
+      // The session id is in an HttpOnly cookie, which the browser attaches
+      // to the same-origin handshake automatically.
       const cookies = cookie.parse(socket.handshake.headers.cookie || '');
       const secret = cookies[SESSION_COOKIE];
 

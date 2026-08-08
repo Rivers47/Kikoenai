@@ -30,8 +30,8 @@ const app = express();
 // Note: non-blocking
 initApp()
   .then(() => {
-    // 定期清理过期会话，启动时先执行一次
-    // unref 使定时器不会阻止进程退出（测试环境下尤其重要）
+    // Sweep expired sessions periodically, and once at startup.
+    // unref() so the timer never keeps the process alive (matters for tests).
     const sweep = () => sweepExpired().catch(err => console.error('清理过期会话失败:', err));
     sweep();
     setInterval(sweep, 60 * 60 * 1000).unref();
@@ -54,7 +54,7 @@ if (config.enableGzip) {
 app.use(express.urlencoded({ extended: true }));
 // parse application/json
 app.use(express.json());
-// 解析 cookie，会话 id 存放在 HttpOnly cookie 中
+// Parse cookies -- the session id lives in an HttpOnly cookie
 app.use(cookieParser());
 
 // For dev purpose only

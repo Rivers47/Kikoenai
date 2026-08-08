@@ -35,9 +35,7 @@
       "filesystem/scanner.js",
       "filesystem/updater.js",
       "filesystem/workFileScanner.js",
-      "database/migrations/*.js",
-      "node_modules/jimp/dist/commonjs/**/*.js",
-      "node_modules/@jimp/**/dist/commonjs/**/*.js"
+      "database/migrations/*.js"
     ],
     "assets": [
       "dist/**/*",
@@ -66,7 +64,6 @@
     "express-validator": "^7.0.0",
     "htmlparser2": "^4.1.0",
     "https": "^1.0.0",
-    "jimp": "^1.6.1",
     "jschardet": "^3.0.0",
     "knex": "^3.3.0",
     "limit-promise": "^1.0.6",

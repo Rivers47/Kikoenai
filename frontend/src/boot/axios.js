@@ -3,10 +3,11 @@ import axios from 'axios'
 import { LocalStorage } from 'quasar'
 
 axios.defaults.headers['Content-Type'] = "application/json"
-// 会话 id 保存在 HttpOnly cookie 中，由浏览器自动携带
+// The session id lives in an HttpOnly cookie, attached by the browser automatically
 axios.defaults.withCredentials = true
 
-// 迁移到 cookie 会话后，旧的 JWT 已无用且无法撤销，清除它以避免长期残留在 LocalStorage 中
+// After the move to cookie sessions the old JWT is useless and cannot be revoked;
+// clear it so it does not linger in LocalStorage
 LocalStorage.remove('jwt-token')
 
 export default boot(({ app }) => {

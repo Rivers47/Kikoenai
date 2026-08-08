@@ -73,3 +73,8 @@ Changes touching both packages (e.g. a new API endpoint used by a new Vue page):
 - **Product vs. package name:** Product is **Kikoenai**; the npm workspace name is still **`kikoeru`** (inherited from upstream). Versions stay in sync across all three `package.json` via `npm run release:*`.
 - **Tests:** Unit/lint tests live inside each package (`backend/test/`, frontend `npm test` = ESLint). Cross-package e2e (Playwright) at `tests/` expects the dev server on :8080.
 - **CI:** `.github/workflows/build.yml` builds the OCI image. Container sets `IS_DOCKER=1` with fixed default paths.
+
+
+## 6. Code Style
+
+Always write comments in English. If an old comment is edited, replace the whole in English.

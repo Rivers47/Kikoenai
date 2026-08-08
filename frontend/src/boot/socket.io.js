@@ -1,7 +1,7 @@
 import { boot } from 'quasar/wrappers'
 import { io } from 'socket.io-client'
 
-// 鉴权走同源的会话 cookie，握手时由浏览器自动携带
+// Auth rides the same-origin session cookie, sent with the handshake automatically
 const socket = io('', {
   autoConnect: false
 })
