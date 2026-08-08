@@ -134,6 +134,7 @@ export default {
       'forwardSeekMode',
       'resumeHistorySeconds',
       'playWorkId',
+      'playWorkVas',
       'visualPlayerCoverUrl',
       'duration',
       'currentTime',
@@ -539,7 +540,7 @@ export default {
       try {
         navigator.mediaSession.metadata = new window.MediaMetadata({
           title: this.currentPlayingFile.title,
-          artist: "",
+          artist: this.playWorkVas.length ? this.playWorkVas[0].name : "",
           album: this.currentPlayingFile.workTitle,
           artwork: [
             {

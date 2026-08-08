@@ -48,6 +48,7 @@ export default function () {
     swapSeekButton: LocalStorage.has(SWAP_SEEK_BUTTON_KEY) && LocalStorage.getItem(SWAP_SEEK_BUTTON_KEY), // 交换进度按钮与切换按钮
     visualPlayerCoverUrl: '', // 可视化播放器的封面图
     playWorkId: 0, // 当前播放作品的id
+    playWorkVas: [], // VAs of the playing work, [{id, name}]; media session shows the first
 
     // swap L/R; graph stays for the session once built, off = passthrough
     flipLRChannel: LocalStorage.has(FLIP_LR_CHANNEL_KEY) && LocalStorage.getItem(FLIP_LR_CHANNEL_KEY),

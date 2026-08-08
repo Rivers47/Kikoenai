@@ -67,6 +67,7 @@ const mutations = {
       state.visualPlayerCoverUrl = coverUrl
     }
     state.playWorkId = workId
+    state.playWorkVas = payload.vas || []
     state.workLastTrackId = payload.workLastTrackId || ''
     if (Object.prototype.hasOwnProperty.call(payload, "resumeHistorySeconds")) {
       state.resumeHistorySeconds = payload.resumeHistorySeconds
@@ -76,6 +77,7 @@ const mutations = {
     state.playing = false
     state.queue = []
     state.queueIndex = 0
+    state.playWorkVas = []
     state.workLastTrackId = ''
   },
   ADD_TO_QUEUE: (state, file) => {

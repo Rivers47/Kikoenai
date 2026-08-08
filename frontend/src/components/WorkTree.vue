@@ -233,6 +233,7 @@ export default {
         const resumeSeconds = this.trackProgress[item.contentHash];
         this.$store.commit('AudioPlayer/SET_QUEUE', {
           workId: this.metadata.id,
+          vas: this.metadata.vas,
           queue: this.queue.concat(),
           index: this.queue.findIndex(file => (file.trackId || file.hash) === item.trackId),
           resetPlaying: true,
@@ -250,6 +251,7 @@ export default {
         const resumeSeconds = item && item.contentHash ? this.trackProgress[item.contentHash] : null;
         this.$store.commit('AudioPlayer/SET_QUEUE', {
           workId: this.metadata.id,
+          vas: this.metadata.vas,
           queue: this.queue.concat(),
           index: this.queue.findIndex(file => (file.trackId || file.hash) === trackId),
           resetPlaying: true,

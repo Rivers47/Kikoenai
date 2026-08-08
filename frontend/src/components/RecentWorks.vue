@@ -116,6 +116,7 @@ export default {
     resumeThisHistory(work) {
       this.$store.commit('AudioPlayer/SET_QUEUE', {
         workId: work.id,
+        vas: work.vas,
         queue: work.state.queue,
         index: work.state.index,
         resetPlaying: false,

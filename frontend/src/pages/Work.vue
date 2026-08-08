@@ -141,6 +141,7 @@ export default {
       this.$store.commit('AudioPlayer/TOGGLE_HIDE')
       this.$store.commit('AudioPlayer/SET_QUEUE', {
         workId: this.metadata.id,
+        vas: this.metadata.vas,
         queue: this.metadata.state.queue,
         index: this.metadata.state.index,
         resetPlaying: false,
