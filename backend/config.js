@@ -79,6 +79,11 @@ const defaultConfig = {
   offloadMedia: false,
   offloadStreamPath: '/media/stream/',          // /media/stream/RJ123456/subdirs/track.mp3
   offloadDownloadPath: '/media/download/',      // /media/download/RJ123456/subdirs/track.mp3
+  enableTranscoding: true,
+  transcodeBitrate: '96k',
+  transcodeMaxConcurrent: 1,
+  transcodeCacheDir: path.join(dataRoot, 'transcodes'),
+  transcodeUseDefaultPath: false, // Ignores transcodeCacheDir if set to true
 };
 const initConfig = (writeConfigToFile = !process.env.FREEZE_CONFIG_FILE) => {
   config = Object.assign(config, defaultConfig);
@@ -128,6 +133,9 @@ const readConfig = () => {
   if(!path.isAbsolute(config.databaseFolderDir)) {
     config.databaseFolderDir = path.join(dataRoot, config.databaseFolderDir);
   }
+  if(!path.isAbsolute(config.transcodeCacheDir)) {
+    config.transcodeCacheDir = path.join(dataRoot, config.transcodeCacheDir);
+  }
 
   // Use ./covers and ./sqlite to override settings, ignoring corresponding fields in config
   if (config.coverUseDefaultPath) {
@@ -135,6 +143,9 @@ const readConfig = () => {
   }
   if (config.dbUseDefaultPath) {
     config.databaseFolderDir = path.join(dataRoot, 'sqlite');
+  }
+  if (config.transcodeUseDefaultPath) {
+    config.transcodeCacheDir = path.join(dataRoot, 'transcodes');
   }
 
   if (process.env.NODE_ENV === 'production' || config.production) {
@@ -173,10 +184,14 @@ class publicConfig {
   get forwardSeekTime() {
     return config.forwardSeekTime;
   }
+  get enableTranscoding() {
+    return config.enableTranscoding;
+  }
   export() {
     return {
       rewindSeekTime: this.rewindSeekTime,
       forwardSeekTime: this.forwardSeekTime,
+      enableTranscoding: this.enableTranscoding,
     };
   }
 }

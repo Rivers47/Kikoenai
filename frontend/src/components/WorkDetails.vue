@@ -227,6 +227,8 @@
 
       <q-btn dense @click="scanWorkFile" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.scanFiles')" />
 
+      <q-btn v-if="enableTranscoding" dense :loading="downloadOfflineLoading" @click="toggleWorkOfflineDownload" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="isWorkDownloaded(metadata.id) ? $t('workdetails.removeOfflineDownload') : $t('workdetails.downloadOffline')" />
+
       <q-btn v-if="isAdmin" dense @click="showEditDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.editMetadata')" />
 
       <q-btn dense :loading="refreshMetadataLoading" @click="refreshMetadata" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.refreshMetadata')" />
@@ -253,7 +255,8 @@ import CoverSFW from 'components/CoverSFW'
 import WriteReview from './WriteReview'
 import EditMetadata from './EditMetadata'
 import NotifyMixin from '../mixins/Notification.js'
-import { mapState } from 'vuex'
+import { mapState, mapGetters } from 'vuex'
+import { cacheFile, uncacheFile, collectDownloadableFiles } from '../utils/downloads'
 
 export default {
   name: 'WorkDetails',
@@ -276,6 +279,7 @@ export default {
   data() {
     return {
       refreshMetadataLoading: false,
+      downloadOfflineLoading: false,
       userMarked: false,
       rating: 0,
       progress: '',
@@ -346,6 +350,14 @@ export default {
     ...mapState('AudioPlayer', [
       'playing',
       'playWorkId'
+    ]),
+
+    ...mapState('Downloads', [
+      'enableTranscoding',
+    ]),
+
+    ...mapGetters('Downloads', [
+      'isWorkDownloaded',
     ]),
   },
 
@@ -510,7 +522,74 @@ export default {
       const mins = Math.floor(totalSeconds / 60)
       const secs = Math.floor(totalSeconds % 60)
       return `${mins}:${secs.toString().padStart(2, '0')}`
-    }
+    },
+
+    async cacheAndCommit (url, extra) {
+      const bytes = await cacheFile(url);
+      this.$store.commit('Downloads/ADD_DOWNLOADED_FILE', {
+        url,
+        workId: this.metadata.id,
+        workTitle: this.metadata.title,
+        bytes,
+        downloadedAt: Date.now(),
+        ...extra,
+      });
+    },
+
+    // Pulls in everything needed to fully use this work offline: audio
+    // tracks, lyric/subtitle files, the cover image, and the JSON metadata
+    // Work.vue/WorkDetails.vue need to render -- not just the audio. See
+    // frontend/CLAUDE.md for why the metadata JSON is included too.
+    async toggleWorkOfflineDownload() {
+      const workId = this.metadata.id;
+
+      if (this.isWorkDownloaded(workId)) {
+        const filesToRemove = this.$store.state.Downloads.downloadedFiles.filter(f => f.workId === workId);
+        for (const file of filesToRemove) {
+          await uncacheFile(file.url);
+          this.$store.commit('Downloads/REMOVE_DOWNLOADED_FILE', file.url);
+        }
+        return;
+      }
+
+      this.downloadOfflineLoading = true;
+      try {
+        const tracksResponse = await this.$axios.get(`/api/tracks/${workId}`);
+        const tree = tracksResponse.data.tree || tracksResponse.data;
+        const files = collectDownloadableFiles(tree);
+
+        for (const file of files) {
+          await this.cacheAndCommit(`/api/media/offline/${file.trackId}`, {
+            trackId: file.trackId,
+            type: file.type,
+            title: file.title,
+          });
+        }
+
+        await this.cacheAndCommit(`/api/cover/${workId}?type=main`, {
+          trackId: null,
+          type: 'cover',
+          title: 'cover',
+        });
+
+        const metadataUrls = [
+          `/api/work/${workId}`,
+          `/api/tracks/${workId}`,
+          `/api/review?work_id=${workId}`,
+          `/api/work/${workId}/memo`,
+        ];
+        for (const url of metadataUrls) {
+          await this.cacheAndCommit(url, { trackId: null, type: 'metadata', title: url });
+        }
+
+        this.showSuccNotif(this.$t('workdetails.downloadOfflineSuccess'));
+      } catch(err) {
+        console.error(err);
+        this.showErrNotif(err.message || err);
+      } finally {
+        this.downloadOfflineLoading = false;
+      }
+    },
   }
 }
 </script>

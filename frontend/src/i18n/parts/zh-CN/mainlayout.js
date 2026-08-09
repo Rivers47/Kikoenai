@@ -12,6 +12,7 @@ export default {
   mediaLibrary: '媒体库',
   fullScreenMode: '大图模式',
   favourites: '我的收藏',
+  downloads: '离线下载',
   circles: '社团',
   tags: '标签',
   voiceActors: '声优',

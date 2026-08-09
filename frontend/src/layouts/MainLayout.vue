@@ -212,6 +212,7 @@ export default {
         { titleKey: 'mediaLibrary', icon: 'widgets', path: '/' },
         { titleKey: 'fullScreenMode', icon: 'play_circle', path: '/fullScreenPlayer' },
         { titleKey: 'favourites', icon: 'favorite', path: '/favourites' },
+        { titleKey: 'downloads', icon: 'download_done', path: '/downloads' },
         { titleKey: 'circles', icon: 'group', path: '/circles' },
         { titleKey: 'tags', icon: 'label', path: '/tags' },
         { titleKey: 'voiceActors', icon: 'mic', path: '/vas' },
@@ -233,6 +234,7 @@ export default {
   mounted () {
     this.initUser();
     this.checkLockFileNotice();
+    this.fetchSharedConfig();
   },
 
   computed: {
@@ -278,6 +280,16 @@ export default {
     search (keyword) {
       this.keyword = keyword
       this.$router.push(keyword ? { path: '/works', query: { keyword } } : '/works')
+    },
+
+    fetchSharedConfig () {
+      this.$axios.get('/api/config/shared')
+        .then((res) => {
+          this.$store.commit('Downloads/SET_ENABLE_TRANSCODING', !!res.data.sharedConfig.enableTranscoding)
+        })
+        .catch((error) => {
+          console.error(error)
+        })
     },
 
     initUser () {

@@ -108,14 +108,24 @@ export default {
 
   computed: {
     source () {
+      const trackId = this.currentPlayingFile.trackId || this.currentPlayingFile.hash
       if (this.currentPlayingFile.mediaStreamUrl) {
         return `${this.currentPlayingFile.mediaStreamUrl}`
-      } else if (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) {
-        return `/api/media/stream/${this.currentPlayingFile.trackId || this.currentPlayingFile.hash}`
+      } else if (trackId && this.isDownloaded(trackId)) {
+        // Once downloaded, always play from the offline copy -- online or
+        // offline -- rather than re-streaming full quality. See
+        // frontend/CLAUDE.md for why. This only changes the returned URL
+        // value; _loadSource()'s no-op comparison and the synchronous call in
+        // the native `ended` handler are untouched.
+        return `/api/media/offline/${trackId}`
+      } else if (trackId) {
+        return `/api/media/stream/${trackId}`
       } else {
         return ""
       }
     },
+
+    ...mapGetters('Downloads', ['isDownloaded', 'isFileDownloaded']),
 
     ...mapState('AudioPlayer', [
       'playing',
@@ -545,7 +555,13 @@ export default {
 
         this.lrcAvailable = true;
         console.log('读入歌词');
-        const lrcUrl = `/api/media/stream/${check_response.data.trackId || check_response.data.hash}`;
+        const lyricTrackId = check_response.data.trackId || check_response.data.hash;
+        // Same mechanism as the audio source computed: once a work is
+        // downloaded, its lyric file is downloaded too (see downloadWork in
+        // WorkDetails.vue), so prefer serving it from the offline copy.
+        const lrcUrl = this.isFileDownloaded(lyricTrackId)
+          ? `/api/media/offline/${lyricTrackId}`
+          : `/api/media/stream/${lyricTrackId}`;
         const lyricExtension = check_response.data.lyricExtension.toLowerCase();
 
         const response = await this.$axios.get(lrcUrl)

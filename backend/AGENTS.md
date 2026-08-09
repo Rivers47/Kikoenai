@@ -252,6 +252,7 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/circles` | GET | List all circles |
 | `/api/vas` | GET | List all VAs |
 | `/api/media/:id/:file` | GET | Stream audio file (supports Range) |
+| `/api/media/offline/:id/:index` | GET | Best offline-friendly copy of a track: lossless (`.wav`/`.flac`) is transcoded to Opus on first request and cached on disk (content-hash-keyed filename, no DB row); already-lossy audio and text/subtitle files are served as-is. Always bypasses `config.offloadMedia`. 503 if `config.enableTranscoding` is false and the source is lossless. |
 | `/api/cover/:id` | GET | Get cover image |
 | `/api/files/:id` | GET | List files in a work |
 | `/api/review` | GET | List works the user has reviewed/rated/progress-marked

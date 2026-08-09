@@ -8,6 +8,7 @@ import Login from 'pages/Login'
 import Favourites from 'pages/Favourites'
 import FullScreenPlayer from 'pages/FullScreenPlayer'
 import TextViewer from 'pages/TextViewer'
+import Downloads from 'pages/Downloads'
 
 import Folders from 'pages/Dashboard/Folders'
 import Scanner from 'pages/Dashboard/Scanner'
@@ -96,6 +97,10 @@ const routes = [
         // trackId is `${workId}/${index}`, so the param has to span the slash
         path: 'text/:trackId(.*)',
         component: TextViewer
+      },
+      {
+        path: 'downloads',
+        component: Downloads
       },
       ...prefixRoutes('favourites', [
         {
