@@ -66,14 +66,24 @@ export default {
     },
 
     source () {
+      const trackId = this.currentPlayingFile.trackId || this.currentPlayingFile.hash
       if (this.currentPlayingFile.mediaStreamUrl) {
         return `${this.currentPlayingFile.mediaStreamUrl}`
-      } else if (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) {
-        return apiUrl(`/api/media/stream/${this.currentPlayingFile.trackId || this.currentPlayingFile.hash}`)
+      } else if (trackId && this.isDownloaded(trackId)) {
+        // Once downloaded, always play from the offline copy -- online or
+        // offline -- rather than re-streaming full quality. See
+        // frontend/CLAUDE.md for why. This only changes the returned URL
+        // value; _loadSource()'s no-op comparison and the synchronous call in
+        // the native `ended` handler are untouched.
+        return apiUrl(`/api/media/offline/${trackId}`)
+      } else if (trackId) {
+        return apiUrl(`/api/media/stream/${trackId}`)
       } else {
         return ""
       }
     },
+
+    ...mapGetters('Downloads', ['isDownloaded', 'isFileDownloaded']),
 
     ...mapState('AudioPlayer', [
       'playing',
@@ -537,7 +547,13 @@ export default {
             }];
 
         const fetched = await Promise.all(sources.map(async (source) => {
-          const response = await this.$axios.get(`/api/media/stream/${source.trackId}`);
+          // Same mechanism as the audio source computed: once a work is
+          // downloaded, its lyric files are downloaded too (see downloadWork in
+          // WorkDetails.vue), so prefer serving them from the offline copy.
+          const lrcUrl = this.isFileDownloaded(source.trackId)
+            ? `/api/media/offline/${source.trackId}`
+            : `/api/media/stream/${source.trackId}`;
+          const response = await this.$axios.get(lrcUrl);
           const lyricExtension = (source.lyricExtension || '').toLowerCase();
           if (lyricExtension === '.srt' || lyricExtension === '.vtt') {
             console.log('srt convert to lrc');

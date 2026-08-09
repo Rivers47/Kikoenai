@@ -2,6 +2,7 @@ import { createStore } from 'vuex'
 
 import AudioPlayer from './module-AudioPlayer'
 import User from './module-User'
+import Downloads from './module-Downloads'
 
 /*
  * If not building with SSR mode, you can
@@ -16,7 +17,8 @@ export default function (/* { ssrContext } */) {
   const Store = createStore({
     modules: {
       AudioPlayer,
-      User
+      User,
+      Downloads
     },
 
     // enable strict mode (adds overhead!)

@@ -139,6 +139,11 @@ const defaultConfig = {
   offloadMedia: false,
   offloadStreamPath: '/media/stream/',          // /media/stream/RJ123456/subdirs/track.mp3
   offloadDownloadPath: '/media/download/',      // /media/download/RJ123456/subdirs/track.mp3
+  enableTranscoding: true,
+  transcodeBitrate: '96k',
+  transcodeMaxConcurrent: 1,
+  transcodeCacheDir: path.join(dataRoot, 'transcodes'),
+  transcodeUseDefaultPath: false, // Ignores transcodeCacheDir if set to true
 };
 const initConfig = (writeConfigToFile = !process.env.FREEZE_CONFIG_FILE) => {
   config = Object.assign(config, defaultConfig);
@@ -205,7 +210,7 @@ const resolveDataFolder = (dir, defaultName, useDefault) => {
 };
 
 /**
- * Resolve the three configurable data folders in place.
+ * Resolve the four configurable data folders in place.
  *
  * Must run after ANY assignment into `config`, not just the initial read:
  * updateConfig re-reads the raw file and hands it to setConfig, whose
@@ -218,6 +223,7 @@ const resolveDataFolders = () => {
   config.coverFolderDir = resolveDataFolder(config.coverFolderDir, 'covers', config.coverUseDefaultPath);
   config.imageFolderDir = resolveDataFolder(config.imageFolderDir, 'images', config.imageUseDefaultPath);
   config.databaseFolderDir = resolveDataFolder(config.databaseFolderDir, 'sqlite', config.dbUseDefaultPath);
+  config.transcodeCacheDir = resolveDataFolder(config.transcodeCacheDir, 'transcodes', config.transcodeUseDefaultPath);
 };
 
 /**
@@ -291,10 +297,14 @@ class publicConfig {
   get forwardSeekTime() {
     return config.forwardSeekTime;
   }
+  get enableTranscoding() {
+    return config.enableTranscoding;
+  }
   export() {
     return {
       rewindSeekTime: this.rewindSeekTime,
       forwardSeekTime: this.forwardSeekTime,
+      enableTranscoding: this.enableTranscoding,
     };
   }
 }
