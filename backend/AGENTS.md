@@ -561,6 +561,7 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 |----------|--------|---------|
 | `/api/media/stream/:id/*path` | GET | Stream one file (Range supported). Redirects to the reverse proxy when `config.offloadMedia` is on, except `.txt`/`.lrc`, which Express serves itself for `jschardet` charset detection |
 | `/api/media/download/:id/*path` | GET | Same file as an attachment |
+| `/api/media/offline/:id/*path` | GET | The best offline-friendly copy of a track: a lossless source (`.wav`/`.flac`) is transcoded to Opus on first request and cached on disk under `config.transcodeCacheDir`; lossy audio and text are served as-is. Always served by Express, never offloaded — the proxy maps to the original file and has no place for a cached transcode. 503 when `config.enableTranscoding` is off |
 | `/api/media/check-lrc/:id/*path` | GET | Lyric sidecars for a track → `{result, message, lyrics: [{trackId, lyricExtension}]}`, one entry per speaker — see §2.8b |
 
 > **`*path` is the work-relative path, and it is the file's one identity.** A

@@ -147,6 +147,53 @@ module.exports = function (ctx) {
           /\/api\//,
           /\/media\//
         )
+
+        // Offline downloads: populated only by the explicit "download for
+        // offline" action (src/utils/downloads.js), never by ordinary
+        // streaming/browsing -- see frontend/CLAUDE.md for the full design.
+        opts.runtimeCaching = opts.runtimeCaching || []
+        // Track/lyric files served by the offline-copy endpoint. Scoped
+        // narrowly to /api/media/offline/ -- never /api/media/stream/, so the
+        // original lossless stream never ends up in Cache Storage.
+        // `rangeRequests: true` is workbox-build's shorthand for attaching a
+        // RangeRequestsPlugin -- do NOT `require('workbox-range-requests')`
+        // and pass `plugins: [new RangeRequestsPlugin()]` instead: that
+        // package references SW-only globals (`self`) at import time and
+        // crashes immediately when this Node-side config file evaluates it.
+        // The shorthand lets workbox-build reference the module itself when
+        // generating the actual service worker (a browser/SW context).
+        opts.runtimeCaching.push({
+          urlPattern: /^\/api\/media\/offline\/.*$/,
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'offline-tracks',
+            rangeRequests: true,
+            matchOptions: { ignoreVary: true }
+          }
+        })
+        // Cover images for downloaded works.
+        opts.runtimeCaching.push({
+          urlPattern: /^\/api\/cover\/.*$/,
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'offline-tracks',
+            matchOptions: { ignoreVary: true }
+          }
+        })
+        // Work-detail page data (title/tags/track-tree/review). NetworkFirst,
+        // not CacheFirst: browsing any work -- downloaded or not -- should show
+        // live data whenever online, only falling back to the cached snapshot
+        // when the network is actually down. The explicit download action also
+        // seeds this cache directly so a downloaded work is navigable offline
+        // immediately, not only after having been viewed once online.
+        opts.runtimeCaching.push({
+          urlPattern: /^\/api\/(work|tracks)\/[^/]+$|^\/api\/review(\?.*)?$/,
+          handler: 'NetworkFirst',
+          options: {
+            cacheName: 'offline-tracks',
+            matchOptions: { ignoreVary: true }
+          }
+        })
       }
     },
 

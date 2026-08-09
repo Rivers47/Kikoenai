@@ -12,6 +12,7 @@ export default {
   mediaLibrary: 'Media Library',
   fullScreenMode: 'Full Screen',
   favourites: 'Favourites',
+  downloads: 'Downloads',
   circles: 'Circles',
   tags: 'Tags',
   voiceActors: 'Voice Actors',

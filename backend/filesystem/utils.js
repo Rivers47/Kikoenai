@@ -1,4 +1,5 @@
 const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 // Replacement for recursive-readdir: returns all files recursively as absolute paths
 // Uses sync glob since the walked directories are bounded and the result is needed immediately.
@@ -41,6 +42,80 @@ async function getAudioFileDuration(filePath) {
 const getAudioFileDurationLimited = (filePath) => limitP.call(getAudioFileDuration, filePath);
 
 
+// Transcoding is CPU-heavy and this runs on modest self-hosted hardware
+// (NAS/RPi), so it gets its own, smaller, dedicated concurrency budget --
+// deliberately separate from limitP (sized by maxParallelism), which bounds
+// cheap I/O-bound work (ffprobe), not CPU-bound encoding.
+const transcodeLimitP = new LimitPromise(config.transcodeMaxConcurrent || 1);
+
+/**
+ * Deterministic cache filename for a transcoded (Opus) copy of a track.
+ *
+ * Keyed by everything the output depends on: the source file (work id +
+ * relPath), the source version (mtime) and the encode settings (bitrate).
+ * Miss any of those and the cache serves the wrong bytes forever -- an earlier
+ * version keyed on the source content hash alone, so changing
+ * config.transcodeBitrate kept serving the old bitrate from cache, and nothing
+ * anywhere cleans this directory up.
+ *
+ * The digest is of the key, not of the file: a relPath cannot go in a filename
+ * raw (slashes, spaces, unicode), and reading the audio to hash it is the cost
+ * this cache exists to avoid. mtime comes from t_work.memo, already on disk.
+ *
+ * Changing the bitrate therefore orphans the previous cache rather than
+ * invalidating it. That is a one-off admin action -- delete
+ * config.transcodeCacheDir to reclaim the space.
+ *
+ * @param {String} id Work id (e.g. '123456', 'd215444').
+ * @param {String} relPath Work-relative path of the source file.
+ * @param {Number|String} mtime Source mtime (ms), from memo.mtime.
+ * @param {String} bitrate ffmpeg -b:a value, e.g. '96k'.
+ * @returns {String} e.g. '123456_a1b2c3d4e5f6a7b8.opus'
+ */
+function transcodeFileName(id, relPath, mtime, bitrate) {
+  const digest = crypto.createHash('sha256')
+    .update(`${relPath}\u0000${mtime}\u0000${bitrate}`)
+    .digest('hex')
+    .slice(0, 16);
+  return `${id}_${digest}.opus`;
+}
+
+/**
+ * Transcode an audio file to Opus at the given bitrate, writing through a
+ * temp file + rename so a concurrent request for the same track never sees a
+ * partially-written cache file -- unlike ffprobe's sub-second probe, a
+ * transcode can take minutes, so a plain write is a real corruption risk here.
+ * @param {String} sourcePath Absolute path to the source (lossless) audio file.
+ * @param {String} cachePath Absolute path to write the final Opus file to.
+ * @param {String} bitrate ffmpeg -b:a value, e.g. '96k'.
+ */
+async function transcodeToOpus(sourcePath, cachePath, bitrate) {
+  fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+  const tmpPath = `${cachePath}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    await execFile('ffmpeg', [
+      '-y',
+      '-i', sourcePath,
+      '-map_metadata', '-1',
+      '-vn',
+      '-c:a', 'libopus',
+      '-b:a', bitrate,
+      tmpPath,
+    ], { timeout: 600000 });
+    fs.renameSync(tmpPath, cachePath);
+  } catch (err) {
+    try {
+      fs.unlinkSync(tmpPath);
+    } catch (unlinkErr) {
+      // ENOENT is fine -- ffmpeg may have failed before ever writing tmpPath
+      if (unlinkErr.code !== 'ENOENT') {
+        console.error(`failed to clean up transcode tmp file: ${tmpPath}`, unlinkErr);
+      }
+    }
+    throw err;
+  }
+}
+const transcodeToOpusLimited = (sourcePath, cachePath, bitrate) => transcodeLimitP.call(transcodeToOpus, sourcePath, cachePath, bitrate);
 
 // 从文件系统，抓取单个作品本地文件的杂项信息：
 //  * 音频文件对应的时长
@@ -542,4 +617,6 @@ module.exports = {
   formatID,
   coverFileName,
   scrapeWorkMemo,
+  transcodeFileName,
+  transcodeToOpusLimited,
 };

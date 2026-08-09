@@ -4,6 +4,7 @@ const { config } = require('../config');
 const fs = require('fs');
 const path = require('path');
 const jschardet = require('jschardet');
+const { transcodeFileName, transcodeToOpusLimited } = require('../filesystem/utils');
 const { joinFragments } = require('./utils/url');
 const { isValidRequest, workIdParam } = require('./utils/validate');
 const { findLyricTracks } = require('./utils/lyrics');
@@ -15,6 +16,12 @@ const offloadUrlFor = (basePath, rootFolder, work, track) => {
   const url = joinFragments(basePath, rootFolder.name, work.dir, track.subtitle || '', track.title);
   return process.platform === 'win32' ? url.replace(/\\/g, '/') : url;
 };
+
+// Sources that get transcoded for the offline-copy endpoint (see /offline
+// below) -- everything else is either text (charset-detected and served as-is)
+// or already-lossy audio (served as-is, re-encoding it would only lose quality).
+const LOSSLESS_AUDIO_EXT_LIST = ['.wav', '.flac'];
+const TEXT_EXT_LIST = ['.txt', '.lrc', '.srt', '.ass', '.vtt'];
 
 // GET (stream) a specific track from work folder
 router.get('/stream/:id/*path',
@@ -77,6 +84,75 @@ router.get('/download/:id/*path',
         // By default, serve file through express
         res.download(path.join(workDir, track.subtitle || '', track.title));
       }
+    } catch (err) {
+      next(err);
+    }
+});
+
+// GET the best offline-friendly copy of a track: lossless audio (.wav/.flac)
+// is transcoded to Opus on first request and cached on disk thereafter;
+// already-lossy audio and text/subtitle files are served as-is. Named for
+// what it's for (an offline-downloadable copy), not for what it does
+// internally, since most requests don't actually transcode anything.
+router.get('/offline/:id/*path',
+  workIdParam(),
+  async (req, res, next) => {
+    if(!isValidRequest(req, res)) return;
+
+    try {
+      const resolved = await resolveTrack(req, res);
+      if (!resolved) return;
+      const { workDir, track } = resolved;
+
+      // This route always serves through Express itself, ignoring
+      // config.offloadMedia -- the nginx offload path maps straight to
+      // the original on-disk file, and a transcoded/cached file has no
+      // place in that mapping.
+      const fileName = path.join(workDir, track.subtitle || '', track.title);
+      const extName = path.extname(fileName).toLocaleLowerCase();
+
+      if (TEXT_EXT_LIST.includes(extName)) {
+        const fileBuffer = fs.readFileSync(fileName);
+        const charsetMatch = jschardet.detect(fileBuffer).encoding;
+        if (charsetMatch) {
+          res.setHeader('Content-Type', `text/plain; charset=${charsetMatch}`);
+        }
+        res.sendFile(fileName, { dotfiles: 'allow' });
+        return;
+      }
+
+      if (!LOSSLESS_AUDIO_EXT_LIST.includes(extName)) {
+        // Already-lossy audio (or any other file type) -- serve as-is,
+        // re-encoding lossy source would only waste CPU and lose quality.
+        res.sendFile(fileName, { dotfiles: 'allow' });
+        return;
+      }
+
+      if (!config.enableTranscoding) {
+        res.status(503).send({error: '转码功能已禁用'});
+        return;
+      }
+
+      // The cache key covers the source file, its version and the encode
+      // settings; see transcodeFileName. mtime is read from disk rather than
+      // from memo.mtime so a file changed since the last scan is not served
+      // from a stale cache entry -- one stat against a transcode that can run
+      // for minutes.
+      const { mtimeMs } = await fs.promises.stat(fileName);
+      const cachePath = path.join(
+        config.transcodeCacheDir,
+        transcodeFileName(req.params.id, track.shortFilePath, Math.round(mtimeMs), config.transcodeBitrate)
+      );
+
+      if (!fs.existsSync(cachePath)) {
+        await transcodeToOpusLimited(fileName, cachePath, config.transcodeBitrate);
+      }
+
+      // The key pins path, mtime and bitrate, so this file's bytes can never
+      // change -- longer than covers, which can only assert 30 days since
+      // DLsite/Fanza could replace the source image.
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
+      res.sendFile(cachePath, { dotfiles: 'allow' });
     } catch (err) {
       next(err);
     }

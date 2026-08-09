@@ -12,6 +12,7 @@ export default {
   mediaLibrary: 'ライブラリ',
   fullScreenMode: 'フルスクリーン',
   favourites: 'お気に入り',
+  downloads: 'オフラインダウンロード',
   circles: 'サークル',
   tags: 'タグ',
   voiceActors: '声優',
