@@ -1,7 +1,7 @@
 <template>
   <q-card class="card hover-show">
     <router-link :to="`/work/${metadata.id}`">
-      <CoverSFW :workid="metadata.id" :nsfw="false" :release="metadata.release" :tags="metadata.tags" />
+      <CoverSFW :workid="metadata.id" :nsfw="false" :release="metadata.release" :tags="metadata.tags" :cover-url="coverUrl" />
     </router-link>
 
     <q-separator />
@@ -121,6 +121,11 @@ export default {
     thumbnailMode: {
       type: Boolean,
       default: false
+    },
+    // Optional cover source override, forwarded to CoverSFW (see there).
+    coverUrl: {
+      type: String,
+      default: ''
     }
   },
 

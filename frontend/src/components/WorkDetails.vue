@@ -566,11 +566,23 @@ export default {
           });
         }
 
-        await this.cacheAndCommit(`/api/cover/${workId}?type=main`, {
-          trackId: null,
-          type: 'cover',
-          title: 'cover',
-        });
+        // All three cover variants: they are distinct Cache Storage keys, and
+        // each is requested by a different part of the UI (WorkDetails/the
+        // Downloads page use ?type=main, WorkCard the bare URL, WorkListItem
+        // and the player ?type=sam). Caching only one leaves the others blank
+        // offline.
+        const coverUrls = [
+          `/api/cover/${workId}?type=main`,
+          `/api/cover/${workId}`,
+          `/api/cover/${workId}?type=sam`,
+        ];
+        for (const url of coverUrls) {
+          await this.cacheAndCommit(url, {
+            trackId: null,
+            type: 'cover',
+            title: 'cover',
+          });
+        }
 
         const metadataUrls = [
           `/api/work/${workId}`,
