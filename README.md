@@ -75,6 +75,11 @@ Edit `/path/to/your/voiceworks` to your folder that contains the voice work file
 
 The server will be up on port `4545` on the host.
 
+### First Login
+
+On first run, a default administrator account is created: username `admin`,
+password `admin`. 
+
 ### Development
 
 ```bash

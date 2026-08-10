@@ -59,6 +59,16 @@ const defaultConfig = {
   httpProxyPort: 0,
   listenPort: 8888,
   blockRemoteConnection: false,
+  // Hostnames (no port) this server should answer requests for, in addition to
+  // localhost/loopback/private-LAN addresses, which are always allowed. Defends
+  // against DNS-rebinding-style attacks where a malicious site's own domain is
+  // briefly pointed at this server's address: the browser treats such a request
+  // as "same-origin" (same hostname string) even though the IP just changed, so
+  // it will still carry a valid session cookie unless the Host header itself is
+  // checked server-side. Empty by default -- opt-in, so upgrading does not lock
+  // out an existing public hostname nobody has listed yet. Add your domain (e.g.
+  // "kikoeru.example.com") once you have one to start enforcing.
+  allowedHosts: [],
   behindProxy: false,
   httpsEnabled: false,
   httpsPrivateKey: 'kikoeru.key',

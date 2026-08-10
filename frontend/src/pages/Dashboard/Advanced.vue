@@ -259,6 +259,25 @@
             <q-toggle v-model="config.production" dense disable />
           </q-item-section>
         </q-item>
+
+        <q-item>
+          <q-item-section>
+            <q-item-label>{{ $t('advanced.allowedHosts') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.allowedHostsCaption') }}</q-item-label>
+          </q-item-section>
+
+          <q-item-section>
+            <q-select
+              v-model="config.allowedHosts"
+              multiple
+              use-input
+              use-chips
+              hide-dropdown-icon
+              new-value-mode="add-unique"
+              :placeholder="$t('advanced.allowedHostsPlaceholder')"
+            />
+          </q-item-section>
+        </q-item>
       </q-list>
     </q-card>
 

@@ -17,7 +17,11 @@ RUN npm ci -w backend --omit=dev && npm cache clean --force
 # Final stage
 FROM node:24-alpine
 
-ENV IS_DOCKER=true
+# NODE_ENV=production forces auth on (see backend/config.js) and cannot be
+# overridden via the admin config -- required so the shipped image is never
+# accidentally exposed with every /api request treated as admin.
+ENV IS_DOCKER=true \
+    NODE_ENV=production
 WORKDIR /usr/src/kikoeru
 
 # Install runtime dependencies: tini for signal handling, ffmpeg for audio processing
