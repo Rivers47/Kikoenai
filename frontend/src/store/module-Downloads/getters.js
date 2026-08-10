@@ -26,10 +26,6 @@ const getters = {
     return state.downloadedFiles.some(f => f.workId === workId && f.type === 'metadata')
   },
 
-  downloadedTracks: (state) => {
-    return state.downloadedFiles.filter(f => f.type === 'audio')
-  },
-
   totalDownloadedBytes: (state) => {
     return state.downloadedFiles.reduce((sum, f) => sum + (f.bytes || 0), 0)
   },
