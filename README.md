@@ -75,6 +75,11 @@ Edit `/path/to/your/voiceworks` to your folder that contains the voice work file
 
 The server will be up on port `4545` on the host.
 
+#### Firefox LNA issue
+If you use a local DNS with a public looking hostname that points at a LAN IP,
+firefox has a bug that causes some LNA issue. The frontend will silently retry
+to fix it. Or you can add the domain to `network.lna.skip-domains` in `about:config`
+
 ### First Login
 
 On first run, a default administrator account is created: username `admin`,

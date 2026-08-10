@@ -231,7 +231,7 @@ export default {
 
   mounted () {
     this.initUser();
-    this.checkUpdate();
+    this.checkLockFileNotice();
   },
 
   computed: {
@@ -298,29 +298,12 @@ export default {
         })
     },
 
-    checkUpdate () {
+    // 检查升级后是否留有需要重新扫描的提示（见 backend/routes/version.js）。
+    // 原本这里还会提示有新版本可用，但那个检查比对的是上游仓库的发布版本，
+    // 与本项目无关，已连同后端的 GitHub 请求一起移除。
+    checkLockFileNotice () {
       this.$axios.get('/api/version')
         .then((res) => {
-          if (res.data.update_available && res.data.notifyUser) {
-            this.$q.notify({
-              message: this.$t('mainlayout.updateAvailable'),
-              color: 'primary',
-              textColor: 'white',
-              icon: 'cloud_download',
-              timeout: 5000,
-              actions: [
-                { label: this.$t('common.ok'), color: 'white' },
-                { label: this.$t('mainlayout.viewUpdate'), color: 'white', handler: () => {
-                    Object.assign(document.createElement('a'), {
-                      target: '_blank',
-                      href: 'https://github.com/umonaca/kikoeru-express/releases',
-                    }).click();
-                  }
-                }
-              ],
-            })
-          }
-
           if (res.data.lockFileExists) {
             this.$q.notify ({
               message: res.data.lockReason,

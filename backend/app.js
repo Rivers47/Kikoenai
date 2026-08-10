@@ -91,14 +91,24 @@ app.use((req, res, next) => {
 
 // Browsers gate any request that crosses into a more-private IP address space
 // (e.g. a public hostname resolving to a LAN IP, as with most self-hosted
-// setups) behind a Local Network Access preflight, even when the request is
-// otherwise same-origin. Without an explicit allow, some browsers fail the
-// request outright instead of prompting -- surfaced to the frontend as a bare
-// "Network Error", most visible on the GETs fired right after page load
-// (before any such preflight has had a chance to be resolved for the origin).
-// This only answers that preflight; the app's own CORS/CSRF model stays
-// same-origin-only -- the actual GET/POST responses below still carry no
-// Access-Control-Allow-Origin header.
+// setups) behind a Local Network Access / Private Network Access preflight,
+// even when the request is otherwise same-origin. Without an explicit allow,
+// the request fails outright. This only answers that preflight; the app's own
+// CORS/CSRF model stays same-origin-only -- the actual GET/POST responses below
+// still carry no Access-Control-Allow-Origin header.
+//
+// Scope note, measured rather than assumed: Chromium sends this preflight, but
+// Firefox (153) does not -- it resolves LNA with an internal permission check
+// and reports `prompt action: auto_allow` without ever hitting the network.
+// Access logs from a Firefox + Caddy deployment contain zero OPTIONS requests,
+// so this middleware is Chromium-only in practice. Kept for those clients.
+//
+// This was originally added (87c32c6) to fix intermittent "Network Error" on the
+// GETs fired right after page load, and it did not, because that bug is not a
+// preflight failure: Firefox tears down and re-establishes its HTTP/2 connection
+// while resolving the LNA permission, silently cancelling requests already
+// dispatched on the discarded connection. No server response can prevent that --
+// the mitigation lives in the frontend, as a retry in src/boot/axios.js.
 //
 // The Origin check below is load-bearing, not cosmetic: this preflight fires
 // for ANY cross-origin request aimed at this host, not just requests from our

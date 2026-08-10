@@ -287,28 +287,6 @@
       </q-toolbar>
 
       <q-list>
-        <q-item style="height: 70px;">
-          <q-item-section>
-            <q-item-label>{{ $t('advanced.checkUpdate') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.checkUpdateCaption') }}</q-item-label>
-          </q-item-section>
-
-          <q-item-section avatar>
-            <q-toggle v-model="config.checkUpdate" dense />
-          </q-item-section>
-        </q-item>
-
-        <q-item v-if="config.checkUpdate">
-          <q-item-section>
-            <q-item-label>{{ $t('advanced.checkBeta') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.checkBetaCaption') }}</q-item-label>
-          </q-item-section>
-
-          <q-item-section avatar>
-            <q-toggle v-model="config.checkBetaUpdate" dense />
-          </q-item-section>
-        </q-item>
-
         <q-item>
           <q-item-section>
             <q-item-label>{{ $t('advanced.dbDefaultPath') }}</q-item-label>

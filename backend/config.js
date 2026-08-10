@@ -30,8 +30,6 @@ const defaultConfig = {
   version: pjson.version,
   production: process.env.NODE_ENV === 'production' ? true : false,
   dbBusyTimeout: 1000,
-  checkUpdate: true,
-  checkBetaUpdate: false,
   maxParallelism: 16,
   rootFolders: [
     // {

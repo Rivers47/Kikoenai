@@ -23,8 +23,6 @@ export default {
   langEnUS: 'English',
   langJaJP: '日本語',
   langZhTW: '繁體中文',
-  updateAvailable: 'GitHub上有新版本',
-  viewUpdate: '查看',
   remindLater: '以后提醒我',
   goToScanner: '前往扫描页',
 }
