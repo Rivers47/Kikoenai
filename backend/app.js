@@ -178,13 +178,21 @@ app.use((err, req, res, next) => {
 // Create HTTP and HTTPS server
 const server = http.createServer(app);
 
-// Keep idle keep-alive connections open longer than the browser's own idle
-// timeout (Firefox: 115s, Chrome: 300s). Node's default is only 5s, which
-// causes a race where the browser reuses a connection the server has already
-// closed -> request fails with "Network Error" (NS_ERROR_NET_RESET) in Firefox.
-// headersTimeout must be greater than keepAliveTimeout.
-server.keepAliveTimeout = 120000; // 120s
-server.headersTimeout = 125000;   // 125s
+// Keep idle keep-alive connections open longer than whoever is reusing them --
+// Node's default of 5s is far too short and makes the peer race us to the close,
+// which surfaces in the browser as "Network Error" (NS_ERROR_NET_RESET).
+//
+// The value has to sit ABOVE the idle timeout of the peer that owns the
+// connection pool, so that side always closes first and never hands a request
+// to a socket we just tore down. Two peers matter:
+//   - a browser talking to us directly (Firefox idles at 115s, Chrome at 300s)
+//   - a reverse proxy's upstream pool (Caddy's reverse_proxy defaults to 2m,
+//     nginx keepalive to 60s)
+// 300s was previously 120s, which exactly matched Caddy's 2m default -- both
+// ends expiring the same idle socket at the same instant is the very race this
+// is meant to remove. headersTimeout must stay greater than keepAliveTimeout.
+server.keepAliveTimeout = 300000; // 300s
+server.headersTimeout = 305000;   // 305s
 
 let httpsServer = null;
 let httpsSuccess = false;
@@ -194,8 +202,8 @@ if (config.httpsEnabled) {
       key: fs.readFileSync(config.httpsPrivateKey),
       cert: fs.readFileSync(config.httpsCert),
     },app);
-    httpsServer.keepAliveTimeout = 120000;
-    httpsServer.headersTimeout = 125000;
+    httpsServer.keepAliveTimeout = 300000;
+    httpsServer.headersTimeout = 305000;
     httpsSuccess = true;
   } catch (err) {
     console.error('HTTPS服务器启动失败，请检查证书位置以及是否文件可读');

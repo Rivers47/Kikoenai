@@ -82,13 +82,19 @@ export default {
         this.pagination = response.data.pagination;
         this.$refs.scroll.refresh();
         // console.log("vscroll = ", this.$refs.scroll);
+
+        // 只有请求成功后才判断是否已经全部加载完毕。
+        // 这个判断不能放到 try 外面：请求失败时 works 和 totalCount 都还是 0，
+        // 0 >= 0 会把 stopLoad 置成 true，于是一次偶发的网络错误就让组件在本次
+        // 页面生命周期内永远不再发请求 —— 而 Works 页在 keep-alive 里，
+        // 退出再进入也不会重新 mounted，只能整页刷新才恢复。
+        if (this.works.length >= this.pagination.totalCount) {
+          this.stopLoad = true;
+        }
       } catch(err) {
         console.warn('load recent work failed: ', err);
-      }
-      this.isLoading = false;
-
-      if (this.works.length >= this.pagination.totalCount) {
-        this.stopLoad = true;
+      } finally {
+        this.isLoading = false;
       }
     },
 
@@ -130,6 +136,14 @@ export default {
 
   mounted() {
     this.getHistory();
+  },
+
+  // Works 页在 keep-alive 中，加载失败后不会再次 mounted。
+  // 重新进入页面时，如果上一次一条都没加载出来就再试一次。
+  activated() {
+    if (this.works.length === 0) {
+      this.getHistory();
+    }
   },
 }
 </script>
