@@ -92,9 +92,6 @@ const initConfig = (writeConfigToFile = !process.env.FREEZE_CONFIG_FILE) => {
 const setConfig = (newConfig, writeConfigToFile = !process.env.FREEZE_CONFIG_FILE) => {
   // Prevent changing some values, overwrite with old ones
   newConfig.production = config.production;
-  if (process.env.NODE_ENV === 'production' || config.production) {
-    newConfig.auth = true;
-  }
   newConfig.md5secret = config.md5secret;
   newConfig.jwtsecret = config.jwtsecret;
 
@@ -136,7 +133,6 @@ const readConfig = () => {
   }
 
   if (process.env.NODE_ENV === 'production' || config.production) {
-    config.auth = true;
     config.production = true;
   }
 };
