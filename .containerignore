@@ -22,6 +22,7 @@ sqlite/*
 # Tests
 test-results
 tests
+backend/test
 *.spec.js
 
 # Nuxt

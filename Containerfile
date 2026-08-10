@@ -12,7 +12,11 @@ COPY package*.json ./
 COPY backend/package*.json ./backend/
 
 # Install only backend production dependencies using the workspace-aware root lock
-RUN npm ci -w backend --omit=dev && npm cache clean --force
+# node-gyp/tar and sqlite3's bundled C source are only needed to compile the
+# native addon; the compiled .node binary works fine without them afterwards.
+RUN npm ci -w backend --omit=dev && npm cache clean --force \
+    && rm -rf node_modules/node-gyp node_modules/tar \
+    && rm -rf backend/node_modules/sqlite3/deps backend/node_modules/sqlite3/src backend/node_modules/sqlite3/binding.gyp
 
 # Final stage
 FROM node:24-alpine
