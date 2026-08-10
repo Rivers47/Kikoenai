@@ -11,7 +11,6 @@ import WorkDetails from 'components/WorkDetails'
 // import WorkQueue from 'components/WorkQueue'
 import WorkTree from 'components/WorkTree'
 import NotifyMixin from '../mixins/Notification.js'
-import { mapState } from 'vuex'
 
 export default {
   name: 'Work',
@@ -36,13 +35,6 @@ export default {
     }
   },
 
-  computed: {
-    ...mapState('AudioPlayer', [
-      'playing',
-      'playWorkId'
-    ]),
-  },
-
   watch: {
     $route (to) {
       this.workid = to.params.id;
@@ -63,11 +55,8 @@ export default {
       try {
         const response = await this.$axios.get(`/api/work/${this.workid}`);
         this.metadata = response.data
-        // 如果有播放状态记录
-        // 同时当前尚未播放，则设置历史播放进度
-        if (this.metadata.state && this.playWorkId == 0) {
-          this.resumeMetadataPlayHistory()
-        }
+        // Do not auto-resume playback history on page load; the user must
+        // explicitly click the "Resume History" button (see WorkDetails.vue).
       } catch (error ) {
         if (error.response) {
           // 请求已发出，但服务器响应的状态码不在 2xx 范围内
