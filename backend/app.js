@@ -57,6 +57,32 @@ app.use(express.json());
 // Parse cookies -- the session id lives in an HttpOnly cookie
 app.use(cookieParser());
 
+// Browsers gate any request that crosses into a more-private IP address space
+// (e.g. a public hostname resolving to a LAN IP, as with most self-hosted
+// setups) behind a Local Network Access preflight, even when the request is
+// otherwise same-origin. Without an explicit allow, some browsers fail the
+// request outright instead of prompting -- surfaced to the frontend as a bare
+// "Network Error", most visible on the GETs fired right after page load
+// (before any such preflight has had a chance to be resolved for the origin).
+// This only answers that preflight; the app's own CORS/CSRF model stays
+// same-origin-only -- the actual GET/POST responses below still carry no
+// Access-Control-Allow-Origin header.
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS' && req.headers['access-control-request-private-network']) {
+    const origin = req.headers.origin;
+    if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+    const requestedMethod = req.headers['access-control-request-method'];
+    if (requestedMethod) res.setHeader('Access-Control-Allow-Methods', requestedMethod);
+    const requestedHeaders = req.headers['access-control-request-headers'];
+    if (requestedHeaders) res.setHeader('Access-Control-Allow-Headers', requestedHeaders);
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 // For dev purpose only
 if (process.env.NODE_ENV === 'development') {
   // eslint-disable-next-line n/no-unpublished-require
