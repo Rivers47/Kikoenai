@@ -71,7 +71,7 @@ async function knexMigrate(command, flags, progress) {
       if (flags.to) {
         // Run pending migrations one by one until we reach the target.
         const targetFile = findMigrationFile(migrationDir, flags.to);
-        // eslint-disable-next-line no-constant-condition
+         
         while (true) {
           const [, log] = await db.migrate.up(migrateConfig);
           if (log.length === 0) break; // No more pending

@@ -14,7 +14,7 @@ router.get('/',
   query('sort').optional().isIn(['desc', 'asc']),
   query('seed').optional().isInt(),
   query('filter').optional().isIn(['marked', 'listening', 'listened', 'replay', 'postponed']),
-  // eslint-disable-next-line no-unused-vars
+   
   async (req, res, next) => {
     if(!isValidRequest(req, res)) return;
 
@@ -54,7 +54,7 @@ router.put('/',
   body('starOnly').optional().isBoolean(),
   body('progressOnly').optional().isBoolean(),
   query('autoMark').optional().isBoolean(),
-  // eslint-disable-next-line no-unused-vars
+   
   (req, res, next) => {
     if(!isValidRequest(req, res)) return;
 

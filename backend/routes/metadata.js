@@ -164,7 +164,7 @@ router.get('/works',
   query('sort').optional().isIn(['desc', 'asc']),
   query('nsfw').optional().isInt().isIn([0/* 无年龄限制 */, 1 /* 全年龄 */, 2 /* 仅R18 */]),
   query('seed').optional().isInt(),
-  // eslint-disable-next-line no-unused-vars
+   
   async (req, res, next) => {
     if(!isValidRequest(req, res)) return;
 
@@ -225,7 +225,7 @@ for (const field of FIELDS) {
   });
 }
 
-// eslint-disable-next-line no-unused-vars
+ 
 router.get('/search', async (req, res, next) => {
   // const keyword = req.params.keyword ? req.params.keyword.trim() : '';
   const keyword = req.query.keyword ? req.query.keyword.trim() : '';
@@ -264,7 +264,7 @@ router.get('/search', async (req, res, next) => {
 // GET list of work ids, restricted by circle/tag/VA/illustrator/script_writer/series
 for (const field of FIELDS) {
   router.get(`/${field}s/:id/works`,
-    // eslint-disable-next-line no-unused-vars
+     
     async (req, res, next) => {
       if(!isValidRequest(req, res)) return;
 

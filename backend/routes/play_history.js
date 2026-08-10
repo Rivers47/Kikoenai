@@ -13,7 +13,7 @@ router.get('/',
   query('page').optional().isInt(),
   query('sort').optional().isIn(['desc', 'asc']),
   query('excludeFinished').optional().isIn(['all', 'listened']),
-  // eslint-disable-next-line no-unused-vars
+   
   async (req, res, next) => {
     if(!isValidRequest(req, res)) return;
 
@@ -53,7 +53,7 @@ router.get('/',
 router.put('/',
   body('work_id').isInt(),
   body('state').isObject(),
-  // eslint-disable-next-line no-unused-vars
+   
   (req, res, next) => {
     if(!isValidRequest(req, res)) return;
 

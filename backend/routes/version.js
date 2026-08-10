@@ -16,7 +16,7 @@ let lastGitHubResponse = {
   update_available: null
 };
 
-// eslint-disable-next-line no-unused-vars
+ 
 router.get('/', (req, res, next) => {
   const lockReason = '新版解决了旧版扫描时将かの仔和こっこ识别为同一个人的问题，建议进行扫描以自动修复这一问题';
 

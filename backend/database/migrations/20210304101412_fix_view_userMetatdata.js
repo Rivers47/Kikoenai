@@ -9,7 +9,7 @@ exports.up = async function(knex) {
 };
 
 // Problematic queries !
-// eslint-disable-next-line no-unused-vars
+ 
 exports.down = async function(knex) {
   try {
     await knex.raw('DROP VIEW IF EXISTS userMetadata');

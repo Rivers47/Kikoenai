@@ -746,7 +746,7 @@ async function updateMetadata(id, options = {}) {
 const updateMetadataLimited = (id, options = null) => limitP.call(updateMetadata, id, options);
 const updateVoiceActorLimited = (id) => limitP.call(updateMetadata, id, { includeVA: true });
 
-// eslint-disable-next-line no-unused-vars
+ 
 async function performUpdate(options = null) {
   const baseQuery = db.knex('t_work').select('id');
   const processor = (id) => updateMetadataLimited(id, options);

@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 require('dotenv').config();
 const path = require('path');
 const express = require('express');
@@ -153,7 +154,7 @@ api(app);
 app.use(express.static(path.join(__dirname, './dist'), { dotfiles: 'allow' /* Express 5: preserve v4 behavior */ }));
 
 // 返回错误响应
-// eslint-disable-next-line no-unused-vars
+ 
 app.use((err, req, res, next) => {
   if (err.name === 'UnauthorizedError') { 
     // 验证错误

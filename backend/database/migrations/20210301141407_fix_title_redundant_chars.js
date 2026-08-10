@@ -19,7 +19,7 @@ exports.up = async function(knex) {
 };
 
 // Cannot be reverted
-// eslint-disable-next-line no-unused-vars
+ 
 exports.down = async function(knex) {
 
 };

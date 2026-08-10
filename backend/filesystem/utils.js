@@ -367,7 +367,7 @@ async function* getFolderList(rootFolder, current = '', depth = 0, logger = cons
     const relativePath = path.join(current, folder);
 
     try {
-    // eslint-disable-next-line no-await-in-loop
+     
       if ((await fs.promises.stat(absolutePath)).isDirectory()) { // 检查是否为文件夹
           const rjMatch = folder.match(/RJ(\d+)/);
           const fanzaMatch = folder.match(/d_(\d+)/);

@@ -31,11 +31,11 @@ exports.down = async function(knex) {
     
     for (let i = 0; i < name.length; i += 1) {
       const char = name.charCodeAt(i);
-      // eslint-disable-next-line no-bitwise
+       
       hash = ((hash << 5) - hash) + char;
     }
     
-    // eslint-disable-next-line no-bitwise
+     
     hash |= 0;
     hash = Math.abs(Math.round(hash / 1000));
     return hash;

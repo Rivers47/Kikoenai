@@ -157,7 +157,7 @@ const routes = [
 ]
 
 // Always leave this as last one
-// eslint-disable-next-line
+ 
 if (process.env.MODE !== 'ssr') {
   routes.push({
     path: '/:pathMatch(.*)*',

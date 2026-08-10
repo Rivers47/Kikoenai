@@ -10,7 +10,7 @@ export default boot(({ app }) => {
       AudioPlayer,
       User
     },
-    // eslint-disable-next-line
+     
     strict: process.env.DEV
   })
 
