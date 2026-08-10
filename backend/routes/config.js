@@ -4,15 +4,11 @@ const router = express.Router();
 const { config, setConfig, sharedConfigHandle } = require('../config');
 
 const filterConfig = (_config, option = 'read') => {
-  const currentConfig = config;
   const configClone = _.cloneDeep(_config);
   delete configClone.md5secret;
   delete configClone.jwtsecret;
   if (option === 'write') {
     delete configClone.production;
-    if (process.env.NODE_ENV === 'production' || currentConfig.production) {
-      delete configClone.auth;
-    }
   }
   return configClone;
 };
