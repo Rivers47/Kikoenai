@@ -1,5 +1,17 @@
 export default {
   title: '离线下载',
   storageUsed: '已使用 {used} / {quota}',
+  totalDownloaded: '已下载 {size}',
   empty: '还没有离线下载的曲目',
+  trackCount: '{count} 个音轨',
+  lyricCount: '{count} 个歌词',
+  playAll: '播放全部',
+  showTracks: '展开音轨',
+  hideTracks: '收起音轨',
+  removeWork: '删除下载',
+  removeWorkConfirm: '确定要删除《{title}》的全部离线文件吗？',
+  sortBy: '排序方式',
+  sortDownloadedAt: '下载时间',
+  sortTitle: '标题',
+  sortSize: '文件大小',
 }

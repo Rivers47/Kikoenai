@@ -1,5 +1,17 @@
 export default {
   title: 'Downloads',
   storageUsed: '{used} used of {quota}',
+  totalDownloaded: '{size} downloaded',
   empty: 'No offline downloads yet',
+  trackCount: '{count} tracks',
+  lyricCount: '{count} lyrics',
+  playAll: 'Play all',
+  showTracks: 'Show tracks',
+  hideTracks: 'Hide tracks',
+  removeWork: 'Remove download',
+  removeWorkConfirm: 'Remove all offline files of "{title}"?',
+  sortBy: 'Sort by',
+  sortDownloadedAt: 'Downloaded date',
+  sortTitle: 'Title',
+  sortSize: 'Size',
 }
