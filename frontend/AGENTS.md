@@ -452,6 +452,5 @@ Build output goes directly into `backend/dist/` (configured via `distDir` in `qu
 ## 10. Development Tips
 
 - **Auth in dev:** If auth is enabled, log in via `/login` first. The session cookie survives hot reloads. Note `config.auth` defaults to `false` outside `NODE_ENV=production`, so auth is usually off in dev.
-- **PWA testing:** Dev mode disables service workers. Use a production build to test PWA features.
 - **Dark mode:** Quasar's `Dark` plugin respects OS preference (`dark: auto`). Toggle via `Dark.toggle()` in `MainLayout.vue`.
 - **Component debugging:** Install Vue DevTools for inspecting Vuex state and component hierarchy.
