@@ -57,6 +57,37 @@ app.use(express.json());
 // Parse cookies -- the session id lives in an HttpOnly cookie
 app.use(cookieParser());
 
+// Reject requests whose Host header we don't recognize (DNS-rebinding defense).
+//
+// A rebinding attack works by pointing an attacker-controlled domain at this
+// server's address; the browser sees it as a same-origin request to that
+// attacker domain (only the DNS answer changed, not the hostname string), so
+// it will attach this server's session cookie just like a legitimate request
+// would. The Host header on such a request is the attacker's own domain, which
+// will never appear in config.allowedHosts, so checking it here blocks the
+// request before any route or session logic runs.
+//
+// Loopback/private-LAN Host headers are always allowed regardless of config --
+// reaching this server from inside its own network is the normal case, not an
+// attack, and doesn't need explicit opt-in. Enforcement for everything else is
+// opt-in via config.allowedHosts (empty by default) so an upgrade never locks
+// out an existing public hostname nobody has listed yet.
+const PRIVATE_HOSTNAME_RE = /^(localhost|127\.\d+\.\d+\.\d+|::1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|f[cd][0-9a-f]{2}:|fe80:)/i;
+const isTrustedHost = (hostHeader) => {
+  if (!hostHeader) return false;
+  // Strip the port; IPv6 literals arrive as "[::1]:8888".
+  const hostname = hostHeader.startsWith('[')
+    ? hostHeader.slice(1, hostHeader.indexOf(']'))
+    : hostHeader.split(':')[0];
+  return PRIVATE_HOSTNAME_RE.test(hostname) || config.allowedHosts.includes(hostname);
+};
+app.use((req, res, next) => {
+  if (config.allowedHosts.length === 0 || isTrustedHost(req.headers.host)) {
+    return next();
+  }
+  res.status(421).send({ error: `Unrecognized Host header "${req.headers.host}". Add it to allowedHosts in the server config if this is expected.` });
+});
+
 // Browsers gate any request that crosses into a more-private IP address space
 // (e.g. a public hostname resolving to a LAN IP, as with most self-hosted
 // setups) behind a Local Network Access preflight, even when the request is
@@ -67,17 +98,31 @@ app.use(cookieParser());
 // This only answers that preflight; the app's own CORS/CSRF model stays
 // same-origin-only -- the actual GET/POST responses below still carry no
 // Access-Control-Allow-Origin header.
+//
+// The Origin check below is load-bearing, not cosmetic: this preflight fires
+// for ANY cross-origin request aimed at this host, not just requests from our
+// own frontend -- our public hostname resolves to a private IP for every
+// visitor, not just legitimate ones. Reflecting an arbitrary Origin here
+// (as an earlier version of this middleware did) would let any third-party
+// site pass this preflight and then fire a credentialed cross-site request
+// (CSRF) using the victim's real session cookie. Only grant it when Origin
+// is genuinely this same host, so a real cross-origin request still falls
+// through to the default-deny behavior below (no CORS headers at all).
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS' && req.headers['access-control-request-private-network']) {
     const origin = req.headers.origin;
-    if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Private-Network', 'true');
-    const requestedMethod = req.headers['access-control-request-method'];
-    if (requestedMethod) res.setHeader('Access-Control-Allow-Methods', requestedMethod);
-    const requestedHeaders = req.headers['access-control-request-headers'];
-    if (requestedHeaders) res.setHeader('Access-Control-Allow-Headers', requestedHeaders);
+    const host = req.headers.host;
+    const isSameOrigin = origin && host && (origin === `https://${host}` || origin === `http://${host}`);
+    if (isSameOrigin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Private-Network', 'true');
+      const requestedMethod = req.headers['access-control-request-method'];
+      if (requestedMethod) res.setHeader('Access-Control-Allow-Methods', requestedMethod);
+      const requestedHeaders = req.headers['access-control-request-headers'];
+      if (requestedHeaders) res.setHeader('Access-Control-Allow-Headers', requestedHeaders);
+    }
     return res.sendStatus(204);
   }
   next();

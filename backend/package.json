@@ -1,6 +1,6 @@
 {
   "name": "kikoeru-express",
-  "version": "0.9.3",
+  "version": "0.10.0",
   "description": "A self-hosted media server for listening to your DLsite voice works.",
   "homepage": "https://github.com/kikoeru-project/kikoeru-express",
   "repository": {
@@ -14,7 +14,7 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "start": "node --trace-warnings app.js",
+    "start": "cross-env NODE_ENV=production node --trace-warnings app.js",
     "dev": "nodemon --trace-warnings app.js",
     "scan": "node --trace-warnings ./filesystem/scanner.js",
     "backfill:progress": "node --trace-warnings ./scripts/backfill-progress.js",
@@ -58,12 +58,10 @@
     "connect-history-api-fallback": "^1.6.0",
     "cookie": "^1.0.2",
     "cookie-parser": "^1.4.7",
-    "crypto": "^1.0.1",
     "dotenv": "^8.2.0",
     "express": "^5.1.0",
     "express-validator": "^7.0.0",
     "htmlparser2": "^4.1.0",
-    "https": "^1.0.0",
     "jschardet": "^3.0.0",
     "knex": "^3.3.0",
     "limit-promise": "^1.0.6",
