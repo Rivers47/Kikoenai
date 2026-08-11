@@ -106,7 +106,7 @@
 
 <script>
 import { mapState, mapGetters } from 'vuex'
-import { basenameWithoutExt } from 'src/utils'
+import { basenameWithoutExt, toQueueItem } from 'src/utils'
 import { formatSeconds } from '../utils'
 import NotifyMixin from '../mixins/Notification.js'
 
@@ -161,7 +161,9 @@ export default {
       const queue = []
       this.fatherFolder.forEach(item => {
         if (item.type === 'audio') {
-          queue.push(item)
+          // Project rather than pushing the whole tree node: this queue is
+          // serialized into every PUT /api/history body. See toQueueItem.
+          queue.push(toQueueItem(item))
         }
       })
 

@@ -335,9 +335,13 @@ export default {
   },
 
   mounted () {
+    // Backstop for uninterrupted playback: every other trigger for
+    // onUpdatePlayingStatus is a state change (track/pause/seek/queue), and
+    // during continuous listening none of them fire. This bounds how much
+    // position is lost if the app dies without a visibilitychange.
     this.historyCheckIntervalId = setInterval(() => {
       this.onUpdatePlayingStatus()
-    }, 60 * 1000) // 每隔一段时间更新一次播放记录
+    }, 10 * 1000) // 每隔一段时间更新一次播放记录
 
     // 监听页面可见性变化，在页面隐藏时（锁屏/切后台）立即刷新播放进度到服务器
     document.addEventListener('visibilitychange', this.onVisibilityChange)

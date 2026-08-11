@@ -50,4 +50,36 @@ export function extname(string) {
   return extIdx >= 0 ? string.substr(extIdx) : "";
 }
 
+/**
+ * Narrows a backend track node down to the fields the player and the play
+ * history actually read.
+ *
+ * The whole queue is serialized into every PUT /api/history body, so anything
+ * carried here is re-uploaded on every sync. The dropped fields are all either
+ * unused on queue items or derivable: `type` (the queue is audio-only by
+ * construction), `relPath` (only used to merge memo hashes onto tree nodes in
+ * Work.vue), and `mediaDownloadUrl` (only used by WorkTree's download button,
+ * which reads the tree node, not the queue).
+ *
+ * `mediaStreamUrl` is kept only when it is NOT the derivable default -- i.e.
+ * when config.offloadMedia points it at a different host. Carrying the default
+ * is actively harmful: AudioElement's `source` computed tests mediaStreamUrl
+ * first, so a present-but-default value shadows the downloaded-copy branch and
+ * a downloaded track streams instead of playing from Cache Storage.
+ */
+export function toQueueItem(node) {
+  const trackId = node.trackId || node.hash;
+  const item = {
+    trackId,
+    contentHash: node.contentHash,
+    title: node.title,
+    duration: node.duration,
+    workTitle: node.workTitle,
+  };
+  if (node.mediaStreamUrl && node.mediaStreamUrl !== `/api/media/stream/${trackId}`) {
+    item.mediaStreamUrl = node.mediaStreamUrl;
+  }
+  return item;
+}
+
 
