@@ -259,7 +259,19 @@ async function getMetadata(id, rootFolderName, dir) {
   }
 
   LOG.task.info(rjcode, '元数据成功添加到数据库.');
-  return 'added';
+
+  // Covers for DLsite translated (and newer) works are often stored under the
+  // original work id / a proxy address, so the guessed path misses them. When
+  // the metadata source (ASMR.one) returns real cover URLs, expose them as
+  // coverUrls so getCoverImageForTranslated can download them directly.
+  if (metadata && (metadata.mainCoverUrl || metadata.samCoverUrl || metadata.thumbnailCoverUrl)) {
+    metadata.coverUrls = {
+      main: metadata.mainCoverUrl,
+      sam: metadata.samCoverUrl,
+      '240x240': metadata.thumbnailCoverUrl,
+    };
+  }
+  return metadata;
 }
 
 
@@ -269,8 +281,31 @@ async function getMetadata(id, rootFolderName, dir) {
  * @param {number} id work id
  * @param {Array} types img types: ['main', 'sam', 'sam@2x', 'sam@3x', '240x240', '360x360']
  */
-async function getCoverImageForTranslated(id, types) {
+async function getCoverImageForTranslated(id, types, coverUrls) {
   const rjcode = formatID(id); // zero-pad to 6/8 digits
+
+  // Prefer the real cover URLs provided by the metadata source (ASMR.one); this
+  // avoids guessing a DLsite path that 404s for translated/newer works.
+  let urls = coverUrls;
+  if (!urls || !(urls.main || urls.sam || urls['240x240'])) {
+    // During re-scans coverUrls may be missing: try once more to get real cover
+    // URLs from ASMR.one before falling back to path guessing.
+    try {
+      const meta = await scrapeWorkMetadataFromAsmrOne(id);
+      urls = {
+        main: meta.mainCoverUrl,
+        sam: meta.samCoverUrl,
+        '240x240': meta.thumbnailCoverUrl,
+      };
+    } catch (err) {
+      LOG.task.warn(rjcode, `尝试从 ASMR.one 获取真实封面 URL 失败，将回退到 DLsite 路径猜测: ${err.message}`);
+    }
+  }
+  if (urls && (urls.main || urls.sam || urls['240x240'])) {
+    return getCoverImageFromUrls(id, types, urls);
+  }
+
+  // Fall back to the original DLsite path-guessing logic
   let coverFromId = rjcode; // 默认就使用原始的作品id
   let isNoImgMain = false;
   try {
@@ -294,6 +329,35 @@ async function getCoverImageForTranslated(id, types) {
   }
 
   return result;
+}
+
+/**
+ * Download cover images from the real URLs provided by the metadata source
+ * (e.g. ASMR.one's cover proxy), avoiding guessed DLsite paths that 404 for
+ * translated/newer works.
+ * @param {number} cover_for_id work id
+ * @param {Array} types img types: ['main', 'sam', '240x240', ...]
+ * @param {Object} coverUrls map of type -> url (keys: main / sam / 240x240 / ...)
+ * @returns {Promise<String>} 'added' or 'failed'
+ */
+async function getCoverImageFromUrls(cover_for_id, types, coverUrls) {
+  const cover_for_rjcode = formatID(cover_for_id);
+  LOG.task.info(cover_for_rjcode, `从来源 URL 下载封面...`);
+  const results = await Promise.all(types.map(async (type) => {
+    const url = coverUrls[type];
+    if (!url) return 'failed';
+    try {
+      const imageRes = await axios.retryGet(url, { responseType: "stream", retry: {} });
+      await saveCoverImageToDisk(imageRes.data, cover_for_rjcode, type);
+      LOG.task.info(cover_for_rjcode, `封面 ${coverFileName(cover_for_rjcode, type)} 下载成功.`);
+      return 'added';
+    } catch (err) {
+      LOG.task.warn(cover_for_rjcode, `在下载封面 ${coverFileName(cover_for_rjcode, type)} 过程中出错: ${err.message} (URL: ${url})`);
+      return 'failed';
+    }
+  }));
+
+  return results.includes("failed") ? "failed" : "added";
 }
 
 /**
@@ -465,7 +529,7 @@ async function processFolder(folder) {
       // result is the inserted metadata object for Fanza works
       coverResult = await getFanzaCoverImage(workId, coverTypes, result.coverUrls);
     } else {
-      coverResult = await getCoverImageForTranslated(workId, coverTypes);
+      coverResult = await getCoverImageForTranslated(workId, coverTypes, result && result.coverUrls);
     }
   }
 
