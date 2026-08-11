@@ -227,8 +227,8 @@ export default {
         this.path.push(item.title);
       } else if (item.type === 'image') {
         this.openPreviewImg(item);
-      } else if (item.type === 'text' || item.type === 'image') {
-        this.openFile(item);
+      } else if (item.type === 'text') {
+        this.openTextPage(item);
       } else if (item.type === 'other') {
         this.download(item);
       } else if ((this.currentPlayingFile.trackId || this.currentPlayingFile.hash) !== item.trackId) {
@@ -297,13 +297,16 @@ export default {
       });
     },
 
-    openFile (file) {
-      // Fallback to old API for an old backend
-      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}` : `/api/media/stream/${file.trackId || file.hash}`;
-      const link = document.createElement('a');
-      link.href = url;
-      link.target="_blank";
-      link.click();
+    // Show a text file on its own in-app page instead of navigating to the raw
+    // file. A real navigation tears down the installed PWA: the SPA document
+    // (and the audio element with it) is destroyed, so playback stops, and with
+    // target="_blank" the new browsing context has a single history entry, so
+    // Android's back button closes the app.
+    openTextPage (file) {
+      this.$router.push({
+        path: `/text/${file.trackId || file.hash}`,
+        query: { title: file.title }
+      });
     },
 
     originalImgSrc (file) {
