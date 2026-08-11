@@ -660,12 +660,21 @@ export default {
     },
     
     // return true if two history updated on (onUpdatePlayingStatus) is same
+    //
+    // Deliberately does NOT compare state.seconds. Position is owned by
+    // /api/track-progress, which is written on every call and costs 81 bytes;
+    // history carries the queue, which is kilobytes. Comparing seconds made
+    // every periodic tick look like a change, so the whole queue was
+    // re-uploaded every few seconds during uninterrupted playback. Ignoring it
+    // means history is written only when the queue or current track actually
+    // changes. state.seconds is still sent on those writes, and
+    // flushHistoryOnHide does not dedup at all, so the position stored in
+    // history stays accurate at the points that matter for resuming.
     isSameTwoHistory(ha, hb) {
       // 如果有任意一个是null，则认为两者不一样
       if (!(ha && hb)) return false;
-      
+
       if (ha.work_id != hb.work_id) return false;
-      if (ha.state.seconds != hb.state.seconds) return false;
       if (ha.state.index != hb.state.index) return false;
       if (ha.state.queue.length != hb.state.queue.length) return false;
       for (let i = 0; i < ha.state.queue.length; ++i) {
@@ -746,6 +755,8 @@ export default {
         }
       }
 
+      this._reportTrackProgressOnUpdate()
+
       // 检查最近一次的历史更新记录，如果两次数据不变，则无需更新记录
       if (this.isSameTwoHistory(this.latestUpdatedHistory, data)) {
         console.log("播放状态未变，跳过服务器历史更新")
@@ -760,9 +771,6 @@ export default {
         .catch((err) => {
           console.error(err.response.data.error)
         })
-
-      // Also report per-track progress (Phase 2)
-      this._reportTrackProgressOnUpdate()
     },
 
     _reportTrackProgressOnUpdate () {
