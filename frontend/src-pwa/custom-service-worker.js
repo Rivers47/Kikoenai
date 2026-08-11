@@ -122,6 +122,20 @@ registerRoute(
   })
 )
 
+// Lyric lookup. AudioElement calls this before it can load a track's lyric
+// file -- it returns which file holds the lyrics and its extension -- so the
+// answer has to be cached alongside the lyric file itself, or a downloaded
+// work has its lyrics on disk but no way to find them offline.
+// NetworkFirst like the other JSON: a lyric scan can add lyrics to a work that
+// previously had none, and that should show up while online.
+registerRoute(
+  ({ url }) => sameOrigin(url) && url.pathname.startsWith('/api/media/check-lrc/'),
+  new NetworkFirst({
+    cacheName: OFFLINE_CACHE,
+    matchOptions: { ignoreVary: true }
+  })
+)
+
 /*
  * Background Fetch (Chromium only).
  *
