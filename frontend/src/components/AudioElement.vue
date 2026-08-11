@@ -252,9 +252,13 @@ export default {
 
     onPause() {
       this.playLrc(false)
+      // No _reportTrackProgress() here: PAUSE() flips AudioPlayer's `playing`
+      // state, whose watcher runs onUpdatePlayingStatus, which already reports
+      // this track's progress. Calling it here too produced two PUTs per pause
+      // with the same contentHash ~500ms apart (the watcher path is debounced).
+      // onEnded still reports directly -- there it is not redundant, since it
+      // must run before the queue advances to capture the finishing track.
       this.PAUSE()
-      // Fire-and-forget per-track progress on pause (Phase 2)
-      this._reportTrackProgress()
     },
     onPlaying() {
       this.resumeAudioContext()
