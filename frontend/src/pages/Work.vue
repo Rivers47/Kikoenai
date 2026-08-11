@@ -98,10 +98,41 @@ export default {
         // Vuex strict mode) with contentHash merged by relPath. Reassigning
         // this.tree triggers WorkTree's `tree` watcher -> internalTree rebuild.
         this.tree = this.mergeContentHashes(this.tree, contentHashMap);
+        // The tree now has hashes, but a queue committed before this resolved
+        // does not -- SET_QUEUE snapshotted the pre-merge node objects, and the
+        // merge above builds new ones rather than mutating them. Heal it, or
+        // per-track progress goes unreported for the rest of the session.
+        this.syncPlayingQueueContentHashes();
       } catch (error) {
         // Hashing can be slow/expensive; fail silently — badges just won't show.
         console.error('fetch work memo failed:', error);
       }
+    },
+
+    // Push freshly merged hashes onto the live queue, but only when the queue
+    // actually belongs to this work -- the user may have navigated here while
+    // something else is playing.
+    syncPlayingQueueContentHashes() {
+      // Read straight from the store: this component maps no AudioPlayer
+      // state, and `this.playWorkId` would be undefined here.
+      if (String(this.$store.state.AudioPlayer.playWorkId) !== String(this.workid)) return;
+      const hashByTrackId = this.collectContentHashesByTrackId(this.tree, {});
+      if (Object.keys(hashByTrackId).length === 0) return;
+      this.$store.commit('AudioPlayer/UPDATE_QUEUE_CONTENT_HASHES', hashByTrackId);
+    },
+
+    // Flatten the merged tree to { [trackId]: contentHash }. Keyed by trackId
+    // rather than relPath because queue items carry trackId, not relPath.
+    collectContentHashesByTrackId(nodes, out) {
+      if (!Array.isArray(nodes)) return out;
+      for (const node of nodes) {
+        if (node.type === 'folder') {
+          this.collectContentHashesByTrackId(node.children, out);
+        } else if (node.type === 'audio' && node.contentHash) {
+          out[node.trackId || node.hash] = node.contentHash;
+        }
+      }
+      return out;
     },
 
     // Return a new tree with contentHash set on audio nodes by matching relPath.

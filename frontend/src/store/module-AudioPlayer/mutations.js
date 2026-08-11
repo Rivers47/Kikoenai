@@ -45,6 +45,31 @@ const mutations = {
     }
   },
 
+  // Backfills contentHash onto queue items that were committed without one.
+  //
+  // Content hashes are computed lazily by GET /api/work/:id/memo, which
+  // resolves *after* the track tree renders so the page never waits on hashing
+  // a multi-GB work. Pressing play in that window queues nodes that have no
+  // contentHash, and because the merge in Work.vue is purely functional (it
+  // builds new node objects) the already-committed queue never sees the hashes
+  // that later land on the tree. Per-track progress is keyed by contentHash, so
+  // that whole play session would report none -- and resuming from the history
+  // it wrote would carry the gap forward.
+  //
+  // `hashByTrackId` is { [trackId]: contentHash }. Existing hashes are never
+  // overwritten, and the array is only replaced when something actually
+  // changed, so this does not churn watchers on the common path.
+  UPDATE_QUEUE_CONTENT_HASHES (state, hashByTrackId) {
+    let changed = false
+    const next = state.queue.map(item => {
+      const contentHash = hashByTrackId[item.trackId || item.hash]
+      if (!contentHash || item.contentHash) return item
+      changed = true
+      return { ...item, contentHash }
+    })
+    if (changed) state.queue = next
+  },
+
   SET_QUEUE (state, payload) {
     state.queue = payload.queue
     state.queueIndex = payload.index
