@@ -26,4 +26,6 @@ export default {
   langZhTW: '繁體中文',
   remindLater: 'Remind me later',
   goToScanner: 'Go to Scanner',
+  downloadComplete: '{title} is ready for offline use',
+  downloadFailed: 'Offline download failed for {title}',
 }

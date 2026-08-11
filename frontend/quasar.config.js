@@ -126,7 +126,12 @@ module.exports = function (ctx) {
 
     // https://quasar.dev/quasar-cli-webpack/developing-pwa/configuring-pwa
     pwa: {
-      workboxMode: 'GenerateSW',
+      // InjectManifest, not GenerateSW: the offline-download feature needs
+      // service-worker event handlers (Background Fetch), which a generated
+      // worker cannot express. The worker is hand-written in
+      // src-pwa/custom-service-worker.js -- caching routes, navigation
+      // fallback, skipWaiting/clientsClaim all live there now.
+      workboxMode: 'InjectManifest',
       extendManifestJson (json) {
         // Relative to the manifest's own URL, so an installed app scopes itself
         // to wherever it was installed from. Quasar's default start_url is
@@ -134,66 +139,48 @@ module.exports = function (ctx) {
         json.start_url = '.'
         json.scope = '.'
       },
-      extendGenerateSWOptions (opts) {
-        opts.skipWaiting = true
-        opts.clientsClaim = true
+      // Build-time only: what workbox-build puts into the injected precache
+      // manifest. Runtime behaviour does NOT belong here anymore.
+      extendInjectManifestOptions (opts) {
         opts.exclude = opts.exclude || []
         opts.exclude.push(/manifest\.json$/, /.*.js.map$/)
-        opts.navigateFallbackDenylist = opts.navigateFallbackDenylist || []
-        // Unanchored on purpose: under config.basePath the pathname these are
-        // matched against is /prefix/api/..., which an anchored ^\/api\/ would
-        // miss, silently handing API requests the SPA shell when offline.
-        opts.navigateFallbackDenylist.push(
-          /\/api\//,
-          /\/media\//
-        )
-
-        // Offline downloads: populated only by the explicit "download for
-        // offline" action (src/utils/downloads.js), never by ordinary
-        // streaming/browsing -- see frontend/CLAUDE.md for the full design.
-        opts.runtimeCaching = opts.runtimeCaching || []
-        // Track/lyric files served by the offline-copy endpoint. Scoped
-        // narrowly to /api/media/offline/ -- never /api/media/stream/, so the
-        // original lossless stream never ends up in Cache Storage.
-        // `rangeRequests: true` is workbox-build's shorthand for attaching a
-        // RangeRequestsPlugin -- do NOT `require('workbox-range-requests')`
-        // and pass `plugins: [new RangeRequestsPlugin()]` instead: that
-        // package references SW-only globals (`self`) at import time and
-        // crashes immediately when this Node-side config file evaluates it.
-        // The shorthand lets workbox-build reference the module itself when
-        // generating the actual service worker (a browser/SW context).
-        opts.runtimeCaching.push({
-          urlPattern: /^\/api\/media\/offline\/.*$/,
-          handler: 'CacheFirst',
-          options: {
-            cacheName: 'offline-tracks',
-            rangeRequests: true,
-            matchOptions: { ignoreVary: true }
-          }
-        })
-        // Cover images for downloaded works.
-        opts.runtimeCaching.push({
-          urlPattern: /^\/api\/cover\/.*$/,
-          handler: 'CacheFirst',
-          options: {
-            cacheName: 'offline-tracks',
-            matchOptions: { ignoreVary: true }
-          }
-        })
-        // Work-detail page data (title/tags/track-tree/review). NetworkFirst,
-        // not CacheFirst: browsing any work -- downloaded or not -- should show
-        // live data whenever online, only falling back to the cached snapshot
-        // when the network is actually down. The explicit download action also
-        // seeds this cache directly so a downloaded work is navigable offline
-        // immediately, not only after having been viewed once online.
-        opts.runtimeCaching.push({
-          urlPattern: /^\/api\/(work|tracks)\/[^/]+$|^\/api\/review(\?.*)?$/,
-          handler: 'NetworkFirst',
-          options: {
-            cacheName: 'offline-tracks',
-            matchOptions: { ignoreVary: true }
-          }
-        })
+        if (ctx.dev) {
+          // Never precache the app bundles in development. webpack-dev-server
+          // emits them under unhashed names (/app.js, /vendor.js, the lazy
+          // route chunks), with the content hash carried in the precache
+          // manifest's `revision` field instead of the filename -- so the
+          // cache-first precache keeps serving the *previous* compilation's
+          // bundle after a rebuild. That bundle's baked-in webpack hash no
+          // longer matches the dev server's, the hot update 404s, HMR gives up
+          // and calls location.reload(), and the reload is served the same
+          // stale bundle: an unbreakable refresh loop.
+          //
+          // index.html stays precached on purpose -- the NavigationRoute in
+          // src-pwa/custom-service-worker.js is bound to it via
+          // createHandlerBoundToURL(), which throws at worker startup if the
+          // URL is absent from the precache. It is safe to keep: in dev it
+          // only ever points at the unhashed bundle names above, so its
+          // content is stable across rebuilds.
+          //
+          // The `.hot-update.` pattern covers webpack's HMR payloads
+          // (app.<hash>.hot-update.json and friends). They are one-shot,
+          // hash-keyed artifacts: precaching them lets the worker serve a
+          // stale hot update, and because their names change on every rebuild
+          // they would also rewrite the manifest -- and therefore sw.js --
+          // each time, so the browser would see a new worker (and fire the
+          // "new version" notification) on every recompile.
+          opts.exclude.push(/\.js$/, /\.hot-update\./)
+        }
+      },
+      // The custom service worker is bundled by esbuild, not webpack/babel --
+      // it is the only part of the app that is. Quasar's default browser
+      // target includes `safari14`, and esbuild refuses to emit destructuring
+      // for Safari 14.0 (a known engine bug it cannot lower), which the
+      // workbox-* packages use throughout. Safari 14.1 fixed that bug, so
+      // raising the floor for this bundle alone is enough. The app's own
+      // target is untouched.
+      extendPWACustomSWConf (esbuildConf) {
+        esbuildConf.target = ['es2022', 'firefox115', 'chrome115', 'safari14.1']
       }
     },
 
