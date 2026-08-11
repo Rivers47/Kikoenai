@@ -84,7 +84,8 @@ export function assertBackgroundFetchSupport () {
 // bare URL, WorkListItem and the player ?type=sam, WorkDetails and the
 // Downloads page ?type=main). Caching only one leaves the others blank offline.
 export function buildWorkDownloadPlan (workId, tree) {
-  const rows = collectDownloadableFiles(tree).map(file => ({
+  const files = collectDownloadableFiles(tree)
+  const rows = files.map(file => ({
     url: `/api/media/offline/${file.trackId}`,
     trackId: file.trackId,
     type: file.type,
@@ -102,12 +103,27 @@ export function buildWorkDownloadPlan (workId, tree) {
   // Committed last, and the SW promotes rows in this order too, so the
   // 'metadata' rows keep working as the whole-work completion marker that
   // module-Downloads' isWorkDownloaded getter keys on.
-  for (const url of [
+  const metadataUrls = [
     `/api/work/${workId}`,
     `/api/tracks/${workId}`,
     `/api/review?work_id=${workId}`,
     `/api/work/${workId}/memo`,
-  ]) {
+  ]
+
+  // AudioElement asks /api/media/check-lrc/<trackId> which file holds a
+  // track's lyrics before it can load them. Without this the lyric file is
+  // downloaded but unreachable offline -- the lookup that points at it fails.
+  // Returns 200 with { result: false } for tracks that have no lyrics, so
+  // including every audio track is safe (a non-2xx here would fail the whole
+  // Background Fetch batch).
+  //
+  // `trackId` stays null on these rows: they are not the lyric file itself,
+  // and setting it would make isFileDownloaded report a lyric that isn't there.
+  for (const file of files) {
+    if (file.type === 'audio') metadataUrls.push(`/api/media/check-lrc/${file.trackId}`)
+  }
+
+  for (const url of metadataUrls) {
     rows.push({ url, trackId: null, type: 'metadata', title: url })
   }
 
