@@ -26,4 +26,6 @@ export default {
   langZhTW: '繁體中文',
   remindLater: '以后提醒我',
   goToScanner: '前往扫描页',
+  downloadComplete: '{title} 已可离线使用',
+  downloadFailed: '{title} 的离线下载失败',
 }
