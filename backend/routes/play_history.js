@@ -51,7 +51,12 @@ router.get('/',
 
 // 更新播放状态
 router.put('/',
-  body('work_id').isInt(),
+  // Not body('work_id').isInt(): work ids are TEXT since migration
+  // 20260802000000 -- DLsite ids are zero-padded digit strings and Fanza ids
+  // are 'd_'-prefixed, so isInt() rejected every Fanza work with a 400. Use the
+  // shared validator, which also self-heals legacy 7-digit ids. Matches the
+  // DELETE below and every other work_id route.
+  workIdBody(),
   body('state').isObject(),
    
   (req, res, next) => {
