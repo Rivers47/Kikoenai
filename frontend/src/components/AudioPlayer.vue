@@ -761,7 +761,11 @@ export default {
           this.latestUpdatedHistory = data;
         })
         .catch((err) => {
-          console.error(err.response.data.error)
+          // No `err.response` when the request never reached the server --
+          // which is the normal case during offline playback of a downloaded
+          // work, not an exceptional one. History is fire-and-forget, so log
+          // and move on rather than throwing out of the handler.
+          console.error(err.response?.data?.error || err.message || err)
         })
     },
 

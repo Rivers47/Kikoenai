@@ -36,13 +36,16 @@ register(process.env.SERVICE_WORKER_FILE, {
       color: 'primary',
       textColor: 'white',
       icon: 'cached',
+      // Reload only when the user actually asks for it. This used to live in
+      // `onDismiss`, which Quasar fires on *any* dismissal -- including the
+      // timeout below -- so the page reloaded itself ten seconds after every
+      // service-worker update, potentially mid-playback. (The action had no
+      // handler of its own; clicking it "worked" only by falling through to
+      // onDismiss.)
       actions: [
-        { label: '刷新', color: 'white' }
+        { label: '刷新', color: 'white', handler: () => { location.reload() } }
       ],
-      timeout: 10000,
-      onDismiss () {
-        location.reload(true)
-      }
+      timeout: 10000
     })
   },
 

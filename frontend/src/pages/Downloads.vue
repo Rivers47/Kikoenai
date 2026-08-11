@@ -241,7 +241,10 @@ export default {
     downloadedWorks () {
       const byWorkId = new Map()
 
-      for (const file of this.downloadedFiles) {
+      // Skip `pending` rows: a whole-work Background Fetch claims its manifest
+      // rows up front, before the bytes are in Cache Storage. Listing those
+      // here would offer works that cannot actually be played offline yet.
+      for (const file of this.downloadedFiles.filter(f => !f.pending)) {
         let work = byWorkId.get(file.workId)
         if (!work) {
           work = {
