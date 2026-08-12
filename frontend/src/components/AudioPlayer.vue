@@ -661,15 +661,9 @@ export default {
     
     // return true if two history updated on (onUpdatePlayingStatus) is same
     //
-    // Deliberately does NOT compare state.seconds. Position is owned by
-    // /api/track-progress, which is written on every call and costs 81 bytes;
-    // history carries the queue, which is kilobytes. Comparing seconds made
-    // every periodic tick look like a change, so the whole queue was
-    // re-uploaded every few seconds during uninterrupted playback. Ignoring it
-    // means history is written only when the queue or current track actually
-    // changes. state.seconds is still sent on those writes, and
-    // flushHistoryOnHide does not dedup at all, so the position stored in
-    // history stays accurate at the points that matter for resuming.
+    // History carries the queue (kilobytes) and is written only when the queue
+    // or current track changes; position is owned by /api/track-progress and no
+    // longer sent here, so there is no seconds field to compare.
     isSameTwoHistory(ha, hb) {
       // 如果有任意一个是null，则认为两者不一样
       if (!(ha && hb)) return false;
@@ -700,7 +694,6 @@ export default {
         state: {
           queue: this.queueCopy,
           index: this.queueIndex,
-          seconds: this.currentTime,
         }
       }
 
@@ -751,7 +744,6 @@ export default {
         "state": {
           queue: this.queueCopy,
           index: this.queueIndex,
-          seconds: this.currentTime,
         }
       }
 

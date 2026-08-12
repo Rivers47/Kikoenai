@@ -32,6 +32,44 @@ const makeQueries = (knex) => {
   }
 
   /**
+   * Overwrite each history row's state.seconds from t_track_progress, keyed by
+   * the contentHash of the track the queue is parked on. PUT /api/history only
+   * fires on play/pause/track-change, so the position it carries goes stale
+   * between writes; t_track_progress is the one updated on an interval.
+   * Rows written before this change (no contentHash on the queue item, or no
+   * progress row yet) keep their stored seconds.
+   * @param {String} username
+   * @param {Array<Object>} rows - Rows carrying a JSON `state` string; mutated in place.
+   */
+  const applyTrackProgressSeconds = async (username, rows) => {
+    const parsed = [];
+    for (const row of rows) {
+      if (!row.state) continue;
+      let state;
+      try {
+        state = JSON.parse(row.state);
+      } catch {
+        continue;
+      }
+      const hash = state.queue && state.queue[state.index] && state.queue[state.index].contentHash;
+      if (hash) parsed.push({ row, state, hash });
+    }
+    if (!parsed.length) return;
+
+    const progress = await knex('t_track_progress')
+      .select('track_key', 'seconds')
+      .where('user_name', username)
+      .whereIn('track_key', parsed.map(p => p.hash));
+    const byKey = new Map(progress.map(p => [p.track_key, p.seconds]));
+
+    for (const p of parsed) {
+      if (!byKey.has(p.hash)) continue;
+      p.state.seconds = byKey.get(p.hash);
+      p.row.state = JSON.stringify(p.state);
+    }
+  };
+
+  /**
    * Shared helper: batch-fetch static relations (tags, vas, illustrators,
    * script_writers, series) and optional user state for a set of work IDs,
    * then assemble into the JSON-string *Obj shape that normalize() expects.
@@ -117,6 +155,7 @@ const makeQueries = (knex) => {
       }
     }
     if (historyFields) {
+      await applyTrackProgressSeconds(username, historyRows);
       for (const h of historyRows) {
         const w = byId.get(h.work_id);
         if (!w) continue;
@@ -1018,6 +1057,7 @@ const makeQueries = (knex) => {
     const totalCount = [{ count: countRow ? countRow.count : 0 }];
 
     const rows = await coreQ.clone().limit(limit).offset(offset);
+    await applyTrackProgressSeconds(username, rows);
     // No reviewFields: the hide-finished filter is applied server-side above, and
     // t_review.progress is already spread into each work item via the LEFT JOIN
     // select. Passing reviewFields would run an extra t_review query and populate

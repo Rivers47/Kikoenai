@@ -157,6 +157,11 @@ export default {
     },
 
     resumeMetadataPlayHistory() {
+      // Position comes from trackProgress, same as WorkTree -- history state
+      // carries only the queue and index.
+      const item = this.metadata.state.queue[this.metadata.state.index]
+      const progress = item && item.contentHash ? this.trackProgress[item.contentHash] : null
+
       // 以最小化形式打开播放器
       this.$store.commit('AudioPlayer/TOGGLE_HIDE')
       this.$store.commit('AudioPlayer/SET_QUEUE', {
@@ -165,10 +170,9 @@ export default {
         queue: this.metadata.state.queue,
         index: this.metadata.state.index,
         resetPlaying: false,
-        resumeHistorySeconds: this.metadata.state.seconds,
+        resumeHistorySeconds: progress ? progress.seconds : -1,
         workLastTrackId: this.metadata.state.queue.length ? (this.metadata.state.queue[this.metadata.state.queue.length - 1].trackId || this.metadata.state.queue[this.metadata.state.queue.length - 1].hash) : ''
       })
-      console.log(`resume seconds = ${this.metadata.state.seconds}`)
     }
   }
 }
