@@ -305,7 +305,10 @@ async function getCoverImageForTranslated(id, types, coverUrls) {
     return getCoverImageFromUrls(id, types, urls);
   }
 
-  // Fall back to the original DLsite path-guessing logic
+  // Fall back to DLsite: for translated works, ask DLsite for the real cover.
+  // Modern translated works live under a <translation-product-slider> that
+  // carries the cover URLs directly (see dlsite.js); older ones are handled
+  // by matching the work_edition_linklist to the original work id.
   let coverFromId = rjcode; // 默认就使用原始的作品id
   let isNoImgMain = false;
   try {
@@ -314,6 +317,10 @@ async function getCoverImageForTranslated(id, types, coverUrls) {
     const tryScrapResult = await scrapeCoverIdForTranslatedWorkFromDLsite(rjcode);
     coverFromId = tryScrapResult.coverFromId;
     isNoImgMain = tryScrapResult.isNoImgMain;
+    if (tryScrapResult.coverUrls && (tryScrapResult.coverUrls.main || tryScrapResult.coverUrls.sam || tryScrapResult.coverUrls['240x240'])) {
+      LOG.task.info(rjcode, `从 DLsite 页面解析到真实封面 URL，直接下载...`);
+      return getCoverImageFromUrls(id, types, tryScrapResult.coverUrls);
+    }
     if (coverFromId != rjcode) {
       LOG.task.info(rjcode, `当前作品RJ${rjcode}似乎不包含封面资源，例如一些翻译作品。从 DLsite 对应的原始作品RJ${coverFromId}下载封面...`);
     }

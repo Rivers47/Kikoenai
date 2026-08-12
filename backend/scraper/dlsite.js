@@ -367,9 +367,38 @@ const scrapeCoverIdForTranslatedWorkFromDLsite = (id_translated) => new Promise(
 
       const hit_id_list = linked_id_list.filter(id => possible_image_id_list.includes(id));
 
+      // New-style pages replace the work_edition_linklist markup with a
+      // <translation-product-slider> component that carries the real cover
+      // URLs directly (under the original work id). When present, expose them
+      // so the caller can download without guessing paths.
+      let realCoverUrls = {};
+      const slider = $('translation-product-slider').first();
+      if (slider.length) {
+        const sliderSrc = slider.attr('src') || '';
+        const sliderThumb = slider.attr('thumb') || '';
+        const toHttp = u => u.replace(/^\/\//, 'https://');
+        if (sliderSrc) {
+          const mainUrl = toHttp(sliderSrc);
+          realCoverUrls.main = mainUrl;
+          const samUrl = mainUrl.replace(/_img_main\.(jpg|png|webp)/i, '_img_sam.$1');
+          if (samUrl !== mainUrl) realCoverUrls.sam = samUrl;
+          if (sliderThumb) realCoverUrls['240x240'] = toHttp(sliderThumb);
+        }
+        // If the cover belongs to the original (Japanese) work, prefer its id
+        // for the guessed-path fallback in getCoverImage.
+        const mainUrlMatch = realCoverUrls.main && /RJ(\d{6,8})[_\w.]+$/.exec(new URL(realCoverUrls.main).pathname);
+        if (mainUrlMatch) {
+          const realCoverFromId = mainUrlMatch[1];
+          if (realCoverFromId !== String(id_translated) && !hit_id_list.includes(realCoverFromId)) {
+            hit_id_list.unshift(realCoverFromId);
+          }
+        }
+      }
+
       const result = {
         coverFromId: hit_id_list.length > 0 ? hit_id_list[0] : id_translated,
         isNoImgMain,
+        coverUrls: Object.keys(realCoverUrls).length > 0 ? realCoverUrls : undefined,
       };
       resolve(result);
     })
