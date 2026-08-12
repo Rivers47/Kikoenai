@@ -159,7 +159,12 @@ export default {
 
   watch: {
     playing (flag) {
-      if (flag) this.resumeAudioContext()
+      if (flag) {
+        this.resumeAudioContext()
+        // Advancing sets playing = true again (no-op) and swaps `source`,
+        // whose watcher loads and plays the next track.
+        if (this._advanceIfSleepStopped()) return
+      }
       if (this.plyr && this.plyr.duration) {
         // Only touch the element when it actually disagrees with the state.
         // Vue watchers are async, so a redundant play() from here lands a tick
@@ -379,6 +384,21 @@ export default {
       })
     },
 
+    // The tracks-mode sleep timer leaves the queue on the track that just
+    // finished, so nothing writes progress for a track the user never played.
+    // Their next play consumes that here and moves on instead of replaying it.
+    _advanceIfSleepStopped () {
+      const stoppedAt = this._sleepStoppedIndex
+      this._sleepStoppedIndex = null
+      // Index check: if the user picked a different track meanwhile, that
+      // choice wins. Watcher order makes clearing the flag on track change
+      // unreliable, comparing the index does not.
+      if (stoppedAt == null || stoppedAt !== this.queueIndex) return false
+      if (this.queueIndex >= this.queue.length - 1) return false
+      this.NEXT_TRACK()
+      return true
+    },
+
     _stopBySleepTimer () {
       this.PAUSE()
       this.CLEAR_SLEEP_MODE()
@@ -400,6 +420,10 @@ export default {
       // 必须在切换曲目逻辑之前处理：一旦推进到下一曲，"当前曲目结束后停止" 就无法实现了
       if (this.sleepMode && this.sleepModeType === 'tracks') {
         if (this.sleepTracksLeft <= 0) {
+          // Stay on the finished track: advancing here would make the
+          // queueIndex watcher report progress for a track the user never
+          // played. The advance is deferred to their next play.
+          this._sleepStoppedIndex = this.queueIndex
           this._stopBySleepTimer()
           return
         }
@@ -481,6 +505,9 @@ export default {
     },
 
     onSeeked() {
+      // Scrubbing back into the finished track means the user wants that
+      // track, not the next one.
+      this._sleepStoppedIndex = null
       this.playLrc(this.playing);
     },
 
@@ -610,7 +637,11 @@ export default {
         // Resume here as well as in onPlaying: a media session action counts as
         // an activation gesture, which iOS requires to honour resume().
         this.resumeAudioContext()
-        if (this.plyr && this.plyr.paused) this.plyr.play().catch(() => {})
+        // Don't restart the finished track when a sleep-timer advance is
+        // pending -- the `playing` watcher swaps in the next one.
+        if (this._sleepStoppedIndex == null && this.plyr && this.plyr.paused) {
+          this.plyr.play().catch(() => {})
+        }
         this.PLAY()
       })
       this.setMediaSessionHandler('pause', () => {
