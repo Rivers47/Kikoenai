@@ -168,11 +168,16 @@ export default {
   },
 
   methods: {
+    // Zero hours/minutes are omitted. The en-US unit strings carry a leading
+    // space (CJK ones don't), so join with '' and trim what that leaves behind.
     humanReadableSeconds(seconds) {
       const h = Math.floor(seconds / 3600)
-      const m = Math.floor(seconds / 60)
+      const m = Math.floor(seconds / 60) % 60
       const s = Math.floor(seconds) % 60
-      return this.$t('favlistitem.timeFormat', { h, m, s })
+      let out = ''
+      if (h) out += this.$t('favlistitem.hourUnit', { h })
+      if (m) out += this.$t('favlistitem.minuteUnit', { m })
+      return (out + this.$t('favlistitem.secondUnit', { s })).trim()
     },
 
     setMetadata () {

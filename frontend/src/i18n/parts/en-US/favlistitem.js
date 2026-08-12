@@ -6,5 +6,7 @@ export default {
   listened: 'Listened',
   replay: 'Replay',
   postponed: 'Postponed',
-  timeFormat: '{h}h {m}m {s}s',
+  hourUnit: '{h}h',
+  minuteUnit: ' {m}m',
+  secondUnit: ' {s}s',
 }

@@ -1,3 +1,4 @@
+//eslint-disable-next-line n/no-unpublished-require
 const { expect } = require('chai');
 const knexLib = require('knex');
 const { makeQueries } = require('../database/queries');

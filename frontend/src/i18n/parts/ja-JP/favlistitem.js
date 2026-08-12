@@ -6,5 +6,7 @@ export default {
   listened: '聴いた',
   replay: 'もう一度聴く',
   postponed: '後回し',
-  timeFormat: '{h}時間{m}分{s}秒',
+  hourUnit: '{h}時間',
+  minuteUnit: '{m}分',
+  secondUnit: '{s}秒',
 }

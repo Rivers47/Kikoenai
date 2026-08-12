@@ -6,5 +6,7 @@ export default {
   listened: '听过',
   replay: '重听',
   postponed: '搁置',
-  timeFormat: '{h}小时{m}分钟{s}秒',
+  hourUnit: '{h}小时',
+  minuteUnit: '{m}分钟',
+  secondUnit: '{s}秒',
 }
