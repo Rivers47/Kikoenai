@@ -58,6 +58,7 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 │   │   ├── Login.vue                     # Login page
 │   │   ├── Favourites.vue                # Favorites, history, progress
 │   │   ├── FullScreenPlayer.vue          # Full-screen player mode
+│   │   ├── TextViewer.vue                # In-app text file viewer (route /text/:trackId)
 │   │   ├── Error404.vue                  # 404 page
 │   │   └── Dashboard/
 │   │       ├── Folders.vue               # Library folder management
@@ -140,6 +141,7 @@ Main layout routes:
 | `/works` | — | redirect→`/` | Legacy path, redirects to `/` preserving query. Deliberate: the reverse direction caused a `replaceState` loop that broke back navigation |
 | `/work/:id` | — | Work | Work detail + track list |
 | `/fullScreenPlayer/:id?` | — | FullScreenPlayer | Full-screen player mode |
+| `/text/:trackId(.*)` | — | TextViewer | In-app viewer for `.txt`/`.lrc`/`.srt`/`.ass`/`.vtt`. The param spans a slash because `trackId` is `${workId}/${index}`. Never link to `/api/media/stream/...` directly — a real navigation kills the SPA document (playback stops) and in an installed PWA back exits the app |
 | `/circles` | — | List | Browse by circle (artist group) |
 | `/tags` | — | List | Browse by tag |
 | `/vas` | — | List | Browse by voice actor |
