@@ -302,8 +302,15 @@ export default {
       'SET_NEW_CURRENT_TIME',
     ]),
 
+    // Memo (ffprobe) wins: Safari's own Ogg/Opus duration is an estimate it
+    // never corrects. Element value is the fallback for tracks without a memo.
+    onDurationChange () {
+      const memo = this.currentPlayingFile.duration
+      this.SET_DURATION(memo > 0 ? memo : (this.plyr ? this.plyr.duration : 0))
+    },
+
     onCanplay () {
-      this.SET_DURATION(this.plyr.duration)
+      this.onDurationChange()
 
       if (this.playing && this.plyr.currentTime !== this.plyr.duration) {
         this.plyr.play()
@@ -457,6 +464,8 @@ export default {
       }
       media.src = url
       media.load()
+      // Retarget now rather than leaving the outgoing track's length on screen.
+      this.onDurationChange()
       return true
     },
 
@@ -680,6 +689,10 @@ export default {
       // same native event, so it can never fire when this listener doesn't
       // — and registering both makes onEnded run twice per track end.
       media.addEventListener('ended', this.onEnded);
+
+      // Native listener: 'durationchange' is absent from Plyr's bubble list
+      // (config/defaults.js `events`), so player.on() would never fire.
+      media.addEventListener('durationchange', this.onDurationChange);
     },
 
     initAudioAnalyzer () {
@@ -739,6 +752,7 @@ export default {
       const media = container.querySelector('video') || container.querySelector('audio');
       if (media) {
         media.removeEventListener('ended', this.onEnded);
+        media.removeEventListener('durationchange', this.onDurationChange);
       }
     }
     if (this._lrCtx) {
