@@ -12,7 +12,8 @@
           </router-link>
         </q-toolbar-title>
 
-        <q-input dark dense rounded standout v-model="keyword" debounce="500" input-class="text-right" class="q-mr-sm">
+        <q-input dark dense rounded standout v-model="keyword" debounce="500" input-class="text-right" class="q-mr-sm"
+          @keyup.enter="search($event.target.value); $event.target.blur()">
           <template v-slot:append>
             <q-icon v-if="keyword === ''" name="search" />
             <q-icon v-else name="clear" class="cursor-pointer" @click="keyword = ''" />
@@ -221,7 +222,7 @@ export default {
 
   watch: {
     keyword () {
-      this.$router.push(this.keyword ? `/works?keyword=${this.keyword}` : `/works`)
+      this.search(this.keyword)
     },
 
     randId () {
@@ -273,6 +274,12 @@ export default {
     ...mapMutations('AudioPlayer', [
       'SET_AI_SERVER_URL',
     ]),
+    // Called by the keyword watcher and by Enter (which bypasses the input's debounce)
+    search (keyword) {
+      this.keyword = keyword
+      this.$router.push(keyword ? { path: '/works', query: { keyword } } : '/works')
+    },
+
     initUser () {
       this.$axios.get('/api/auth/me')
         .then((res) => {

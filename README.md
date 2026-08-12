@@ -171,6 +171,7 @@ The frontend builds directly into `backend/dist/`, which is served as static con
 - [ ] Migrate frontend to shadcn
 - [ ] metadata cache server to replace hvdb/asmrone
 - [x] Smarter Play status, hide finished work in history
+- [ ] Advanced search
 
 ## License
 
