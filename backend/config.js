@@ -113,6 +113,13 @@ const readConfig = () => {
     }
   }
 
+  // Ignored, not dropped: rewriting config.json is destructive, and a stale key
+  // is the only trace of what the user actually tried to configure.
+  const unknownKeys = Object.keys(config).filter(key => !(key in defaultConfig));
+  if (unknownKeys.length) {
+    console.log('配置项未被使用，已忽略:', unknownKeys.join(', '));
+  }
+
   // Support reading relative path
   // When config is saved in admin panel, it will still be stored as absolute path 
   if(!path.isAbsolute(config.coverFolderDir)) {
