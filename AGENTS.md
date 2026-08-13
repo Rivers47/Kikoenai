@@ -39,7 +39,7 @@ Run from repo root. Node **>= 24.0.0**.
 | `npm run build` | Build frontend into `backend/dist/` |
 | `npm start` | Production: backend serves `backend/dist/` |
 | `npm run lint` | backend lint + frontend ESLint |
-| `npm run release:patch` / `:minor` / `:major` | Bump backend version, sync across all three `package.json` via `version:sync` |
+| `npm run release:patch` / `:minor` / `:major` | Full release — see §5 |
 
 Per-package scripts still work inside each workspace (e.g. `npm run scan`, `npm test` in `backend/`).
 
@@ -70,7 +70,8 @@ Changes touching both packages (e.g. a new API endpoint used by a new Vue page):
 
 ## 5. Repo-Wide Notes
 
-- **Product vs. package name:** Product is **Kikoenai**; the npm workspace name is still **`kikoeru`** (inherited from upstream). Versions stay in sync across all three `package.json` via `npm run release:*`.
+- **Product vs. package name:** Product is **Kikoenai**; the npm workspace name is still **`kikoeru`** (inherited from upstream).
+- **Releasing:** one command from a clean tree on `main` — `npm run release:patch` (or `:minor` / `:major`). It bumps the root `package.json`, then npm's `version` lifecycle runs `scripts/sync-version.js` (propagating the version to `backend/`, `frontend/` and `package-lock.json`) and stages those files; npm commits and tags `vX.Y.Z`, and `postversion` pushes with `--follow-tags`. The tag push triggers `build.yml` (semver-tagged container images) and `package-windows.yml` (Windows exe + **published** GitHub release with generated notes). Nothing manual after the one command.
 - **Tests:** Unit/lint tests live inside each package (`backend/test/`, frontend `npm test` = ESLint). Cross-package e2e (Playwright) at `tests/` expects the dev server on :8080.
 - **CI:** `.github/workflows/build.yml` builds the OCI image. Container sets `IS_DOCKER=1` with fixed default paths.
 

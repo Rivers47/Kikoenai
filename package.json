@@ -22,10 +22,12 @@
     "package:windows:zip": "node scripts/package.js --windows",
     "start": "npm start -w backend",
     "lint": "npm run lint -w backend && npm run test -w frontend",
-    "release:patch": "npm version patch -w backend && npm run version:sync",
-    "release:minor": "npm version minor -w backend && npm run version:sync",
-    "release:major": "npm version major -w backend && npm run version:sync",
-    "version:sync": "node -e \"var v=require('./backend/package.json').version;['package.json','frontend/package.json'].forEach(function(f){var p=require('./'+f);p.version=v;require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\\n')})\""
+    "release:patch": "npm version patch",
+    "release:minor": "npm version minor",
+    "release:major": "npm version major",
+    "version": "node scripts/sync-version.js && git add package.json package-lock.json backend/package.json frontend/package.json",
+    "postversion": "git push --follow-tags",
+    "version:sync": "node scripts/sync-version.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.0",

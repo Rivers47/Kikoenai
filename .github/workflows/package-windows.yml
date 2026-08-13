@@ -54,6 +54,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: package/dist/Kikoenai-exe-windows-x64-*.zip
-          draft: true
+          # Publish straight away; notes are generated from commits since the last tag.
+          draft: false
+          generate_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
