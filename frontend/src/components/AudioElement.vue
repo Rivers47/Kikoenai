@@ -28,6 +28,7 @@ import Lyric from 'lrc-file-parser'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import NotifyMixin from '../mixins/Notification.js'
 import { formatSeconds } from '../utils'
+import { sendOrQueue } from '../utils/outbox'
 import { debounce } from 'quasar';
 import Plyr from 'plyr'
 
@@ -384,13 +385,15 @@ export default {
       const seconds = this.plyr ? this.plyr.currentTime : 0
       const duration = this.plyr ? this.plyr.duration : 0
       const completed = duration > 0 && seconds >= 0.95 * duration
-      this.$axios.put('/api/track-progress', {
-        work_id: this.playWorkId,
-        contentHash: file.contentHash,
-        seconds: Math.round(seconds * 100) / 100,
-        completed: completed
-      }).catch((err) => {
-        console.error('track progress report failed:', err)
+      sendOrQueue(this.$axios, {
+        method: 'PUT',
+        url: '/api/track-progress',
+        body: {
+          work_id: this.playWorkId,
+          contentHash: file.contentHash,
+          seconds: Math.round(seconds * 100) / 100,
+          completed: completed
+        }
       })
     },
 
