@@ -42,7 +42,7 @@ kikoenai/
 
 ### Container
 
-An OCI container image is built at ()[https://github.com/Rivers47/Kikoenai/pkgs/container/kikoenai]
+An OCI container image is built at [here](https://github.com/Rivers47/Kikoenai/pkgs/container/kikoenai)
 
 Sample rootless quadlet config
 

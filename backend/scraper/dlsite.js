@@ -367,9 +367,54 @@ const scrapeCoverIdForTranslatedWorkFromDLsite = (id_translated) => new Promise(
 
       const hit_id_list = linked_id_list.filter(id => possible_image_id_list.includes(id));
 
+      // New-style pages replace the work_edition_linklist markup with a
+      // <translation-product-slider> component that carries the real cover
+      // URLs directly (under the original work id). When present, expose them
+      // so the caller can download without guessing paths.
+      const realCoverUrls = {};
+      const slider = $('translation-product-slider').first();
+      if (slider.length) {
+        const sliderSrc = slider.attr('src') || '';
+        const sliderThumb = slider.attr('thumb') || '';
+        // src/thumb may be protocol-relative or root-relative; resolve against
+        // the work page so a malformed value can't throw out of the scrape.
+        // Anything that doesn't resolve to an image path is not a cover — a
+        // placeholder like "#" would otherwise resolve to the page itself.
+        const toAbsolute = (u) => {
+          try {
+            const resolved = new URL(u, url);
+            return /\.(jpe?g|png|webp|gif)$/i.test(resolved.pathname) ? resolved.href : '';
+          } catch {
+            return '';
+          }
+        };
+        const mainUrl = sliderSrc && toAbsolute(sliderSrc);
+        if (mainUrl) {
+          realCoverUrls.main = mainUrl;
+          // DLsite names the variants by suffix, whatever the extension is.
+          const samUrl = mainUrl.replace('_img_main', '_img_sam');
+          if (samUrl !== mainUrl) realCoverUrls.sam = samUrl;
+          if (sliderThumb) {
+            const thumbUrl = toAbsolute(sliderThumb);
+            if (thumbUrl) realCoverUrls['240x240'] = thumbUrl;
+          }
+
+          // The cover usually belongs to the original (Japanese) work; prefer
+          // its id for the guessed-path fallback in guessDLsiteCoverUrl.
+          const mainUrlMatch = /RJ(\d{6,8})[_\w.]+$/.exec(new URL(mainUrl).pathname);
+          if (mainUrlMatch) {
+            const realCoverFromId = mainUrlMatch[1];
+            if (realCoverFromId !== rjcode && !hit_id_list.includes(realCoverFromId)) {
+              hit_id_list.unshift(realCoverFromId);
+            }
+          }
+        }
+      }
+
       const result = {
         coverFromId: hit_id_list.length > 0 ? hit_id_list[0] : id_translated,
         isNoImgMain,
+        coverUrls: Object.keys(realCoverUrls).length > 0 ? realCoverUrls : undefined,
       };
       resolve(result);
     })
