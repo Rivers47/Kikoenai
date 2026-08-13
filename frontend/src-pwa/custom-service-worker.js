@@ -21,6 +21,7 @@ import {
 import { registerRoute, NavigationRoute } from 'workbox-routing'
 import { CacheFirst, NetworkFirst } from 'workbox-strategies'
 import { RangeRequestsPlugin } from 'workbox-range-requests'
+import { drain, SYNC_TAG } from '../src/utils/outbox'
 
 // Previously `opts.skipWaiting` / `opts.clientsClaim` in quasar.config.js.
 // Quasar sets both by default in GenerateSW mode; in InjectManifest mode
@@ -242,4 +243,19 @@ self.addEventListener('backgroundfetchclick', (event) => {
     }
     await self.clients.openWindow('/downloads')
   })())
+})
+
+/*
+ * Outbox replay (Background Sync, Chromium only).
+ *
+ * The page enqueues playback-state writes it could not deliver; this fires once
+ * the browser believes the network is usable again, which may be long after the
+ * tab was frozen or closed. Letting drain() throw is what buys the retry --
+ * a rejected waitUntil makes Chromium re-fire the event with backoff.
+ *
+ * See src/utils/outbox.js for the store and the replay rules.
+ */
+self.addEventListener('sync', (event) => {
+  if (event.tag !== SYNC_TAG) return
+  event.waitUntil(drain())
 })

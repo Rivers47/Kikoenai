@@ -304,6 +304,7 @@ import Scrollable from 'components/Scrollable'
 import SleepMode from 'components/SleepMode'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import { formatSeconds } from '../utils'
+import { sendOrQueue, requestSync } from '../utils/outbox'
 import { debounce } from 'quasar'
 import { apiUrl } from 'src/base-path'
 
@@ -690,7 +691,11 @@ export default {
       }
     },
 
-    // 使用 keepalive fetch 确保页面关闭时播放进度能够送达服务器
+    // Hiding is the last moment we are guaranteed to run -- the OS may freeze
+    // the process immediately after. Both writes go through the outbox, so what
+    // matters here is that the rows are durable before we lose the thread; the
+    // requests themselves may well be killed in flight, and the service worker
+    // delivers whatever survives.
     flushHistoryOnHide() {
       if (this.queueCopy.length <= 0) return;
       if (!this.resumeHistoryDone) return;
@@ -713,39 +718,18 @@ export default {
       // Only the history write is skipped. Progress is a position, which does
       // keep changing while playing, so it is reported either way.
       if (!this.isSameTwoHistory(this.latestUpdatedHistory, data)) {
-        fetch(apiUrl(`/api/history/${this.playWorkId}`), {
+        sendOrQueue(this.$axios, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-          keepalive: true,
-        }).catch(() => {})
+          url: `/api/history/${this.playWorkId}`,
+          body: { state: data.state }
+        })
       }
 
-      // Also report per-track progress (Phase 2)
-      this._flushTrackProgressOnHide()
+      this._reportTrackProgressOnUpdate()
+      requestSync()
     },
 
-    // Fire-and-forget per-track progress on page hide (Phase 2)
-    _flushTrackProgressOnHide () {
-      const file = this.queueCopy[this.queueIndex]
-      if (!file || !file.trackId || this.playWorkId === 0) return
-      const seconds = this.currentTime
-      const duration = file.duration
-      const completed = duration > 0 && seconds >= 0.95 * duration
-      if (!this._markTrackProgressReported(file.trackId, seconds)) return
-      fetch(apiUrl(`/api/track-progress/${file.trackId}`), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          seconds: Math.round(seconds * 100) / 100,
-          completed: completed,
-          observedAt: Date.now()
-        }),
-        keepalive: true,
-      }).catch(() => {})
-    },
 
-    
     onUpdatePlayingStatus() {
       // 当前播放列表为空，禁止记录播放历史
       if (this.queueCopy.length <= 0) return;
@@ -804,12 +788,14 @@ export default {
       const duration = file.duration
       const completed = duration > 0 && seconds >= 0.95 * duration
       if (!this._markTrackProgressReported(file.trackId, seconds)) return
-      this.$axios.put(`/api/track-progress/${file.trackId}`, {
-        seconds: Math.round(seconds * 100) / 100,
-        completed: completed,
-        observedAt: Date.now()
-      }).catch((err) => {
-        console.error('track progress report failed:', err)
+      sendOrQueue(this.$axios, {
+        method: 'PUT',
+        url: `/api/track-progress/${file.trackId}`,
+        body: {
+          seconds: Math.round(seconds * 100) / 100,
+          completed: completed,
+          observedAt: Date.now()
+        }
       })
     },
 

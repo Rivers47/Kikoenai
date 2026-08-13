@@ -43,6 +43,7 @@ import WorkDetails from 'components/WorkDetails'
 import WorkTree from 'components/WorkTree'
 import WorkDescription from 'components/WorkDescription'
 import NotifyMixin from '../mixins/Notification.js'
+import { pendingProgress } from '../utils/outbox'
 
 export default {
   name: 'Work',
@@ -129,6 +130,14 @@ export default {
           this.showErrNotif(error.message || error)
         }
       }
+
+      // Undelivered local progress wins over both the server's answer and the
+      // cached snapshot behind it -- it is by definition newer. Runs even when
+      // the request above failed, which is the offline case it exists for.
+      this.trackProgress = {
+        ...this.trackProgress,
+        ...await pendingProgress(this.workid)
+      };
     },
 
     async requestExtras() {

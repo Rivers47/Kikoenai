@@ -145,31 +145,11 @@ module.exports = function (ctx) {
         opts.exclude = opts.exclude || []
         opts.exclude.push(/manifest\.json$/, /.*.js.map$/)
         if (ctx.dev) {
-          // Never precache the app bundles in development. webpack-dev-server
-          // emits them under unhashed names (/app.js, /vendor.js, the lazy
-          // route chunks), with the content hash carried in the precache
-          // manifest's `revision` field instead of the filename -- so the
-          // cache-first precache keeps serving the *previous* compilation's
-          // bundle after a rebuild. That bundle's baked-in webpack hash no
-          // longer matches the dev server's, the hot update 404s, HMR gives up
-          // and calls location.reload(), and the reload is served the same
-          // stale bundle: an unbreakable refresh loop.
-          //
-          // index.html stays precached on purpose -- the NavigationRoute in
-          // src-pwa/custom-service-worker.js is bound to it via
-          // createHandlerBoundToURL(), which throws at worker startup if the
-          // URL is absent from the precache. It is safe to keep: in dev it
-          // only ever points at the unhashed bundle names above, so its
-          // content is stable across rebuilds.
-          //
-          // The `.hot-update.` pattern covers webpack's HMR payloads
-          // (app.<hash>.hot-update.json and friends). They are one-shot,
-          // hash-keyed artifacts: precaching them lets the worker serve a
-          // stale hot update, and because their names change on every rebuild
-          // they would also rewrite the manifest -- and therefore sw.js --
-          // each time, so the browser would see a new worker (and fire the
-          // "new version" notification) on every recompile.
-          opts.exclude.push(/\.js$/, /\.hot-update\./)
+          // Webpack's HMR payloads are one-shot and hash-named: precaching them
+          // serves stale hot updates, and their changing names rewrite the
+          // manifest (and so sw.js) on every recompile, firing the "new
+          // version" notification each time.
+          opts.exclude.push(/\.hot-update\./)
         }
       },
       // The custom service worker is bundled by esbuild, not webpack/babel --

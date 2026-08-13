@@ -186,6 +186,7 @@ import { mapGetters, mapState } from 'vuex'
 import WorkCard from 'components/WorkCard'
 import WorkListItem from 'components/WorkListItem'
 import { uncacheFile } from '../utils/downloads'
+import { pendingProgress } from '../utils/outbox'
 
 // Own LocalStorage keys -- deliberately NOT the Works page's `listMode` /
 // `sortCategoryOption`, so the two pages keep independent view preferences.
@@ -388,15 +389,24 @@ export default {
       })
     },
 
-    playWork (work, index = 0) {
+    async playWork (work, index = 0) {
       if (work.tracks.length === 0) return
 
       const metadata = this.metadataByWorkId[work.workId]
+      // contentHash and duration come from the manifest: without them the
+      // player reports no progress and shows no track length, and offline
+      // there is no tree to recover them from. Manifests written before they
+      // were recorded simply lack them, as they did before.
       const queue = work.tracks.map(file => ({
         trackId: file.trackId,
         title: file.title,
         workTitle: work.workTitle,
+        contentHash: file.contentHash,
+        duration: file.duration,
       }))
+
+      const progress = await pendingProgress(work.workId)
+      const resume = queue[index] && progress[queue[index].contentHash]
 
       this.$store.commit('AudioPlayer/SET_QUEUE', {
         workId: work.workId,
@@ -404,6 +414,7 @@ export default {
         queue,
         index,
         resetPlaying: true,
+        resumeHistorySeconds: resume ? resume.seconds : -1,
         workLastTrackId: queue[queue.length - 1].trackId,
       })
     },

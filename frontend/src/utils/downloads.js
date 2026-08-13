@@ -48,6 +48,10 @@ export function collectDownloadableFiles (tree) {
           trackId: node.trackId || node.hash,
           title: node.title,
           type: node.type === 'audio' ? 'audio' : 'lyric',
+          // Carried so a queue built from the manifest can report progress and
+          // show a track length -- offline there is no tree to read them from.
+          contentHash: node.contentHash,
+          duration: node.duration,
         })
       }
     }
@@ -90,6 +94,8 @@ export function buildWorkDownloadPlan (workId, tree) {
     trackId: file.trackId,
     type: file.type,
     title: file.title,
+    contentHash: file.contentHash,
+    duration: file.duration,
   }))
 
   for (const url of [

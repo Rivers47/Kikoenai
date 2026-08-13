@@ -30,6 +30,7 @@ import NotifyMixin from '../mixins/Notification.js'
 import { formatSeconds } from '../utils'
 import { MAX_LYRIC_STREAMS } from 'src/utils/lyrics'
 import { convert_srt_vtt_to_lrc_streams, mergeLyricStreams } from 'src/utils/subtitles'
+import { sendOrQueue } from '../utils/outbox'
 import { debounce } from 'quasar';
 import Plyr from 'plyr'
 import { apiUrl } from 'src/base-path'
@@ -356,12 +357,14 @@ export default {
       const seconds = this.plyr ? this.plyr.currentTime : 0
       const duration = this.plyr ? this.plyr.duration : 0
       const completed = duration > 0 && seconds >= 0.95 * duration
-      this.$axios.put(`/api/track-progress/${file.trackId}`, {
-        seconds: Math.round(seconds * 100) / 100,
-        completed: completed,
-        observedAt: Date.now()
-      }).catch((err) => {
-        console.error('track progress report failed:', err)
+      sendOrQueue(this.$axios, {
+        method: 'PUT',
+        url: `/api/track-progress/${file.trackId}`,
+        body: {
+          seconds: Math.round(seconds * 100) / 100,
+          completed: completed,
+          observedAt: Date.now()
+        }
       })
     },
 
