@@ -18,7 +18,8 @@ kikoenai/
 ├── frontend/               # Vue 3 / Quasar PWA  → see frontend/AGENTS.md
 ├── scripts/{dev,build}.sh
 ├── tests/                  # Root-level Playwright e2e (baseURL :8080, chromium)
-├── .github/workflows/build.yml   # CI: container image build
+├── .github/workflows/build.yml         # CI: production container image
+├── .github/workflows/build-debug.yml   # Manual-only: `-debug` container image
 ├── Containerfile           # OCI image (ghcr.io/rivers47/kikoenai)
 └── compose-example.yaml
 ```
@@ -73,7 +74,7 @@ Changes touching both packages (e.g. a new API endpoint used by a new Vue page):
 - **Product vs. package name:** Product is **Kikoenai**; the npm workspace name is still **`kikoeru`** (inherited from upstream).
 - **Releasing:** one command from a clean tree on `main` — `npm run release:patch` (or `:minor` / `:major`). It bumps the root `package.json`, then npm's `version` lifecycle runs `scripts/sync-version.js` (propagating the version to `backend/`, `frontend/` and `package-lock.json`) and stages those files; npm commits and tags `vX.Y.Z`, and `postversion` pushes with `--follow-tags`. The tag push triggers `build.yml` (semver-tagged container images) and `package-windows.yml` (Windows exe + **published** GitHub release with generated notes). Nothing manual after the one command.
 - **Tests:** Unit/lint tests live inside each package (`backend/test/`, frontend `npm test` = ESLint). Cross-package e2e (Playwright) at `tests/` expects the dev server on :8080.
-- **CI:** `.github/workflows/build.yml` builds the OCI image. Container sets `IS_DOCKER=1` with fixed default paths.
+- **CI:** `.github/workflows/build.yml` builds the production OCI image on every push. `build-debug.yml` builds the `-debug` variant (unminified bundle + source maps) and is **`workflow_dispatch` only** — run it from the Actions tab on the branch/tag you want to debug. Both set `flavor: latest=false` on `docker/metadata-action`; without it the default `latest=auto` emits an extra unsuffixed `latest` on semver tag pushes, which is how the debug image once ended up published as `latest`. Container sets `IS_DOCKER=1` with fixed default paths.
 
 
 ## 6. Code Style

@@ -1,7 +1,9 @@
-name: Build All (Frontend + Backend Container)
+name: Build Debug Container (manual)
 
+# Manual only. The debug image ships an unminified bundle with source maps and
+# is never built automatically -- run this from the Actions tab on whichever
+# branch or tag you want to debug.
 on:
-  push:
   workflow_dispatch:
 
 env:
@@ -27,8 +29,8 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci -w frontend
 
-      - name: Build frontend (production, no debug)
-        run: npm run build:prod
+      - name: Build frontend (debug)
+        run: npm run build
         working-directory: frontend
 
       # ── Container image ───────────────────────────────────────
@@ -37,16 +39,16 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
-          # latest=false: only the explicit type=raw entry below may set `latest`.
-          # The default (latest=auto) would emit an extra unsuffixed `latest` on
-          # semver tag pushes -- see build-debug.yml, where that clobbered it.
+          # latest=false is load-bearing: the default (latest=auto) emits an
+          # unsuffixed `latest` whenever type=semver matches, and the per-entry
+          # suffix below does NOT apply to it -- so a debug run on a tag would
+          # publish the debug image as `latest`.
           flavor: latest=false
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix={{branch}}-,enable=${{ github.ref_type == 'branch' }}
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch,suffix=-debug
+            type=sha,prefix={{branch}}-,suffix=-debug,enable=${{ github.ref_type == 'branch' }}
+            type=semver,pattern={{version}},suffix=-debug
+            type=raw,value=latest-debug,enable={{is_default_branch}}
 
       - name: Build container image
         id: build-image
@@ -60,7 +62,6 @@ jobs:
           oci: true
 
       - name: Push image to GitHub Container Registry
-        if: ${{ github.event_name != 'pull_request' }}
         uses: redhat-actions/push-to-registry@v3
         with:
           image: ${{ steps.build-image.outputs.image }}
