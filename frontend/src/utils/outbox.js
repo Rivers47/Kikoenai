@@ -31,6 +31,21 @@ const PROGRESS_URL = '/api/track-progress'
 
 export const isQueueable = (url) => QUEUEABLE.some((re) => re.test(url))
 
+/*
+ * Background Sync is the only thing that ever empties this store, so without it
+ * the whole mechanism must stay switched off rather than degrade. A row that
+ * cannot drain outlives the write it stands for, and pendingProgress() would go
+ * on masking the server's value forever -- including newer progress from
+ * another device. Every entry point below therefore falls back to exactly the
+ * pre-outbox behaviour: send, and let the caller see the failure.
+ *
+ * This is the one capability check in the offline feature set. Background Fetch
+ * fails loudly instead (assertBackgroundFetchSupport in utils/downloads.js)
+ * because a download the user asked for should not silently not happen; here
+ * the correct non-Chromium behaviour is to be invisible.
+ */
+export const canSync = () => 'SyncManager' in self
+
 let dbPromise = null
 
 function openDb () {
@@ -107,6 +122,7 @@ export async function entries () {
  * attempt fails. Registering with an empty store is a harmless no-op.
  */
 export async function requestSync () {
+  if (!canSync()) return
   try {
     const registration = await navigator.serviceWorker.ready
     await registration.sync.register(SYNC_TAG)
@@ -126,6 +142,18 @@ export async function requestSync () {
  * dependency-free and can be bundled into the service worker.
  */
 export async function sendOrQueue (http, { method, url, body }) {
+  if (!canSync()) {
+    // Matches what these call sites did before the outbox: fire, and log the
+    // failure. Throwing instead would surface as an unhandled rejection --
+    // none of them await this.
+    try {
+      await http({ method, url, data: body, __outboxed: true })
+    } catch (err) {
+      console.error(err)
+    }
+    return
+  }
+
   const key = await enqueue({ method, url, body })
   try {
     // __outboxed keeps the axios interceptor from queueing this a second time
@@ -147,6 +175,10 @@ export async function sendOrQueue (http, { method, url, body }) {
  */
 export async function pendingProgress (workId) {
   const out = {}
+  // Nothing is enqueued without Background Sync, so this is normally already
+  // empty -- the guard also drops rows left by a build that predates it, which
+  // would otherwise mask the server's progress permanently.
+  if (!canSync()) return out
   for (const entry of await entries()) {
     if (!entry.url.startsWith(PROGRESS_URL)) continue
     let body
