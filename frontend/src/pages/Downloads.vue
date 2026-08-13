@@ -134,47 +134,11 @@
           <div class="row items-center justify-between q-mt-xs q-px-sm">
             <span class="col-auto text-caption text-on-surface-variant">{{ workSummary(work) }}</span>
             <div class="col-auto row items-center no-wrap">
-              <q-btn flat round dense icon="play_arrow" color="primary" @click="playWork(work)">
-                <q-tooltip>{{ $t('downloads.playAll') }}</q-tooltip>
-              </q-btn>
-              <q-btn
-                flat
-                round
-                dense
-                :icon="isExpanded(work) ? 'expand_less' : 'expand_more'"
-                @click="toggleExpand(work)"
-              >
-                <q-tooltip>{{ isExpanded(work) ? $t('downloads.hideTracks') : $t('downloads.showTracks') }}</q-tooltip>
-              </q-btn>
               <q-btn flat round dense icon="delete" color="negative" @click="removeWork(work)">
                 <q-tooltip>{{ $t('downloads.removeWork') }}</q-tooltip>
               </q-btn>
             </div>
           </div>
-
-          <q-slide-transition>
-            <div v-show="isExpanded(work)">
-              <q-list dense bordered class="q-mt-xs rounded-borders">
-                <q-item
-                  v-for="(file, index) in work.tracks"
-                  :key="file.url"
-                  clickable
-                  @click="playWork(work, index)"
-                >
-                  <q-item-section side>
-                    <q-icon name="play_arrow" size="xs" />
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label lines="1">{{ file.title }}</q-item-label>
-                    <q-item-label caption>{{ formatBytes(file.bytes) }}</q-item-label>
-                  </q-item-section>
-                  <q-item-section side>
-                    <q-btn flat round dense icon="delete" color="negative" @click.stop="removeFile(file)" />
-                  </q-item-section>
-                </q-item>
-              </q-list>
-            </div>
-          </q-slide-transition>
         </div>
       </div>
     </template>
