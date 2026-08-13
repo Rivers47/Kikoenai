@@ -2,7 +2,7 @@ import { boot } from 'quasar/wrappers'
 import axios from 'axios'
 import { LocalStorage } from 'quasar'
 import i18n from '../i18n'
-import { enqueue, isQueueable, requestSync } from '../utils/outbox'
+import { canSync, enqueue, isQueueable, requestSync } from '../utils/outbox'
 
 axios.defaults.headers['Content-Type'] = "application/json"
 // The session id lives in an HttpOnly cookie, attached by the browser automatically
@@ -65,6 +65,9 @@ async function queueWrite (config) {
   if (!config || (config.method || 'get').toLowerCase() === 'get') return null
   // sendOrQueue already owns this request's row; let it see the failure.
   if (config.__outboxed) return null
+  // Nothing would ever drain the row, so reporting success would be a lie --
+  // reject as before and let the call site show its error. See canSync().
+  if (!canSync()) return null
 
   const url = axios.getUri(config)
   if (!isQueueable(url)) return null
