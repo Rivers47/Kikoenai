@@ -187,6 +187,7 @@ import { mapMutations, mapState, mapGetters } from 'vuex'
 import { Dark } from 'quasar'
 import { CONTRAST_MODES, getContrastMode, setContrastMode } from 'src/utils/contrast'
 import { onDownloadMessage, reconcileDownloads } from 'src/utils/downloads'
+import { requestSync } from 'src/utils/outbox'
 
 export default {
   name: 'MainLayout',
@@ -298,6 +299,10 @@ export default {
     // with fetches that finish while it is running.
     initOfflineDownloads () {
       if (!('serviceWorker' in navigator)) return;
+
+      // Rows survive a process that was killed outright, with no chance to
+      // register a sync of its own. Boot is where those get picked up.
+      requestSync();
 
       this.unsubscribeDownloadMessages = onDownloadMessage({
         onSuccess: (workId, stored) => {
