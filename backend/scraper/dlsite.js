@@ -371,26 +371,42 @@ const scrapeCoverIdForTranslatedWorkFromDLsite = (id_translated) => new Promise(
       // <translation-product-slider> component that carries the real cover
       // URLs directly (under the original work id). When present, expose them
       // so the caller can download without guessing paths.
-      let realCoverUrls = {};
+      const realCoverUrls = {};
       const slider = $('translation-product-slider').first();
       if (slider.length) {
         const sliderSrc = slider.attr('src') || '';
         const sliderThumb = slider.attr('thumb') || '';
-        const toHttp = u => u.replace(/^\/\//, 'https://');
-        if (sliderSrc) {
-          const mainUrl = toHttp(sliderSrc);
+        // src/thumb may be protocol-relative or root-relative; resolve against
+        // the work page so a malformed value can't throw out of the scrape.
+        // Anything that doesn't resolve to an image path is not a cover — a
+        // placeholder like "#" would otherwise resolve to the page itself.
+        const toAbsolute = (u) => {
+          try {
+            const resolved = new URL(u, url);
+            return /\.(jpe?g|png|webp|gif)$/i.test(resolved.pathname) ? resolved.href : '';
+          } catch {
+            return '';
+          }
+        };
+        const mainUrl = sliderSrc && toAbsolute(sliderSrc);
+        if (mainUrl) {
           realCoverUrls.main = mainUrl;
-          const samUrl = mainUrl.replace(/_img_main\.(jpg|png|webp)/i, '_img_sam.$1');
+          // DLsite names the variants by suffix, whatever the extension is.
+          const samUrl = mainUrl.replace('_img_main', '_img_sam');
           if (samUrl !== mainUrl) realCoverUrls.sam = samUrl;
-          if (sliderThumb) realCoverUrls['240x240'] = toHttp(sliderThumb);
-        }
-        // If the cover belongs to the original (Japanese) work, prefer its id
-        // for the guessed-path fallback in getCoverImage.
-        const mainUrlMatch = realCoverUrls.main && /RJ(\d{6,8})[_\w.]+$/.exec(new URL(realCoverUrls.main).pathname);
-        if (mainUrlMatch) {
-          const realCoverFromId = mainUrlMatch[1];
-          if (realCoverFromId !== String(id_translated) && !hit_id_list.includes(realCoverFromId)) {
-            hit_id_list.unshift(realCoverFromId);
+          if (sliderThumb) {
+            const thumbUrl = toAbsolute(sliderThumb);
+            if (thumbUrl) realCoverUrls['240x240'] = thumbUrl;
+          }
+
+          // The cover usually belongs to the original (Japanese) work; prefer
+          // its id for the guessed-path fallback in guessDLsiteCoverUrl.
+          const mainUrlMatch = /RJ(\d{6,8})[_\w.]+$/.exec(new URL(mainUrl).pathname);
+          if (mainUrlMatch) {
+            const realCoverFromId = mainUrlMatch[1];
+            if (realCoverFromId !== rjcode && !hit_id_list.includes(realCoverFromId)) {
+              hit_id_list.unshift(realCoverFromId);
+            }
           }
         }
       }
