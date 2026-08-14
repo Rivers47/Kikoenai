@@ -107,17 +107,34 @@ module.exports = function (ctx) {
 
     // https://quasar.dev/quasar-cli-webpack/developing-pwa/configuring-pwa
     pwa: {
-      workboxMode: 'GenerateSW',
-      extendGenerateSWOptions (opts) {
-        opts.skipWaiting = true
-        opts.clientsClaim = true
+      // InjectManifest, not GenerateSW: the offline-download feature needs
+      // service-worker event handlers (Background Fetch), which a generated
+      // worker cannot express. The worker is hand-written in
+      // src-pwa/custom-service-worker.js -- caching routes, navigation
+      // fallback, skipWaiting/clientsClaim all live there now.
+      workboxMode: 'InjectManifest',
+      // Build-time only: what workbox-build puts into the injected precache
+      // manifest. Runtime behaviour does NOT belong here anymore.
+      extendInjectManifestOptions (opts) {
         opts.exclude = opts.exclude || []
         opts.exclude.push(/manifest\.json$/, /.*.js.map$/)
-        opts.navigateFallbackDenylist = opts.navigateFallbackDenylist || []
-        opts.navigateFallbackDenylist.push(
-          /^\/api\/.*$/,
-          /\/media\/.*$/
-        )
+        if (ctx.dev) {
+          // Webpack's HMR payloads are one-shot and hash-named: precaching them
+          // serves stale hot updates, and their changing names rewrite the
+          // manifest (and so sw.js) on every recompile, firing the "new
+          // version" notification each time.
+          opts.exclude.push(/\.hot-update\./)
+        }
+      },
+      // The custom service worker is bundled by esbuild, not webpack/babel --
+      // it is the only part of the app that is. Quasar's default browser
+      // target includes `safari14`, and esbuild refuses to emit destructuring
+      // for Safari 14.0 (a known engine bug it cannot lower), which the
+      // workbox-* packages use throughout. Safari 14.1 fixed that bug, so
+      // raising the floor for this bundle alone is enough. The app's own
+      // target is untouched.
+      extendPWACustomSWConf (esbuildConf) {
+        esbuildConf.target = ['es2022', 'firefox115', 'chrome115', 'safari14.1']
       }
     },
 

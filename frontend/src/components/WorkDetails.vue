@@ -227,6 +227,8 @@
 
       <q-btn dense @click="scanWorkFile" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.scanFiles')" />
 
+      <q-btn v-if="enableTranscoding" dense :loading="downloadOfflineLoading" @click="toggleWorkOfflineDownload" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="offlineDownloadLabel" />
+
       <q-btn v-if="isAdmin" dense @click="showEditDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.editMetadata')" />
 
       <q-btn dense :loading="refreshMetadataLoading" @click="refreshMetadata" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.refreshMetadata')" />
@@ -253,7 +255,8 @@ import CoverSFW from 'components/CoverSFW'
 import WriteReview from './WriteReview'
 import EditMetadata from './EditMetadata'
 import NotifyMixin from '../mixins/Notification.js'
-import { mapState } from 'vuex'
+import { mapState, mapGetters } from 'vuex'
+import { uncacheFile, buildWorkDownloadPlan, startWorkDownload, bgFetchIdFor } from '../utils/downloads'
 
 export default {
   name: 'WorkDetails',
@@ -276,6 +279,7 @@ export default {
   data() {
     return {
       refreshMetadataLoading: false,
+      downloadOfflineLoading: false,
       userMarked: false,
       rating: 0,
       progress: '',
@@ -347,6 +351,23 @@ export default {
       'playing',
       'playWorkId'
     ]),
+
+    ...mapState('Downloads', [
+      'enableTranscoding',
+    ]),
+
+    ...mapGetters('Downloads', [
+      'isWorkDownloaded',
+      'isWorkDownloading',
+    ]),
+
+    // Three states, not two: a Background Fetch keeps running after this page
+    // is closed, so "downloading" has to be visible on return.
+    offlineDownloadLabel () {
+      if (this.isWorkDownloading(this.metadata.id)) return this.$t('workdetails.downloadOfflineInProgress');
+      if (this.isWorkDownloaded(this.metadata.id)) return this.$t('workdetails.removeOfflineDownload');
+      return this.$t('workdetails.downloadOffline');
+    },
   },
 
   watch: {
@@ -510,7 +531,78 @@ export default {
       const mins = Math.floor(totalSeconds / 60)
       const secs = Math.floor(totalSeconds % 60)
       return `${mins}:${secs.toString().padStart(2, '0')}`
-    }
+    },
+
+    // Pulls in everything needed to fully use this work offline: audio
+    // tracks, lyric/subtitle files, the cover image, and the JSON metadata
+    // Work.vue/WorkDetails.vue need to render -- not just the audio. See
+    // frontend/CLAUDE.md for why the metadata JSON is included too.
+    //
+    // The download itself runs as a Background Fetch: this method returns as
+    // soon as it is registered, and the service worker finishes the job even
+    // if the tab is closed.
+    async toggleWorkOfflineDownload() {
+      const workId = this.metadata.id;
+
+      if (this.isWorkDownloaded(workId) || this.isWorkDownloading(workId)) {
+        // Cancel first if a fetch is still running, otherwise the browser
+        // keeps downloading a work the user just removed.
+        if (this.isWorkDownloading(workId)) {
+          const registration = await navigator.serviceWorker.ready;
+          const running = await registration.backgroundFetch.get(bgFetchIdFor(workId));
+          if (running) await running.abort();
+        }
+
+        const filesToRemove = this.$store.state.Downloads.downloadedFiles.filter(f => f.workId === workId);
+        for (const file of filesToRemove) {
+          await uncacheFile(file.url);
+        }
+        this.$store.commit('Downloads/REMOVE_DOWNLOADED_FILES', filesToRemove.map(f => f.url));
+        return;
+      }
+
+      this.downloadOfflineLoading = true;
+      try {
+        const tracksResponse = await this.$axios.get(`/api/tracks/${workId}`);
+        const tree = tracksResponse.data.tree || tracksResponse.data;
+        const rows = buildWorkDownloadPlan(workId, tree);
+
+        // Claim every row up front, pending. The page is the only side that
+        // knows track titles, and the download completes in the service worker
+        // -- possibly with no tab open -- so the manifest is written here and
+        // promoted later rather than being built as files arrive.
+        for (const row of rows) {
+          this.$store.commit('Downloads/ADD_DOWNLOADED_FILE', {
+            ...row,
+            workId,
+            workTitle: this.metadata.title,
+            bytes: 0,
+            downloadedAt: Date.now(),
+            pending: true,
+          });
+        }
+
+        try {
+          await startWorkDownload({
+            workId,
+            workTitle: this.metadata.title,
+            rows,
+            title: this.$t('workdetails.downloadOfflineNotificationTitle', { title: this.metadata.title }),
+          });
+        } catch (err) {
+          // Registration failed, so nothing will ever promote these rows.
+          this.$store.commit('Downloads/REMOVE_DOWNLOADED_FILES', rows.map(r => r.url));
+          throw err;
+        }
+
+        this.showSuccNotif(this.$t('workdetails.downloadOfflineStarted'));
+      } catch(err) {
+        console.error(err);
+        this.showErrNotif(err.message || err);
+      } finally {
+        this.downloadOfflineLoading = false;
+      }
+    },
   }
 }
 </script>

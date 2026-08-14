@@ -65,6 +65,63 @@ const getContentHash = (filePath) => {
 // with many tracks doesn't spike disk I/O by hashing everything at once.
 const getContentHashLimited = (filePath) => limitP.call(getContentHash, filePath);
 
+// Transcoding is CPU-heavy and this runs on modest self-hosted hardware
+// (NAS/RPi), so it gets its own, smaller, dedicated concurrency budget --
+// deliberately separate from limitP (sized by maxParallelism), which bounds
+// cheap I/O-bound work (ffprobe, hashing), not CPU-bound encoding.
+const transcodeLimitP = new LimitPromise(config.transcodeMaxConcurrent || 1);
+
+/**
+ * Deterministic cache filename for a transcoded (Opus) copy of a track.
+ * Content-hash-addressed: cache invalidation is automatic -- a changed source
+ * file produces a different hash, so a new cache filename is derived and the
+ * old one is simply orphaned, mirroring how coverFileName's id+type keying
+ * needs no explicit invalidation step either.
+ * @param {String} id Work id (e.g. '123456', 'd_215444').
+ * @param {String} contentHash CRC32 hex digest of the source file.
+ * @returns {String} e.g. '123456_a1b2c3d4.opus'
+ */
+function transcodeFileName(id, contentHash) {
+  return `${id}_${contentHash}.opus`;
+}
+
+/**
+ * Transcode an audio file to Opus at the given bitrate, writing through a
+ * temp file + rename so a concurrent request for the same track never sees a
+ * partially-written cache file -- unlike ffprobe's sub-second probe, a
+ * transcode can take minutes, so a plain write is a real corruption risk here.
+ * @param {String} sourcePath Absolute path to the source (lossless) audio file.
+ * @param {String} cachePath Absolute path to write the final Opus file to.
+ * @param {String} bitrate ffmpeg -b:a value, e.g. '96k'.
+ */
+async function transcodeToOpus(sourcePath, cachePath, bitrate) {
+  fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+  const tmpPath = `${cachePath}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    await execFile('ffmpeg', [
+      '-y',
+      '-i', sourcePath,
+      '-map_metadata', '-1',
+      '-vn',
+      '-c:a', 'libopus',
+      '-b:a', bitrate,
+      tmpPath,
+    ], { timeout: 600000 });
+    fs.renameSync(tmpPath, cachePath);
+  } catch (err) {
+    try {
+      fs.unlinkSync(tmpPath);
+    } catch (unlinkErr) {
+      // ENOENT is fine -- ffmpeg may have failed before ever writing tmpPath
+      if (unlinkErr.code !== 'ENOENT') {
+        console.error(`failed to clean up transcode tmp file: ${tmpPath}`, unlinkErr);
+      }
+    }
+    throw err;
+  }
+}
+const transcodeToOpusLimited = (sourcePath, cachePath, bitrate) => transcodeLimitP.call(transcodeToOpus, sourcePath, cachePath, bitrate);
+
 /**
  * Lazily compute CRC32 content hashes for a work's audio files at tree-build time.
  * Reuses memo.hash[relPath] when the file's mtime is unchanged; computes
@@ -467,5 +524,8 @@ module.exports = {
   coverFileName,
   scrapeWorkMemo,
   getContentHash,
+  getContentHashLimited,
   scrapeWorkHashes,
+  transcodeFileName,
+  transcodeToOpusLimited,
 };
