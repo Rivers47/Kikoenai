@@ -1,6 +1,6 @@
 {
   "name": "kikoeru",
-  "version": "0.10.2",
+  "version": "0.11.0",
   "private": true,
   "description": "A self-hosted media server for DLsite voice works — monorepo combining backend (kikoeru-express) and frontend (kikoeru-quasar).",
   "homepage": "https://github.com/kikoeru-project/kikoeru-express",
