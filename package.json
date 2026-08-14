@@ -22,9 +22,9 @@
     "package:windows:zip": "node scripts/package.js --windows",
     "start": "npm start -w backend",
     "lint": "npm run lint -w backend && npm run test -w frontend",
-    "release:patch": "npm version patch",
-    "release:minor": "npm version minor",
-    "release:major": "npm version major",
+    "release:patch": "npm version patch -m \"v%s\"",
+    "release:minor": "npm version minor -m \"v%s\"",
+    "release:major": "npm version major -m \"v%s\"",
     "version": "node scripts/sync-version.js && git add package.json package-lock.json backend/package.json frontend/package.json",
     "postversion": "git push --follow-tags",
     "version:sync": "node scripts/sync-version.js"
