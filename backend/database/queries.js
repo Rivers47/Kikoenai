@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { nameToUUID } = require('../scraper/utils');
 const { canonicalizeTagName } = require('../scraper/tag-aliases');
+const { canonicalizeVaName } = require('../scraper/va-aliases');
 
 /**
  * Format ID: pad DLsite numeric ids to RJ form (6 or 8 digits).
@@ -188,6 +189,12 @@ const makeQueries = (knex) => {
   const resolveTagLabel = async (trx, name) =>
     resolveLabel(trx, 't_tag', canonicalizeTagName(name));
 
+  // VA-specific resolver: canonicalizes the scraped name (variant → canonical)
+  // so a VA registered under several spellings folds onto one t_va row.
+  // See scraper/va-aliases.json.
+  const resolveVaLabel = async (trx, name) =>
+    resolveLabel(trx, 't_va', canonicalizeVaName(name));
+
   /**
    * Takes a work metadata object and inserts it into the database.
    * @param {Object} work Work object.
@@ -222,7 +229,7 @@ const makeQueries = (knex) => {
 
     // VAs
     for (const va of work.vas) {
-      const vaId = await resolveLabel(trx, 't_va', va.name);
+      const vaId = await resolveVaLabel(trx, va.name);
       await trx.raw('INSERT OR IGNORE INTO r_va_work(va_id, work_id) VALUES (?, ?)', [vaId, work.id]);
     }
 
@@ -272,7 +279,7 @@ const makeQueries = (knex) => {
     }
     if (options.includeVA || options.refreshAll) {
       for (const va of work.vas) {
-        const vaId = await resolveLabel(trx, 't_va', va.name);
+        const vaId = await resolveVaLabel(trx, va.name);
         await trx.raw('INSERT OR IGNORE INTO r_va_work(va_id, work_id) VALUES (?, ?)', [vaId, work.id]);
       }
     }
@@ -393,7 +400,7 @@ const makeQueries = (knex) => {
     await trx('r_va_work').where('work_id', workId).del();
     const newVaIds = [];
     for (const va of data.vas) {
-      const id = await resolveLabel(trx, 't_va', va.name);
+      const id = await resolveVaLabel(trx, va.name);
       newVaIds.push(id);
       await trx.raw('INSERT OR IGNORE INTO r_va_work(va_id, work_id) VALUES (?, ?)', [id, workId]);
     }

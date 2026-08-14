@@ -1,0 +1,8 @@
+{
+  "_comment": "VA duplicate-registration map. \"variant_name\": \"canonical_name\". Hand-maintained: when a VA registers under several spellings, each variant hashes to its own t_va UUID and splits their works across rows. Edit and restart the server to apply; run the merge migration (or re-scan) to fold rows that already exist.",
+  "乙倉ゅい（乙倉由依）": "乙倉ゅい",
+  "乙倉ゅい(乙倉由依)": "乙倉ゅい",
+  "乙倉ゆい": "乙倉ゅい",
+  "麦咲輪葵紫": "麦咲輪紫葵",
+  "芦屋もこ。": "芦屋もこ"
+}

@@ -1,6 +1,6 @@
 const { knex } = require('./db');
 
-const dbVersion = '20260808000000';
+const dbVersion = '20260814000000';
 
 // 数据库结构
 const createSchema = () => knex.schema
