@@ -10,6 +10,7 @@ const { isValidRequest, workIdParam } = require('./utils/validate');
 const { formatID, scrapeWorkMemo, coverFileName } = require('../filesystem/utils');
 const { scrapeWorkMetadataFromDLsite } = require('../scraper/dlsite');
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
+const { saveWorkImages, saveWorkReviews } = require('../filesystem/workExtras');
 
 // Covers come from DLsite/Fanza and effectively never change, so cache them
 // for a long time rather than paying a conditional request every time (a 304
@@ -406,7 +407,13 @@ router.post('/work/scan/:id',
   } 
 );
 
-// refresh metadata of a work from DLsite or Fanza, and update the database
+// refresh metadata of a work from DLsite or Fanza, and update the database.
+//
+// Unlike PERFORM_UPDATE (which runs updater.js --refreshAll over the whole
+// library), this is one user-initiated work, so it also downloads the sample
+// and description images and re-scrapes the reviews. Neither is fatal: the
+// metadata update has already been committed by then, and a partial refresh
+// beats a 500 that tells the user nothing was saved.
 router.post('/refresh/:id',
   workIdParam(),
   async function(req, res) {
@@ -422,7 +429,18 @@ router.post('/refresh/:id',
       }
       metadata.id = work_id;
       await db.updateWorkMetadata(metadata, { refreshAll: true });
-      res.send({ message: 'Refresh metadata for work ' + work_id + ' successful', metadata });
+
+      const [images, reviews] = await Promise.all([
+        saveWorkImages(work_id, metadata),
+        saveWorkReviews(work_id),
+      ]);
+
+      res.send({
+        message: 'Refresh metadata for work ' + work_id + ' successful',
+        metadata,
+        images,
+        reviews,
+      });
     } catch (err) {
       console.error(err);
       res.status(500).send({error: "Failed to refresh metadata for work " + work_id + ": " + err.message});

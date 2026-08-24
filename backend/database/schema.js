@@ -1,6 +1,6 @@
 const { knex } = require('./db');
 
-const dbVersion = '20260814000000';
+const dbVersion = '20260824000000';
 
 // 数据库结构
 const createSchema = () => knex.schema
@@ -28,7 +28,11 @@ const createSchema = () => knex.schema
     table.text('rank'); // TEXT 类型 [历史销售业绩]
 
     table.json('memo'); // 关于这个作品的各种信息记录,音频文件,音频文件时长,歌词映射
-    
+
+    table.text('description'); // TEXT 类型 [作品内容, 纯文本]
+    table.text('description_parts'); // JSON: the same block, per-part, incl. the track list
+    table.text('sample_images'); // JSON: [{url, thumb, width, height, file}]
+
     table.primary('id');
     table.foreign('circle_id').references('id').inTable('t_circle'); // FOREIGN KEY 外键
     table.index(['circle_id', 'release', 'dl_count', 'review_count', 'price', 'rate_average_2dp'], 't_work_index'); // INDEX 索引
@@ -81,6 +85,18 @@ const createSchema = () => knex.schema
     table.foreign('work_id').references('id').inTable('t_work').onUpdate('CASCADE').onDelete('CASCADE');
     table.primary(['script_writer_id', 'work_id']);
   })
+  .createTable('t_author', (table) => {
+    table.string('id'); // UUID v5, 基于name生成的固定值
+    table.string('name').notNullable(); // VARCHAR 类型 [作者名称]
+    table.primary('id');
+  })
+  .createTable('r_author_work', (table) => {
+    table.string('author_id');
+    table.string('work_id');
+    table.foreign('author_id').references('id').inTable('t_author').onUpdate('CASCADE').onDelete('CASCADE');
+    table.foreign('work_id').references('id').inTable('t_work').onUpdate('CASCADE').onDelete('CASCADE');
+    table.primary(['author_id', 'work_id']);
+  })
   .createTable('t_series', (table) => {
     table.string('id').notNullable(); // UUID v5, based on name
     table.string('name').notNullable(); // VARCHAR 类型 [シリーズ名称]
@@ -132,6 +148,30 @@ const createSchema = () => knex.schema
     table.foreign('user_name').references('name').inTable('t_user').onDelete('CASCADE');
     table.foreign('work_id').references('id').inTable('t_work').onDelete('CASCADE');
     table.primary(['user_name', 'work_id', 'track_key']);
+  })
+  .createTable('t_dlsite_review', (table) => {
+    // DLsite's own member_review_id. Distinct from t_review, which holds
+    // *this server's* users' ratings and progress.
+    table.string('id').notNullable();
+    table.string('work_id').notNullable();
+    table.string('reviewer_id');
+    table.string('reviewer_name');
+    table.integer('rate'); // 1-5 stars
+    table.text('review_title');
+    table.text('review_text');
+    table.boolean('spoiler');
+    table.boolean('recommend');
+    table.boolean('is_purchased');
+    table.integer('good_review');
+    table.integer('bad_review');
+    table.text('genres'); // JSON [{id, name}] — genres the reviewer picked
+    table.string('entry_date');
+    table.string('regist_date');
+    table.timestamps(true, true);
+
+    table.foreign('work_id').references('id').inTable('t_work').onUpdate('CASCADE').onDelete('CASCADE');
+    table.primary(['id']);
+    table.index('work_id');
   })
   .createTable('t_session', (table) => {
     table.string('id').notNullable(); // sha256 of the session secret, never the secret itself

@@ -1,9 +1,30 @@
+# Build context excludes for `podman build` / `buildah build`.
+#
+# .containerignore (not .dockerignore): the published image is built by
+# redhat-actions/buildah-build in .github/workflows/build.yml, and buildah
+# prefers this filename. There is no Docker/BuildKit anywhere in the pipeline.
+#
+# The Containerfile copies package*.json, backend/package*.json, and then all of
+# backend/. Everything listed here is either never copied, or actively harmful
+# to have in the image.
+#
+# NOTE: backend/dist/ is gitignored but MUST reach the image -- CI builds the
+# frontend into it just before the image build. Do not add it here.
+
 # Git
 .git
 .gitignore
 
 # Node modules
+# The build stage runs its own `npm ci -w backend --omit=dev` against Alpine
+# (musl). `COPY ./backend/ ./` is the LAST copy in the final stage, so a
+# backend/node_modules present in the context would overlay the Alpine-built
+# native modules with whatever the host compiled, and sqlite3 would fail to
+# load. backend/node_modules is listed explicitly rather than relying on the
+# bare `node_modules` pattern, which only matches at the context root.
 node_modules
+backend/node_modules
+frontend/node_modules
 .pnp
 .pnp.js
 
@@ -14,10 +35,23 @@ frontend
 # Build artifacts (already placed by CI)
 # dist is handled by explicit COPY in Containerfile
 
-# Config
-config/*
-covers/*
-sqlite/*
+# Runtime data: secrets, and an entire library
+# These live under backend/, not at the context root -- the earlier root-level
+# `config/*` / `covers/* `/ `sqlite/*` patterns matched nothing at all, which is
+# how a local build came to bake in a developer's config and database.
+# config/config.json holds md5secret and jwtsecret; sqlite/ is the whole
+# database; covers/ and images/ are the scraped image caches. None are tracked
+# in git, so CI never sees them -- but a fresh named volume mounted over a path
+# that has content in the image is seeded from that content, so an operator's
+# volume would come pre-populated with someone else's data.
+backend/config
+backend/sqlite
+backend/covers
+backend/images
+
+# Media: the default library mount point.
+# On a developer machine it holds real voice works.
+backend/VoiceWork
 
 # Tests
 test-results
@@ -25,8 +59,8 @@ tests
 backend/test
 *.spec.js
 
-# Nuxt
-.nuxt
+# Root scripts — never copied by the Containerfile
+scripts
 
 # VS Code
 .vscode
@@ -40,7 +74,11 @@ backend/test
 npm-debug.log*
 
 # Docs
+# Nothing reads markdown at runtime (checked: no route opens a .md file).
+# LICENSE is deliberately NOT excluded -- GPL-3.0 requires shipping it.
 *.md
+backend/*.md
+frontend/*.md
 docs
 
 # GitHub

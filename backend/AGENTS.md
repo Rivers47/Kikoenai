@@ -31,6 +31,7 @@
 ├── config/
 │   └── config.json          # Runtime config (auto-generated on first run)
 ├── covers/                  # Cached cover images
+├── images/                  # Scraped sample + description images (config.imageFolderDir)
 ├── database/
 │   ├── db.js                # Thin re-export: singleton knex + databaseExist + queries (via makeQueries)
 │   ├── queries.js           # makeQueries(knex) factory: all query functions bound to a knex instance
@@ -46,6 +47,7 @@
 │   ├── scannerModules.js    # Core scanning logic (~25KB)
 │   ├── updater.js           # Metadata update entry point
 │   ├── workFileScanner.js   # Lyric file scanner entry point
+│   ├── workExtras.js        # Sample/description image download + DLsite review scraping (shared: scanner + refresh route)
 │   └── utils.js             # File system utilities
 ├── scraper/
 │   ├── dlsite.js            # DLsite metadata scraper (primary)
@@ -107,23 +109,26 @@ SQLite3 via Knex.js with the following tables:
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
-| `t_work` | Voice works (audio albums) | `id` (TEXT — see id note below), `title`, `dir`, `circle_id`, `nsfw`, `release`, `dl_count`, `price`, `rate_average_2dp`, `memo` (JSON) |
+| `t_work` | Voice works (audio albums) | `id` (TEXT — see id note below), `title`, `dir`, `circle_id`, `nsfw`, `release`, `dl_count`, `price`, `rate_average_2dp`, `memo` (JSON), `description`, `description_parts` (JSON), `sample_images` (JSON) |
 | `t_circle` | Circles (artist groups) | `id` (UUID), `name` |
 | `t_tag` | Tags | `id` (UUID), `name` |
 | `t_va` | Voice actors | `id` (UUID v5), `name` |
 | `t_illustrator` | Illustrators | `id` (UUID), `name` |
 | `t_script_writer` | Script writers | `id` (UUID), `name` |
+| `t_author` | Authors (作者) | `id` (UUID), `name` |
 | `t_series` | Series (manual collections) | `id` (UUID), `name` |
 | `r_tag_work` | Tag-work many-to-many | `tag_id`, `work_id` |
 | `r_va_work` | VA-work many-to-many | `va_id`, `work_id` |
 | `r_illustrator_work` | Illustrator-work many-to-many | `illustrator_id`, `work_id` |
 | `r_script_writer_work` | Script-writer-work many-to-many | `script_writer_id`, `work_id` |
+| `r_author_work` | Author-work many-to-many | `author_id`, `work_id` |
 | `r_series_work` | Series-work many-to-many | `series_id`, `work_id` |
 | `t_user` | Users | `name` (PK), `password`, `group` |
 | `t_review` | Reviews & progress | `user_name`, `work_id`, `rating`, `review_text`, `progress` |
 | `t_play_history` | Playback state | `user_name`, `work_id`, `state` (JSON) |
+| `t_dlsite_review` | Scraped DLsite user reviews | `id` (DLsite `member_review_id`), `work_id`, `rate`, `review_title`, `review_text`, `genres` (JSON) |
 
-**Work id / label id note (since migration `20260802000000`):** `t_work.id` and all `work_id` foreign keys are **TEXT**. A DLsite work id is stored already RJ-padded (`'123456'` 6-digit, or `'01134567'` 8-digit — matching `formatID`), so the work URL `/work/123456` shows the original RJ id directly; a Fanza (DMM doujin) work id is the content-id `'d_215444'`. The `d_` prefix distinguishes the source — there is no separate source column. **All** label ids (circle/tag/va/illustrator/script_writer/series) are name-based UUIDs (TEXT PK) resolved by `resolveLabel` in `queries.js`; DLsite RG/genre/SRI ids scraped from the storefront are no longer used as DB ids, and a label shared across DLsite + Fanza merges into one row.
+**Work id / label id note (since migration `20260802000000`):** `t_work.id` and all `work_id` foreign keys are **TEXT**. A DLsite work id is stored already RJ-padded (`'123456'` 6-digit, or `'01134567'` 8-digit — matching `formatID`), so the work URL `/work/123456` shows the original RJ id directly; a Fanza (DMM doujin) work id is the content-id `'d_215444'`. The `d_` prefix distinguishes the source — there is no separate source column. **All** label ids (circle/tag/va/illustrator/script_writer/series/author) are name-based UUIDs (TEXT PK) resolved by `resolveLabel` in `queries.js`; DLsite RG/genre/SRI ids scraped from the storefront are no longer used as DB ids, and a label shared across DLsite + Fanza merges into one row.
 
 **Tag canonicalization (rename protection):** tag names are canonicalized via `scraper/tag-aliases.json` before UUID resolution. `resolveTagLabel` in `queries.js` (the single choke point covering scan-insert, scan-update, and admin-edit) maps a scraped new Japanese tag name back to its canonical old name so a DLsite rename folds onto the existing `t_tag` row instead of splitting into two. The map is hand-maintained (`scraper/tag-aliases.json`, loaded once at require time — restart to apply); tags not in the map pass through unchanged. Other label tables (circle/illustrator/script_writer/series) are not canonicalized. The backend always serves canonical Japanese tag names; UI/tag translation is client-side (see `frontend/AGENTS.md` i18n).
 
@@ -136,6 +141,15 @@ SQLite3 via Knex.js with the following tables:
 - `setConfig()` merges new values but **protects** these fields: `production`, `md5secret`, `jwtsecret` (cannot be changed at runtime).
 - `updateConfig()` adds missing keys with defaults on version upgrades.
 - `publicConfig` class exposes a subset to the frontend (e.g., `rewindSeekTime`, `forwardSeekTime`).
+- `imageFolderDir` (default `images/`) holds scraped sample/description images, separate from `coverFolderDir`. It gets the same treatment as the cover path: relative values resolve against `dataRoot`, and `imageUseDefaultPath: true` forces `dataRoot/images`. Deployments that mount `covers/` as a volume should mount `images/` too.
+
+**Data root and the four data folders.** All persistent state lives in `config/`, `sqlite/`, `covers/`, `images/`, each hanging off `dataRoot`. `dataRoot` is `KIKO_DATA_DIR || __dirname`. The **container image sets `KIKO_DATA_DIR=/data`** so one volume covers everything; the fallback (`__dirname`, the application directory) cannot take a single volume without shadowing `app.js`, `node_modules/` and `dist/`. `scripts/launchers/Kikoenai.bat` sets it to the archive root for the Windows portable build. `-e KIKO_DATA_DIR=/usr/src/kikoeru` restores the pre-`/data` container layout exactly. See `Containerfile` and `README.md`.
+
+- The three configurable folders resolve through **`resolveDataFolder(dir, defaultName, useDefault)`** in `config.js`: `useDefault` wins, then a relative path (joined to `dataRoot`), then an absolute path.
+- **`rerootFromAppDir` is the non-obvious part.** The admin panel saves folder paths as *absolute*, so a `config.json` written before `KIKO_DATA_DIR` was set holds e.g. `/usr/src/kikoeru/covers`. Without re-rooting, setting `KIKO_DATA_DIR` moves only the folders `config.json` does not mention (in practice just the newest key) and silently leaves the covers and database behind — a half-migrated state with no error. So an absolute path *inside the app directory* is re-rooted onto `dataRoot` and logged; a path outside it is a deliberate user choice (big disk, network share) and is left alone.
+- **Never applied to `rootFolders` or `voiceWorkDefaultPath`.** Those are the user's media mounts, not app state; rewriting them would break a working library. The container keeps `VoiceWork` at `/usr/src/kikoeru/VoiceWork` regardless of `KIKO_DATA_DIR`.
+- **The `Containerfile` declares no `VOLUME`, deliberately.** `VOLUME` only does anything when the operator mounts nothing at that path, and then it creates *anonymous* volumes — unnamed, easy to orphan, silently removed by `podman rm -v`, and impossible to undo in a derived image. Explicit mounts are unaffected either way.
+- **Legacy-layout startup warning.** When `IS_DOCKER` is set, `dataRoot !== appDir`, the app directory holds a `sqlite/db.sqlite3` and the current data root does not, `config.js` prints a four-line `!!!` warning naming both paths and both remedies. It is **advisory only** — it changes no behaviour. It exists because the alternative failure mode is silent: an empty data root looks like a fresh install, and a rescan then rebuilds the library without ratings, reviews, progress or play history, none of which scanning can recover.
 - **Removed:** the legacy `tagLanguage` config key (was non-functional — scrapers always fetch Japanese). It is no longer in `defaultConfig`; a stale `tagLanguage` left in a pre-existing `config.json` is harmless and ignored. UI language is now per-user in the browser (see `frontend/AGENTS.md` i18n).
 
 ### 2.5 Scanning System (`filesystem/`)
@@ -182,6 +196,51 @@ All routes mounted under `/api`:
 - Cover images served from `covers/` directory.
 - File listing traverses the work directory and returns track info (name, duration, format).
 
+### 2.9 Work-Page Extras (description, images, author, reviews)
+
+The DLsite scraper reads more than the `#work_outline` spec table. **None of this is exposed over `/api` or rendered by the frontend yet** — it is scaffolding for later features (LLM track-title/VA extraction, tag classification). Everything below is DLsite-only; `fanza.js` is unchanged and Fanza works get none of it.
+
+**Scraped fields** (`scraper/dlsite.js`, returned on the metadata object):
+
+| Field | Source | Notes |
+|-------|--------|-------|
+| `authors[]` | `作者` row of `#work_outline` | The creator credit on works with no VA/illustrator/scenario breakdown. Rarely set. `{id: nameToUUID(name), name}`, same shape as `vas`/`scriptWriters`. |
+| `description` | `div[itemprop="description"]` | Plain text. `<br>` handling is a sentinel, not a bare `\n` — see `elementText`, DLsite writes `"<br />\n"` so a naive replace doubles every line break. |
+| `descriptionParts[]` | same block, per `.work_parts` | `{type, heading, text, images[], tracks[]}`. `type` comes from the `type_*` class: `text`, `image`, `tracklist`. |
+| `descriptionParts[].tracks[]` | `.work_parts.type_tracklist` | `{title, time}`. **Only ~16% of works use this structured part** (measured over 40 random library works: 16% structured, 43% track list written as prose inside a `type_text` part, 40% no track list). The prose case is still captured — as `text` under a heading like `☆トラックリスト&プレイ内容` — but `tracks[]` is empty for it, and the numbering varies wildly (`Track1`, `①`, bare `1`, `◆01`). Parsing that is the LLM's job, not the scraper's. |
+| `descriptionParts[].type` | the `type_*` class | Seen in the wild: `text`, `image`, `multiimages`, `tracklist`, `list`. Unknown types still parse — the type is recorded and text/images extracted generically. |
+| `sampleImages[]` | `.product-slider-data div[data-src]` | `{url, thumb, width, height}`. The slides are rendered client-side by Vue, so the visible `<img>` tags are **not** in the HTML — only these empty data divs are. The first slide (`_img_main`) is dropped; it is the cover. |
+
+The JSON fallback (`scrapeStaticWorkMetadataFromDLsiteJson`) fills the same fields from `product.json`: `creaters.created_by`, `intro_s` (a plain-text summary DLsite has already truncated — no parts, no track list) and `image_samples`.
+
+> The JSON scraper read `creaters.illust` / `creaters.scenario`; the API keys are `illust_by` / `scenario_by`, so that path silently dropped illustrators and script writers. Fixed alongside `created_by`.
+
+**Reviews** — `scrapeWorkReviewsFromDLsite(id, {order, limit, maxPages})`. Reviews are rendered client-side and are absent from the work page HTML; the endpoint the Vue component calls is `GET /{site}/api/review?product_id=RJ…&order=regist_d&limit=…&page=…&locale=ja_JP`. It paginates until a short page, de-duplicating by `member_review_id` (a "pickup" review repeats across pages). Each review carries `genres` — genres **the reviewer** picked, independent of the seller-chosen work genres.
+
+> A region-restricted work returns `{is_success: true, error_msg: ""}` with no `review_list` and serves a stripped work page (no description, no slider, no review section). That is indistinguishable from "no reviews" at the API level, so a scrape from a blocked IP silently yields empty extras rather than an error.
+
+**Storage** — `db.getWorkExtras(id)`, `db.setWorkSampleImages(id, list)`, `db.replaceWorkDlsiteReviews(id, reviews)`, `db.getWorkDlsiteReviews(id)`. Reviews are **replaced**, not merged: DLsite lets reviewers edit and delete, and the rows carry no local state.
+
+**Images on disk** — `config.imageFolderDir` (default `images/`, sibling of `covers/`, with the same relative-path and `imageUseDefaultPath` handling). Named by position, not by remote basename: `RJ<id>_img_smp<N>.<ext>` for slider images and `RJ<id>_img_part<N>.<ext>` for images embedded in description blocks — description images are served under opaque hash names that collide across works. `deleteWorkImagesFromDisk` matches that exact pattern rather than a bare prefix, so pointing `imageFolderDir` at the cover folder cannot delete covers.
+
+**When it runs** (`filesystem/scannerModules.js`):
+
+| Trigger | Description + author | Sample-image URLs | Image download | Reviews |
+|---------|---------------------|-------------------|----------------|---------|
+| New work during `PERFORM_SCAN` | ✅ | ✅ | ✅ | ✅ |
+| `PERFORM_UPDATE` (= `updater.js --refreshAll`) — **whole library** | ✅ | ✅ | ❌ | ❌ |
+| `POST /api/refresh/:id` — **one work** | ✅ | ✅ | ✅ | ✅ |
+| `updater.js --images` | ✅ | ✅ | ✅ | ❌ |
+| `updater.js --reviews` | ❌ | ❌ | ❌ | ✅ |
+
+Downloads and review pagination cost extra requests per work, so they deliberately do **not** ride along with `refreshAll` — the UI's update button would otherwise turn into thousands of image fetches. `--refreshAll` still writes the image *list* (URLs, `file: null`); a later `--images` fills in the files.
+
+> **Two different refresh paths, don't confuse them.** `PERFORM_UPDATE` (Scanner page button → `socket.js` → forks `updater.js --refreshAll`) iterates **every** row of `t_work` and skips the network-heavy extras. `POST /api/refresh/:id` (`WorkDetails.vue`) refreshes **one** user-initiated work and does everything, including image download and review scraping. It calls `db.updateWorkMetadata` directly and never touches `scannerModules`, so the `includeImages`/`includeReviews` option handling in `updateMetadata` does not apply to it — it calls `filesystem/workExtras.js` itself.
+
+**`filesystem/workExtras.js`** holds `saveWorkImages(id, metadata, log)` and `saveWorkReviews(id, log)`, shared by the scanner child and the refresh route. It is deliberately **not** in `scannerModules.js`: requiring that from a route would pull in the child-process IPC plumbing (it reassigns `process.send`) and the scan concurrency limiter. The logger is injected — the scanner passes an adapter onto `LOG.task` so progress shows on the Scanner page, the route passes the console default. `downloadWorkImages` mkdirs `config.imageFolderDir` itself, since a library upgraded but never rescanned has no `images/` directory and the route can be the first writer.
+
+Both are non-fatal in the route: `db.updateWorkMetadata` has already committed by the time they run, so a failed image fetch returns a partial success rather than a 500 implying nothing was saved. The response carries `{images, reviews}` counts.
+
 ---
 
 ## 3. Critical Conventions & Gotchas
@@ -224,6 +283,14 @@ npm start       # Start server (production)
 npm run dev     # Start with nodemon (development)
 npm run scan    # Run scanner manually
 npm test        # ESLint + Mocha tests
+
+# Metadata refresh (filesystem/updater.js). Flags are mutually exclusive —
+# the first one set wins.
+node filesystem/updater.js --refreshAll     # dynamic + all static metadata (what PERFORM_UPDATE runs)
+node filesystem/updater.js --author         # 作者 only
+node filesystem/updater.js --description    # description + image list, no downloads
+node filesystem/updater.js --images         # implies --description, then downloads the images
+node filesystem/updater.js --reviews        # re-scrape every DLsite user review
 ```
 
 > **Packaging:** the deprecated `pkg` single-executable path has been removed. A
@@ -266,6 +333,7 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/config/shared` | GET | Public config (seek times) |
 | `/api/version` | GET | Version + update info |
 | `/api/work/:id` | PUT | Manually edit work metadata — title, nsfw, release, circle, tags[], vas[], illustrators[], scriptWriters[], series (admin only) |
+| `/api/refresh/:id` | POST | Re-scrape one work from DLsite/Fanza: metadata (`refreshAll`), then sample/description images and DLsite reviews. Returns `{message, metadata, images, reviews}` where `images`/`reviews` are counts. Image and review failures are non-fatal (metadata is already committed). |
 | `/api/illustrators` | GET | List all illustrators (autocomplete for metadata editor) |
 | `/api/script_writers` | GET | List all script writers (autocomplete for metadata editor) |
 | `/api/seriess` | GET | List all series (autocomplete for metadata editor) |

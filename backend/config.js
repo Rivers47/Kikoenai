@@ -2,10 +2,39 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// KIKO_DATA_DIR lets the portable Windows build point data folders
-// (config/sqlite/covers/VoiceWork) at the launcher directory instead of app/.
-// Unset -> __dirname, identical to the old behavior.
-const dataRoot = process.env.KIKO_DATA_DIR || __dirname;
+// The four persistent data folders (config/sqlite/covers/images) all hang off
+// dataRoot. It defaults to the application directory, which cannot take a
+// single volume without shadowing app.js, node_modules and dist -- that is why
+// the old container layout needed one mount per folder.
+//
+// KIKO_DATA_DIR moves all four somewhere outside the app directory, so one
+// mount covers everything: the container image sets it to /appdata, and the
+// portable Windows launcher sets it to the folder holding Kikoenai.bat.
+//
+// The voice-work library is deliberately NOT under here -- it is the user's
+// media, mounted separately, and never follows dataRoot.
+//
+// appDir is kept separately because a config.json written before this variable
+// was set stores folder paths as absolute paths inside it; see rerootFromAppDir.
+const appDir = __dirname;
+const dataRoot = process.env.KIKO_DATA_DIR || appDir;
+
+// Loud, advisory only: the container image used to keep these folders under the
+// application directory and now defaults to KIKO_DATA_DIR=/appdata. An operator
+// upgrading without moving their volumes would otherwise start against an empty
+// directory, rescan, and lose ratings/reviews/progress/history -- none of which
+// a rescan can rebuild. Nothing is changed here; the point is that the failure
+// must not be silent.
+if (process.env.IS_DOCKER && dataRoot !== appDir) {
+  const legacyDb = path.join(appDir, 'sqlite', 'db.sqlite3');
+  const currentDb = path.join(dataRoot, 'sqlite', 'db.sqlite3');
+  if (fs.existsSync(legacyDb) && !fs.existsSync(currentDb)) {
+    console.warn(` !!! 检测到旧版数据目录: ${legacyDb} 存在，但当前数据目录 ${dataRoot} 为空。`);
+    console.warn(` !!! Found a database at ${legacyDb}, but the current data root ${dataRoot} is empty.`);
+    console.warn(` !!! Either mount your data into ${dataRoot} (config/ sqlite/ covers/ images/),`);
+    console.warn(` !!! or set KIKO_DATA_DIR=${appDir} to keep the previous layout. See README.md.`);
+  }
+}
 const configFolderDir = path.join(dataRoot, 'config');
 const configPath = path.join(configFolderDir, 'config.json');
 const pjson = require('./package.json');
@@ -38,8 +67,10 @@ const defaultConfig = {
     // }
   ],
   coverFolderDir: path.join(dataRoot, 'covers'),
+  imageFolderDir: path.join(dataRoot, 'images'), // Scraped sample/description images, kept out of the cover cache
   databaseFolderDir: path.join(dataRoot, 'sqlite'),
   coverUseDefaultPath: false, // Ignores coverFolderDir if set to true
+  imageUseDefaultPath: false, // Ignores imageFolderDir if set to true
   dbUseDefaultPath: true, // Ignores databaseFolderDir if set to true
   voiceWorkDefaultPath: voiceWorkDefaultPath(),
   auth: process.env.NODE_ENV === 'production' ? true : false,
@@ -100,6 +131,46 @@ const setConfig = (newConfig, writeConfigToFile = !process.env.FREEZE_CONFIG_FIL
   }
 };
 
+// Re-root a data folder that an earlier run pinned inside the application
+// directory.
+//
+// The admin panel saves folder paths as absolute, so a config.json written
+// before KIKO_DATA_DIR was set holds e.g. "/usr/src/kikoeru/covers". Setting
+// KIKO_DATA_DIR afterwards would move only the folders that config.json does
+// not mention, silently leaving the covers and the database behind at the old
+// location. Anything outside the app directory is a deliberate choice by the
+// user (a big disk, a network share) and is left alone.
+//
+// Deliberately not applied to rootFolders or voiceWorkDefaultPath: those are
+// the user's media mounts, not app state, and rewriting them would break a
+// working library.
+const rerootFromAppDir = (dir) => {
+  if (dataRoot === appDir) return dir;
+
+  const relative = path.relative(appDir, dir);
+  // '..' prefix or an absolute result (another Windows drive) means the path
+  // is not inside the app directory.
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return dir;
+
+  const rerooted = path.join(dataRoot, relative);
+  console.log(`数据目录已迁移: ${dir} -> ${rerooted}`);
+  return rerooted;
+};
+
+/**
+ * Resolve one configurable data folder against the current data root.
+ * @param {String} dir Value from config.json (relative or absolute).
+ * @param {String} defaultName Folder name used when useDefault is set.
+ * @param {Boolean} useDefault Ignore `dir` and use dataRoot/defaultName.
+ * @returns {String} Absolute path.
+ */
+const resolveDataFolder = (dir, defaultName, useDefault) => {
+  if (useDefault) return path.join(dataRoot, defaultName);
+  if (!dir) return path.join(dataRoot, defaultName);
+  if (!path.isAbsolute(dir)) return path.join(dataRoot, dir);
+  return rerootFromAppDir(dir);
+};
+
 // Get or use default value
 const readConfig = () => {
   config = JSON.parse(fs.readFileSync(configPath));
@@ -120,22 +191,11 @@ const readConfig = () => {
     console.log('配置项未被使用，已忽略:', unknownKeys.join(', '));
   }
 
-  // Support reading relative path
-  // When config is saved in admin panel, it will still be stored as absolute path 
-  if(!path.isAbsolute(config.coverFolderDir)) {
-    config.coverFolderDir = path.join(dataRoot, config.coverFolderDir);
-  }
-  if(!path.isAbsolute(config.databaseFolderDir)) {
-    config.databaseFolderDir = path.join(dataRoot, config.databaseFolderDir);
-  }
-
-  // Use ./covers and ./sqlite to override settings, ignoring corresponding fields in config
-  if (config.coverUseDefaultPath) {
-    config.coverFolderDir = path.join(dataRoot, 'covers');
-  }
-  if (config.dbUseDefaultPath) {
-    config.databaseFolderDir = path.join(dataRoot, 'sqlite');
-  }
+  // Data folder paths: relative to dataRoot, or absolute, or forced to the
+  // default. `useDefault` wins, then a relative path, then an absolute one.
+  config.coverFolderDir = resolveDataFolder(config.coverFolderDir, 'covers', config.coverUseDefaultPath);
+  config.imageFolderDir = resolveDataFolder(config.imageFolderDir, 'images', config.imageUseDefaultPath);
+  config.databaseFolderDir = resolveDataFolder(config.databaseFolderDir, 'sqlite', config.dbUseDefaultPath);
 
   if (process.env.NODE_ENV === 'production' || config.production) {
     config.production = true;

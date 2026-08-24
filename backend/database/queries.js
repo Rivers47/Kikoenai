@@ -219,6 +219,9 @@ const makeQueries = (knex) => {
         rate_average_2dp: work.rate_average_2dp,
         rate_count_detail: JSON.stringify(work.rate_count_detail),
         rank: work.rank ? JSON.stringify(work.rank) : null,
+        description: work.description || null,
+        description_parts: work.descriptionParts ? JSON.stringify(work.descriptionParts) : null,
+        sample_images: work.sampleImages ? JSON.stringify(work.sampleImages) : null,
       });
 
     // Tags (canonicalized: a renamed DLsite tag folds onto the old-name row)
@@ -246,6 +249,14 @@ const makeQueries = (knex) => {
       for (const sw of work.scriptWriters) {
         const swId = await resolveLabel(trx, 't_script_writer', sw.name);
         await trx.raw('INSERT OR IGNORE INTO r_script_writer_work(script_writer_id, work_id) VALUES (?, ?)', [swId, work.id]);
+      }
+    }
+
+    // Authors (作者) — rarely set, and never alongside a VA/illustrator breakdown
+    if (work.authors) {
+      for (const author of work.authors) {
+        const authorId = await resolveLabel(trx, 't_author', author.name);
+        await trx.raw('INSERT OR IGNORE INTO r_author_work(author_id, work_id) VALUES (?, ?)', [authorId, work.id]);
       }
     }
 
@@ -307,6 +318,18 @@ const makeQueries = (knex) => {
         }
       }
     }
+    // Author: delete only when includeAuthor flag explicitly set; insert always if includeAuthor or refreshAll
+    if (options.includeAuthor) {
+      await trx('r_author_work').where('work_id', work.id).del();
+    }
+    if (options.includeAuthor || options.refreshAll) {
+      if (work.authors) {
+        for (const author of work.authors) {
+          const authorId = await resolveLabel(trx, 't_author', author.name);
+          await trx.raw('INSERT OR IGNORE INTO r_author_work(author_id, work_id) VALUES (?, ?)', [authorId, work.id]);
+        }
+      }
+    }
     // Series: delete only when includeSeries flag explicitly set; insert always if includeSeries or refreshAll
     if (options.includeSeries) {
       await trx('r_series_work').where('work_id', work.id).del();
@@ -334,6 +357,23 @@ const makeQueries = (knex) => {
       .update({
         nsfw: work.nsfw
       });
+    }
+
+    // Description and sample image list: overwritten wholesale, since a
+    // partial scrape is worth less than the previous full one only if it is
+    // empty — which is why an empty scrape is skipped here.
+    if (options.includeDescription || options.refreshAll) {
+      const patch = {};
+      if (work.description) patch.description = work.description;
+      if (work.descriptionParts && work.descriptionParts.length) {
+        patch.description_parts = JSON.stringify(work.descriptionParts);
+      }
+      if (work.sampleImages && work.sampleImages.length) {
+        patch.sample_images = JSON.stringify(work.sampleImages);
+      }
+      if (Object.keys(patch).length) {
+        await trx('t_work').where('id', work.id).update(patch);
+      }
     }
 
     if (options.refreshAll) {
@@ -488,8 +528,9 @@ const makeQueries = (knex) => {
    * @param {*} illustrators Array of illustrator ids to check.
    * @param {*} scriptWriters Array of script writer ids to check.
    * @param {*} series Array of series ids to check.
+   * @param {*} authors Array of author ids to check.
    */
-  const cleanupOrphans = async (trxProvider, circle, tags, vas, illustrators = [], scriptWriters = [], series = [])  => {
+  const cleanupOrphans = async (trxProvider, circle, tags, vas, illustrators = [], scriptWriters = [], series = [], authors = [])  => {
     const trx = await trxProvider();
     const getCount = (tableName, colName, colValue) => new Promise((resolveCount, rejectCount) => {
       trx(tableName)
@@ -583,6 +624,19 @@ const makeQueries = (knex) => {
       }
     }
 
+    for (let i = 0; i < authors.length; i += 1) {
+      const a = authors[i];
+      const count = await getCount('r_author_work', 'author_id', a);
+
+      if (count === 0) {
+        promises.push(
+          trx('t_author')
+            .delete()
+            .where('id', '=', a),
+        );
+      }
+    }
+
     await Promise.all(promises);
   };
 
@@ -599,6 +653,7 @@ const makeQueries = (knex) => {
       const illustrators = await trx('r_illustrator_work').select('illustrator_id').where('work_id', '=', id);
       const scriptWriters = await trx('r_script_writer_work').select('script_writer_id').where('work_id', '=', id);
       const series = await trx('r_series_work').select('series_id').where('work_id', '=', id);
+      const authors = await trx('r_author_work').select('author_id').where('work_id', '=', id);
 
       await trx('t_play_history').del().where('work_id', '=', id);
       await trx('r_tag_work').del().where('work_id', '=', id);
@@ -606,6 +661,8 @@ const makeQueries = (knex) => {
       await trx('r_illustrator_work').del().where('work_id', '=', id);
       await trx('r_script_writer_work').del().where('work_id', '=', id);
       await trx('r_series_work').del().where('work_id', '=', id);
+      await trx('r_author_work').del().where('work_id', '=', id);
+      await trx('t_dlsite_review').del().where('work_id', '=', id);
       await trx('t_review').del().where('work_id', '=', id);
       await trx('t_work').del().where('id', '=', id);
       await cleanupOrphans(
@@ -616,6 +673,7 @@ const makeQueries = (knex) => {
         illustrators.map(i => i.illustrator_id),
         scriptWriters.map(s => s.script_writer_id),
         series.map(s => s.series_id),
+        authors.map(a => a.author_id),
       );
   };
 
@@ -666,6 +724,9 @@ const makeQueries = (knex) => {
           break;
         case 'series':
           coreQ = coreQ.whereIn('t_work.id', knex('r_series_work').select('work_id').where('series_id', id));
+          break;
+        case 'author':
+          coreQ = coreQ.whereIn('t_work.id', knex('r_author_work').select('work_id').where('author_id', id));
           break;
         default:
           break;
@@ -861,7 +922,7 @@ const makeQueries = (knex) => {
         .select(`t_${field}.id`, 'name')
         .groupBy(`${field}_id`)
         .count(`${field}_id as count`);
-    } else if (['tag', 'va', 'illustrator', 'script_writer', 'series'].includes(field)) {
+    } else if (['tag', 'va', 'illustrator', 'script_writer', 'series', 'author'].includes(field)) {
       const tableName = field === 'illustrator' || field === 'script_writer' || field === 'series' ? field : field;
       return knex(`r_${tableName}_work`)
         .join(`t_${tableName}`, `${tableName}_id`, '=', 'id')
@@ -1085,7 +1146,7 @@ const makeQueries = (knex) => {
   }
 
   const getMetadata = ({field = 'circle', id} = {}) => {
-    const validFields = ['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series'];
+    const validFields = ['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series', 'author'];
     if (!validFields.includes(field)) throw new Error('无效的查询域');
     return knex(`t_${field}`)
       .select('*')
@@ -1108,6 +1169,106 @@ const makeQueries = (knex) => {
       .update({
         memo: JSON.stringify(memo)
       });
+  }
+
+  /**
+   * Reads the scraped work-page extras: description, per-part description
+   * structure (incl. the track list) and the sample image list.
+   * @param {String} work_id
+   * @returns {Promise<Object|null>} { description, descriptionParts, sampleImages }
+   */
+  async function getWorkExtras(work_id) {
+    const row = await knex('t_work')
+      .select('description', 'description_parts', 'sample_images')
+      .where('id', '=', work_id)
+      .first();
+
+    if (!row) return null;
+
+    const parse = (value, fallback) => {
+      if (!value) return fallback;
+      try {
+        return JSON.parse(value);
+      } catch {
+        return fallback;
+      }
+    };
+
+    return {
+      description: row.description || '',
+      descriptionParts: parse(row.description_parts, []),
+      sampleImages: parse(row.sample_images, []),
+    };
+  }
+
+  /**
+   * Overwrites the stored sample image list. Used by the scanner to record
+   * which images actually made it to disk (the `file` field).
+   * @param {String} work_id
+   * @param {Array<Object>} sampleImages
+   */
+  async function setWorkSampleImages(work_id, sampleImages) {
+    await knex('t_work')
+      .where('id', '=', work_id)
+      .update({ sample_images: JSON.stringify(sampleImages || []) });
+  }
+
+  /**
+   * Replaces every stored DLsite review of a work with the scraped set.
+   *
+   * Replace rather than merge: DLsite lets reviewers edit and delete, so a
+   * merge would keep stale text around forever. Reviews carry no local state,
+   * so nothing is lost by rewriting them.
+   * @param {String} work_id
+   * @param {Array<Object>} reviews Normalized reviews from scrapeWorkReviewsFromDLsite.
+   */
+  const replaceWorkDlsiteReviews = async (work_id, reviews) => knex.transaction(async (trx) => {
+    await trx('t_dlsite_review').where('work_id', work_id).del();
+    if (!reviews || !reviews.length) return;
+
+    const rows = reviews.map(review => ({
+      id: review.id,
+      work_id,
+      reviewer_id: review.reviewerId,
+      reviewer_name: review.reviewerName,
+      rate: review.rate,
+      review_title: review.title,
+      review_text: review.text,
+      spoiler: review.spoiler,
+      recommend: review.recommend,
+      is_purchased: review.isPurchased,
+      good_review: review.goodReview,
+      bad_review: review.badReview,
+      genres: JSON.stringify(review.genres || []),
+      entry_date: review.entryDate,
+      regist_date: review.registDate,
+    }));
+
+    // Chunked: SQLite caps a statement at 999 bound parameters by default and
+    // a popular work can carry hundreds of reviews.
+    await trx.batchInsert('t_dlsite_review', rows, 50);
+  });
+
+  /**
+   * Reads a work's stored DLsite reviews, newest first.
+   * @param {String} work_id
+   * @returns {Promise<Array<Object>>}
+   */
+  async function getWorkDlsiteReviews(work_id) {
+    const rows = await knex('t_dlsite_review')
+      .select('*')
+      .where('work_id', '=', work_id)
+      .orderBy('regist_date', 'desc');
+
+    return rows.map((row) => {
+      let genres = [];
+      try {
+        genres = row.genres ? JSON.parse(row.genres) : [];
+      } catch {
+        genres = [];
+      }
+      return { ...row, genres };
+    });
   }
 
   // t_track_progress queries (Phase 2)
@@ -1142,6 +1303,8 @@ const makeQueries = (knex) => {
     getWorksWithReviews, updateUserReview, deleteUserReview, resetUserProgress,
     getPlayHistory, updatePlayHistory, deletePlayHistory,
     getWorkMemo, setWorkMemo,
+    getWorkExtras, setWorkSampleImages,
+    replaceWorkDlsiteReviews, getWorkDlsiteReviews,
     getTrackProgress, upsertTrackProgress,
   };
 };

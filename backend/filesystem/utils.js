@@ -447,6 +447,73 @@ const saveCoverImageToDisk = (stream, id, type) => new Promise((resolve, reject)
 });
 
 /**
+ * Generate the on-disk filename for one scraped work image.
+ *
+ * Named by position rather than by the remote basename: description images
+ * are served under opaque md5-ish names that collide across works, and the
+ * sample slider's own names are only stable while DLsite keeps them.
+ * @param {String} id Work id (e.g. '123456', '01134567', 'd_215444')
+ * @param {String} kind 'smp' for a sample-slider image, 'part' for one embedded in the description
+ * @param {Number} index 1-based position within its kind
+ * @param {String} [ext='jpg'] File extension, without the dot
+ * @returns {String} Filename like 'RJ123456_img_smp1.jpg'
+ */
+function workImageFileName(id, kind, index, ext = 'jpg') {
+  const safeExt = /^[a-z0-9]{1,5}$/i.test(ext) ? ext.toLowerCase() : 'jpg';
+  const prefix = String(id).startsWith('d_') ? id : `RJ${id}`;
+  return `${prefix}_img_${kind}${index}.${safeExt}`;
+}
+
+/**
+ * Saves one scraped work image to the image folder.
+ * @param {ReadableStream} stream Image data stream.
+ * @param {String} fileName Output name, from workImageFileName.
+ */
+const saveWorkImageToDisk = (stream, fileName) => new Promise((resolve, reject) => {
+  try {
+    stream.pipe(
+      fs.createWriteStream(path.join(config.imageFolderDir, fileName))
+        .on('close', () => resolve())
+        .on('error', reject),
+    );
+  } catch (err) {
+    reject(err);
+  }
+});
+
+/**
+ * Deletes every scraped image belonging to a work.
+ *
+ * Matched by pattern rather than from the stored list, so images left behind
+ * by an earlier scrape (a work whose sample count shrank) go too. The match is
+ * deliberately narrow — a deployment that points imageFolderDir at the cover
+ * folder must not lose its covers here.
+ * @param {String} id Work id (e.g. '123456', '01134567', 'd_215444').
+ */
+const deleteWorkImagesFromDisk = async (id) => {
+  const prefix = String(id).startsWith('d_') ? id : `RJ${id}`;
+  const pattern = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_img_(smp|part)\\d+\\.[a-z0-9]+$`, 'i');
+
+  let entries;
+  try {
+    entries = await fs.promises.readdir(config.imageFolderDir);
+  } catch (err) {
+    if (err.code === 'ENOENT') return; // no image folder yet, nothing to delete
+    throw err;
+  }
+
+  await Promise.all(entries
+    .filter(name => pattern.test(name))
+    .map(async (name) => {
+      try {
+        await fs.promises.unlink(path.join(config.imageFolderDir, name));
+      } catch (err) {
+        if (err.code !== 'ENOENT') throw err;
+      }
+    }));
+};
+
+/**
  * 格式化 id，适配 8 位、6 位 id
  * @param {number|string} id
  * @return {string}
@@ -463,6 +530,9 @@ module.exports = {
   getFolderList,
   deleteCoverImageFromDisk,
   saveCoverImageToDisk,
+  workImageFileName,
+  saveWorkImageToDisk,
+  deleteWorkImagesFromDisk,
   formatID,
   coverFileName,
   scrapeWorkMemo,

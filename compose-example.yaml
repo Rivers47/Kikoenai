@@ -1,3 +1,6 @@
+# Edit /path/to/your/voiceworks, then `podman compose up -d`.
+# Upgrading from the four-volume layout? See README.md before you start.
+
 services:
   kikoenai:
     container_name: kikoenai
@@ -5,13 +8,13 @@ services:
     ports:
       - "4545:8888"
     volumes:
-      - kikoenai-sqlite:/usr/src/kikoeru/sqlite
-      - kikoenai-config:/usr/src/kikoeru/config
-      - kikoenai-covers:/usr/src/kikoeru/covers
+      # All persistent data (config/, sqlite/, covers/, images/) lives under
+      # KIKO_DATA_DIR, which the image sets to /appdata.
+      - kikoenai-appdata:/appdata
+      # Your library stays a separate bind mount: it is your media, not
+      # application state, so it does not belong in the data volume.
       - /path/to/your/voiceworks:/usr/src/kikoeru/VoiceWork
     restart: unless-stopped
 
 volumes:
-  kikoenai-sqlite:
-  kikoenai-config:
-  kikoenai-covers:
+  kikoenai-appdata:

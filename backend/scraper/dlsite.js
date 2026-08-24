@@ -14,6 +14,142 @@ const ILLUSTRATOR = 'イラスト';
 const SCRIPT_WRITER = 'シナリオ';
 const RELEASE = '販売日';
 const SERIES = 'シリーズ名';
+const AUTHOR = '作者';
+
+// DLsite serves asset URLs protocol-relative ("//img.dlsite.jp/..."); make them
+// absolute so callers can hand them straight to axios.
+const absoluteAssetUrl = (u) => {
+  if (!u) return '';
+  const trimmed = u.trim();
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return '';
+};
+
+/**
+ * Plain text of an element, preserving the line structure the markup implies.
+ * Cheerio's .text() drops <br> and runs block elements together, which turns a
+ * seller's formatted blurb into one unreadable line.
+ * @param {Function} $ Cheerio instance.
+ * @param {Object} el Element to render.
+ * @returns {String}
+ */
+const elementText = ($, el) => {
+  const $el = $(el).clone();
+  // A sentinel, not a bare '\n': DLsite writes "<br />\n" so a literal newline
+  // usually follows the tag in the source, and turning the <br> into a newline
+  // of its own would double every line break. The sentinel swallows that one
+  // following source newline, leaving "<br /><br />" as the only way to get a
+  // blank line.
+  $el.find('br').replaceWith('\u0000');
+  $el.find('p, div, li, tr, h1, h2, h3, h4, h5, h6').append('\u0000');
+  return $el.text()
+    .replace(/\r/g, '')
+    .replace(/[ \t]*\u0000[ \t]*\n?/g, '\n')
+    .replace(/[ \t]*\n[ \t]*/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
+/**
+ * Parses the 作品内容 block into structured parts.
+ *
+ * The block is a sequence of `.work_parts` sections, each tagged by a
+ * `type_*` class: `type_text` (a blurb), `type_image` (a banner plus caption)
+ * and `type_tracklist` (the per-track titles, which the files on disk usually
+ * lack). Sellers mix them freely, so the parts are kept in page order rather
+ * than flattened into one string.
+ * @param {Function} $ Cheerio instance.
+ * @returns {Array<Object>} [{ type, heading, text, images, tracks }]
+ */
+const parseDescriptionParts = ($) => {
+  const parts = [];
+
+  $('div[itemprop="description"] .work_parts').each(function () {
+    const $part = $(this);
+    const typeClass = ($part.attr('class') || '').split(/\s+/).find(c => c.startsWith('type_'));
+    const type = typeClass ? typeClass.replace('type_', '') : 'text';
+
+    const heading = $part.children('.work_parts_heading').text().trim();
+    const $area = $part.children('.work_parts_area');
+
+    // Full-size image first: the <a> wrapper points at the original, the <img>
+    // inside it may be a resized copy.
+    const images = [];
+    $area.find('a[href], img[src]').each(function () {
+      const el = $(this);
+      const raw = el.is('a') ? el.attr('href') : el.attr('src');
+      const abs = absoluteAssetUrl(raw);
+      if (abs && /\.(jpe?g|png|webp|gif)$/i.test(abs) && !images.includes(abs)) {
+        images.push(abs);
+      }
+    });
+
+    const tracks = [];
+    $area.find('ul.work_tracklist li.work_tracklist_item').each(function () {
+      const title = $(this).children('.title').text().trim();
+      const time = $(this).children('.time').text().trim();
+      if (title) tracks.push({ title, time });
+    });
+
+    // The tracklist is returned structurally; leaving it in the prose too
+    // would duplicate every title.
+    const $text = $area.clone();
+    $text.find('ul.work_tracklist').remove();
+
+    parts.push({
+      type,
+      heading: heading || null,
+      text: elementText($, $text),
+      images,
+      tracks,
+    });
+  });
+
+  return parts;
+};
+
+/**
+ * Flattens description parts into the plain prose blob.
+ * @param {Array<Object>} parts Output of parseDescriptionParts.
+ * @returns {String}
+ */
+const descriptionToText = parts => parts
+  .map(part => [part.heading, part.text].filter(Boolean).join('\n'))
+  .filter(Boolean)
+  .join('\n\n')
+  .trim();
+
+/**
+ * Parses the work's sample images from the product slider.
+ *
+ * `.product-slider-data` holds one empty <div> per slide carrying the real
+ * asset URL, dimensions and thumbnail — the visible <img> tags are rendered
+ * client-side by Vue and are not in the HTML. The first slide is the cover
+ * (`_img_main`), which the cover download already handles, so it is dropped.
+ * @param {Function} $ Cheerio instance.
+ * @returns {Array<Object>} [{ url, thumb, width, height }]
+ */
+const parseSampleImages = ($) => {
+  const samples = [];
+
+  $('.product-slider-data div[data-src]').each(function () {
+    const el = $(this);
+    const url = absoluteAssetUrl(el.attr('data-src'));
+    if (!url || url.includes('_img_main')) return;
+
+    const width = parseInt(el.attr('data-width'), 10);
+    const height = parseInt(el.attr('data-height'), 10);
+    samples.push({
+      url,
+      thumb: absoluteAssetUrl(el.attr('data-thumb')) || null,
+      width: Number.isNaN(width) ? null : width,
+      height: Number.isNaN(height) ? null : height,
+    });
+  });
+
+  return samples;
+};
 
 /**
  * Scrapes static work metadata from public DLsite page HTML.
@@ -23,7 +159,7 @@ const scrapeStaticWorkMetadataFromDLsite = (id) => new Promise((resolve, reject)
   const rjcode = formatID(id);
   const url = `https://www.dlsite.com/maniax/work/=/product_id/RJ${rjcode}.html${LOCALE_PARAM}`;
 
-  const work = { id, tags: [], vas: [], illustrators: [], scriptWriters: [] };
+  const work = { id, tags: [], vas: [], illustrators: [], scriptWriters: [], authors: [], sampleImages: [] };
 
   axios.retryGet(url, {
     retry: {}
@@ -133,6 +269,26 @@ const scrapeStaticWorkMetadataFromDLsite = (id) => new Promise((resolve, reject)
           });
         });
 
+      // 作者 — the creator credit on works that have no separate VA/illustrator
+      // /scenario breakdown (mostly manga and older voice works). Rarely set.
+        workOutline.children('tbody').children('tr').children('th')
+        .filter(function() {
+          return $(this).text() === AUTHOR;
+        }).parent().children('td').children('a').each(function() {
+          const authorName = $(this).text().trim();
+          if (authorName) {
+            work.authors.push({
+              id: nameToUUID(authorName),
+              name: authorName
+            });
+          }
+        });
+
+      // 作品内容 (description) and the sample images from the product slider
+      work.descriptionParts = parseDescriptionParts($);
+      work.description = descriptionToText(work.descriptionParts);
+      work.sampleImages = parseSampleImages($);
+
       if (work.tags.length === 0 && work.vas.length === 0) {
         reject(new Error('Couldn\'t parse data from DLsite work page.'));
       }
@@ -173,7 +329,7 @@ const scrapeStaticWorkMetadataFromDLsiteJson = (id) => new Promise((resolve, rej
   const rjcode = formatID(id);
   const url = `https://www.dlsite.com/maniax/api/=/product.json?workno=RJ${rjcode}`;
 
-  const work = { id, tags: [], vas: [], illustrators: [], scriptWriters: [] };
+  const work = { id, tags: [], vas: [], illustrators: [], scriptWriters: [], authors: [], sampleImages: [] };
   axios.retryGet(url, {
     retry: {}
   })
@@ -212,19 +368,47 @@ const scrapeStaticWorkMetadataFromDLsiteJson = (id) => new Promise((resolve, rej
       }));
       
       // イラスト
-      if (data.creaters.illust) {
-        work.illustrators = data.creaters.illust.map((v) => ({
+      if (data.creaters.illust_by) {
+        work.illustrators = data.creaters.illust_by.map((v) => ({
           id: nameToUUID(v.name),
           name: v.name
         }));
       }
       
       // シナリオ
-      if (data.creaters.scenario) {
-        work.scriptWriters = data.creaters.scenario.map((v) => ({
+      if (data.creaters.scenario_by) {
+        work.scriptWriters = data.creaters.scenario_by.map((v) => ({
           id: nameToUUID(v.name),
           name: v.name
         }));
+      }
+
+      // 作者
+      if (data.creaters.created_by) {
+        work.authors = data.creaters.created_by.map((v) => ({
+          id: nameToUUID(v.name),
+          name: v.name
+        }));
+      }
+
+      // The JSON API carries no description markup — intro_s is a plain-text
+      // summary, already truncated by DLsite. Good enough for this fallback
+      // path; the HTML scraper is the one that returns the full blurb, the
+      // per-part structure and the track list.
+      work.description = (data.intro_s || '').trim();
+      work.descriptionParts = work.description
+        ? [{ type: 'text', heading: null, text: work.description, images: [], tracks: [] }]
+        : [];
+
+      if (Array.isArray(data.image_samples)) {
+        work.sampleImages = data.image_samples
+          .map((img) => ({
+            url: absoluteAssetUrl(img.url),
+            thumb: null,
+            width: parseInt(img.width, 10) || null,
+            height: parseInt(img.height, 10) || null,
+          }))
+          .filter(img => img.url);
       }
 
       if (work.tags.length === 0 && work.vas.length === 0) {
@@ -325,6 +509,103 @@ const scrapeWorkMetadataFromDLsiteJson = (id) => {
       const work = {};
       return Object.assign(work, res[0], res[1]);
     });
+};
+
+// Reviews are rendered client-side by a Vue component, so they are absent from
+// the work page HTML. This is the endpoint that component calls.
+const REVIEW_PAGE_SIZE = 50;
+const REVIEW_MAX_PAGES = 200; // hard stop, so a broken response can't loop forever
+
+/**
+ * Normalizes one raw review from the DLsite review API.
+ * @param {Object} raw
+ * @returns {Object}
+ */
+const normalizeReview = (raw) => {
+  const toInt = (v) => {
+    const n = parseInt(v, 10);
+    return Number.isNaN(n) ? null : n;
+  };
+
+  return {
+    id: String(raw.member_review_id),
+    workno: raw.workno,
+    reviewerId: raw.reviewer_id || null,
+    reviewerName: raw.nick_name || null,
+    // 1-5 stars. The list endpoint reports them 1-5, unlike rate_average_star
+    // elsewhere in the DLsite API, which is x10.
+    rate: toInt(raw.rate),
+    title: raw.review_title || null,
+    text: raw.review_text || null,
+    spoiler: raw.spoiler === '1' || raw.spoiler === 1,
+    recommend: !!toInt(raw.recommend),
+    isPurchased: !!toInt(raw.is_purchased),
+    goodReview: toInt(raw.good_review) || 0,
+    badReview: toInt(raw.bad_review) || 0,
+    // Genres the *reviewer* picked, keyed by DLsite genre id. These are
+    // independent of the seller-chosen work genres.
+    genres: raw.genre && typeof raw.genre === 'object'
+      ? Object.entries(raw.genre).map(([genreId, name]) => ({ id: genreId, name }))
+      : [],
+    entryDate: raw.entry_date || null,
+    registDate: raw.regist_date || null,
+  };
+};
+
+/**
+ * Scrapes every user review of a work from DLsite's review API, paginating
+ * until the site stops returning rows.
+ * @param {number|string} id Work id.
+ * @param {Object} [options]
+ * @param {String} [options.order='regist_d'] Sort order accepted by the API.
+ * @param {Number} [options.limit=50] Page size.
+ * @param {Number} [options.maxPages=200] Safety cap on pages fetched.
+ * @returns {Promise<Array<Object>>} Normalized reviews, de-duplicated by id.
+ */
+const scrapeWorkReviewsFromDLsite = async (id, options = {}) => {
+  const rjcode = formatID(id);
+  const order = options.order || 'regist_d';
+  const limit = options.limit || REVIEW_PAGE_SIZE;
+  const maxPages = options.maxPages || REVIEW_MAX_PAGES;
+
+  const reviews = [];
+  const seen = new Set();
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const url = `https://www.dlsite.com/maniax/api/review?product_id=RJ${rjcode}`
+      + `&order=${order}&limit=${limit}&page=${page}&locale=ja_JP`;
+
+    let data;
+    try {
+      const response = await axios.retryGet(url, { retry: {} });
+      data = response.data;
+    } catch (error) {
+      if (error.response) {
+        throw new Error(`Couldn't request work reviews (${url}), received: ${error.response.status}.`);
+      }
+      throw error;
+    }
+
+    if (!data || data.is_success !== true) {
+      throw new Error(`Couldn't parse reviews for RJ${rjcode}: ${(data && data.error_msg) || 'unexpected response'}.`);
+    }
+
+    const rows = Array.isArray(data.review_list) ? data.review_list : [];
+    if (rows.length === 0) break;
+
+    for (const raw of rows) {
+      // A review promoted to "pickup" is repeated across pages; keep one copy.
+      const review = normalizeReview(raw);
+      if (review.id && !seen.has(review.id)) {
+        seen.add(review.id);
+        reviews.push(review);
+      }
+    }
+
+    if (rows.length < limit) break;
+  }
+
+  return reviews;
 };
 
 /**
@@ -432,4 +713,5 @@ module.exports = {
   scrapeWorkMetadataFromDLsiteJson,
   scrapeDynamicWorkMetadataFromDLsite,
   scrapeCoverIdForTranslatedWorkFromDLsite,
+  scrapeWorkReviewsFromDLsite,
 };
