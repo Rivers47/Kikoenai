@@ -196,6 +196,25 @@ All routes mounted under `/api`:
 - Cover images served from `covers/` directory.
 - File listing traverses the work directory and returns track info (name, duration, format).
 
+### 2.9b Track Titles (`memo.trackTitles`)
+
+Works whose audio files are named `01.mp3` / `#2.wav` show only the filename. `t_work.memo.trackTitles` maps **relPath → display name**, exactly like `memo.duration` and `memo.contentHash`:
+
+- `getTrackList` (`filesystem/utils.js`) merges it onto audio files as **`trackTitle`**, next to the existing duration/contentHash merges. `toTree` carries it onto the audio node.
+- **`trackTitle` is a separate field, never a replacement for `title`.** `title` is the real filename and `toTree` builds the offload stream/download URLs from it — overwriting it breaks playback.
+- Frontend renders `item.trackTitle || item.title`, with the filename demoted to a caption when a title exists (`WorkTree.vue`).
+- No migration, no new route: `memo` is already JSON and `GET /api/tracks/:id` already selects it.
+
+**Populating it is out-of-band.** `scripts/extract-track-titles.js <workId>` is a standalone CLI, not a server feature — nothing in the server imports it, and there is no `defaultConfig` key. It handles **exactly one work per run** (deliberately: the output is a judgement call worth eyeballing before it lands in the DB, and the works needing it are a few circles, not a library sweep). It reads `description` + `description_parts`, and:
+
+1. **Structured fast path** — if `description_parts[].tracks[]` has as many titles as the work has audio files, it pairs them in disk order with no model call. That covers ~16% of works.
+2. **Model path** — otherwise it asks an OpenAI-compatible endpoint (`KIKO_LLM_BASE_URL` / `KIKO_LLM_API_KEY` / `KIKO_LLM_MODEL`, env only) to align titles to filenames.
+3. **Verbatim validation** — every returned title must appear, whitespace-insensitively, in the description *or* the structured track titles. This is the guard that makes unattended runs safe; a paraphrased Japanese title is indistinguishable from a real one once stored.
+
+> **The haystack must include the structured titles.** `descriptionToText` strips `ul.work_tracklist` out of `description` so titles are not duplicated in the prose — validating against prose alone rejects every structured work. `buildHaystack` joins both.
+
+Every precondition failure is loud and exits non-zero — unknown id, no scraped description, no audio on disk, unconfigured root folder, or titles already present without `--force`. The caller named the work explicitly, so silently doing nothing would be the wrong answer; the uninformative-filename check is advisory only, printed but never a skip. `--dry-run` prints without writing.
+
 ### 2.9 Work-Page Extras (description, images, author, reviews)
 
 The DLsite scraper reads more than the `#work_outline` spec table. **None of this is exposed over `/api` or rendered by the frontend yet** — it is scaffolding for later features (LLM track-title/VA extraction, tag classification). Everything below is DLsite-only; `fanza.js` is unchanged and Fanza works get none of it.

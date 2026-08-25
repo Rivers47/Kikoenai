@@ -17,8 +17,13 @@ const { nameToUUID } = require('../scraper/utils');
 const { config } = require('../config');
 const { updateLock } = require('../upgrade');
 
-// 只有在子进程中 process 对象才有 send() 方法
-process.send = process.send || function () {};
+// 只有在子进程中 process 对象才有 send() 方法.
+// The stub takes the same (message, callback) shape as the real one so callers
+// can await a send unconditionally -- see LOG.finish.
+process.send = process.send || function (message, callback) {
+  if (typeof callback === 'function') callback();
+  return true;
+};
 
 const tasks = [];
 const failedTasks = [];
@@ -26,12 +31,20 @@ const mainLogs = [];
 const results = [];
 
 const LOG = {
+  // Returns a promise that settles once SCAN_FINISHED has been flushed to the
+  // parent. process.send() is asynchronous and process.exit() does NOT drain
+  // pending IPC writes, so sending and exiting on the same tick silently drops
+  // the message once there is any backlog -- measured: with ~50 queued messages
+  // the child delivers 6 and loses the rest. The frontend only leaves its
+  // 'running' state on SCAN_FINISHED, and socket.js emits nothing on a zero
+  // exit, so losing it leaves the scanner page stuck on the last line forever.
+  // IPC is ordered, so the last message's callback also implies the backlog
+  // ahead of it went out.
   finish(message) {
     console.log(` * ${message}`);
-    process.send({
-      event: 'SCAN_FINISHED',
-      payload: { message }
-    }); 
+    return new Promise((resolve) => {
+      process.send({ event: 'SCAN_FINISHED', payload: { message } }, resolve);
+    });
   },
   main: {
     __internal__(level, message) {
@@ -797,7 +810,7 @@ async function performScan() {
   const folderResult = await tryProcessFolderListParallel(folderList);
 
   const message = folderResult.updated ?  `扫描完成: 更新 ${folderResult.updated} 个，新增 ${folderResult.added} 个，跳过 ${folderResult.skipped} 个，失败 ${folderResult.failed} 个.` : `扫描完成: 新增 ${folderResult.added} 个，跳过 ${folderResult.skipped} 个，失败 ${folderResult.failed} 个.`;
-  LOG.finish(message);
+  await LOG.finish(message);
 
   db.knex.destroy();
   if (!fixVADatabaseSuccess) {
@@ -865,7 +878,7 @@ async function performUpdate(options = null) {
   const counts = await refreshWorks(baseQuery, 'id', processor);
 
   const message = `扫描完成: 更新 ${counts.updated} 个，失败 ${counts.failed} 个.`;
-  LOG.finish(message);
+  await LOG.finish(message);
   db.knex.destroy();
   if (counts.failed) process.exit(1);
 }
@@ -949,7 +962,7 @@ async function performWorkFileScan() {
   });
 
   const message = `扫描完成: 更新 ${counts.updated} 个，失败 ${counts.failed} 个，跳过 ${counts.skipped} 个.`;
-  LOG.finish(message);
+  await LOG.finish(message);
   db.knex.destroy();
   if (counts.failed) process.exit(1);
   process.exit(0);

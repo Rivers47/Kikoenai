@@ -59,7 +59,11 @@ const defaultConfig = {
   version: pjson.version,
   production: process.env.NODE_ENV === 'production' ? true : false,
   dbBusyTimeout: 1000,
-  maxParallelism: 16,
+  // Concurrent works during a scan. Each work now costs a page scrape, an API
+  // call, 3 cover downloads, its sample/description images and its reviews, so
+  // 16 at once is enough to get rate-limited by DLsite. Lower this further if
+  // scans still stall; it only affects scan speed.
+  maxParallelism: 8,
   rootFolders: [
     // {
     //   name: '',

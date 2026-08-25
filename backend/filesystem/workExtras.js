@@ -89,16 +89,22 @@ async function downloadWorkImages(id, metadata, log = consoleLogger) {
 
   log.info(displayId, `从 DLsite 下载作品图片 (${targets.length} 张)...`);
 
-  const results = await Promise.all(targets.map(async (target) => {
+  // Sequential, deliberately. The scanner already runs config.maxParallelism
+  // works at once, so a Promise.all here multiplies out: 16 works x 10 images
+  // was ~160 concurrent requests at img.dlsite.jp, well above the ~48 the cover
+  // downloads ever produced, and enough to get the whole scan rate-limited.
+  // One at a time per work keeps the ceiling at maxParallelism.
+  const results = [];
+  for (const target of targets) {
     try {
       const imageRes = await axios.retryGet(target.url, { responseType: 'stream', retry: {} });
       await saveWorkImageToDisk(imageRes.data, target.file);
-      return target;
+      results.push(target);
     } catch (err) {
       log.warn(displayId, `在下载作品图片 ${target.file} 过程中出错: ${err.message} (URL: ${target.url})`);
-      return { ...target, file: null };
+      results.push({ ...target, file: null });
     }
-  }));
+  }
 
   const downloaded = results.filter(r => r.file).length;
   log.info(displayId, `作品图片下载完成: ${downloaded}/${targets.length}`);

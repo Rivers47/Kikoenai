@@ -227,7 +227,13 @@ const getTrackList = async function (id, dir, readMemo, files) {
 
     const durationMemo = readMemo.duration || { /* fallback */ };
     const hashMemo = readMemo.contentHash || readMemo.hash || {};
-    // add duration and contentHash for each audio
+    // Human-readable track names, keyed by relPath like the two memos above.
+    // Populated out-of-band (see backend/scripts/extract-track-titles.js) for
+    // works whose files are named "01.mp3", "#2.wav" and the like. Kept in a
+    // field of its own rather than overwriting `title`: `title` is the real
+    // filename and toTree builds the stream/download URLs from it.
+    const trackTitleMemo = readMemo.trackTitles || {};
+    // add duration, contentHash and track title for each audio
     const filesAddAudioDuration = await Promise.all(sortedHashedFiles.map(async (file) => {
       if (supportedMediaExtList.includes(file.ext)) {
         if (undefined !== durationMemo[file.shortFilePath]) {
@@ -235,6 +241,9 @@ const getTrackList = async function (id, dir, readMemo, files) {
         }
         if (undefined !== hashMemo[file.shortFilePath]) {
           file.contentHash = hashMemo[file.shortFilePath];
+        }
+        if (trackTitleMemo[file.shortFilePath]) {
+          file.trackTitle = trackTitleMemo[file.shortFilePath];
         }
       }
       // relPath (shortFilePath) is kept on the track so toTree can expose it
@@ -342,6 +351,7 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
         contentHash: track.contentHash,
         relPath: track.shortFilePath,
         title: track.title,
+        trackTitle: track.trackTitle, // display name, falls back to title in the UI
         duration: track.duration,
         workTitle,
         mediaStreamUrl,

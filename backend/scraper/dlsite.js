@@ -514,7 +514,13 @@ const scrapeWorkMetadataFromDLsiteJson = (id) => {
 // Reviews are rendered client-side by a Vue component, so they are absent from
 // the work page HTML. This is the endpoint that component calls.
 const REVIEW_PAGE_SIZE = 50;
-const REVIEW_MAX_PAGES = 200; // hard stop, so a broken response can't loop forever
+const REVIEW_MAX_PAGES = 20; // 1000 reviews; a broken response can't loop forever
+// Wall-clock cap. Paging is sequential, and every request can burn
+// dlsiteTimeout x retry attempts before it gives up -- which on a rate-limited
+// connection is minutes per page. Without a budget one work stalls its whole
+// scan task, and because a task only leaves the scanner's in-flight list when
+// processFolder resolves, the UI sits on that work's last log line forever.
+const REVIEW_TIME_BUDGET_MS = 60 * 1000;
 
 /**
  * Normalizes one raw review from the DLsite review API.
@@ -568,10 +574,17 @@ const scrapeWorkReviewsFromDLsite = async (id, options = {}) => {
   const limit = options.limit || REVIEW_PAGE_SIZE;
   const maxPages = options.maxPages || REVIEW_MAX_PAGES;
 
+  const budgetMs = options.budgetMs || REVIEW_TIME_BUDGET_MS;
+  const deadline = Date.now() + budgetMs;
+
   const reviews = [];
   const seen = new Set();
 
   for (let page = 1; page <= maxPages; page += 1) {
+    if (Date.now() > deadline) {
+      console.log(`[RJ${rjcode}] 评论抓取超时，已获取 ${reviews.length} 条，停止翻页.`);
+      break;
+    }
     const url = `https://www.dlsite.com/maniax/api/review?product_id=RJ${rjcode}`
       + `&order=${order}&limit=${limit}&page=${page}&locale=ja_JP`;
 
