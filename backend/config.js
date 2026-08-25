@@ -130,6 +130,9 @@ const setConfig = (newConfig, writeConfigToFile = !process.env.FREEZE_CONFIG_FIL
 
   // Merge config
   config = Object.assign(config, newConfig);
+  // Re-resolve after the merge: newConfig carries whatever was on disk or came
+  // from the admin panel, which may be relative or pinned to the old data root.
+  resolveDataFolders();
   if (writeConfigToFile) {
     fs.writeFileSync(configPath, JSON.stringify(config, null, "\t"));
   }
@@ -175,6 +178,22 @@ const resolveDataFolder = (dir, defaultName, useDefault) => {
   return rerootFromAppDir(dir);
 };
 
+/**
+ * Resolve the three configurable data folders in place.
+ *
+ * Must run after ANY assignment into `config`, not just the initial read:
+ * updateConfig re-reads the raw file and hands it to setConfig, whose
+ * Object.assign would otherwise put the unresolved on-disk values back --
+ * silently undoing rerootFromAppDir and then persisting the stale paths.
+ * That is how a version upgrade could leave covers pointing inside the
+ * application directory while the database, opened earlier, stayed correct.
+ */
+const resolveDataFolders = () => {
+  config.coverFolderDir = resolveDataFolder(config.coverFolderDir, 'covers', config.coverUseDefaultPath);
+  config.imageFolderDir = resolveDataFolder(config.imageFolderDir, 'images', config.imageUseDefaultPath);
+  config.databaseFolderDir = resolveDataFolder(config.databaseFolderDir, 'sqlite', config.dbUseDefaultPath);
+};
+
 // Get or use default value
 const readConfig = () => {
   config = JSON.parse(fs.readFileSync(configPath));
@@ -197,9 +216,7 @@ const readConfig = () => {
 
   // Data folder paths: relative to dataRoot, or absolute, or forced to the
   // default. `useDefault` wins, then a relative path, then an absolute one.
-  config.coverFolderDir = resolveDataFolder(config.coverFolderDir, 'covers', config.coverUseDefaultPath);
-  config.imageFolderDir = resolveDataFolder(config.imageFolderDir, 'images', config.imageUseDefaultPath);
-  config.databaseFolderDir = resolveDataFolder(config.databaseFolderDir, 'sqlite', config.dbUseDefaultPath);
+  resolveDataFolders();
 
   if (process.env.NODE_ENV === 'production' || config.production) {
     config.production = true;
