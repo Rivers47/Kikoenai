@@ -161,7 +161,7 @@ async function main() {
   console.log('\n== 5. stage runtime + launcher ==');
   await stageRuntime();
   stageLauncher();
-  for (const d of ['config', 'sqlite', 'covers', 'VoiceWork']) {
+  for (const d of ['config', 'sqlite', 'covers', 'images', 'VoiceWork']) {
     mkdir(path.join(STAGE, d));
   }
 

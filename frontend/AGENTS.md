@@ -343,6 +343,12 @@ Both build targets are **PWA**, not SPA, and output to `../backend/dist` (`distD
 
 ---
 
+## 5b. Track Titles
+
+`WorkTree.vue` renders a track as `item.trackTitle || item.title`. `title` is always the real filename; `trackTitle` is an optional scraped/extracted display name present only on audio nodes whose work has `memo.trackTitles` populated. When both exist the filename is shown as a caption underneath.
+
+Never swap the two: `title` is what the backend builds media URLs from (see `backend/AGENTS.md` §2.9b).
+
 ## 6. API Contract (Consumed from Backend)
 
 | Endpoint | Method | Used In | Purpose |

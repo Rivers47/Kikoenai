@@ -76,7 +76,10 @@
           </q-item-section>
 
           <q-item-section>
-            <q-item-label class="text-subtitle1">{{ item.title }}</q-item-label>
+            <!-- trackTitle is the scraped track name, only present on audio files
+                 whose titles have been filled in; title is always the filename. -->
+            <q-item-label class="text-subtitle1">{{ item.trackTitle || item.title }}</q-item-label>
+            <q-item-label v-if="item.trackTitle" caption lines="1">{{ item.title }}</q-item-label>
             <q-item-label v-if="item.children" caption lines="1">{{ $t('worktree.items', { count: item.children.length }) }}</q-item-label>
           </q-item-section>
 

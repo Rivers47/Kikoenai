@@ -24,8 +24,11 @@ FROM node:24-alpine
 # NODE_ENV=production forces auth on (see backend/config.js) and cannot be
 # overridden via the admin config -- required so the shipped image is never
 # accidentally exposed with every /api request treated as admin.
+# KIKO_DATA_DIR contains all four persistent data folders (config/sqlite/covers/
+# images)
 ENV IS_DOCKER=true \
-    NODE_ENV=production
+    NODE_ENV=production \
+    KIKO_DATA_DIR=/appdata
 WORKDIR /usr/src/kikoeru
 
 # Install runtime dependencies: tini for signal handling, ffmpeg for audio processing
@@ -43,8 +46,6 @@ COPY --from=build /usr/src/kikoeru/node_modules ./node_modules
 COPY ./backend/ ./
 
 EXPOSE 8888
-
-VOLUME [ "/usr/src/kikoeru/sqlite", "/usr/src/kikoeru/config", "/usr/src/kikoeru/covers" ]
 
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD [ "node", "app.js" ]

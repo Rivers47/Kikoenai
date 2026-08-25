@@ -118,6 +118,7 @@ config
 
 # Covers
 covers
+images
 
 # SQLite
 sqlite

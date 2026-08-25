@@ -8,15 +8,22 @@ const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
 const { scrapeWorkMetadataFromAsmrOne } = require('../scraper/asmrOne');
 const db = require('../database/db');
 const { createSchema } = require('../database/schema');
-const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, scrapeWorkMemo, coverFileName, formatID } = require('./utils');
+const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, scrapeWorkMemo, coverFileName, formatID,
+  deleteWorkImagesFromDisk } = require('./utils');
+const workExtras = require('./workExtras');
 const { md5 } = require('../auth/utils');
 const { nameToUUID } = require('../scraper/utils');
 
 const { config } = require('../config');
 const { updateLock } = require('../upgrade');
 
-// 只有在子进程中 process 对象才有 send() 方法
-process.send = process.send || function () {};
+// 只有在子进程中 process 对象才有 send() 方法.
+// The stub takes the same (message, callback) shape as the real one so callers
+// can await a send unconditionally -- see LOG.finish.
+process.send = process.send || function (message, callback) {
+  if (typeof callback === 'function') callback();
+  return true;
+};
 
 const tasks = [];
 const failedTasks = [];
@@ -24,12 +31,20 @@ const mainLogs = [];
 const results = [];
 
 const LOG = {
+  // Returns a promise that settles once SCAN_FINISHED has been flushed to the
+  // parent. process.send() is asynchronous and process.exit() does NOT drain
+  // pending IPC writes, so sending and exiting on the same tick silently drops
+  // the message once there is any backlog -- measured: with ~50 queued messages
+  // the child delivers 6 and loses the rest. The frontend only leaves its
+  // 'running' state on SCAN_FINISHED, and socket.js emits nothing on a zero
+  // exit, so losing it leaves the scanner page stuck on the last line forever.
+  // IPC is ordered, so the last message's callback also implies the backlog
+  // ahead of it went out.
   finish(message) {
     console.log(` * ${message}`);
-    process.send({
-      event: 'SCAN_FINISHED',
-      payload: { message }
-    }); 
+    return new Promise((resolve) => {
+      process.send({ event: 'SCAN_FINISHED', payload: { message } }, resolve);
+    });
   },
   main: {
     __internal__(level, message) {
@@ -468,6 +483,16 @@ async function getFanzaCoverImage(id, types, coverUrls) {
       : "added";
 }
 
+// Route workExtras' output through the scanner's task log so image and review
+// progress shows up in the Scanner page like every other per-work message.
+const extrasLogger = {
+  info: (id, message) => LOG.task.info(id, message),
+  warn: (id, message) => LOG.task.warn(id, message),
+};
+
+const saveWorkImages = (id, metadata) => workExtras.saveWorkImages(id, metadata, extrasLogger);
+const saveWorkReviews = id => workExtras.saveWorkReviews(id, extrasLogger);
+
 /**
  * 获取音声元数据，获取音声封面图片，
  * 返回一个 Promise 对象，处理结果: 'added', 'skipped' or 'failed'
@@ -540,6 +565,11 @@ async function processFolder(folder) {
       coverResult = await getFanzaCoverImage(workId, coverTypes, result.coverUrls);
     } else {
       coverResult = await getCoverImageForTranslated(workId, coverTypes, result && result.coverUrls);
+      // Sample/description images and user reviews: extra requests, so only on
+      // first add. Re-run them for an existing work with `updater.js
+      // --includeImages` / `--includeReviews`.
+      await saveWorkImages(workId, result);
+      await saveWorkReviews(workId);
     }
   }
 
@@ -583,8 +613,9 @@ async function performCleanup() {
 
     await db.removeWork(work.id, trxProvider); // 将其数据项从数据库中移除
     try {
-      // 然后删除其封面图片
-      await deleteCoverImageFromDisk(work.id);    
+      // 然后删除其封面图片和抓取到的作品图片
+      await deleteCoverImageFromDisk(work.id);
+      await deleteWorkImagesFromDisk(work.id);
     } catch(err) {
       if (err && err.code !== 'ENOENT') { 
           LOG.main.error(`[${work.id}] 在删除封面过程中出错: ${err.message}`);
@@ -760,6 +791,15 @@ async function performScan() {
     }
   }
 
+  if (!fs.existsSync(config.imageFolderDir)) {
+    try {
+      fs.mkdirSync(config.imageFolderDir, { recursive: true });
+    } catch(err) {
+      LOG.main.error(`在创建存放作品图片的文件夹时出错: ${err.message}`);
+      process.exit(1);
+    }
+  }
+
   await tryCreateDatabase();
   await tryCreateAdminUser();
 
@@ -770,7 +810,7 @@ async function performScan() {
   const folderResult = await tryProcessFolderListParallel(folderList);
 
   const message = folderResult.updated ?  `扫描完成: 更新 ${folderResult.updated} 个，新增 ${folderResult.added} 个，跳过 ${folderResult.skipped} 个，失败 ${folderResult.failed} 个.` : `扫描完成: 新增 ${folderResult.added} 个，跳过 ${folderResult.skipped} 个，失败 ${folderResult.failed} 个.`;
-  LOG.finish(message);
+  await LOG.finish(message);
 
   db.knex.destroy();
   if (!fixVADatabaseSuccess) {
@@ -791,7 +831,7 @@ async function updateMetadata(id, options = {}) {
   if (isFanza) {
     // Fanza: only static scraping is available
     scrapeProcessor = () => scrapeWorkMetadataFromFanza(id);
-  } else if (options.includeVA || options.includeTags || options.includeNSFW || options.includeIllustrator || options.includeScriptWriter || options.includeSeries || options.refreshAll) {
+  } else if (options.includeVA || options.includeTags || options.includeNSFW || options.includeIllustrator || options.includeScriptWriter || options.includeSeries || options.includeAuthor || options.includeDescription || options.includeImages || options.refreshAll) {
     // static + dynamic
     scrapeProcessor = () => scrapeWorkMetadataFromDLsite(id);
   } else {
@@ -808,6 +848,16 @@ async function updateMetadata(id, options = {}) {
     metadata.id = id;
 
     await db.updateWorkMetadata(metadata, options);
+
+    // Downloading images and paginating reviews costs extra requests per work,
+    // so neither rides along with refreshAll — ask for them explicitly.
+    if (options.includeImages) {
+      await saveWorkImages(id, metadata);
+    }
+    if (options.includeReviews) {
+      await saveWorkReviews(id);
+    }
+
     LOG.task.log(displayId, `元数据更新成功`);
     return 'updated';
   } catch(err) {
@@ -828,7 +878,7 @@ async function performUpdate(options = null) {
   const counts = await refreshWorks(baseQuery, 'id', processor);
 
   const message = `扫描完成: 更新 ${counts.updated} 个，失败 ${counts.failed} 个.`;
-  LOG.finish(message);
+  await LOG.finish(message);
   db.knex.destroy();
   if (counts.failed) process.exit(1);
 }
@@ -912,7 +962,7 @@ async function performWorkFileScan() {
   });
 
   const message = `扫描完成: 更新 ${counts.updated} 个，失败 ${counts.failed} 个，跳过 ${counts.skipped} 个.`;
-  LOG.finish(message);
+  await LOG.finish(message);
   db.knex.destroy();
   if (counts.failed) process.exit(1);
   process.exit(0);
