@@ -85,46 +85,7 @@ Edit `/path/to/your/voiceworks` to your folder that contains the voice work file
 The voice-work library stays a separate bind mount: it is your own media, not
 application state, so it does not belong in the data volume.
 
-#### Upgrading from the four-volume layout
 
-> **This is a breaking change for existing container deployments.** Read this before
-> pulling a newer image.
-
-Earlier images kept the four data folders inside the application directory, so each
-needed its own mount:
-
-```
-Volume=/path/to/config:/usr/src/kikoeru/config
-Volume=/path/to/sqlite:/usr/src/kikoeru/sqlite
-Volume=/path/to/covers:/usr/src/kikoeru/covers
-Volume=/path/to/images:/usr/src/kikoeru/images
-```
-
-The data root is now `/appdata` by default, so those mounts are no longer where the server
-looks. Pick one of two options.
-
-**Keep the old layout.** Set the data root back to the application directory. This
-reproduces the previous behaviour exactly — nothing moves, and your existing mounts keep
-working:
-
-```
-Environment=KIKO_DATA_DIR=/usr/src/kikoeru
-```
-
-**Or consolidate into one volume.** Copy the contents of your four volumes into
-`config/`, `sqlite/`, `covers/` and `images/` inside the new one, then start with only
-`-v kikoenai-appdata:/appdata`. Folder paths that `config.json` recorded inside the
-application directory are re-rooted automatically on startup (you will see
-`数据目录已迁移: …` in the log); a path you chose yourself outside it — a big disk, a
-network share — is left untouched.
-
-If you do neither, the server starts against an empty `/appdata` and logs a `!!!` warning
-naming both paths. Nothing is deleted, but **do not let a scan run in that state**: a
-rescan rebuilds the library without your ratings, reviews, progress or play history,
-and those cannot be recovered by scanning again.
-
-Windows portable builds are unaffected — `Kikoenai.bat` already points the data root at
-the folder holding the launcher, and always has.
 
 The server will be up on port `4545` on the host.
 
