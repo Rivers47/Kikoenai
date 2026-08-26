@@ -24,6 +24,14 @@ const consoleLogger = {
 };
 
 /**
+ * Whether the implicit image download and review scrape are switched off.
+ * A missing key counts as "skip", so a config.json predating the setting gets
+ * the cheaper behaviour rather than silently keeping the expensive one.
+ * @returns {Boolean}
+ */
+const skipWorkExtras = () => config.skipWorkExtras !== false;
+
+/**
  * Collects every image a work page offers, in the order they should be
  * numbered on disk: the sample slider first, then the ones embedded in the
  * description blocks.
@@ -160,6 +168,7 @@ async function saveWorkReviews(id, log = consoleLogger) {
 }
 
 module.exports = {
+  skipWorkExtras,
   collectWorkImages,
   downloadWorkImages,
   saveWorkImages,

@@ -566,10 +566,13 @@ async function processFolder(folder) {
     } else {
       coverResult = await getCoverImageForTranslated(workId, coverTypes, result && result.coverUrls);
       // Sample/description images and user reviews: extra requests, so only on
-      // first add. Re-run them for an existing work with `updater.js
-      // --includeImages` / `--includeReviews`.
-      await saveWorkImages(workId, result);
-      await saveWorkReviews(workId);
+      // first add, and only when config.skipWorkExtras is off. Re-run them for
+      // an existing work with `updater.js --images` / `--reviews`, which ignore
+      // the setting.
+      if (!workExtras.skipWorkExtras()) {
+        await saveWorkImages(workId, result);
+        await saveWorkReviews(workId);
+      }
     }
   }
 

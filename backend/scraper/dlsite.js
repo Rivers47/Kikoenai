@@ -520,7 +520,7 @@ const REVIEW_MAX_PAGES = 20; // 1000 reviews; a broken response can't loop forev
 // connection is minutes per page. Without a budget one work stalls its whole
 // scan task, and because a task only leaves the scanner's in-flight list when
 // processFolder resolves, the UI sits on that work's last log line forever.
-const REVIEW_TIME_BUDGET_MS = 60 * 1000;
+const REVIEW_TIME_BUDGET_MS = 120 * 1000;
 
 /**
  * Normalizes one raw review from the DLsite review API.

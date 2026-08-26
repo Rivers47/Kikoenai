@@ -10,7 +10,7 @@ const { isValidRequest, workIdParam } = require('./utils/validate');
 const { formatID, scrapeWorkMemo, coverFileName } = require('../filesystem/utils');
 const { scrapeWorkMetadataFromDLsite } = require('../scraper/dlsite');
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
-const { saveWorkImages, saveWorkReviews } = require('../filesystem/workExtras');
+const { saveWorkImages, saveWorkReviews, skipWorkExtras } = require('../filesystem/workExtras');
 
 // Covers come from DLsite/Fanza and effectively never change, so cache them
 // for a long time rather than paying a conditional request every time (a 304
@@ -430,10 +430,14 @@ router.post('/refresh/:id',
       metadata.id = work_id;
       await db.updateWorkMetadata(metadata, { refreshAll: true });
 
-      const [images, reviews] = await Promise.all([
-        saveWorkImages(work_id, metadata),
-        saveWorkReviews(work_id),
-      ]);
+      // Gated by config.skipWorkExtras like the scanner. `updater.js --images`
+      // / `--reviews` remain the way to fetch them for one work regardless.
+      const [images, reviews] = skipWorkExtras()
+        ? [0, 0]
+        : await Promise.all([
+          saveWorkImages(work_id, metadata),
+          saveWorkReviews(work_id),
+        ]);
 
       res.send({
         message: 'Refresh metadata for work ' + work_id + ' successful',

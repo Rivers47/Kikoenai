@@ -242,15 +242,21 @@ The JSON fallback (`scrapeStaticWorkMetadataFromDLsiteJson`) fills the same fiel
 
 **Images on disk** — `config.imageFolderDir` (default `images/`, sibling of `covers/`, with the same relative-path and `imageUseDefaultPath` handling). Named by position, not by remote basename: `RJ<id>_img_smp<N>.<ext>` for slider images and `RJ<id>_img_part<N>.<ext>` for images embedded in description blocks — description images are served under opaque hash names that collide across works. `deleteWorkImagesFromDisk` matches that exact pattern rather than a bare prefix, so pointing `imageFolderDir` at the cover folder cannot delete covers.
 
+**`config.skipWorkExtras` (default `true`) switches off the two expensive halves** — the image downloads and the review scrape — on every **implicit** path: library scans, `refreshAll` (the Scanner page's update button), and `POST /api/refresh/:id`. Together they are what makes a scan expensive (N image downloads plus paginated review requests per work) and what gets it rate-limited by DLsite. It does **not** gate the explicit `updater.js --images` / `--reviews` flags — naming one on the command line is already opting in. A missing config key counts as "skip".
+
+**Description, `description_parts` and the sample-image URL list are never gated.** They are parsed from the work page the scanner already fetches, so they cost no extra request, and `scripts/extract-track-titles.js` needs the description to work at all. The switch controls network cost, not what gets parsed.
+
 **When it runs** (`filesystem/scannerModules.js`):
 
 | Trigger | Description + author | Sample-image URLs | Image download | Reviews |
 |---------|---------------------|-------------------|----------------|---------|
-| New work during `PERFORM_SCAN` | ✅ | ✅ | ✅ | ✅ |
+| New work during `PERFORM_SCAN` | ✅ | ✅ | ¹ | ¹ |
 | `PERFORM_UPDATE` (= `updater.js --refreshAll`) — **whole library** | ✅ | ✅ | ❌ | ❌ |
-| `POST /api/refresh/:id` — **one work** | ✅ | ✅ | ✅ | ✅ |
+| `POST /api/refresh/:id` — **one work** | ✅ | ✅ | ¹ | ¹ |
 | `updater.js --images` | ✅ | ✅ | ✅ | ❌ |
 | `updater.js --reviews` | ❌ | ❌ | ❌ | ✅ |
+
+¹ Only when `config.skipWorkExtras` is `false`; it defaults to `true`, so out of the box no images are downloaded and no reviews fetched. The first two columns are unaffected by the switch.
 
 Downloads and review pagination cost extra requests per work, so they deliberately do **not** ride along with `refreshAll` — the UI's update button would otherwise turn into thousands of image fetches. `--refreshAll` still writes the image *list* (URLs, `file: null`); a later `--images` fills in the files.
 

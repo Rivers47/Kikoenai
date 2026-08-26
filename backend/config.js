@@ -70,6 +70,17 @@ const defaultConfig = {
     //   path: ''
     // }
   ],
+  // Skip downloading sample/description images and scraping user reviews during
+  // library scans, refreshAll, and the per-work refresh route. Defaults to true:
+  // neither is surfaced in the UI yet, and together they are what makes a scan
+  // expensive -- N image downloads plus paginated review requests per work, which
+  // is what gets it rate-limited by DLsite.
+  // The work description, its per-part structure and the sample image URL list
+  // are NOT gated: they are parsed from the work page already being fetched, so
+  // they cost no extra request, and extract-track-titles.js needs the description.
+  // Independent of the explicit `updater.js --images/--reviews` flags, which
+  // always run: asking for them by name is already opting in.
+  skipWorkExtras: true,
   coverFolderDir: path.join(dataRoot, 'covers'),
   imageFolderDir: path.join(dataRoot, 'images'), // Scraped sample/description images, kept out of the cover cache
   databaseFolderDir: path.join(dataRoot, 'sqlite'),
