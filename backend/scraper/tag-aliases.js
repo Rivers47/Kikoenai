@@ -9,7 +9,9 @@
 //
 // The map is hand-maintained in tag-aliases.json and loaded once at require
 // time; restart the server to pick up edits. Fanza/free-form tags are not in
-// the map and pass through unchanged (no stable id exists for them).
+// the map and pass through unchanged (no stable id exists for them). Existing
+// split rows are merged by
+// database/migrations/20260825000000_merge_tag_aliases.js.
 //
 // ponytail: in-memory load, no watcher — edits need a restart. Acceptable for
 // a rarely-changed hand-curated map; add a fs.watch if it ever becomes hot.
@@ -43,9 +45,14 @@ if (process.env.NODE_ENV !== 'production' && require.main === module) {
   // empty map; the mapped path is a one-liner aliases[name]). When you add a
   // real entry, also assert it here so the mapping stays correct.
   const assert = require('assert');
+  // DLsite renamed the ロリ genre to つるぺた; the pre-existing katakana ツルペタ
+  // genre is folded in too (see tag-aliases.json).
+  assert.strictEqual(canonicalizeTagName('つるぺた'), 'ロリ');
+  assert.strictEqual(canonicalizeTagName('ツルペタ'), 'ロリ');
+  assert.strictEqual(canonicalizeTagName('ロリ'), 'ロリ');
   assert.strictEqual(canonicalizeTagName('未映射のタグ'), '未映射のタグ');
   assert.strictEqual(canonicalizeTagName(null), null);
   console.log('tag-aliases self-check OK');
 }
 
-module.exports = { canonicalizeTagName };
+module.exports = { canonicalizeTagName, tagAliases: aliases };
