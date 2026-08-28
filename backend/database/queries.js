@@ -34,18 +34,28 @@ const makeQueries = (knex) => {
 
   /**
    * Overwrite each history row's state.seconds from t_track_progress, keyed by
-   * the contentHash of the track the queue is parked on. PUT /api/history only
-   * fires on play/pause/track-change, so the position it carries goes stale
-   * between writes; t_track_progress is the one updated on an interval.
-   * Rows written before this change (no contentHash on the queue item, or no
-   * progress row yet) keep their stored seconds.
+   * the work and the contentHash of the track the queue is parked on. PUT
+   * /api/history only fires on play/pause/track-change, so the position it
+   * carries goes stale between writes; t_track_progress is the one updated on
+   * an interval. Rows written before this change (no contentHash on the queue
+   * item, or no progress row yet) keep their stored seconds.
+   *
+   * The lookup is keyed by (work_id, track_key), not track_key alone:
+   * track_key is a CRC32 of the file's content, so two works that ship a
+   * byte-identical file (reused SE/BGM/trial tracks are common) share one key,
+   * and a single-column match let one work's position overwrite the other's.
    * @param {String} username
    * @param {Array<Object>} rows - Rows carrying a JSON `state` string; mutated in place.
+   *   The work id is read from `work_id`, falling back to `id` — getPlayHistory
+   *   selects t_work.id, assembleWorks passes raw t_play_history rows.
    */
   const applyTrackProgressSeconds = async (username, rows) => {
+    const progressKey = (workId, trackKey) => `${workId}\u0000${trackKey}`;
     const parsed = [];
     for (const row of rows) {
       if (!row.state) continue;
+      const workId = row.work_id !== undefined ? row.work_id : row.id;
+      if (workId === undefined) continue;
       let state;
       try {
         state = JSON.parse(row.state);
@@ -53,19 +63,19 @@ const makeQueries = (knex) => {
         continue;
       }
       const hash = state.queue && state.queue[state.index] && state.queue[state.index].contentHash;
-      if (hash) parsed.push({ row, state, hash });
+      if (hash) parsed.push({ row, state, hash, key: progressKey(workId, hash) });
     }
     if (!parsed.length) return;
 
     const progress = await knex('t_track_progress')
-      .select('track_key', 'seconds')
+      .select('work_id', 'track_key', 'seconds')
       .where('user_name', username)
       .whereIn('track_key', parsed.map(p => p.hash));
-    const byKey = new Map(progress.map(p => [p.track_key, p.seconds]));
+    const byKey = new Map(progress.map(p => [progressKey(p.work_id, p.track_key), p.seconds]));
 
     for (const p of parsed) {
-      if (!byKey.has(p.hash)) continue;
-      p.state.seconds = byKey.get(p.hash);
+      if (!byKey.has(p.key)) continue;
+      p.state.seconds = byKey.get(p.key);
       p.row.state = JSON.stringify(p.state);
     }
   };
