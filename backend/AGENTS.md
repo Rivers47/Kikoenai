@@ -33,6 +33,7 @@
 ├── covers/                  # Cached cover images
 ├── images/                  # Scraped sample + description images (config.imageFolderDir)
 ├── database/
+│   ├── search-query.js      # Advanced search syntax parser (E-Hentai style `field:"value"`)
 │   ├── db.js                # Thin re-export: singleton knex + databaseExist + queries (via makeQueries)
 │   ├── queries.js           # makeQueries(knex) factory: all query functions bound to a knex instance
 │   ├── init.js              # App initialization (db creation, migration, config upgrade)
@@ -58,6 +59,7 @@
 ├── sqlite/
 │   └── db.sqlite3           # SQLite database file
 ├── static/                  # Static assets
+├── work-id.js               # Work-id helpers: isFanzaId / canonicalizeWorkId / fanzaCid
 ├── api.js                   # API setup: session middleware + route mounting
 ├── app.js                   # Entry point: Express app, HTTP/HTTPS, Socket.IO
 ├── config.js                # Config file read/write, defaults, migration
@@ -128,11 +130,30 @@ SQLite3 via Knex.js with the following tables:
 | `t_play_history` | Playback state | `user_name`, `work_id`, `state` (JSON) |
 | `t_dlsite_review` | Scraped DLsite user reviews | `id` (DLsite `member_review_id`), `work_id`, `rate`, `review_title`, `review_text`, `genres` (JSON) |
 
-**Work id / label id note (since migration `20260802000000`):** `t_work.id` and all `work_id` foreign keys are **TEXT**. A DLsite work id is stored already RJ-padded (`'123456'` 6-digit, or `'01134567'` 8-digit — matching `formatID`), so the work URL `/work/123456` shows the original RJ id directly; a Fanza (DMM doujin) work id is the content-id `'d_215444'`. The `d_` prefix distinguishes the source — there is no separate source column. **All** label ids (circle/tag/va/illustrator/script_writer/series/author) are name-based UUIDs (TEXT PK) resolved by `resolveLabel` in `queries.js`; DLsite RG/genre/SRI ids scraped from the storefront are no longer used as DB ids, and a label shared across DLsite + Fanza merges into one row.
+**Work id / label id note (since migration `20260802000000`):** `t_work.id` and all `work_id` foreign keys are **TEXT**. A DLsite work id is stored already RJ-padded (`'123456'` 6-digit, or `'01134567'` 8-digit — matching `formatID`), so the work URL `/work/123456` shows the original RJ id directly; a Fanza (DMM doujin) work id is the content-id **without its underscore**, `'d215444'` (migration `20260828000000`; DMM writes it `d_215444`). The leading `d` distinguishes the source — there is no separate source column. `work-id.js` owns the three helpers: `isFanzaId`, `canonicalizeWorkId` (`d_215444` → `d215444`), `fanzaCid` (back to DMM's form). **All** label ids (circle/tag/va/illustrator/script_writer/series/author) are name-based UUIDs (TEXT PK) resolved by `resolveLabel` in `queries.js`; DLsite RG/genre/SRI ids scraped from the storefront are no longer used as DB ids, and a label shared across DLsite + Fanza merges into one row.
 
 **Tag canonicalization (rename protection):** tag names are canonicalized via `scraper/tag-aliases.json` before UUID resolution. `resolveTagLabel` in `queries.js` (the single choke point covering scan-insert, scan-update, and admin-edit) maps a scraped new Japanese tag name back to its canonical old name so a DLsite rename folds onto the existing `t_tag` row instead of splitting into two. The map is hand-maintained (`scraper/tag-aliases.json`, loaded once at require time — restart to apply); tags not in the map pass through unchanged. Rows that already exist in a deployed DB are folded by migration `20260825000000_merge_tag_aliases.js`, which reads the same JSON — **adding a new alias entry after that migration has run needs a fresh migration** (or a re-scan of the affected works) to merge the existing rows. Other label tables (circle/illustrator/script_writer/series) are not canonicalized. The backend always serves canonical Japanese tag names; UI/tag translation is client-side (see `frontend/AGENTS.md` i18n).
 
 **VA canonicalization (duplicate registration):** same mechanism for voice actors, via `scraper/va-aliases.json` and `resolveVaLabel` in `queries.js`. A VA who registered under several spellings (e.g. 乙倉ゅい / 乙倉ゅい（乙倉由依）/ 乙倉ゅい(乙倉由依) / 乙倉ゆい) otherwise gets one `t_va` row per spelling with their works split between them; the map redirects every variant to the canonical name on write. Rows that already exist in a deployed DB are folded by migration `20260814000000_merge_va_aliases.js`, which reads the same JSON — **adding a new alias entry after that migration has run needs a fresh migration** (or a re-scan of the affected works) to merge the existing rows.
+
+### 2.3b Search Syntax (`database/search-query.js`)
+
+`GET /api/search?keyword=` accepts an E-Hentai style filter language. `parseSearchQuery()` splits the raw box into terms; `applySearchTerm()` in `queries.js` turns each into one parenthesised clause on the `t_work` query, and **every term must match (AND)**.
+
+```
+term      := ['-'] [ namespace ':' ] value
+value     := '"' anything '"' | bare       # bare: '_' stands for a space
+```
+
+- **Namespaces:** `circle` (`group`), `tag` (`tags`), `va` (`cv`, `voice`), `illustrator` (`illust`), `script_writer` (`scriptwriter`, `scenario`, `script`), `series`, `author`, `title`, `id`. Case-insensitive. An **unknown** namespace is not special — `foo:bar` is searched as the literal text `foo:bar`, so titles with colons still work.
+- **`$` anchors** the value (whole name, not substring), inside or right after the quotes: `va:"春日 部長$"`.
+- **`-` negates** the whole term: `-tag:NTR`.
+- **No namespace** = the old behaviour, matched across title + circle + tag + va + illustrator + script writer + series + author at once; a token that looks like a work code (`RJ123456`, `123456`, `d215444`, `d_215444`) resolves to that id instead.
+- **Fanza ids take both spellings.** `d215444` is the stored id; `d_215444` (DMM's own form, and what a pre-migration bookmark holds) is accepted and folded onto it. The underscore-free form is only recognised as a *whole* term (`/^d_?(\d+)$/`), or a title token like `CD100001` would be read as a work code; the underscore form still matches as a substring (`d_215444.zip`) the way it always did. Detection runs on `term.raw` — the token *before* `_` becomes a space — or `d_215444` would arrive as `d 215444`.
+- Matching is `LIKE`, i.e. ASCII-case-insensitive; an anchored term is `LIKE <value>` (no wildcards) rather than `=` so the two stay consistent.
+- Multi-word plain input now ANDs per token (`夏 思い出`); quote it for the old whole-phrase match (`"夏の思い出"`).
+
+**Latent bug fixed by the rewrite:** the free-text branch used to emit `title LIKE ? OR circle IN ? OR id IN ?` flat, and `nsfwFilter` appended `AND nsfw = ?` afterwards — SQLite binds `AND` tighter, so the nsfw filter only applied to the last `OR` arm. Every term is now wrapped in its own group.
 
 ### 2.4 Configuration (`config.js`)
 
@@ -168,7 +189,7 @@ Only one scanner process can run at a time (guarded by `scanner` variable in `so
 - **DLsite** (`dlsite.js`): Primary scraper. Fetches work pages, parses HTML with Cheerio.
 - **ASMR.one** (`asmrOne.js`): Secondary source.
 - **HVDB** (`hvdb.js`): Another metadata source.
-- **Fanza** (`fanza.js`): Scrapes Fanza (DMM) doujin detail pages. Uses age-check cookies to bypass the adult interstitial. Identifies works by `d_`-prefixed content ids.
+- **Fanza** (`fanza.js`): Scrapes Fanza (DMM) doujin detail pages. Uses age-check cookies to bypass the adult interstitial. Takes a work id in either spelling, addresses the detail page by `fanzaCid()` (`cid=d_215444`), and returns the canonical `d215444` on the metadata object.
 - All scrapers use a shared Axios instance (`axios.js`) with proxy support, retry logic, and configurable timeouts.
 
 ### 2.7 Routes (`routes/`)
@@ -330,7 +351,7 @@ node filesystem/updater.js --reviews        # re-scrape every DLsite user review
 
 The following endpoints are consumed by the `frontend/` package:
 
-**Id formats:** work-id route params (`:id` on `/api/work`, `/api/cover`, `/api/tracks`, `/api/media/*`, `/api/refresh`, `/api/work/scan`) are **strings** matching `^(\d{6,8}|d_\d+)$` — DLsite ids are already RJ-padded digit strings, Fanza ids are `d_`-prefixed (validated by `workIdParam`/`workIdBody` in `routes/utils/validate.js`). Label-id params (`/api/:fields/:id/works`) are UUID strings.
+**Id formats:** work-id route params (`:id` on `/api/work`, `/api/cover`, `/api/tracks`, `/api/media/*`, `/api/refresh`, `/api/work/scan`) are **strings** matching `^(\d{6,8}|d_?\d+)$` — DLsite ids are already RJ-padded digit strings, Fanza ids are `d`-prefixed and underscore-free. `workIdParam`/`workIdBody`/`workIdQuery` in `routes/utils/validate.js` validate them and sanitize the legacy `d_` spelling away, so a stale PWA cache or an old bookmark (`/work/d_215444`) keeps resolving after the migration. Label-id params (`/api/:fields/:id/works`) are UUID strings.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -338,7 +359,7 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/auth/me` | POST | Log in; sets the session cookie, returns `{ user, session }` |
 | `/api/auth/logout` | POST | Destroy the server-side session and clear the cookie |
 | `/api/works` | GET | List/search works (supports pagination, sort, filter) |
-| `/api/search` | GET | Keyword search
+| `/api/search` | GET | Keyword search — `keyword` supports the advanced filter syntax (§2.3b), e.g. `va:"name$" -tag:NTR` |
 | `/api/:fields/:id/works` | GET | Works filtered
 | `/api/work/:id` | GET | Get work metadata + playback state |
 | `/api/work/:id/memo` | GET | Get work memo incl. lazily-computed content hashes (`{ contentHash: { relPath: contentHash } }`). Only endpoint that reads audio file bytes (CRC32 via zlib, mtime-invalidated, cached in `t_work.memo.contentHash`). Frontend fetches after tree renders and merges hashes onto nodes by relPath. |
@@ -413,6 +434,8 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 - **Linting:** ESLint (node plugin)
 - **Tests:** Located in `test/` directory:
   - `edit-metadata.js` — covers the `PUT /api/work/:id` flow and `db.editWorkMetadata` (uses shared `db-test.sqlite3` singleton)
+  - `search-query.js` — advanced search parser + `getWorksByKeyWord` behaviour (builds its own throwaway `db-search-test.sqlite3`)
+  - `work-id.js` — id canonicalization, cover/image file naming, `getFolderList` work-code detection, and migration `20260828000000` up/down
   - `benchmark.js` — DB query benchmark; Skips if `backend/sqlite/db.sqlite3` is missing/empty;
 - **Run:** `npm test` (sets `NODE_ENV=test`)
 

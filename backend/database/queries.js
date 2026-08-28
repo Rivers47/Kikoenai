@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { nameToUUID } = require('../scraper/utils');
 const { canonicalizeTagName } = require('../scraper/tag-aliases');
 const { canonicalizeVaName } = require('../scraper/va-aliases');
+const { parseSearchQuery, RELATION_FIELDS } = require('./search-query');
 
 /**
  * Format ID: pad DLsite numeric ids to RJ form (6 or 8 digits).
@@ -824,6 +825,82 @@ const makeQueries = (knex) => {
    * @param {Number} [opts.seed]
    * @returns {Promise<{works: Object[], totalCount: Array<{count: number}>}>}
    */
+  /**
+   * Subquery selecting the ids of the labels in `table` whose name matches the
+   * term. LIKE (not '=') even for an anchored term, so that matching stays
+   * ASCII-case-insensitive the way substring matching already is.
+   * @param {String} table - 't_circle' | 't_tag' | ...
+   * @param {{value: String, exact: Boolean}} term
+   */
+  const labelIdsMatching = (table, term) => knex(table).select('id')
+    .where('name', 'like', term.exact ? term.value : `%${term.value}%`);
+
+  /**
+   * Restrict to one work id when the text looks like a Fanza cid or a DLsite
+   * code (RJ123456 / bare digits).
+   *
+   * A Fanza cid may be typed with or without the underscore — `d215444` is the
+   * form to prefer in a search, since an unquoted `_` stands for a space (see
+   * search-query.js) — and both canonicalize to the stored `d_215444`. The
+   * underscore-free spelling is only recognised as a whole term, or a title
+   * token such as `CD2` would be read as a work code; the underscore form
+   * still matches as a substring, the way it always did (`d_215444.zip`).
+   * @returns {Boolean} whether a code was recognised (and a clause applied).
+   */
+  const applyWorkIdText = (qb, text) => {
+    const fanzaMatch = text.match(/^d_?(\d+)$/i) || text.match(/d_(\d+)/i);
+    const rjMatch = text.match(/(?:rj)?(\d{6,8})/i);
+    if (fanzaMatch) {
+      qb.where('t_work.id', '=', `d${fanzaMatch[1]}`);
+    } else if (rjMatch) {
+      qb.where('t_work.id', '=', formatID(parseInt(rjMatch[1], 10)));
+    } else {
+      return false;
+    }
+    return true;
+  };
+
+  /**
+   * Apply one parsed search term (see database/search-query.js) as a clause on
+   * `qb`. Negation is handled by the caller, which wraps this in whereNot.
+   * @param {import('knex').Knex.QueryBuilder} qb
+   * @param {{field: ?String, value: String, exact: Boolean}} term
+   */
+  const applySearchTerm = (qb, term) => {
+    const relation = RELATION_FIELDS[term.field];
+    if (relation) {
+      qb.whereIn('t_work.id', knex(relation.relTable).select('work_id')
+        .whereIn(relation.key, labelIdsMatching(relation.nameTable, term)));
+      return;
+    }
+    if (term.field === 'circle') {
+      qb.whereIn('t_work.circle_id', labelIdsMatching('t_circle', term));
+      return;
+    }
+    if (term.field === 'title') {
+      qb.where('t_work.title', 'like', term.exact ? term.value : `%${term.value}%`);
+      return;
+    }
+    if (term.field === 'id') {
+      if (!applyWorkIdText(qb, term.raw)) qb.where('t_work.id', 'like', `%${term.raw}%`);
+      return;
+    }
+
+    // No namespace: a work code, otherwise every metadata field at once
+    if (applyWorkIdText(qb, term.raw)) return;
+
+    const [tags, vas, illustrators, scriptWriters, series, authors] =
+      ['tag', 'va', 'illustrator', 'script_writer', 'series', 'author'].map((field) => {
+        const rel = RELATION_FIELDS[field];
+        return knex(rel.relTable).select('work_id')
+          .whereIn(rel.key, labelIdsMatching(rel.nameTable, term));
+      });
+
+    qb.where('t_work.title', 'like', term.exact ? term.value : `%${term.value}%`)
+      .orWhereIn('t_work.circle_id', labelIdsMatching('t_circle', term))
+      .orWhereIn('t_work.id', tags.union([vas, illustrators, scriptWriters, series, authors]));
+  };
+
   const getWorksByKeyWord = async ({keyword, username = 'admin', nsfw = 0, order = 'release', sort = 'desc', limit, offset, seed} = {}) => {
     let coreQ = knex('t_work')
       .join('t_circle', 't_circle.id', 't_work.circle_id')
@@ -835,35 +912,12 @@ const makeQueries = (knex) => {
         't_work.rate_count', 't_work.rate_average_2dp',
         't_work.rate_count_detail', 't_work.rank');
 
-    // Detect Fanza cid (d_XXXXXX) or RJ code
-    const fanzaMatch = keyword.match(/(d_\d+)/i);
-    const rjMatch = keyword.match(/(?:rj)?(\d{6,8})/i);
-    if (fanzaMatch) {
-      const fanzaId = fanzaMatch[1];
-      coreQ = coreQ.where('t_work.id', '=', fanzaId);
-    } else if (rjMatch) {
-      const digits = rjMatch[1];
-      const paddedId = formatID(parseInt(digits, 10));
-      coreQ = coreQ.where('t_work.id', '=', paddedId);
-    } else {
-      const circleIdQuery = knex('t_circle').select('id').where('name', 'like', `%${keyword}%`);
-      const tagIdQuery = knex('t_tag').select('id').where('name', 'like', `%${keyword}%`);
-      const vaIdQuery = knex('t_va').select('id').where('name', 'like', `%${keyword}%`);
-      const illustratorIdQuery = knex('t_illustrator').select('id').where('name', 'like', `%${keyword}%`);
-      const scriptWriterIdQuery = knex('t_script_writer').select('id').where('name', 'like', `%${keyword}%`);
-      const seriesIdQuery = knex('t_series').select('id').where('name', 'like', `%${keyword}%`);
-
-      const workIdQuery = knex('r_tag_work').select('work_id').where('tag_id', 'in', tagIdQuery).union([
-        knex('r_va_work').select('work_id').where('va_id', 'in', vaIdQuery),
-        knex('r_illustrator_work').select('work_id').where('illustrator_id', 'in', illustratorIdQuery),
-        knex('r_script_writer_work').select('work_id').where('script_writer_id', 'in', scriptWriterIdQuery),
-        knex('r_series_work').select('work_id').where('series_id', 'in', seriesIdQuery),
-      ]);
-
-      coreQ = coreQ
-        .where('t_work.title', 'like', `%${keyword}%`)
-        .orWhere('t_work.circle_id', 'in', circleIdQuery)
-        .orWhere('t_work.id', 'in', workIdQuery);
+    // Each parsed term is a separate, parenthesised AND clause, so the nsfw
+    // filter below can never be swallowed by an OR group.
+    for (const term of parseSearchQuery(keyword)) {
+      coreQ = term.negate
+        ? coreQ.whereNot(function () { applySearchTerm(this, term); })
+        : coreQ.where(function () { applySearchTerm(this, term); });
     }
 
     coreQ = nsfwFilter(nsfw, coreQ);

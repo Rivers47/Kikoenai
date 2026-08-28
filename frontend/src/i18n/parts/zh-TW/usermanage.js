@@ -1,0 +1,17 @@
+export default {
+  changeAdminPassword: '修改管理員密碼',
+  newPassword: '新密碼',
+  confirmPassword: '確認密碼',
+  passwordMinLength: '密碼長度至少為 5',
+  passwordsDoNotMatch: '兩次密碼輸入不一致',
+  change: '修改',
+  addNewUser: '新增使用者',
+  userGroup: '使用者群組',
+  username: '使用者名稱',
+  usernameMinLength: '使用者名稱長度至少為 5',
+  usernameExists: '該名稱已存在，使用者名稱不能重複',
+  password: '密碼',
+  allUsers: '所有使用者',
+  confirmDeleteUsers: '確認刪除選取的使用者？',
+  selectedRecords: '已選取 {count} 筆記錄，共 {total} 筆',
+}

@@ -94,14 +94,19 @@ export default {
       const fontSize = fontScale * Math.round(Math.sqrt((cvs.width * cvs.height) / expectCharCount))
 
       const isDarkMode = this.$q.dark.isActive;
-      const themeVar = (name) => getComputedStyle(document.body).getPropertyValue(name).trim()
+      const bodyStyle = getComputedStyle(document.body)
+      const themeVar = (name) => bodyStyle.getPropertyValue(name).trim()
 
       // background
       ctx.clearRect(0, 0, cvs.width, cvs.height)
       ctx.fillStyle = themeVar('--surface-container') || (isDarkMode ? '#1E1F25' : '#FFFFFF')
       ctx.fillRect(0, 0, cvs.width, cvs.height)
 
-      ctx.font = `bold ${fontSize}px "-apple-system", "BlinkMacSystemFont", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", "Helvetica", "Arial", "sans-serif", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"`
+      // A canvas gets no cascade, so sample the app's own stack off <body>
+      // rather than hardcoding one. The old literal led with PingFang SC /
+      // Hiragino Sans GB — both Simplified-Chinese faces — which preempted
+      // fallback and drew Japanese kanji with Chinese glyph shapes.
+      ctx.font = `bold ${fontSize}px ${bodyStyle.fontFamily || 'sans-serif'}`
       ctx.fillStyle = themeVar('--q-accent') || '#745470'
 
       // 可绘制参数

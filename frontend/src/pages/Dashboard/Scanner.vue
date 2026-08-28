@@ -104,7 +104,7 @@
 
                   <q-item-section>
                     <q-item-label v-if="item.logs.length > 0" class="ellipsis">{{item.logs[item.logs.length - 1].message}}</q-item-label>
-                    <q-item-label caption>{{item.rjcode.startsWith('d_') ? item.rjcode : `RJ${item.rjcode}`}}</q-item-label>
+                    <q-item-label caption>{{ isFanzaId(item.rjcode) ? item.rjcode : `RJ${item.rjcode}` }}</q-item-label>
                   </q-item-section>
                 </template>
                 
@@ -145,7 +145,7 @@
                     </q-item-label>
 
                     <q-item-label caption class="text-white">
-                      {{item.rjcode.startsWith('d_') ? item.rjcode : `RJ${item.rjcode}`}}
+                      {{ isFanzaId(item.rjcode) ? item.rjcode : `RJ${item.rjcode}` }}
                     </q-item-label>
                   </q-item-section>
                 </template>
@@ -169,6 +169,7 @@
 
 <script>
 import NotifyMixin from '../../mixins/Notification.js'
+import { isFanzaId } from 'src/utils'
 
 export default {
   name: 'Scanner',
@@ -188,6 +189,8 @@ export default {
   },
 
   methods: {
+    isFanzaId, // template: Fanza ids print as-is, DLsite ids get the RJ prefix
+
     cleanRerun() {
       this.tasks = []
       this.failedTasks = []
@@ -263,7 +266,7 @@ export default {
   computed: {
     allLogs () {
       const resultLogs = this.results.map(res => {
-        const prefix = res.rjcode.startsWith('d_') ? '' : 'RJ'
+        const prefix = isFanzaId(res.rjcode) ? '' : 'RJ'
         const code = `${prefix}${res.rjcode}`
         const count = res.count
         if (res.result === 'added') {

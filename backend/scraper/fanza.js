@@ -1,6 +1,7 @@
 const cheerio = require('cheerio');
 const axios = require('./axios');
 const { nameToUUID } = require('./utils');
+const { canonicalizeWorkId, fanzaCid } = require('../work-id');
 
 // The ジャンル row mixes in storefront section and sale-status markers that
 // carry no genre information; skip them.
@@ -8,14 +9,16 @@ const IGNORED_TAGS = new Set(['旧作', '新作', '成人向け', '男性向け'
 
 /**
  * Scrape work metadata from Fanza (DMM) doujin detail page.
- * @param {string} cid Content ID, e.g. 'd_215444'
+ * @param {string} cid Work id in either spelling, e.g. 'd215444' or 'd_215444'.
+ *        The detail page is addressed by Fanza's own underscore form; the
+ *        returned metadata carries the canonical id (see work-id.js).
  * @returns {Promise<Object>} Work metadata object.
  */
 const scrapeWorkMetadataFromFanza = (cid) => new Promise((resolve, reject) => {
-  const url = `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${cid}/`;
+  const url = `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${fanzaCid(cid)}/`;
 
   const work = {
-    id: cid,
+    id: canonicalizeWorkId(cid),
     title: '',
     circle: {},
     nsfw: true,

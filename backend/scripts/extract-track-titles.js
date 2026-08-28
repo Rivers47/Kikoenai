@@ -30,7 +30,7 @@
  * Usage:
  *   node scripts/extract-track-titles.js RJ01234567 --dry-run  # inspect only
  *   node scripts/extract-track-titles.js 01234567              # same work, bare id
- *   node scripts/extract-track-titles.js d_215444 --force      # overwrite existing
+ *   node scripts/extract-track-titles.js d215444 --force       # overwrite existing
  */
 
 const path = require('path');
@@ -40,12 +40,13 @@ const { hideBin } = require('yargs/helpers');
 const db = require('../database/db');
 const { config } = require('../config');
 const { getTrackList, formatID } = require('../filesystem/utils');
+const { isFanzaId, canonicalizeWorkId } = require('../work-id');
 
 const argv = yargs(hideBin(process.argv))
   .usage('$0 <workId> [options]')
   .command('$0 <workId>', 'Extract track titles for one work', y => y.positional('workId', {
     type: 'string',
-    description: "Work id: RJ01234567, 01234567, or Fanza d_215444",
+    description: "Work id: RJ01234567, 01234567, or Fanza d215444",
   }))
   .option('dry-run', { type: 'boolean', description: 'Print, do not write' })
   .option('force', { type: 'boolean', description: 'Overwrite titles this work already has' })
@@ -80,14 +81,15 @@ const UNINFORMATIVE = /^(?:track|trk|tr|no|#|＃)?[\s._\-–—]*[0-9０-９]{1,
  * page, or the database.
  *
  * t_work.id stores DLsite ids RJ-padded but *without* the RJ prefix ('415278',
- * '01479926'); Fanza ids keep their 'd_' prefix. formatID does the 6/8-digit
- * padding, so an unpadded paste resolves too.
+ * '01479926'); a Fanza id is stored underscore-free ('d215444'), so a cid
+ * copied off DMM ('d_215444') is canonicalized here. formatID does the
+ * 6/8-digit padding, so an unpadded paste resolves too.
  * @param {String} raw
  * @returns {String|null} id as stored in t_work, or null if unparseable
  */
 const normalizeWorkId = (raw) => {
   const trimmed = String(raw).trim();
-  if (/^d_\d+$/i.test(trimmed)) return trimmed.toLowerCase();
+  if (isFanzaId(trimmed)) return canonicalizeWorkId(trimmed.toLowerCase());
 
   const digits = trimmed.replace(/^RJ/i, '');
   if (!/^\d{1,8}$/.test(digits)) return null;
@@ -308,7 +310,7 @@ async function run() {
 
   const workId = normalizeWorkId(argv.workId);
   if (!workId) {
-    throw new Error(`"${argv.workId}" is not a work id. Expected RJ01234567, 01234567 or d_215444.`);
+    throw new Error(`"${argv.workId}" is not a work id. Expected RJ01234567, 01234567 or d215444.`);
   }
   if (workId !== argv.workId) console.log(`(${argv.workId} -> ${workId})`);
 
@@ -323,7 +325,7 @@ async function run() {
   if (!work.description) {
     // Fanza is a dead end, not a "scrape it again" situation: scraper/fanza.js
     // extracts no description at all, so POST /api/refresh would change nothing.
-    if (workId.startsWith('d_')) {
+    if (isFanzaId(workId)) {
       throw new Error(`Work ${workId} is a Fanza work, and the Fanza scraper does not extract descriptions — there is nothing to extract titles from. DLsite works only.`);
     }
     throw new Error(`Work ${workId} has no stored description. Scrape it first: POST /api/refresh/${workId}`);

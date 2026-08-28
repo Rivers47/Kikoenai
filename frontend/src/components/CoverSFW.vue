@@ -40,7 +40,7 @@
 
 <script>
 
-import { formatID } from 'src/utils'
+import { formatID, isFanzaId } from 'src/utils'
 
 export default {
   name: 'CoverSFW',
@@ -84,7 +84,7 @@ export default {
 
     code () {
       const id = String(this.workid)
-      if (id.startsWith('d_')) {
+      if (isFanzaId(id)) {
         return id
       }
       return 'RJ' + id

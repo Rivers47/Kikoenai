@@ -111,6 +111,7 @@
 <script>
 import CoverSFW from 'components/CoverSFW'
 import NotifyMixin from '../mixins/Notification.js'
+import { isFanzaId, fanzaCid } from 'src/utils'
 
 export default {
   name: 'WorkCard',
@@ -149,11 +150,11 @@ export default {
       return this.metadata.rate_count_detail.slice().sort(compare);
     },
     isFanza() {
-      return String(this.metadata.id).startsWith('d_');
+      return isFanzaId(this.metadata.id);
     },
     sourceLink() {
       if (this.isFanza) {
-        return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${this.metadata.id}/`;
+        return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${fanzaCid(this.metadata.id)}/`;
       }
       return `https://www.dlsite.com/home/work/=/product_id/RJ${this.metadata.id}.html`;
     },

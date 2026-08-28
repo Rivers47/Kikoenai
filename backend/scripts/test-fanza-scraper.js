@@ -2,8 +2,8 @@
  * Manual test for the Fanza scraper.
  *
  * Usage:
- *   node scripts/test-fanza-scraper.js d_215444 [d_XXXXXX ...]
- *   node scripts/test-fanza-scraper.js --dump d_215444
+ *   node scripts/test-fanza-scraper.js d215444 [dXXXXXX ...]
+ *   node scripts/test-fanza-scraper.js --dump d215444
  *
  * Prints every field scraped from the Fanza doujin detail page.
  * Proxy settings from config/config.json (httpProxyHost/httpProxyPort) apply.
@@ -27,12 +27,13 @@ if (args.includes('--no-proxy')) {
 }
 
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
+const { fanzaCid } = require('../work-id');
 
 const dump = args.includes('--dump');
 const ids = args.filter((a) => !a.startsWith('--'));
 
 if (ids.length === 0) {
-  console.error('Usage: node scripts/test-fanza-scraper.js d_215444 [d_XXXXXX ...]');
+  console.error('Usage: node scripts/test-fanza-scraper.js d215444 [dXXXXXX ...]');
   process.exit(1);
 }
 
@@ -68,7 +69,7 @@ const dumpPage = async (id) => {
   const cheerio = require('cheerio');
   const axios = require('../scraper/axios');
 
-  const url = `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${id}/`;
+  const url = `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${fanzaCid(id)}/`;
   const response = await axios.retryGet(url, {
     retry: {},
     headers: { cookie: 'age_check_done=1; dc_doujin_age_check_done=1' },

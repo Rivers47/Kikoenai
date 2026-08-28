@@ -7,7 +7,7 @@ catalog files don't collide.
 ## Locales
 - `zh-CN` — base/complete (fallbackLocale). Always has every key.
 - `en-US`, `ja-JP` — complete, seeded at launch.
-- `zh-TW` — stub, falls back to zh-CN.
+- `zh-TW` — complete.
 
 ## Two translation layers (kept apart)
 1. **Static UI strings** → vue-i18n. Use `$t('scope.key')` in templates, `this.$t(...)` in Options API script.

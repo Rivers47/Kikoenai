@@ -254,6 +254,7 @@ import WriteReview from './WriteReview'
 import EditMetadata from './EditMetadata'
 import NotifyMixin from '../mixins/Notification.js'
 import { mapState } from 'vuex'
+import { isFanzaId, fanzaCid } from 'src/utils'
 
 export default {
   name: 'WorkDetails',
@@ -313,12 +314,12 @@ export default {
     },
 
     isFanza() {
-      return String(this.metadata.id).startsWith('d_');
+      return isFanzaId(this.metadata.id);
     },
 
     sourceLink() {
       if (this.isFanza) {
-        return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${this.metadata.id}/`;
+        return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${fanzaCid(this.metadata.id)}/`;
       }
       return `https://www.dlsite.com/home/work/=/product_id/RJ${this.metadata.id}.html`;
     },

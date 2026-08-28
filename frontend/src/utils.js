@@ -1,11 +1,27 @@
 import axios from "axios";
+
+/**
+ * Work ids are canonical everywhere in the app: DLsite ids are zero-padded
+ * digits, Fanza ids are `d` + digits (`d215444`). Fanza's own underscore form
+ * (`d_215444`) is only used when addressing DMM itself — see backend
+ * `work-id.js`, which owns the same two helpers.
+ */
+export function isFanzaId(id) {
+  return /^d_?\d+$/i.test(String(id));
+}
+
+/** `d215444` → `d_215444`, the content id DMM's own URLs take. */
+export function fanzaCid(id) {
+  return String(id).replace(/^d(\d+)$/i, 'd_$1');
+}
+
 /**
  * 格式化 id，适配 8 位、6 位 id
  * @param {number} id
  * @return {string}
  */
 export function formatID(id) {
-  if (typeof id === 'string') return id; // already in final form ('123456', '01134567', 'd_215444')
+  if (typeof id === 'string') return id; // already in final form ('123456', '01134567', 'd215444')
   if (id >= 1000000) {
     // 大于 7 位数，则补全为 8 位
     id = `0${id}`.slice(-8);

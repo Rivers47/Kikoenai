@@ -269,7 +269,7 @@ Two separate translation layers, kept apart:
 1. **Static UI strings** → `vue-i18n` v9 (legacy mode, Options API). `$t('scope.key')` in templates, `this.$t(...)` in script. The instance is created in `src/i18n/index.js` and registered by `src/boot/i18n.js` (in the `boot` array, `quasar.config.js`).
 2. **Dynamic tag names** → `translateTag(name, locale)` in `src/i18n/tags/index.js`, exposed as `$tTag(name)` via the i18n boot. Tag names are DATA (canonical Japanese from the backend), so they live in hand-maintained JSON maps (`src/i18n/tags/{zh-CN,en-US,zh-TW}.json`), NOT in the vue-i18n catalog. `ja-JP` is the identity (no map). Unmapped tags fall back to the Japanese name.
 
-**Locales:** `zh-CN` (base/`fallbackLocale`, complete), `en-US`, `ja-JP` (complete), `zh-TW` (stub, falls back to `zh-CN`).
+**Locales:** `zh-CN` (base/`fallbackLocale`), `en-US`, `ja-JP`, `zh-TW` — all complete (33 scopes, 345 keys each).
 
 **Catalog layout:** per-scope partial files under `src/i18n/parts/<locale>/<scope>.js` (scope = `.vue` filename lowercased), auto-discovered by `require.context` in `src/i18n/index.js` — adding a partial file is enough; do NOT edit `index.js` per scope. Shared strings live under scope `common` (`parts/<locale>/common.js`). Conventions are documented in `src/i18n/CONVENTIONS.md` (read before editing).
 
@@ -277,7 +277,7 @@ Two separate translation layers, kept apart:
 
 **Language switcher:** a clickable item in the `MainLayout.vue` sidebar (icon `language`) cycles through locales on click, calling `changeLanguage(locale)` from `src/boot/i18n.js`, which updates `vue-i18n`, the Quasar lang pack (`Quasar.lang.set`), and LocalStorage. The dead server `tagLanguage` config and its radio group were **removed** (scrapers always fetch Japanese; tag language is now a display concern, resolved client-side).
 
-**Quasar lang sync:** `src/boot/i18n.js` dynamically imports the matching `quasar/lang/*` pack (`zh-CN`, `en-US`, `ja`; `zh-TW` reuses `zh-CN`) and falls back to `en-US` on load failure. `quasar.config.js` `framework.lang: 'en-US'` remains the build-time default and is overridden at boot.
+**Quasar lang sync:** `src/boot/i18n.js` dynamically imports the matching `quasar/lang/*` pack (`zh-CN`, `en-US`, `ja`, `zh-TW`) and falls back to `en-US` on load failure. `quasar.config.js` `framework.lang: 'en-US'` remains the build-time default and is overridden at boot.
 
 **Tag identity vs display:** the backend stores canonical Japanese tag names (canonicalized via `backend/scraper/tag-aliases.json` — see `backend/AGENTS.md` §2.3). The frontend's tag-translation maps are keyed by that canonical name, so the frontend never deals with renames. Display sites use `$tTag(tag.name)`; the editor (`EditMetadata.vue`) keeps canonical `tag.name` as the stored/bound value.
 
@@ -370,7 +370,7 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 | `/api/review` | GET/PUT/DELETE | `WorkDetails.vue`, `Favourites.vue`, `AudioElement.vue` | Work reviews; the work is identified by a `work_id` body field or query param, not a path segment. PUT with `progressOnly=true` and `autoMark=true` only writes `progress='listened'` if existing is not terminal (listened/replay/postponed). |
 | `/api/review/progress` | DELETE | `WorkDetails.vue` | Clear only `progress` (NULL), preserving rating/review_text. If the row has no rating/review_text, the whole row is deleted. Query `work_id`. |
 | `/api/history` | GET | `Favourites.vue`, `RecentWorks.vue` | List works with playback history. Optional `excludeFinished` (`all`|`listened`, default `listened`). Response items include nullable `progress`. |
-| `/api/search` | GET | `Works.vue` | Keyword search |
+| `/api/search` | GET | `Works.vue` | Keyword search — `keyword` supports E-Hentai style filters (`va:"name$"`, `circle:under_score`, `-tag:NTR`, ANDed); parsed server-side, see `backend/AGENTS.md` §2.3b |
 | `/api/version` | GET | `MainLayout.vue` | Version + update info |
 | `/api/config/admin` | GET/PUT | `Folders.vue`, `Advanced.vue` | Admin config read/write |
 | `/api/credentials/user` | POST/PUT/DELETE | `UserManage.vue` | Create / update / delete a user |
@@ -379,7 +379,7 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 | `/api/refresh/:id` | POST | `WorkDetails.vue` | Re-fetch metadata for one work |
 | `/api/work/scan/:id` | POST | `WorkDetails.vue` | Rescan a single work |
 | `/api/{tags,circles,vas,illustrators,script_writers,seriess}/:id/works` | GET | `List.vue`, `Works.vue` | Works filtered by that entity |
-| `/api/work/:id` | PUT | `EditMetadata.vue` | Manually edit work metadata (admin only). Work id is a string: DLsite RJ-padded (`\d{6,8}`) or Fanza cid (`d_\d+`). |
+| `/api/work/:id` | PUT | `EditMetadata.vue` | Manually edit work metadata (admin only). Work id is a string: DLsite RJ-padded (`\d{6,8}`) or Fanza (`d\d+`, underscore-free — `isFanzaId`/`fanzaCid` in `src/utils.js`; DMM's own `d_215444` only appears in links out to DMM). |
 | `/api/illustrators` | GET | `EditMetadata.vue` | List illustrators (autocomplete) |
 | `/api/script_writers` | GET | `EditMetadata.vue` | List script writers (autocomplete) |
 | `/api/seriess` | GET | `EditMetadata.vue` | List series (autocomplete; irregular plural) |

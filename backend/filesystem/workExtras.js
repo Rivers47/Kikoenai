@@ -15,8 +15,9 @@ const db = require('../database/db');
 const { config } = require('../config');
 const { scrapeWorkReviewsFromDLsite } = require('../scraper/dlsite');
 const { formatID, workImageFileName, saveWorkImageToDisk } = require('./utils');
+const { isFanzaId } = require('../work-id');
 
-const displayIdOf = id => (String(id).startsWith('d_') ? id : formatID(id));
+const displayIdOf = id => (isFanzaId(id) ? id : formatID(id));
 
 const consoleLogger = {
   info: (id, message) => console.log(`[${id}] ${message}`),
@@ -153,7 +154,7 @@ async function saveWorkImages(id, metadata, log = consoleLogger) {
  * @returns {Promise<Number>} Number of reviews stored.
  */
 async function saveWorkReviews(id, log = consoleLogger) {
-  if (String(id).startsWith('d_')) return 0; // Fanza reviews are not scraped
+  if (isFanzaId(id)) return 0; // Fanza reviews are not scraped
 
   const rjcode = formatID(id);
   try {

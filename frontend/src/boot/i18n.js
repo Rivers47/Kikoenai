@@ -13,7 +13,7 @@ const QUASAR_LANG_IMPORT = {
   'zh-CN': () => import('quasar/lang/zh-CN'),
   'en-US': () => import('quasar/lang/en-US'),
   'ja-JP': () => import('quasar/lang/ja'),
-  'zh-TW': () => import('quasar/lang/zh-CN'), // no zh-TW pack; reuse zh-CN
+  'zh-TW': () => import('quasar/lang/zh-TW'),
 }
 
 async function loadQuasarLang(locale) {

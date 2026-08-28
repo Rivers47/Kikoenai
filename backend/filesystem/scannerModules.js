@@ -5,6 +5,7 @@ const LimitPromise = require('limit-promise'); // 限制并发数量
 const axios = require('../scraper/axios.js'); // 数据请求
 const { scrapeWorkMetadataFromDLsite, scrapeWorkMetadataFromDLsiteJson, scrapeDynamicWorkMetadataFromDLsite, scrapeCoverIdForTranslatedWorkFromDLsite } = require('../scraper/dlsite');
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
+const { isFanzaId, fanzaCid } = require('../work-id');
 const { scrapeWorkMetadataFromAsmrOne } = require('../scraper/asmrOne');
 const db = require('../database/db');
 const { createSchema } = require('../database/schema');
@@ -84,8 +85,8 @@ const LOG = {
   },
   task: {
     // 添加作品专门的log记录
-    add(taskId) { // taskId == rjcode or cid, e.g. "443322" or "01134321" or "d_215444"
-      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8 || taskId.startsWith('d_')));
+    add(taskId) { // taskId == rjcode or cid, e.g. "443322" or "01134321" or "d215444"
+      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8 || isFanzaId(taskId)));
       tasks.push({
         rjcode: taskId,
         result: null,
@@ -112,7 +113,7 @@ const LOG = {
       }
     },
     __internal_task__(taskId, level, msg) {
-      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8 || taskId.startsWith('d_')));
+      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8 || isFanzaId(taskId)));
       console[level](`task[${taskId}] log`, msg);
 
       const task = tasks.find(task => task.rjcode === taskId);
@@ -187,12 +188,12 @@ function uniqueFolderListSeparate(arr) {
  * 从 DLsite 或 Fanza 抓取该音声的元数据，并保存到数据库，
  * 返回一个 Promise 对象，处理结果: the inserted metadata object, or 'failed'
  * (callers need metadata.coverUrls for the cover download)
- * @param {string} id work id (e.g. '123456', 'd_215444')
+ * @param {string} id work id (e.g. '123456', 'd215444')
  * @param {string} rootFolderName 根文件夹别名
  * @param {string} dir 音声文件夹相对路径
  */
 async function getMetadata(id, rootFolderName, dir) {
-  const isFanza = String(id).startsWith('d_');
+  const isFanza = isFanzaId(id);
 
   if (isFanza) {
     LOG.task.info(id, '从 Fanza (DMM) 抓取元数据...');
@@ -423,7 +424,7 @@ async function downloadCovers(cover_for_id, types, candidatesFor) {
 
 /**
  * Download cover images from Fanza (DMM) for a Fanza work.
- * @param {String} id Work id (e.g. 'd_215444')
+ * @param {String} id Work id (e.g. 'd215444')
  * @param {Array} types img types: ['main', 'sam', '240x240']
  * @param {Object} [coverUrls] URLs scraped from the work page ({ main, sam }).
  *        The asset path segment varies by content type (digital/doujin,
@@ -431,7 +432,7 @@ async function downloadCovers(cover_for_id, types, candidatesFor) {
  * @returns {Promise<String>} 'added' or 'failed'
  */
 async function getFanzaCoverImage(id, types, coverUrls) {
-  const cid = id; // e.g. d_215444
+  const cid = fanzaCid(id); // DMM asset paths use Fanza's own form, e.g. d_215444
   // The asset path segment varies by content type (digital/voice,
   // digital/cg_game, ...), so the real cover URL only exists on the work
   // page. When the caller has no scraped coverUrls (e.g. re-downloading a
@@ -506,7 +507,7 @@ async function processFolder(folder) {
     .first();
 
   const workId = folder.id;
-  const isFanza = String(workId).startsWith('d_');
+  const isFanza = isFanzaId(workId);
   const coverTypes = ['main', 'sam', '240x240'];
   const count = res['count(*)'];
 
@@ -824,11 +825,11 @@ async function performScan() {
 
 /**
  * 更新音声的动态元数据
- * @param {string} id work id (e.g. '123456', 'd_215444')
+ * @param {string} id work id (e.g. '123456', 'd215444')
  * @param {options = {}} options includeVA, includeTags, refreshAll, etc.
  */
 async function updateMetadata(id, options = {}) {
-  const isFanza = String(id).startsWith('d_');
+  const isFanza = isFanzaId(id);
 
   let scrapeProcessor;
   if (isFanza) {
@@ -904,7 +905,7 @@ async function refreshWorks(query, idColumnName, processor) {
 
   await Promise.all(works.map(async (work) => {
     const workid = work[idColumnName];
-    const displayId = String(workid).startsWith('d_') ? workid : formatID(workid);
+    const displayId = isFanzaId(workid) ? workid : formatID(workid);
     
     const result = (await processor(workid)) === 'failed'
     ? 'failed'
@@ -922,7 +923,7 @@ async function refreshWorks(query, idColumnName, processor) {
 // 扫描一个作品的文件夹中的文件信息
 // 例如音频时长、是否包含歌词文件等
 async function scanWorkFile(work, index, total) {
-  const displayId = String(work.id).startsWith('d_') ? work.id : formatID(work.id);
+  const displayId = isFanzaId(work.id) ? work.id : formatID(work.id);
 
   LOG.main.info(`扫描进度：${index+1}/${total}`);
 

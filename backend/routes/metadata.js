@@ -10,6 +10,7 @@ const { isValidRequest, workIdParam } = require('./utils/validate');
 const { formatID, scrapeWorkMemo, coverFileName } = require('../filesystem/utils');
 const { scrapeWorkMetadataFromDLsite } = require('../scraper/dlsite');
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
+const { isFanzaId } = require('../work-id');
 const { saveWorkImages, saveWorkReviews, skipWorkExtras } = require('../filesystem/workExtras');
 
 // Covers come from DLsite/Fanza and effectively never change, so cache them
@@ -422,7 +423,7 @@ router.post('/refresh/:id',
     const work_id = req.params.id;
     try {
       let metadata;
-      if (String(work_id).startsWith('d_')) {
+      if (isFanzaId(work_id)) {
         metadata = await scrapeWorkMetadataFromFanza(work_id);
       } else {
         metadata = await scrapeWorkMetadataFromDLsite(work_id);

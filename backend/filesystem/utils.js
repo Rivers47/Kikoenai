@@ -9,6 +9,7 @@ const recursiveReaddir = (dir) => {
 const { orderBy } = require('natural-orderby');
 const { joinFragments } = require('../routes/utils/url');
 const { config } = require('../config');
+const { isFanzaId, fanzaCid } = require('../work-id');
 
 const supportedMediaExtList = ['.mp3', '.ogg', '.opus', '.wav', '.aac', '.flac', '.webm', '.mp4', '.m4a', '.mka'];
 const supportedSubtitleExtList = ['.lrc', '.srt', '.ass', ".vtt"]; // '.ass' only support show on file list, not for play lyric
@@ -177,7 +178,7 @@ async function scrapeWorkMemo(work_id, dir, oldMemo) {
 /**
  * Returns list of playable tracks in a given folder. Track is an object
  * containing 'title', 'subtitle' and 'trackId'.
- * @param {String} id Work identifier (e.g. '123456', '01134567', 'd_215444').
+ * @param {String} id Work identifier (e.g. '123456', '01134567', 'd215444').
  * @param {String} dir Work directory (absolute).
  * @param {readMemo} at least a empty object, or { duration: { "relative/path/audio.mp3": 33, "audio2.mp3": 22 }} for storage audio file duration
  */
@@ -380,13 +381,17 @@ async function* getFolderList(rootFolder, current = '', depth = 0, logger = cons
      
       if ((await fs.promises.stat(absolutePath)).isDirectory()) { // 检查是否为文件夹
           const rjMatch = folder.match(/RJ(\d+)/);
-          const fanzaMatch = folder.match(/d_(\d+)/);
+          // Fanza names its folders after the cid (`d_215444`); the
+          // underscore-free spelling is accepted too, but only at a word
+          // boundary and with enough digits that a folder like `Sound_CD1`
+          // cannot be read as a work code.
+          const fanzaMatch = folder.match(/d_(\d+)/) || folder.match(/(?:^|[^a-z0-9])d(\d{4,})/i);
           if (rjMatch) {
             // Found a DLsite work folder
             yield { absolutePath, relativePath, rootFolderName: rootFolder.name, id: formatID(parseInt(rjMatch[1], 10)) };
           } else if (fanzaMatch) {
             // Found a Fanza work folder
-            yield { absolutePath, relativePath, rootFolderName: rootFolder.name, id: 'd_' + fanzaMatch[1] };
+            yield { absolutePath, relativePath, rootFolderName: rootFolder.name, id: 'd' + fanzaMatch[1] };
           } else if (depth + 1 < config.scannerMaxRecursionDepth) {
             // 若文件夹名称中不含有RJ号，就进入该文件夹内部
             // Found a folder that's not a work folder, go inside if allowed.
@@ -407,20 +412,21 @@ async function* getFolderList(rootFolder, current = '', depth = 0, logger = cons
 
 /**
  * Generate the cover filename for a given work id and type.
- * @param {String} id Work id (e.g. '123456', '01134567', 'd_215444')
+ * @param {String} id Work id (e.g. '123456', '01134567', 'd215444')
  * @param {String} type Cover type: 'main', 'sam', '240x240', '360x360'
  * @returns {String} Filename like 'RJ123456_img_main.jpg' or 'd_215444_img_main.jpg'
+ *          (on-disk names keep Fanza's own underscore form — see work-id.js)
  */
 function coverFileName(id, type) {
-  if (String(id).startsWith('d_')) {
-    return `${id}_img_${type}.jpg`;
+  if (isFanzaId(id)) {
+    return `${fanzaCid(id)}_img_${type}.jpg`;
   }
   return `RJ${id}_img_${type}.jpg`;
 }
 
 /**
  * Deletes a work's cover image from disk.
- * @param {String} id Work id (e.g. '123456', '01134567', 'd_215444').
+ * @param {String} id Work id (e.g. '123456', '01134567', 'd215444').
  */
 const deleteCoverImageFromDisk = id => new Promise((resolve, reject) => {
   const types = ['main', 'sam', '240x240', '360x360'];
@@ -441,7 +447,7 @@ const deleteCoverImageFromDisk = id => new Promise((resolve, reject) => {
 /**
  * Saves cover image to disk.
  * @param {ReadableStream} stream Image data stream.
- * @param {String} id Work id (e.g. '123456', '01134567', 'd_215444').
+ * @param {String} id Work id (e.g. '123456', '01134567', 'd215444').
  * @param {String} type img type: ('main', 'sam', 'sam@2x', 'sam@3x', '240x240', '360x360').
  */
 const saveCoverImageToDisk = (stream, id, type) => new Promise((resolve, reject) => {
@@ -462,7 +468,7 @@ const saveCoverImageToDisk = (stream, id, type) => new Promise((resolve, reject)
  * Named by position rather than by the remote basename: description images
  * are served under opaque md5-ish names that collide across works, and the
  * sample slider's own names are only stable while DLsite keeps them.
- * @param {String} id Work id (e.g. '123456', '01134567', 'd_215444')
+ * @param {String} id Work id (e.g. '123456', '01134567', 'd215444')
  * @param {String} kind 'smp' for a sample-slider image, 'part' for one embedded in the description
  * @param {Number} index 1-based position within its kind
  * @param {String} [ext='jpg'] File extension, without the dot
@@ -470,7 +476,7 @@ const saveCoverImageToDisk = (stream, id, type) => new Promise((resolve, reject)
  */
 function workImageFileName(id, kind, index, ext = 'jpg') {
   const safeExt = /^[a-z0-9]{1,5}$/i.test(ext) ? ext.toLowerCase() : 'jpg';
-  const prefix = String(id).startsWith('d_') ? id : `RJ${id}`;
+  const prefix = isFanzaId(id) ? fanzaCid(id) : `RJ${id}`;
   return `${prefix}_img_${kind}${index}.${safeExt}`;
 }
 
@@ -498,10 +504,10 @@ const saveWorkImageToDisk = (stream, fileName) => new Promise((resolve, reject) 
  * by an earlier scrape (a work whose sample count shrank) go too. The match is
  * deliberately narrow — a deployment that points imageFolderDir at the cover
  * folder must not lose its covers here.
- * @param {String} id Work id (e.g. '123456', '01134567', 'd_215444').
+ * @param {String} id Work id (e.g. '123456', '01134567', 'd215444').
  */
 const deleteWorkImagesFromDisk = async (id) => {
-  const prefix = String(id).startsWith('d_') ? id : `RJ${id}`;
+  const prefix = isFanzaId(id) ? fanzaCid(id) : `RJ${id}`;
   const pattern = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_img_(smp|part)\\d+\\.[a-z0-9]+$`, 'i');
 
   let entries;
@@ -529,7 +535,7 @@ const deleteWorkImagesFromDisk = async (id) => {
  * @return {string}
  */
 function formatID(id) {
-  if (typeof id === 'string') return id; // already in final form ('123456', '01134567', 'd_215444')
+  if (typeof id === 'string') return id; // already in final form ('123456', '01134567', 'd215444')
   const n = parseInt(id, 10);
   return (n >= 1000000) ? `0${n}`.slice(-8) : `000000${n}`.slice(-6);
 }

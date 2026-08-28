@@ -2,8 +2,7 @@
 // catalogs under src/i18n/parts/<locale>/ so parallel agents can add files
 // without touching this index.
 //
-// Locales seeded: zh-CN (base/fallback), en-US, ja-JP. zh-TW is a stub that
-// falls back to zh-CN.
+// Locales seeded: zh-CN (base/fallback), en-US, ja-JP, zh-TW — all complete.
 
 import { createI18n } from 'vue-i18n'
 import { LocalStorage } from 'quasar'
@@ -50,7 +49,8 @@ function detectBrowserLocale() {
   const langs = [navigator.language, ...(navigator.languages || [])].filter(Boolean)
   for (const l of langs) {
     if (SUPPORTED_LOCALES.includes(l)) return l
-    // zh-TW / zh-HK / zh-Hant → zh-CN (Traditional falls back to Simplified base)
+    // Traditional variants (zh-Hant / zh-HK / zh-MO) → zh-TW; other zh → zh-CN.
+    if (/^zh\b.*\b(hant|hk|mo|tw)\b/i.test(l.replace(/-/g, ' '))) return 'zh-TW'
     if (/^zh/i.test(l)) return 'zh-CN'
     if (/^ja/i.test(l)) return 'ja-JP'
     if (/^en/i.test(l)) return 'en-US'

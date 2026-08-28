@@ -39,6 +39,9 @@ kikoenai/
 
 ## Quick Start
 
+### Windows
+Download the zip from the release page.  Double click `Kikoenai.bat`. Put your works in `VoiceWork\`.
+When upgrading, copy the exe to the old folder.
 
 ### Container
 
@@ -82,24 +85,26 @@ WantedBy=multi-user.target default.target
 Alternatively, use the provided `compose-example.yaml` with with your container compose tool of choice.
 Edit `/path/to/your/voiceworks` to your folder that contains the voice work files.
 
-The voice-work library stays a separate bind mount: it is your own media, not
-application state, so it does not belong in the data volume.
-
-
-
 The server will be up on port `4545` on the host.
 
+
+### Library Organization
+
+The server scans for folder names containing `RJxxxxxxx` for DLsite works; 
+or `d_xxxxxx` or `dxxxxxx` for Fanza(DMM) works.
+You can configure the search depth in settings.
+
 #### Firefox LNA issue
-If you use a local DNS with a public looking hostname that points at a LAN IP,
-firefox has a bug that causes some LNA issue. The frontend will silently retry
-to fix it. Or you can add the domain to `network.lna.skip-domains` in `about:config`
+Due to a bug in Firefox. If you use a local DNS with a public looking hostname
+that points at a LAN IP, axio could occur. The frontend will silently retry to
+fix it. Or you can add the domain to `network.lna.skip-domains` in `about:config`
 
 ### First Login
 
 On first run, a default administrator account is created: username `admin`,
 password `admin`. 
 
-### Development
+## Development
 
 ```bash
 # Install all dependencies
@@ -136,32 +141,6 @@ npm run dev:frontend   # Frontend only (quasar dev)
 npm run build:frontend # Build frontend only
 ```
 
-### Windows Portable Build
-
-A self-contained Windows distribution that runs without installing Node or ffmpeg:
-the `Kikoenai/` folder bundles Node 24 LTS, Windows-native `sqlite3`, and
-`ffmpeg`/`ffprobe`. Unzip and double-click `Kikoenai.bat`.
-
-**Building (on a Windows host):**
-
-```bash
-npm install
-npm run package:windows   # -> package/dist/Kikoenai-windows-x64-<version>.zip
-```
-
-Or via CI: pushing a `v*` tag runs `.github/workflows/package-windows.yml` on
-`windows-latest` and attaches the zip to a draft GitHub release. `workflow_dispatch`
-builds it manually without tagging.
-
-**First run:** Windows SmartScreen may warn because the build is unsigned — choose
-*More info* → *Run anyway*. Point your voice-work library at a folder via the admin
-panel (config → root folders); `VoiceWork/` next to the launcher is only a default
-fallback.
-
-**Where your data lives:** `config/`, `sqlite/`, `covers/`, `images/`, and the `VoiceWork/`
-fallback are created next to `Kikoenai.bat` (the archive root), matching the
-legacy `pkg` build so migration is a folder copy.
-
 ## Integration
 
 The frontend builds directly into `backend/dist/`, which is served as static content by the Express server. This is configured via `distDir` in `frontend/quasar.config.js`.
@@ -185,7 +164,7 @@ The frontend builds directly into `backend/dist/`, which is served as static con
 - [ ] Migrate frontend to shadcn
 - [ ] metadata cache server to replace hvdb/asmrone
 - [x] Smarter Play status, hide finished work in history
-- [ ] Advanced search
+- [x] Advanced search
 
 ## License
 
