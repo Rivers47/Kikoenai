@@ -9,13 +9,11 @@
 :root {
   --sfw-badge-bg: #E6F7D6;
   --sfw-badge-text: #56842A;
-  --lyrics-bg: rgba(158, 158, 158, 0.7); // translucent pill behind lyrics
   --rating-star: #F2C037; // bright amber for rating stars
 }
 body.body--dark {
   --sfw-badge-bg: #33511D;
   --sfw-badge-text: #C5E8A5;
-  --lyrics-bg: rgba(97, 97, 97, 0.8);
   --rating-star: #FFD54F; // brighter on dark backgrounds
 }
 

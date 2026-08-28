@@ -12,7 +12,7 @@
           class="text-center text-bold ellipsis-2-lines absolute-bottom non-selectable"
           @mousedown="onCursorDown"
           @touchstart="onCursorDown"
-          :class="'text-accent'">
+          :class="'text-on-surface-variant'">
           <div class="lyricBackground">
             <span id="lyric"
               :style="{'font-size': `${fontSize}rem`}">
@@ -159,15 +159,13 @@ export default {
     min-width: 1vw;
     max-width: 90vw;
   }
-  #lyric {
-    text-shadow:1px 1px 2px black;
-  }
+  
   .lyricBackground {
     border-radius: 10px;
     padding: 2px 4px;
     transition: 0.5s;
     backdrop-filter: blur(4px);
-    background-color: var(--lyrics-bg);
+    background-color: rgb(var(--surface-container-highest-rgb) / 0.75);
   }
   .fontSizeBar {
     width: 300px;
