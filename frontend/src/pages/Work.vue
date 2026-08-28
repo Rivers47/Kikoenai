@@ -157,10 +157,14 @@ export default {
     },
 
     resumeMetadataPlayHistory() {
-      // Position comes from trackProgress, same as WorkTree -- history state
-      // carries only the queue and index.
-      const item = this.metadata.state.queue[this.metadata.state.index]
-      const progress = item && item.contentHash ? this.trackProgress[item.contentHash] : null
+      // Position comes from state.seconds, which GET /api/work/:id resolved
+      // from t_track_progress -- the same value the "played to" line shows.
+      // Not this.trackProgress: it is keyed by the parked queue item's
+      // contentHash, which history rows written before per-track progress do
+      // not carry, and it only arrives with GET /api/tracks/:id, which lists
+      // the work directory and so resolves after the metadata request that
+      // renders this button. Either way the lookup missed and resumed at 0.
+      // -1 is the "nothing to resume" sentinel for rows with no position yet.
 
       // 以最小化形式打开播放器
       this.$store.commit('AudioPlayer/TOGGLE_HIDE')
@@ -170,7 +174,7 @@ export default {
         queue: this.metadata.state.queue,
         index: this.metadata.state.index,
         resetPlaying: false,
-        resumeHistorySeconds: progress ? progress.seconds : -1,
+        resumeHistorySeconds: this.metadata.state.seconds ?? -1,
         workLastTrackId: this.metadata.state.queue.length ? (this.metadata.state.queue[this.metadata.state.queue.length - 1].trackId || this.metadata.state.queue[this.metadata.state.queue.length - 1].hash) : ''
       })
     }
