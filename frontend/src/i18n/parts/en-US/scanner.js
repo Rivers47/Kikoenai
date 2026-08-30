@@ -1,7 +1,7 @@
 export default {
   killScan: 'Kill scan process',
-  scanLibrary: 'Scan library',
-  refreshLibrary: 'Refresh library info',
+  scanLibrary: 'Scan for new works',
+  refreshLibrary: 'Refresh all metadata',
   scanFileChanges: 'Scan file changes',
   processing: 'Processing',
   failed: 'Failed',

@@ -1,7 +1,7 @@
 export default {
   killScan: 'スキャンプロセスを終了',
   scanLibrary: 'ライブラリをスキャン',
-  refreshLibrary: 'ライブラリ情報を更新',
+  refreshLibrary: 'メタデータを更新',
   scanFileChanges: 'ファイル変更をスキャン',
   processing: '処理中',
   failed: '失敗',
