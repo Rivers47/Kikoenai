@@ -1,4 +1,5 @@
 const express = require('express');
+const { config } = require('../config');
 const router = express.Router();
 
 // Health check endpoint
@@ -9,7 +10,7 @@ router.get('/health', (req, res) => {
 // Eliminate error message from old PWA
 // Will be deleted in the future
 router.get('/me', (req, res) => {
-  res.redirect('/api/auth/me');
+  res.redirect(`${config.basePath}/api/auth/me`);
 });
 
 router.use('/auth', require('./auth'));

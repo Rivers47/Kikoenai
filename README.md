@@ -99,6 +99,67 @@ Due to a bug in Firefox. If you use a local DNS with a public looking hostname
 that points at a LAN IP, axio could occur. The frontend will silently retry to
 fix it. Or you can add the domain to `network.lna.skip-domains` in `about:config`
 
+### Serving under a sub-path
+
+By default Kikoenai expects to own the root of whatever hostname it is reached
+on — `https://example.com/` or `https://kikoenai.example.com/`. Set `basePath`
+in `config/config.json` to put it under a path instead, so it can share a
+hostname with the other services on the same box:
+
+```json
+{
+  "basePath": "/kikoeru"
+}
+```
+
+The app is then at `https://example.com/kikoeru/`, and so are its API, its
+Socket.IO endpoint and its session cookie. Leave `basePath` empty (the default)
+to keep serving from the root; nothing about an existing install changes.
+
+Multi-segment prefixes (`/apps/kikoeru`) work too. Leading and trailing slashes
+are optional — `kikoeru`, `/kikoeru` and `/kikoeru/` all mean the same thing.
+
+**Your reverse proxy must pass the prefix through, not strip it.** Kikoenai
+generates absolute URLs for its own assets, so it has to see the same paths the
+browser does. Both of these are correct:
+
+```nginx
+# nginx — note the upstream has no trailing slash, which is what stops
+# nginx from rewriting /kikoeru/api/... down to /api/...
+location /kikoeru/ {
+    proxy_pass http://127.0.0.1:8888;
+    proxy_http_version 1.1;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    # WebSocket upgrade for Socket.IO (the scanner's progress log)
+    proxy_set_header Upgrade    $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+```
+
+```caddyfile
+# Caddy — handle_path would strip the prefix, so use handle
+example.com {
+    handle /kikoeru/* {
+        reverse_proxy 127.0.0.1:8888
+    }
+}
+```
+
+Two things are deliberately *not* prefixed for you:
+
+- `offloadStreamPath` / `offloadDownloadPath`, when `offloadMedia` is on. Those
+  name virtual directories inside your reverse proxy rather than routes in this
+  app, so write the prefix into them yourself if that is where you mounted the
+  library.
+- `allowedHosts` is a list of hostnames and has nothing to do with paths.
+
+If you move an existing install from the root to a sub-path, browsers that
+already installed the PWA will keep a service worker registered at the old
+scope. Unregister it from the browser's devtools, or just reinstall the app
+from the new URL.
+
 ### First Login
 
 On first run, a default administrator account is created: username `admin`,

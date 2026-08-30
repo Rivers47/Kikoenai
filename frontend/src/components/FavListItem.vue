@@ -105,6 +105,7 @@
 <script>
 import WriteReview from './WriteReview'
 import NotifyMixin from '../mixins/Notification.js'
+import { apiUrl } from 'src/base-path'
 
 export default {
   name: 'FavListItem',
@@ -151,7 +152,7 @@ export default {
     },
 
     coverUrl () {
-      return this.workid ? `/api/cover/${this.workid}?type=240x240` : ""
+      return this.workid ? apiUrl(`/api/cover/${this.workid}?type=240x240`) : ""
     },
   },
 

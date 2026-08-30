@@ -32,7 +32,10 @@ const sessionCookieOptions = () => ({
   // where an unconditional Secure flag would make login silently fail. Behind a
   // TLS-terminating reverse proxy, `false` is merely less strict, not broken.
   secure: config.httpsEnabled,
-  path: '/',
+  // Scoped to where the app is actually served from, so an install under
+  // config.basePath does not hand its session cookie to the other services
+  // sharing the hostname. '/' when the app owns the whole host, as before.
+  path: config.basePath || '/',
 });
 
 // Create a session and return the secret handed to the client (only its hash is stored)

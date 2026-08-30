@@ -305,6 +305,7 @@ import SleepMode from 'components/SleepMode'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import { formatSeconds } from '../utils'
 import { debounce } from 'quasar'
+import { apiUrl } from 'src/base-path'
 
 export default {
   name: 'AudioPlayer',
@@ -440,7 +441,7 @@ export default {
       }
       // 回退：按 workId 取标准封面。
       if (this.playWorkId) {
-        return `/api/cover/${this.playWorkId}`
+        return apiUrl(`/api/cover/${this.playWorkId}`)
       }
       return ""
     },
@@ -623,7 +624,7 @@ export default {
 
     samCoverUrl (trackId) {
       const id = trackId || ''
-      return id ? `/api/cover/${id.split('/')[0]}?type=sam` : ""
+      return id ? apiUrl(`/api/cover/${id.split('/')[0]}?type=sam`) : ""
     },
 
     onClickTrack (index) {
@@ -697,7 +698,7 @@ export default {
         }
       }
 
-      fetch('/api/history', {
+      fetch(apiUrl('/api/history'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -715,7 +716,7 @@ export default {
       const seconds = this.currentTime
       const duration = file.duration
       const completed = duration > 0 && seconds >= 0.95 * duration
-      fetch('/api/track-progress', {
+      fetch(apiUrl('/api/track-progress'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

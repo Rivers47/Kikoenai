@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import routes from './routes'
+import { basePath } from '../base-path'
 
 /*
  * If not building with SSR mode, you can
@@ -27,10 +28,12 @@ export default function (/* { store, ssrContext } */) {
     },
     routes,
 
-    // Leave these as they are and change in quasar.conf.js instead!
-    // quasar.conf.js -> build -> vueRouterMode
-    // quasar.conf.js -> build -> publicPath
-    history: createWebHistory(process.env.VUE_ROUTER_BASE)
+    // Not process.env.VUE_ROUTER_BASE: Quasar derives that from
+    // build.publicPath, which in production is the placeholder the backend
+    // rewrites only inside index.html. The prefix the router needs is the
+    // resolved one the server injected. quasar.conf.js -> build -> vueRouterMode
+    // still owns the history/hash choice.
+    history: createWebHistory(`${basePath}/`)
   })
 
   return Router

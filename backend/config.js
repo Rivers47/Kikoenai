@@ -37,6 +37,7 @@ if (process.env.IS_DOCKER && dataRoot !== appDir) {
 }
 const configFolderDir = path.join(dataRoot, 'config');
 const configPath = path.join(configFolderDir, 'config.json');
+const { normalizeBasePath } = require('./base-path');
 const pjson = require('./package.json');
 const compareVersions = require('compare-versions');
 
@@ -102,6 +103,19 @@ const defaultConfig = {
   httpProxyHost: '',
   httpProxyPort: 0,
   listenPort: 8888,
+  // Serve everything -- WebApp, /api and /socket.io -- under a sub-path, so
+  // the app can share a hostname with other services instead of taking a
+  // subdomain of its own: "/kikoeru" puts it at https://example.com/kikoeru/.
+  // Empty means the root of the hostname, which is the default and what every
+  // existing install already does.
+  //
+  // The reverse proxy must pass the prefix through rather than strip it: the
+  // browser and this server have to agree on one set of URLs. See README.md.
+  //
+  // Not applied to offloadStreamPath/offloadDownloadPath below -- those address
+  // the reverse proxy's own virtual directories, so write the prefix into them
+  // yourself if that is where you mounted the library.
+  basePath: '',
   blockRemoteConnection: false,
   // Hostnames (no port) this server should answer requests for, in addition to
   // localhost/loopback/private-LAN addresses, which are always allowed. Defends
@@ -144,6 +158,7 @@ const setConfig = (newConfig, writeConfigToFile = !process.env.FREEZE_CONFIG_FIL
   // Re-resolve after the merge: newConfig carries whatever was on disk or came
   // from the admin panel, which may be relative or pinned to the old data root.
   resolveDataFolders();
+  resolveBasePath();
   if (writeConfigToFile) {
     fs.writeFileSync(configPath, JSON.stringify(config, null, "\t"));
   }
@@ -205,6 +220,16 @@ const resolveDataFolders = () => {
   config.databaseFolderDir = resolveDataFolder(config.databaseFolderDir, 'sqlite', config.dbUseDefaultPath);
 };
 
+/**
+ * Normalize the URL prefix in place, so every reader can just concatenate it
+ * and so the tidied value is what gets written back to config.json.
+ * Must run after ANY assignment into `config`, for the same reason
+ * resolveDataFolders() does.
+ */
+const resolveBasePath = () => {
+  config.basePath = normalizeBasePath(config.basePath);
+};
+
 // Get or use default value
 const readConfig = () => {
   config = JSON.parse(fs.readFileSync(configPath));
@@ -228,6 +253,7 @@ const readConfig = () => {
   // Data folder paths: relative to dataRoot, or absolute, or forced to the
   // default. `useDefault` wins, then a relative path, then an absolute one.
   resolveDataFolders();
+  resolveBasePath();
 
   if (process.env.NODE_ENV === 'production' || config.production) {
     config.production = true;

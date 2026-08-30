@@ -333,9 +333,13 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
       offloadDownloadUrl = offloadDownloadUrl.replace(/\\/g, '/');
     }
   
-    const textBaseUrl = '/api/media/stream/';
-    const mediaStreamBaseUrl = '/api/media/stream/';
-    const mediaDownloadBaseUrl = '/api/media/download/';
+    // These go to the browser as <audio>/<a href> sources, so they carry the
+    // deploy prefix. The offload URLs above deliberately do not: they address
+    // the reverse proxy's own virtual directories, which the operator names in
+    // offloadStreamPath/offloadDownloadPath.
+    const textBaseUrl = `${config.basePath}/api/media/stream/`;
+    const mediaStreamBaseUrl = `${config.basePath}/api/media/stream/`;
+    const mediaDownloadBaseUrl = `${config.basePath}/api/media/download/`;
     const textStreamBaseUrl = textBaseUrl + track.trackId;    // Handle charset detection internally with jschardet
     const textDownloadBaseUrl = config.offloadMedia ? offloadDownloadUrl : mediaDownloadBaseUrl + track.trackId;
     const mediaStreamUrl = config.offloadMedia ? offloadStreamUrl : mediaStreamBaseUrl + track.trackId;

@@ -32,6 +32,7 @@ import { MAX_LYRIC_STREAMS } from 'src/utils/lyrics'
 import { convert_srt_vtt_to_lrc_streams, mergeLyricStreams } from 'src/utils/subtitles'
 import { debounce } from 'quasar';
 import Plyr from 'plyr'
+import { apiUrl } from 'src/base-path'
 
 // Every media session action this component registers; teardown walks this
 // list to unregister them one by one.
@@ -68,7 +69,7 @@ export default {
       if (this.currentPlayingFile.mediaStreamUrl) {
         return `${this.currentPlayingFile.mediaStreamUrl}`
       } else if (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) {
-        return `/api/media/stream/${this.currentPlayingFile.trackId || this.currentPlayingFile.hash}`
+        return apiUrl(`/api/media/stream/${this.currentPlayingFile.trackId || this.currentPlayingFile.hash}`)
       } else {
         return ""
       }
@@ -675,7 +676,7 @@ export default {
       if (type == "visualPlayerCover") {
         return this.visualPlayerCoverUrl || ""
       } else if (workId != 0) {
-        return `/api/cover/${workId}?type=${type}`
+        return apiUrl(`/api/cover/${workId}?type=${type}`)
       } else {
         return ""
       }

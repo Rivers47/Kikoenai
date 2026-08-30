@@ -6,7 +6,12 @@ const { config } = require('./config');
 const { SESSION_COOKIE, getSession } = require('./auth/session');
 
 const initSocket = (server) => {
-  const io = socket(server);
+  // Socket.IO attaches to the HTTP server, not to Express, so it never sees the
+  // router config.basePath is mounted on -- it has to be told the prefix. The
+  // client mirrors this in src/boot/socket.io.js. Empty basePath gives
+  // '/socket.io', which is the library default and what every existing install
+  // is already talking to.
+  const io = socket(server, { path: `${config.basePath}/socket.io` });
   if (config.auth) {
     io.use((socket, next) => {
       // The session id is in an HttpOnly cookie, which the browser attaches
