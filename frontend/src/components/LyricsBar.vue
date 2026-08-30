@@ -1,6 +1,6 @@
 <template>
     <div
-      v-if="currentLyric !== ''"
+      v-if="hasVisibleLyric"
       class="lyric-container"
       ref="draggable"
     >
@@ -9,14 +9,24 @@
         </div>
         <div
           id="lyricsBar"
-          class="text-center text-bold ellipsis-2-lines absolute-bottom non-selectable"
+          class="text-center text-bold absolute-bottom non-selectable"
           @mousedown="onCursorDown"
           @touchstart="onCursorDown"
           :class="'text-on-surface-variant'">
           <div class="lyricBackground">
-            <span id="lyric"
-              :style="{'font-size': `${fontSize}rem`}">
-              {{currentLyric}}
+            <!-- One line per speaker, stacked. Speakers with nothing to say
+                 right now are dropped rather than left as blank rows, and the
+                 bar grows upwards, so the baseline never moves. -->
+            <span
+              v-for="(line, index) in currentLyrics"
+              v-show="line !== ''"
+              :key="index"
+              class="lyric-line ellipsis-2-lines"
+              :style="{'font-size': `${fontSize}rem`, color: lyricStreamColor(index, currentLyrics.length)}">
+              <!-- Only WebVTT voice spans name their speaker; the other
+                   formats have no such field and render text alone. -->
+              <span v-if="lyricSpeakers[index]" class="lyric-speaker">{{lyricSpeakers[index]}}</span>
+              {{line}}
             </span>
           </div>
         </div>
@@ -25,14 +35,20 @@
 
 <script>
 import { mapState } from 'vuex'
+import { lyricStreamColor } from 'src/utils/lyrics'
 
 export default {
   name: 'LyricsBar',
 
   computed: {
     ...mapState('AudioPlayer', [
-      'currentLyric'
+      'currentLyrics',
+      'lyricSpeakers'
     ]),
+
+    hasVisibleLyric () {
+      return this.currentLyrics.some(line => line !== '')
+    },
   },
 
   data () {
@@ -57,6 +73,8 @@ export default {
   },
 
   methods: {
+    lyricStreamColor,
+
     showTempSizeBar() {
       // return // debug only
       clearTimeout(this.laterTimer);
@@ -158,6 +176,21 @@ export default {
     position: relative;
     min-width: 1vw;
     max-width: 90vw;
+  }
+
+  /* Block-level so several speakers stack instead of running together on one
+     line; the 2-line clamp is per speaker rather than for the bar as a whole. */
+  .lyric-line {
+    display: block;
+  }
+
+  /* Inline rather than on its own row: the name must not cost a line of height,
+     which the picture-in-picture window (a couple of lines tall) cannot spare.
+     It inherits the speaker's colour and is toned down so the words still lead. */
+  .lyric-speaker {
+    font-size: 0.7em;
+    opacity: 0.75;
+    margin-inline-end: 0.4em;
   }
   
   .lyricBackground {

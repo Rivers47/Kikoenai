@@ -54,7 +54,10 @@
     "npm": ">= 9.0.0"
   },
   "browserslist": [
-    "last 1 version, not dead, ie >= 11"
+    "defaults",
+    "not dead",
+    "iOS >= 15",
+    "Safari >= 15"
   ],
   "eslintIgnore": [
     "dist/*",

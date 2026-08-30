@@ -184,8 +184,11 @@ const mutations = {
   SET_HAS_LYRIC: (state, value) => {
     state.hasLyric = value;
   },
-  SET_CURRENT_LYRIC: (state, line) => {
-    state.currentLyric = line
+  SET_CURRENT_LYRICS: (state, lines) => {
+    state.currentLyrics = lines
+  },
+  SET_LYRIC_SPEAKERS: (state, names) => {
+    state.lyricSpeakers = names
   },
   SET_LYRIC_OFFSET_SECONDS: (state, value) => {
     state.lyricOffsetSeconds = value;

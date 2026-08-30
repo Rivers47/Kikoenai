@@ -217,6 +217,35 @@ All routes mounted under `/api`:
 - Cover images served from `covers/` directory.
 - File listing traverses the work directory and returns track info (name, duration, format).
 
+### 2.8b Multi-speaker lyrics
+
+`routes/utils/lyrics.js` (`findLyricTracks`) resolves which lyric files belong to
+an audio track. For `01 Track.mp3` it accepts, extension case-insensitive:
+
+| Name | Meaning |
+|------|---------|
+| `01 Track.lrc` / `01 Track.mp3.lrc` | the track's only lyric stream (the stem form wins if both exist) |
+| `01 Track.1.lrc`, `01 Track.2.lrc`, … | one stream per speaker |
+
+Extensions rank `.lrc` > `.srt` > `.vtt`; `.ass` is listed in the file tree but
+is never parsed for playback. **When any numbered file exists the numbered set
+wins** and an unnumbered file is ignored, so a whole-track transcript can sit
+beside a per-speaker split without both being drawn. A numbered candidate is
+dropped when a sibling *media* file already owns that name (a folder with both
+`01.mp3` and `01.2.mp3` must not read `01.2.lrc` as speaker 2 of `01.mp3`).
+
+There is no established convention for this: LRC and SRT have no per-line
+speaker field, so several speakers means several files. WebVTT does have one —
+the `<v Name>` voice span — and a single `.vtt` using it is split into
+per-speaker streams by the **frontend** parser instead (`AudioElement.vue`);
+the backend still returns it as one entry. The numbers here are positional only
+and are never shown: a voice span is the only thing that names a speaker on
+screen, so numbered streams are told apart by colour alone.
+
+Covered by `test/lyric-discovery.js`. To diagnose a real folder — which files
+match, which are orphaned and why, and whether each one parses — run
+`npm run check:lyrics -- <folder>` from the repo root.
+
 ### 2.9b Track Titles (`memo.trackTitles`)
 
 Works whose audio files are named `01.mp3` / `#2.wav` show only the filename. `t_work.memo.trackTitles` maps **relPath → display name**, exactly like `memo.duration` and `memo.contentHash`:
@@ -367,6 +396,7 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/circles` | GET | List all circles |
 | `/api/vas` | GET | List all VAs |
 | `/api/media/:id/:file` | GET | Stream audio file (supports Range) |
+| `/api/media/check-lrc/:id/:index` | GET | Lyric sidecar files for a track. Returns `{result, lyrics: [{trackId, lyricExtension}]}`, one entry per speaker — see §2.8b. `trackId`/`lyricExtension` are also returned flat (first entry) for pre-multi-speaker clients. |
 | `/api/cover/:id` | GET | Get cover image |
 | `/api/files/:id` | GET | List files in a work |
 | `/api/review` | GET | List works the user has reviewed/rated/progress-marked

@@ -9,6 +9,7 @@ const jschardet = require('jschardet');
 const { getTrackList } = require('../filesystem/utils');
 const { joinFragments } = require('./utils/url');
 const { isValidRequest, workIdParam } = require('./utils/validate');
+const { findLyricTracks } = require('./utils/lyrics');
 
 // GET (stream) a specific track from work folder
 router.get('/stream/:id/:index',
@@ -142,47 +143,22 @@ router.get('/check-lrc/:id/:index',
           getTrackList(req.params.id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo))
             .then((tracks) => {
               const track = tracks[req.params.index];
-              const fileDir = path.join(rootFolder.path, work.dir, track.subtitle || '');
+              const lyrics = findLyricTracks(track, tracks);
 
-
-
-              let foundLyricFileName = "";
-              let foundLyricExtension = "";
-              const supportedLyricExtensions = [".lrc", ".srt", ".vtt"];
-              const trackTitle = track.title;
-              for (const ext of supportedLyricExtensions) {
-                // 几种不同的查找歌词文件的方式
-                const tryFileLocs = [
-                  trackTitle.substring(0, trackTitle.lastIndexOf(".")) + ext, // sometitle.mp3 -> sometitle.lrc
-                  trackTitle.substring(0, trackTitle.lastIndexOf(".")) + ext.toUpperCase(), // sometitle.mp3 -> sometitle.LRC
-                  trackTitle + ext, // sometitle.mp3 -> sometitle.mp3.lrc
-                  trackTitle + ext.toUpperCase(), // sometitle.mp3 -> sometitle.mp3.LRC
-                ];
-                for (const tryFileLoc of tryFileLocs) {
-                  if (fs.existsSync(path.join(fileDir, tryFileLoc))) {
-                    foundLyricFileName = tryFileLoc;
-                    break;
-                  }
-                }
-                if (foundLyricFileName != "") {
-                  foundLyricExtension = ext;
-                  break;
-                }
-              }
-
-
-              if (foundLyricFileName != "") {
-                console.log('找到歌词文件');
-                const subtitleToFind = track.subtitle;
-                console.log('歌词文件名： ', foundLyricFileName);
-                // 文件名、子目录名相同
-                tracks.forEach(trackItem => {
-                  if (trackItem.title === foundLyricFileName && subtitleToFind === trackItem.subtitle) {
-                      res.send({result: true, message:'找到歌词文件', trackId: trackItem.trackId, lyricExtension: foundLyricExtension});
-                  }
+              if (lyrics.length) {
+                console.log('Found lyrics file: ', lyrics.map(lyric => lyric.trackId).join(', '));
+                res.send({
+                  result: true,
+                  message: 'Found lyrics file',
+                  lyrics,
+                  // Single-file fields kept for clients cached from before
+                  // multi-speaker lyrics existed: the PWA can serve a bundle
+                  // older than the backend it talks to.
+                  trackId: lyrics[0].trackId,
+                  lyricExtension: lyrics[0].lyricExtension,
                 });
               } else {
-                res.send({result: false, message:'不存在歌词文件', trackId: ''});
+                res.send({result: false, message:'Found no lyrics file', trackId: '', lyrics: []});
               }
             })
             .catch(err => next(err));

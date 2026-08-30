@@ -39,45 +39,70 @@ const fallback = {
   warning: '#F9A825',
 };
 
-// name -> tonal roles, e.g. { positive: { light, onLight, containerLight, ... } }
+// Tones for [color, on-color, container, on-container], per scheme variant.
+// The contrast tiers walk the tonal palette in the same direction Material's
+// own contrast curves do: darker on light, lighter on dark. Without them a tier
+// inherits the base tone while its surfaces move, so "more contrast" produced
+// *less* — the light tiers measured 3.8:1 against surface-container-highest,
+// below WCAG AA, while the base scheme managed 5.0:1.
+const TONES = {
+  light: [40, 100, 90, 10],
+  lightMedium: [30, 100, 85, 5],
+  lightHigh: [20, 100, 80, 0],
+  dark: [80, 20, 30, 90],
+  darkMedium: [85, 15, 35, 95],
+  darkHigh: [90, 10, 40, 100],
+};
+
+// name -> per-variant roles, e.g. { positive: { light: { color, on, ... }, ... } }
 const extended = {};
 for (const c of theme.extendedColors ?? []) {
   const name = c.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   let argb = argbFromHex(c.color);
   if (c.harmonized && theme.seed) argb = Blend.harmonize(argb, argbFromHex(theme.seed));
   const p = TonalPalette.fromInt(argb);
-  extended[name] = {
-    light: hexFromArgb(p.tone(40)),
-    onLight: hexFromArgb(p.tone(100)),
-    containerLight: hexFromArgb(p.tone(90)),
-    onContainerLight: hexFromArgb(p.tone(10)),
-    dark: hexFromArgb(p.tone(80)),
-    onDark: hexFromArgb(p.tone(20)),
-    containerDark: hexFromArgb(p.tone(30)),
-    onContainerDark: hexFromArgb(p.tone(90)),
-  };
+  extended[name] = Object.fromEntries(
+    Object.entries(TONES).map(([variant, [color, on, container, onContainer]]) => [
+      variant,
+      {
+        color: hexFromArgb(p.tone(color)),
+        on: hexFromArgb(p.tone(on)),
+        container: hexFromArgb(p.tone(container)),
+        onContainer: hexFromArgb(p.tone(onContainer)),
+      },
+    ])
+  );
 }
 
 // Semantic brand color used for $positive/$info/$warning (light scheme).
-const semantic = (name) => extended[name]?.light ?? fallback[name];
+const semantic = (name) => extended[name]?.light.color ?? fallback[name];
 
-// CSS variables for one extended color, one scheme variant ('light' | 'dark').
-const extendedVars = (name, which) => {
-  const e = extended[name];
-  const cap = which === 'light' ? 'Light' : 'Dark';
-  const color = e[which], on = e[`on${cap}`];
-  const container = e[`container${cap}`], onContainer = e[`onContainer${cap}`];
+// CSS variables for one extended color, in one scheme variant (a key of TONES).
+const extendedVars = (name, variant) => {
+  const e = extended[name][variant];
   return [
-    `  --${name}: ${color};`,
-    `  --${name}-rgb: ${hexToRgb(color)};`,
-    `  --on-${name}: ${on};`,
-    `  --on-${name}-rgb: ${hexToRgb(on)};`,
-    `  --${name}-container: ${container};`,
-    `  --${name}-container-rgb: ${hexToRgb(container)};`,
-    `  --on-${name}-container: ${onContainer};`,
-    `  --on-${name}-container-rgb: ${hexToRgb(onContainer)};`,
+    `  --${name}: ${e.color};`,
+    `  --${name}-rgb: ${hexToRgb(e.color)};`,
+    `  --on-${name}: ${e.on};`,
+    `  --on-${name}-rgb: ${hexToRgb(e.on)};`,
+    `  --${name}-container: ${e.container};`,
+    `  --${name}-container-rgb: ${hexToRgb(e.container)};`,
+    `  --on-${name}-container: ${e.onContainer};`,
+    `  --on-${name}-container-rgb: ${hexToRgb(e.onContainer)};`,
   ];
 };
+
+// Extended colors are emitted in every block, contrast tiers included: custom
+// properties cascade, so a tier that omitted them would silently keep the base
+// scheme's tone against its own, differently-lit surfaces.
+const extendedBlock = (variant, indent = '') =>
+  Object.keys(extended).length
+    ? '\n' + indent + '  // extended colors from extendedColors\n' +
+      Object.keys(extended)
+        .flatMap((n) => extendedVars(n, variant))
+        .map((line) => indent + line)
+        .join('\n')
+    : '';
 
 // Material roles exposed as CSS custom properties (beyond Quasar's brand colors).
 const tokenRoles = [
@@ -150,7 +175,7 @@ const vars = (scheme, brand) => {
       // dark variants of the extended (semantic) colors
       ...['positive', 'info', 'warning']
         .filter((n) => extended[n])
-        .map((n) => `  --q-${n}: ${extended[n].dark};`),
+        .map((n) => `  --q-${n}: ${extended[n].dark.color};`),
       ''
     );
   }
@@ -172,10 +197,10 @@ if (lightHigh || darkHigh) {
 // High contrast, applied automatically when the user prefers more contrast.
 @media (prefers-contrast: more) {
 ${lightHigh ? `  :root {
-${vars(lightHigh, true)}
+${vars(lightHigh, true)}${extendedBlock('lightHigh', '  ')}
   }
 ` : ''}${darkHigh ? `  body.body--dark {
-${vars(darkHigh, true)}
+${vars(darkHigh, true)}${extendedBlock('darkHigh', '  ')}
   }
 ` : ''}}
 `;
@@ -184,29 +209,21 @@ ${vars(darkHigh, true)}
 // Manual: add class="contrast-medium"/"contrast-high" on <body> to force a tier
 // (e.g. from an in-app accessibility setting). Placed last so it wins over the
 // media query.
-for (const [cls, lt, dk] of [
-  ['contrast-medium', lightMedium, darkMedium],
-  ['contrast-high', lightHigh, darkHigh],
+for (const [cls, lt, dk, ltVariant, dkVariant] of [
+  ['contrast-medium', lightMedium, darkMedium, 'lightMedium', 'darkMedium'],
+  ['contrast-high', lightHigh, darkHigh, 'lightHigh', 'darkHigh'],
 ]) {
   if (!lt && !dk) continue;
   contrastBlocks += `
 // Manual ${cls} override.
 ${lt ? `body.${cls} {
-${vars(lt, true)}
+${vars(lt, true)}${extendedBlock(ltVariant)}
 }
 ` : ''}${dk ? `body.body--dark.${cls} {
-${vars(dk, true)}
+${vars(dk, true)}${extendedBlock(dkVariant)}
 }
 ` : ''}`;
 }
-
-// Extended colors go only in the base light/dark blocks; contrast tiers
-// inherit them unchanged.
-const extendedBlock = (which) =>
-  Object.keys(extended).length
-    ? '\n  // extended (semantic) colors from extendedColors\n' +
-      Object.keys(extended).flatMap((n) => extendedVars(n, which)).join('\n')
-    : '';
 
 // --- Utility classes for theme tokens ---
 // Quasar generates bg-*/text-on-* utilities only for its built-in brand
@@ -254,6 +271,7 @@ ${bareOnRoles
   .map((r) => `.text-on-${r} { color: var(--on-${r}) !important; }`)
   .join('\n')}
 .text-on-surface { color: var(--on-surface) !important; }
+.text-on-surface-variant { color: var(--on-surface-variant) !important; }
 `;
 
 const tokens = `${header}

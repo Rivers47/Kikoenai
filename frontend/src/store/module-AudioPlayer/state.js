@@ -35,7 +35,13 @@ export default function () {
     muted: false,
     volume: 0, // 音量 (0.0-1.0)
     hasLyric: false,
-    currentLyric: '',
+    // One entry per simultaneous lyric stream (a track voiced by several
+    // speakers ships one lyric file per speaker). Empty entries are speakers
+    // who have nothing on screen right now; empty array means no lyrics.
+    currentLyrics: [],
+    // Speaker name per stream, parallel to currentLyrics; null where the
+    // format carries no name. Fixed for the track, so it is set once on load.
+    lyricSpeakers: [],
     lyricOffsetSeconds: 0,
     sleepMode: false,          // 睡眠定时是否开启
     sleepModeType: null,       // 'minutes' | 'tracks'

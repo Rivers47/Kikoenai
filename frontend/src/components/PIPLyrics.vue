@@ -8,6 +8,7 @@
 <script>
 import { mapState, mapMutations, mapGetters } from 'vuex'
 import { debounce } from 'quasar';
+import { lyricStreamColorVar } from 'src/utils/lyrics'
 
 // Initial canvas aspect ratio (width : height). Once the PiP window opens the
 // canvas is resized to the window's own dimensions; this only sets the shape of
@@ -38,7 +39,8 @@ export default {
     },
 
     ...mapState('AudioPlayer', [
-      'currentLyric',
+      'currentLyrics',
+      'lyricSpeakers',
       'enablePIPLyrics',
       'playing',
     ]),
@@ -112,7 +114,13 @@ export default {
       return chars.join('') + '…'
     },
 
-    drawLyric(str) {
+    /**
+     * Paint the currently sounding line of every lyric stream, one colour per
+     * speaker, stacked in the same order as the in-page lyric bar, each
+     * prefixed with its speaker's name where the format supplied one.
+     * @param {string[]} streams one entry per speaker; empty entries are skipped
+     */
+    drawLyrics(streams) {
       const cvs = this.$refs.canvas
       const ctx = this.ctx
       if (!ctx) return
@@ -131,17 +139,37 @@ export default {
       // Hiragino Sans GB — both Simplified-Chinese faces — which preempted
       // fallback and drew Japanese kanji with Chinese glyph shapes.
       ctx.font = `bold ${fontSize}px ${bodyStyle.fontFamily || 'sans-serif'}`
-      ctx.fillStyle = themeVar('--on-surface-variant')
+
+      const total = streams.length
+      const speaking = streams
+        .map((text, index) => ({ text: String(text ?? ''), index }))
+        .filter(stream => stream.text !== '')
+        .map((stream) => {
+          // The name is folded into the text rather than drawn as a separate
+          // run: the canvas has no text layout, so a second run would need its
+          // own measuring and wrapping for no gain at this size. An ideographic
+          // space keeps it legible in both CJK and Latin faces.
+          const name = this.lyricSpeakers[stream.index]
+          return name ? { ...stream, text: `${name}\u3000${stream.text}` } : stream
+        })
 
       const maxLines = Math.max(1, Math.floor(cvs.height / fontSize))
-      const lines = this.wrapText(String(str ?? ''), cvs.width - PAD_WIDTH * 2, maxLines)
+      // The PiP window is a couple of lines tall, so share the budget between
+      // whoever is speaking rather than letting the first speaker fill it.
+      const linesPerStream = Math.max(1, Math.floor(maxLines / Math.max(1, speaking.length)))
+      const lines = []
+      speaking.forEach((stream) => {
+        this.wrapText(stream.text, cvs.width - PAD_WIDTH * 2, linesPerStream)
+          .forEach(line => lines.push({ line, color: themeVar(lyricStreamColorVar(stream.index, total)) }))
+      })
 
       // Centre the block of lines vertically.
       const topOffset = (cvs.height - lines.length * fontSize) / 2
-      lines.forEach((line, index) => {
+      lines.forEach(({ line, color }, index) => {
         const metrics = ctx.measureText(line)
         const x = PAD_WIDTH + (cvs.width - metrics.width) / 2
         const y = topOffset + index * fontSize + metrics.actualBoundingBoxAscent
+        ctx.fillStyle = color
         ctx.fillText(line, x, y)
       })
 
@@ -183,7 +211,7 @@ export default {
       if (!this.pipWindow) return
       this.canvas.width = Math.round(this.pixelRatio * this.pipWindow.width);
       this.canvas.height = Math.round(this.pixelRatio * this.pipWindow.height);
-      this.drawLyric(this.currentLyric)
+      this.drawLyrics(this.currentLyrics)
     },
 
     forceVideoStartLoadMetadata() {
@@ -198,7 +226,7 @@ export default {
         }
         remaining--
         requestAnimationFrame(draw)
-        this.drawLyric(this.currentLyric)
+        this.drawLyrics(this.currentLyrics)
       }
       requestAnimationFrame(draw)
     },
@@ -311,17 +339,17 @@ export default {
       if (value) this.stopPIPLyric()
       else if (this.enablePIPLyrics) this.tryEnterPIPAndShowUserPrompt()
     },
-    currentLyric(newLyric) {
+    currentLyrics(newLyrics) {
       if (!this.enablePIPLyrics) return
-      this.drawLyric(newLyric)
+      this.drawLyrics(newLyrics)
     },
     playing() {
       this.syncPlayingStateFromAudioToPIPVideo()
-      this.drawLyric(this.currentLyric);
+      this.drawLyrics(this.currentLyrics);
     },
     "$q.dark.isActive"() {
       // Theme colours are sampled per paint, so redraw as soon as they change.
-      this.drawLyric(this.currentLyric);
+      this.drawLyrics(this.currentLyrics);
     }
   },
 

@@ -28,6 +28,8 @@ import Lyric from 'lrc-file-parser'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import NotifyMixin from '../mixins/Notification.js'
 import { formatSeconds } from '../utils'
+import { MAX_LYRIC_STREAMS } from 'src/utils/lyrics'
+import { convert_srt_vtt_to_lrc_streams, mergeLyricStreams } from 'src/utils/subtitles'
 import { debounce } from 'quasar';
 import Plyr from 'plyr'
 
@@ -37,55 +39,6 @@ const MEDIA_SESSION_ACTIONS = [
   'play', 'pause', 'nexttrack', 'previoustrack', 'seekbackward', 'seekforward'
 ]
 
-function convert_srt_vtt_to_lrc(text) {
-  let lines = text.split("\n").map(l => l.trim())
-  let isVtt = lines[0] == 'WEBVTT';
-  if (isVtt) {
-    lines = lines.slice(1)
-  }
-
-  const timeParseRe = /(\d*):(\d*):(\d*)(\.|,)(\d*)\s*-->\s*[\d:.]*/
-
-  const parsingUnit = [];
-  let i = 0;
-  while(i < lines.length) {
-
-    if (/^\d*$/.test(lines[i++])) {
-      if (timeParseRe.test(lines[i])) {
-        const [_whole, h, m, s, _mill_sep, ms] = timeParseRe.exec(lines[i]).map(x => parseInt(x));
-        let texts = [];
-        i++;
-        while(i < lines.length && lines[i] != "") {
-          texts.push(lines[i++]);
-        }
-        parsingUnit.push([
-          [h, m, s, ms],
-          texts.join(' '),
-        ]);
-      }
-    }
-  }
-
-  function padding(n, len) {
-    n = Math.ceil(n);
-    let s = `${n}`;
-    let pad = len - s.length;
-    if (pad > 0) {
-      for (let i = 0; i < pad; ++i) {
-        s = "0" + s;
-      }
-    }
-    return s;
-  }
-
-  function formatLrcTime([h, m, s, ms]) {
-    return padding(h * m, 2) + ":" + padding(m, 2) + ":" + padding(s, 2) + "." + padding(ms, 3);
-  }
-
-  const lrcContent = parsingUnit.map(([time, text]) => `[${formatLrcTime(time)}] ${text}`).join("\n");
-  return lrcContent;
-}
-
 export default {
   name: 'AudioElement',
 
@@ -94,8 +47,8 @@ export default {
   data() {
     return {
       lrcContent: "",
+      // A single parser for all streams at once — see mergeLyricStreams.
       lrcObj: null,
-      lrcAvailable: false,
       plyr: null,
 
       isChangingCurrentTime: false,
@@ -107,6 +60,10 @@ export default {
   },
 
   computed: {
+    lrcAvailable () {
+      return this.lrcObj !== null
+    },
+
     source () {
       if (this.currentPlayingFile.mediaStreamUrl) {
         return `${this.currentPlayingFile.mediaStreamUrl}`
@@ -250,6 +207,12 @@ export default {
 
   created() {
     this.debouncedPlayLrc = debounce(this.playLrc, 100, true);
+    // Bumped on every loadLrcFile() call so a slower load for a track the user
+    // has already skipped past cannot apply its lyrics over the current one.
+    // Multi-speaker tracks fetch one file per speaker, which widens the window.
+    this._lrcLoadId = 0;
+    // Non-reactive: rebuilt wholesale per track and only ever read by index.
+    this._lyricFrames = [];
   },
 
   methods: {
@@ -296,7 +259,8 @@ export default {
       'SET_TRACK',
       'NEXT_TRACK',
       'PREVIOUS_TRACK',
-      'SET_CURRENT_LYRIC',
+      'SET_CURRENT_LYRICS',
+      'SET_LYRIC_SPEAKERS',
       'SET_VOLUME',
       'CLEAR_SLEEP_MODE',
       'DECREMENT_SLEEP_TRACKS',
@@ -512,52 +476,90 @@ export default {
     },
 
     playLrc (playStatus) {
-      if (this.lrcAvailable) {
-        if (playStatus) {
-          this.lrcObj.play((this.plyr.currentTime + this.lyricOffsetSeconds) * 1000);
-        } else {
-          this.lrcObj.play((this.plyr.currentTime + this.lyricOffsetSeconds) * 1000);
-          this.lrcObj.pause();
-        }
-      }
+      if (!this.lrcAvailable) return;
+      // All speakers ride one parser, so they cannot drift apart under seeking
+      // or the offset slider.
+      this.lrcObj.play((this.plyr.currentTime + this.lyricOffsetSeconds) * 1000);
+      if (!playStatus) this.lrcObj.pause();
     },
 
-    createLrcObj () {
-        this.lrcObj = new Lyric({
-          onPlay: (line, text) => {
-            this.SET_CURRENT_LYRIC(text);
-          },
-        })
+    // Interleave the speakers into one parser and publish a whole frame — every
+    // speaker's current line — on each tick, so a line arriving for one speaker
+    // never drops the line another is still holding on screen. Speaker names
+    // are fixed for the track, so they go out once here, not on every line.
+    setLyricStreams (streams) {
+      this.stopLrcObj();
+      const { lyric, frames } = mergeLyricStreams(streams, Lyric);
+      this._lyricFrames = frames;
+      this.lrcObj = new Lyric({
+        onPlay: (line, text) => {
+          const frame = this._lyricFrames[parseInt(text, 10)];
+          if (frame) this.SET_CURRENT_LYRICS(frame.slice());
+        },
+      });
+      this.lrcObj.setLyric(lyric);
+      this.lrcContent = streams.map(stream => stream.content).join('\n');
+      this.SET_LYRIC_SPEAKERS(streams.map(stream => stream.name));
+      this.SET_CURRENT_LYRICS(streams.map(() => ''));
+    },
+
+    stopLrcObj () {
+      if (!this.lrcObj) return;
+      this.lrcObj.pause();
+      this.lrcObj.setLyric('');
     },
 
     async loadLrcFile () {
       const trackId = (this.queue[this.queueIndex].trackId || this.queue[this.queueIndex].hash);
       const url = `/api/media/check-lrc/${trackId}`;
+      const loadId = ++this._lrcLoadId;
 
       try {
         const check_response = await this.$axios.get(url)
+        if (loadId !== this._lrcLoadId) return;
         if (!check_response.data.result) {
           //new track has no lyric — clear the previous track's lyric
-          // state so its onPlay callback stops firing SET_CURRENT_LYRIC.
+          // state so its onPlay callback stops firing SET_CURRENT_LYRICS.
           this.resetToNoLyricStatus();
           return;
         }
 
-        this.lrcAvailable = true;
         console.log('读入歌词');
-        const lrcUrl = `/api/media/stream/${check_response.data.trackId || check_response.data.hash}`;
-        const lyricExtension = check_response.data.lyricExtension.toLowerCase();
+        // `lyrics` holds one entry per speaker file; the singular fields are
+        // the pre-multi-speaker shape, still sent by the backend so that a
+        // cached older bundle keeps working — read them the same way here.
+        const sources = check_response.data.lyrics && check_response.data.lyrics.length
+          ? check_response.data.lyrics
+          : [{
+              trackId: check_response.data.trackId || check_response.data.hash,
+              lyricExtension: check_response.data.lyricExtension,
+            }];
 
-        const response = await this.$axios.get(lrcUrl)
+        const fetched = await Promise.all(sources.map(async (source) => {
+          const response = await this.$axios.get(`/api/media/stream/${source.trackId}`);
+          const lyricExtension = (source.lyricExtension || '').toLowerCase();
+          if (lyricExtension === '.srt' || lyricExtension === '.vtt') {
+            console.log('srt convert to lrc');
+            // A single .vtt carrying voice spans expands to several named
+            // streams; SRT has no voice span, so it yields one unnamed stream.
+            return convert_srt_vtt_to_lrc_streams(response.data);
+          }
+          // LRC has no speaker field at all, so it is always one unnamed stream.
+          return [{ name: null, content: String(response.data) }];
+        }));
+        if (loadId !== this._lrcLoadId) return;
         console.log('歌词读入成功');
-        console.log('srt convert to lrc');
-        if (lyricExtension == ".srt" || lyricExtension == ".vtt") {
-          response.data = convert_srt_vtt_to_lrc(response.data);
+
+        const streams = fetched.flat()
+          .filter(stream => stream.content.trim() !== '')
+          .slice(0, MAX_LYRIC_STREAMS);
+        if (!streams.length) {
+          this.resetToNoLyricStatus();
+          return;
         }
-        this.lrcObj.setLyric(response.data);
-        this.lrcContent = response.data;
-        this.lrcObj.play(this.plyr.currentTime * 1000);
-        if (!this.playing) this.lrcObj.pause()
+
+        this.setLyricStreams(streams);
+        this.playLrc(this.playing);
         this.SET_HAS_LYRIC(true);
       } catch(error) {
         if (error.response) {
@@ -569,15 +571,17 @@ export default {
           console.error(error)
           this.showErrNotif(error.message || error);
         }
-        this.SET_HAS_LYRIC(false);
+        if (loadId === this._lrcLoadId) this.resetToNoLyricStatus();
       }
     },
 
     resetToNoLyricStatus() {
-      this.lrcAvailable = false;
-      this.lrcObj.setLyric('');
+      this.stopLrcObj();
+      this.lrcObj = null;
+      this._lyricFrames = [];
       this.lrcContent = '';
-      this.SET_CURRENT_LYRIC('');
+      this.SET_LYRIC_SPEAKERS([]);
+      this.SET_CURRENT_LYRICS([]);
       this.SET_HAS_LYRIC(false);
     },
 
@@ -770,7 +774,6 @@ export default {
     this.initPlyr();
     this.initAudioAnalyzer();
     if (this.flipLRChannel) this.applyFlipLRChannel();
-    this.createLrcObj();
     if (this.source) {
       this._loadSource(this.source);
       this.loadLrcFile();
