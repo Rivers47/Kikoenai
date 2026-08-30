@@ -99,78 +99,29 @@ Due to a bug in Firefox. If you use a local DNS with a public looking hostname
 that points at a LAN IP, axio could occur. The frontend will silently retry to
 fix it. Or you can add the domain to `network.lna.skip-domains` in `about:config`
 
-### Serving under a sub-path
+### Change base URL
 
-By default Kikoenai expects to own the root of whatever hostname it is reached
-on — `https://example.com/` or `https://kikoenai.example.com/`. Set `basePath`
-in `config/config.json` to put it under a path instead, so it can share a
-hostname with the other services on the same box:
+Set `basePath`
+in `config/config.json` or through the web UI.
 
 ```json
-{
   "basePath": "/kikoeru"
-}
 ```
 
-The app is then at `https://example.com/kikoeru/`, and so are its API, its
-Socket.IO endpoint and its session cookie. Leave `basePath` empty (the default)
-to keep serving from the root; nothing about an existing install changes.
+The app is then at `https://example.com/kikoeru/`.
 
-Multi-segment prefixes (`/apps/kikoeru`) work too. Leading and trailing slashes
-are optional — `kikoeru`, `/kikoeru` and `/kikoeru/` all mean the same thing.
-
-**Your reverse proxy must pass the prefix through, not strip it.** Kikoenai
-generates absolute URLs for its own assets, so it has to see the same paths the
-browser does. Both of these are correct:
+> [!TIP]
+> **Your reverse proxy must pass the prefix through, not strip it.** 
 
 ```nginx
-# `location /kikoeru/` only matches the path WITH its trailing slash, so send
-# the bare form here rather than letting nginx 404 it.
-location = /kikoeru { return 301 /kikoeru/; }
-
-# The upstream deliberately has no trailing slash. Written as
-# `proxy_pass http://127.0.0.1:8888/;` — with a URI part, even a bare "/" —
-# nginx replaces the matched location prefix, and /kikoeru/api/works would
-# reach the app as /api/works. Without one it forwards the request URI
-# untouched, which is what this needs. Most reverse-proxy examples you will
-# find online include that slash.
-location /kikoeru/ {
-    proxy_pass http://127.0.0.1:8888;
-    proxy_http_version 1.1;
-    proxy_set_header Host              $host;
-    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    # WebSocket upgrade for Socket.IO (the scanner's progress log)
-    proxy_set_header Upgrade    $http_upgrade;
-    proxy_set_header Connection "upgrade";
-}
+proxy_pass http://127.0.0.1:8888;  # NOT http://127.0.0.1:8888/  — that would strip /kikoeru
 ```
 
-```caddyfile
-example.com {
-    # /kikoeru/* does not match the bare path either; redir sorts ahead of
-    # handle in Caddy's default directive order, so this needs no route block.
-    redir /kikoeru /kikoeru/
+In Caddy, use `handle`, not `handle_path`.
 
-    # handle, not handle_path: handle_path strips the matched prefix.
-    handle /kikoeru/* {
-        reverse_proxy 127.0.0.1:8888
-    }
-}
-```
-
-Two things are deliberately *not* prefixed for you:
-
-- `offloadStreamPath` / `offloadDownloadPath`, when `offloadMedia` is on. Those
-  name virtual directories inside your reverse proxy rather than routes in this
-  app, so write the prefix into them yourself if that is where you mounted the
-  library.
-- `allowedHosts` is a list of hostnames and has nothing to do with paths.
-
-If you move an existing install from the root to a sub-path, browsers that
-already installed the PWA will keep a service worker registered at the old
-scope. Unregister it from the browser's devtools, or just reinstall the app
-from the new URL.
+If you change the config, restart the server,
+and you might need to unregister the service worker
+in browser, or just reinstall the app.
 
 ### First Login
 
