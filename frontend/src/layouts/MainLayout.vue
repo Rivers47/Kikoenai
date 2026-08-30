@@ -155,7 +155,7 @@
     <q-page-container :class="{'page-container-style': isFullScreenPage, 'padding-bottom-play-bar': !isFullScreenPage}">
       <!-- <q-page padding> -->
       <router-view v-slot="{ Component }">
-        <keep-alive include="Works">
+        <keep-alive :include="['Works', 'Favourites']">
           <component :is="Component" />
         </keep-alive>
       </router-view>

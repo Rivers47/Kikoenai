@@ -60,7 +60,7 @@
     <!-- 作品列表 -->
     <div>
       <div class="q-px-sm q-pt-md">
-        <q-infinite-scroll @load="onLoad" :offset="500" :disable="stopLoad" ref="scroll" v-if="mode !=='folder'">
+        <q-infinite-scroll @load="onLoad" :offset="500" :disable="stopLoad" ref="scroll">
           <div class="row justify-center text-muted" v-if="works.length === 0">{{ $t('favourites.emptyHint') }}</div>
           <q-list bordered separator class="shadow-2" v-if="works.length">
              <FavListItem v-for="work in works" :key="work.id" :workid="work.id" :metadata="work" @reset="reset()" :mode="mode"></FavListItem> 
@@ -71,8 +71,6 @@
             </div>
           </template>
         </q-infinite-scroll>
-
-        <div v-else class="row justify-center text-muted">{{ $t('favourites.notImplemented') }}</div>
       </div>
     </div>
   </q-page>
@@ -116,7 +114,6 @@ export default {
         { label: this.$t('favourites.playHistory'), value: 'history' },
         { label: this.$t('favourites.myReviews'), value: 'review' },
         { label: this.$t('favourites.myProgress'), value: 'progress' },
-        { label: this.$t('favourites.folder'), value: 'folder' },
       ]
     },
 
@@ -172,6 +169,22 @@ export default {
     this.progressFilter = this.progress;
   },
 
+  // The page is kept alive so that returning from a work restores both the
+  // loaded list and the scroll position. While cached the component stays
+  // mounted, so the infinite scroller has to be frozen explicitly — otherwise
+  // it reacts to scrolling on whatever page is actually visible.
+  activated () {
+    this.$nextTick(() => {
+      if (this.works.length < this.pagination.totalCount) {
+        this.stopLoad = false
+      }
+    })
+  },
+
+  deactivated () {
+    this.stopLoad = true
+  },
+
   mounted() {
     if (localStorage.sortByFavourites) {
       try {
@@ -192,12 +205,16 @@ export default {
       this.reset();
     },
 
-    // Browser back and forth
+    // Browser back and forth. The page is kept alive, so these also fire right
+    // after changeMode()/changeProgressFilter() pushed the route — skip then,
+    // the click handler has already reset for the mode it just switched to.
     route() {
+      if (this.mode === this.route) return;
       this.mode = this.route;
       this.reset();
     },
     progress() {
+      if (this.progressFilter === this.progress) return;
       this.progressFilter = this.progress;
       this.reset();
     }

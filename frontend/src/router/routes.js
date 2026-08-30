@@ -141,11 +141,6 @@ const routes = [
           },
         ]),
         {
-          path: '/folder',
-          props: { route: 'folder'},
-          component: Favourites,
-        },
-        {
           path: '/history',
           props: { route: 'history'},
           component: Favourites,
