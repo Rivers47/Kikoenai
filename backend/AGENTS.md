@@ -219,7 +219,15 @@ Consequences worth knowing:
   `socket.js` sets `path: \`${config.basePath}/socket.io\`` itself, and
   `frontend/src/boot/socket.io.js` mirrors it. Change one, change the other.
 - **The session cookie's `path` follows `basePath`**, so an install under a
-  prefix does not hand its cookie to the other services on the hostname.
+  prefix does not hand its cookie to the other services on the hostname. It is
+  **pinned at require time** (`COOKIE_PATH` in `auth/session.js`), not read
+  live: the setting is editable from the admin panel but the router only moves
+  on restart, and a cookie scoped ahead of the routes would lock the admin out
+  of the session they saved the change from.
+- **Editable from the admin panel** (Dashboard → Advanced → Web server
+  settings), so it round-trips through `PUT /api/config/admin` → `setConfig` →
+  `resolveBasePath`, and the normalized value is what lands in `config.json`.
+  Like everything else in that card, it needs a restart to take effect.
 - **`offloadStreamPath`/`offloadDownloadPath` are deliberately not prefixed.**
   They address the reverse proxy's own virtual directories, not routes here.
   `mediaStreamBaseUrl`/`mediaDownloadBaseUrl` in `filesystem/utils.js` *are*
