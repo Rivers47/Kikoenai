@@ -93,6 +93,28 @@ describe('work memo: content hashes and rescans', function () {
     expect(after.memo.contentHash['a.mp3']).to.not.equal(originalA);
   });
 
+  it('leaves every file hashed when the scanner chains memo then hashes', async function () {
+    // The scanner warms hashes so GET /api/tracks/:id never has to compute
+    // them. Order matters: scrapeWorkMemo rewrites mtimes and drops the hashes
+    // of changed files, so hashing first would throw the fresh hashes away.
+    let memo = await scrapeWorkMemo('1', dir, {});
+    ({ memo } = await scrapeWorkHashes('1', dir, memo));
+    expect(Object.keys(memo.contentHash)).to.have.members(['a.mp3', 'b.mp3']);
+
+    // A later scan pass re-warms a modified file and leaves the rest cached.
+    write('a.mp3', 'ZZZZZZZZ');
+    touch('a.mp3', 60);
+    const before = memo.contentHash['a.mp3'];
+    memo = await scrapeWorkMemo('1', dir, memo);
+    const rewarmed = await scrapeWorkHashes('1', dir, memo);
+    expect(rewarmed.memo.contentHash['a.mp3']).to.not.equal(before);
+    expect(rewarmed.memo.contentHash['b.mp3']).to.be.a('string');
+
+    // With the work warm, opening it reads nothing.
+    const onOpen = await scrapeWorkHashes('1', dir, rewarmed.memo);
+    expect(onOpen.changed).to.equal(false);
+  });
+
   it('keeps the hash of a file that merely has no duration', async function () {
     // The rescan's update branch also fires when ffprobe failed and left no
     // duration. That says nothing about the file's contents, so re-reading

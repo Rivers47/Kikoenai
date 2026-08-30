@@ -9,7 +9,7 @@ const { isFanzaId, fanzaCid } = require('../work-id');
 const { scrapeWorkMetadataFromAsmrOne } = require('../scraper/asmrOne');
 const db = require('../database/db');
 const { createSchema } = require('../database/schema');
-const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, scrapeWorkMemo, coverFileName, formatID,
+const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, scrapeWorkMemo, scrapeWorkHashes, coverFileName, formatID,
   deleteWorkImagesFromDisk } = require('./utils');
 const workExtras = require('./workExtras');
 const { md5 } = require('../auth/utils');
@@ -157,6 +157,14 @@ process.on('message', (m) => {
     process.exit(1);
   }
 });
+
+// Exit when the server that forked us goes away. Node keeps a child running
+// after the IPC channel closes, so killing only the parent used to leave this
+// process scanning invisibly: its logs go nowhere, and the `scanner` guard in
+// socket.js is in-memory, so a restarted server would let the user start a
+// second scan alongside it. Two scanners then write t_work.memo at once, and
+// setWorkMemo replaces the whole column, so one silently overwrites the other.
+process.on('disconnect', () => process.exit(1));
 
 
 /**
@@ -544,11 +552,20 @@ async function processFolder(folder) {
     LOG.task.info(workId, `发现新文件夹: "${folder.absolutePath}"`);
 
     LOG.task.info(workId, `扫描音频文件时长`);
-    const memo = await scrapeWorkMemo(
+    let memo = await scrapeWorkMemo(
       workId,
       folder.absolutePath,
       { /* 首次添加的作品肯定没有memo，这里设置一个空object作为初始memo */}
     );
+
+    // Warm the content hashes here so opening the work later is instant.
+    // GET /api/tracks/:id computes any that are missing before it can answer,
+    // and that reads every audio file. Doing it in the scanner moves the cost
+    // into a background child process, where slowness is expected.
+    // Must run after scrapeWorkMemo, not before: that call rewrites mtimes and
+    // drops the hashes of changed files, which would discard fresh hashes.
+    LOG.task.info(workId, `计算音频文件哈希`);
+    ({ memo } = await scrapeWorkHashes(workId, folder.absolutePath, memo));
     
     const result = await getMetadata(workId, folder.rootFolderName, folder.relativePath); // 获取元数据
 
@@ -933,13 +950,18 @@ async function scanWorkFile(work, index, total) {
     const absoluteWorkDir = path.join(rootFolder.path, work.dir);
 
     // work memo, for instance, memorize all audio durations
-    const memo = await scrapeWorkMemo(
+    let memo = await scrapeWorkMemo(
       work.id,
       absoluteWorkDir,
       typeof(work.memo) === 'string' 
       ? JSON.parse(work.memo)
       : { /* fallback empty object as memo */ }
     );
+    // Warm the content hashes too, so GET /api/tracks/:id never has to. Runs
+    // after scrapeWorkMemo because that call invalidates hashes by mtime.
+    // The first run over an existing library reads every audio file, because
+    // no work has a cached hash yet. Later runs only read changed files.
+    ({ memo } = await scrapeWorkHashes(work.id, absoluteWorkDir, memo));
     // console.log('work: ', absoluteWorkDir);
     // console.log('memo: ', memo);
     await db.setWorkMemo(work.id, memo);
