@@ -246,6 +246,12 @@ Covered by `test/lyric-discovery.js`. To diagnose a real folder — which files
 match, which are orphaned and why, and whether each one parses — run
 `npm run check:lyrics -- <folder>` from the repo root.
 
+### 2.9a Writing `t_work.memo`
+
+`setWorkMemo` replaces the **whole** JSON column, so anything that builds a memo must spread the old one first. The keys are written by different producers and none of them knows about the others: `duration`/`mtime`/`isContainLyric` by `scrapeWorkMemo` (scan and `POST /api/work/scan/:id`), `contentHash` by `scrapeWorkHashes` (`GET /api/tracks/:id`), `trackTitles` by `scripts/extract-track-titles.js`. `scrapeWorkMemo` used to start from a bare `{ duration, isContainLyric, mtime }`, so every rescan silently wiped the hashes and the extracted track titles.
+
+One coupling to keep in mind when touching either function: `scrapeWorkHashes` invalidates a cached hash by comparing `memo.mtime[relPath]`. A rescan rewrites those mtimes, so it must also drop the `contentHash` of any file whose mtime actually changed — otherwise the fresh mtime makes a stale hash look valid forever. It must *not* drop hashes for the other reasons that branch fires (a missing duration, e.g. from a failed ffprobe), or every rescan would force a full re-read of the work.
+
 ### 2.9b Track Titles (`memo.trackTitles`)
 
 Works whose audio files are named `01.mp3` / `#2.wav` show only the filename. `t_work.memo.trackTitles` maps **relPath → display name**, exactly like `memo.duration` and `memo.contentHash`:
@@ -391,7 +397,6 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/search` | GET | Keyword search — `keyword` supports the advanced filter syntax (§2.3b), e.g. `va:"name$" -tag:NTR` |
 | `/api/:fields/:id/works` | GET | Works filtered
 | `/api/work/:id` | GET | Get work metadata + playback state |
-| `/api/work/:id/memo` | GET | Get work memo incl. lazily-computed content hashes (`{ contentHash: { relPath: contentHash } }`). Only endpoint that reads audio file bytes (CRC32 via zlib, mtime-invalidated, cached in `t_work.memo.contentHash`). Frontend fetches after tree renders and merges hashes onto nodes by relPath. |
 | `/api/tags` | GET | List all tags |
 | `/api/circles` | GET | List all circles |
 | `/api/vas` | GET | List all VAs |
@@ -416,7 +421,7 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/track-progress` | PUT | Report per-track playback progress. Accepts `{work_id, contentHash, seconds, completed}`. Upserts `t_track_progress` keyed by contentHash directly — no file read. |
 | `/api/backfill/progress` | POST | Admin: replay play history to mark finished works `listened` and seed `t_track_progress`. Position comes from `state.seconds` on legacy history rows and from `t_track_progress` on current ones (history no longer carries a position); the track key is the queue item's `contentHash`, CRC32'd from disk only when the row predates it. Body `{ dryRun?: bool }` → `{ logs[], summary }`. |
 
-> **Tracks response (Phase 2):** `GET /api/tracks/:id` returns `{ tree, trackProgress }` instead of a bare array. The tree is built from the directory listing + `t_work.memo` (durations) **without reading any audio file bytes** — `contentHash` on audio nodes is populated only from already-cached `memo.contentHash` (null/undefined where not yet hashed). Audio nodes carry `trackId` (session-stable file handle, was `hash`), `relPath` (relative path from work root), the stable key the frontend uses to merge late-arriving hashes. `trackProgress` is a `{contentHash: {seconds, completed}}` map. Content hashes are computed lazily by `GET /api/work/:id/memo` (the only endpoint that reads file bytes) and merged onto tree nodes reactively by `relPath`. This is a breaking response-shape change; `Work.vue` handles both via `response.data.tree || response.data`.
+> **Tracks response:** `GET /api/tracks/:id` returns `{ tree, trackProgress }` instead of a bare array. It is the only endpoint that reads audio file bytes: it computes any missing content hashes (CRC32 via zlib, mtime-invalidated, cached in `t_work.memo.contentHash`) **before** building the tree, so every audio node's `contentHash` is populated in the response. The first open of a work therefore streams its audio once; every later open is cache-hit and reads no bytes. A file that cannot be read is logged and left without a hash rather than failing the request. Audio nodes carry `trackId` (session-stable file handle, was `hash`) and `relPath` (relative path from work root). `trackProgress` is a `{contentHash: {seconds, completed}}` map. This is a breaking response-shape change; `Work.vue` handles both via `response.data.tree || response.data`. **Superseded:** hashing was briefly split into a separate `GET /api/work/:id/memo` that the frontend merged in afterwards. The gap between the two responses let a queue be committed — and persisted to `t_play_history` — without hashes, which permanently silenced per-track progress for that row, since the resume-from-history path never refetches the tree. The endpoint is gone.
 
 > **Note:** Library scanning is **not** a REST endpoint. The frontend triggers it over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN`) and listens for the `SCAN_*` events above. The plural-list route `/:field(circle\|tag\|va\|illustrator\|script_writer\|series)s/` powers the `/api/illustrators`, `/api/script_writers`, and `/api/seriess` endpoints above (note the irregular plural `seriess`).
 

@@ -85,7 +85,7 @@ async function scrapeWorkHashes(work_id, dir, oldMemo) {
   // Read-side compat: new memos store contentHash, old memos may have hash.
   const oldMemoHash = safeMemo.contentHash || safeMemo.hash || {};
   const oldMemoMtime = safeMemo.mtime || {};
-  const memo = { ...safeMemo, contentHash: { ...oldMemoHash } };
+  const memo = { ...safeMemo, contentHash: { ...oldMemoHash }, mtime: { ...oldMemoMtime } };
   // Remove the old `hash` key if present (migrate to contentHash in-memory;
   // the next setWorkMemo will persist the new key).
   if (memo.hash) delete memo.hash;
@@ -98,19 +98,25 @@ async function scrapeWorkHashes(work_id, dir, oldMemo) {
 
   await Promise.all(audioFiles.map(async (file) => {
     const shortPath = file.replace(path.join(dir, '/'), '');
-    // Async stat (not statSync): on a network mount each stat is a network
-    // round-trip, and a sync stat blocks the event loop per file — serializing
-    // N RTTs and stalling the parallel hash reads. Promise.all lets them overlap.
-    const fstat = await fs.promises.stat(file);
-    const newMTime = Math.round(fstat.mtime.getTime());
-    const oldMTime = oldMemoMtime[shortPath];
-    if (oldMemoHash[shortPath] !== undefined && oldMTime === newMTime) {
-      return; // cached and unchanged — reuse
+    // Skip files we cannot read. This runs inside GET /api/tracks/:id, so a
+    // throw here would fail the whole file list. The node just gets no hash.
+    try {
+      // Async stat (not statSync): on a network mount each stat is a network
+      // round-trip, and a sync stat blocks the event loop per file — serializing
+      // N RTTs and stalling the parallel hash reads. Promise.all lets them overlap.
+      const fstat = await fs.promises.stat(file);
+      const newMTime = Math.round(fstat.mtime.getTime());
+      const oldMTime = oldMemoMtime[shortPath];
+      if (oldMemoHash[shortPath] !== undefined && oldMTime === newMTime) {
+        return; // cached and unchanged — reuse
+      }
+      const hash = await getContentHashLimited(file);
+      memo.contentHash[shortPath] = hash;
+      memo.mtime[shortPath] = newMTime;
+      changed = true;
+    } catch (err) {
+      console.error(`work[${work_id}] hash failed, file = ${file}`, err);
     }
-    const hash = await getContentHashLimited(file);
-    memo.contentHash[shortPath] = hash;
-    memo.mtime[shortPath] = newMTime;
-    changed = true;
   }));
 
   // Return the walked file list so the caller can hand it to getTrackList and
@@ -134,9 +140,17 @@ async function scrapeWorkHashes(work_id, dir, oldMemo) {
 async function scrapeWorkMemo(work_id, dir, oldMemo) {
   const files = await recursiveReaddir(dir);
   // Filter out any files not matching these extensions
-  const oldMemoMtime = oldMemo.mtime || {};
-  const oldMemoDuration = oldMemo.duration || {};
-  const memo = { duration: {}, isContainLyric: false, mtime: {} };
+  const oldMemoMtime = (oldMemo || {}).mtime || {};
+  const oldMemoDuration = (oldMemo || {}).duration || {};
+  // Callers pass the object below to db.setWorkMemo(), which replaces the whole
+  // t_work.memo JSON column. So copy oldMemo into it: an object literal holding
+  // only the keys this function fills in would drop the ones other code writes,
+  // contentHash and trackTitles, on every rescan. duration and mtime are
+  // rebuilt further down, so they start empty.
+  const memo = { ...(oldMemo || {}), duration: {}, isContainLyric: false, mtime: {} };
+  // The spread above is shallow, so memo.contentHash is still oldMemo's object.
+  // Copy it, because the loop below deletes stale entries from it.
+  if (memo.contentHash) memo.contentHash = { ...memo.contentHash };
   await Promise.all(files
     .filter((file) => {
       const ext = path.extname(file).toLowerCase();
@@ -162,6 +176,15 @@ async function scrapeWorkMemo(work_id, dir, oldMemo) {
       ) { // 更新duration和mtime
         console.log(`work[${work_id}] update data on file: ${fileDict.fullPath}, fstate.mtime: ${fstat.mtime.getTime()}, `);
         memo.mtime[fileDict.shortPath] = newMTime;
+        // The file changed, so its old contentHash is stale. Drop it, or the
+        // mtime written on the line above would make scrapeWorkHashes treat
+        // that stale hash as valid. Test the mtime again here instead of
+        // relying on the enclosing if: that condition also passes when only
+        // the duration is missing, which says nothing about the contents.
+        // A file with no old mtime is new and has no hash to drop.
+        if (oldMTime !== undefined && oldMTime !== newMTime && memo.contentHash) {
+          delete memo.contentHash[fileDict.shortPath];
+        }
         const duration = await getAudioFileDurationLimited(fileDict.fullPath);
         if (! isNaN(duration) && typeof(duration) === 'number') {
           memo.duration[fileDict.shortPath] = duration;

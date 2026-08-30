@@ -447,7 +447,6 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 | `/api/auth/logout` | POST | `MainLayout.vue` | Destroy the server-side session and clear the cookie |
 | `/api/works` | GET | `Works.vue` | List/search works (paginated, sorted, filtered) |
 | `/api/work/:id` | GET | `Work.vue` | Get work metadata + playback state |
-| `/api/work/:id/memo` | GET | `Work.vue` | Get work memo incl. lazily-computed content hashes (`{ contentHash: { relPath: contentHash } }`). Only endpoint reading audio file bytes; fetched after tree renders, merged onto nodes by `relPath` to populate per-track badges. |
 | `/api/tags` | GET | `List.vue` | List all tags |
 | `/api/circles` | GET | `List.vue` | List all circles |
 | `/api/vas` | GET | `List.vue` | List all VAs |
@@ -474,7 +473,7 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 | `/api/seriess` | GET | `EditMetadata.vue` | List series (autocomplete; irregular plural) |
 | `/api/track-progress` | PUT | `AudioElement.vue`, `AudioPlayer.vue` | Report per-track playback progress. Accepts `{work_id, contentHash, seconds, completed}`. Fire-and-forget write. |
 
-> **Tracks response (Phase 2):** `GET /api/tracks/:id` returns `{ tree, trackProgress }` (breaking shape change; `Work.vue` handles both via `response.data.tree || response.data`). The tree is built from the directory listing + `memo` **without reading audio file bytes** — `contentHash` on audio nodes is populated only from cached `memo.hash` (null/undefined where not yet hashed). Audio nodes carry `relPath` (relative path from work root) as the stable key the frontend uses to merge late-arriving hashes from `GET /api/work/:id/memo` (the only endpoint reading file bytes). `trackProgress` is a `{contentHash: {seconds, completed}}` map.
+> **Tracks response:** `GET /api/tracks/:id` returns `{ tree, trackProgress }` (breaking shape change; `Work.vue` handles both via `response.data.tree || response.data`). Audio nodes arrive with `contentHash` already populated — the backend hashes before building the tree — so progress badges paint on first render and any queue committed from the tree carries its hashes. The first open of a work is slower for it (the backend streams the audio once, then caches by mtime). `trackProgress` is a `{contentHash: {seconds, completed}}` map. **Do not reintroduce a second request for hashes:** a queue committed before hashes arrive is serialized into `t_play_history` by `toQueueItem`, and the resume-from-history paths (`RecentWorks.vue`, `FavListItem.vue`) never fetch the tree, so such a row can never recover its hashes — `POST /api/backfill/progress` is the only repair.
 
 > **Note:** Library scanning is **not** a REST endpoint. `Scanner.vue` triggers scans over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN` / `KILL_SCAN_PROCESS`) and listens for the `SCAN_*` events.
 

@@ -72,10 +72,10 @@ export default {
         const response = await this.$axios.get(`/api/tracks/${this.workid}`);
         this.tree = response.data.tree || response.data;
         this.trackProgress = response.data.trackProgress || {};
-        // Tree is rendered instantly from listing + memo (no file reads). Hashes
-        // are computed/cached separately and merged reactively here so the tree
-        // doesn't wait on hashing multi-GB works.
-        this.requestMemo();
+        // The tree arrives with contentHash already on every audio node, so
+        // progress badges paint on first render and any queue committed from
+        // here carries its hashes. The first open of a work is slower for it
+        // (the backend hashes the audio once, then caches by mtime).
       } catch (error) {
         if (error.response) {
           // 请求已发出，但服务器响应的状态码不在 2xx 范围内
@@ -86,71 +86,6 @@ export default {
       }
     },
 
-    // Fetch lazily-computed content hashes and merge them onto the already-
-    // rendered tree nodes by relPath. Per-track progress badges populate
-    // reactively once contentHash is set (WorkTree reads trackProgress[contentHash]).
-    async requestMemo() {
-      try {
-        const response = await this.$axios.get(`/api/work/${this.workid}/memo`);
-        const contentHashMap = response.data.contentHash || {};
-        if (Object.keys(contentHashMap).length === 0) return;
-        // Build a new tree (no in-place mutation — the nodes may be observed by
-        // Vuex strict mode) with contentHash merged by relPath. Reassigning
-        // this.tree triggers WorkTree's `tree` watcher -> internalTree rebuild.
-        this.tree = this.mergeContentHashes(this.tree, contentHashMap);
-        // The tree now has hashes, but a queue committed before this resolved
-        // does not -- SET_QUEUE snapshotted the pre-merge node objects, and the
-        // merge above builds new ones rather than mutating them. Heal it, or
-        // per-track progress goes unreported for the rest of the session.
-        this.syncPlayingQueueContentHashes();
-      } catch (error) {
-        // Hashing can be slow/expensive; fail silently — badges just won't show.
-        console.error('fetch work memo failed:', error);
-      }
-    },
-
-    // Push freshly merged hashes onto the live queue, but only when the queue
-    // actually belongs to this work -- the user may have navigated here while
-    // something else is playing.
-    syncPlayingQueueContentHashes() {
-      // Read straight from the store: this component maps no AudioPlayer
-      // state, and `this.playWorkId` would be undefined here.
-      if (String(this.$store.state.AudioPlayer.playWorkId) !== String(this.workid)) return;
-      const hashByTrackId = this.collectContentHashesByTrackId(this.tree, {});
-      if (Object.keys(hashByTrackId).length === 0) return;
-      this.$store.commit('AudioPlayer/UPDATE_QUEUE_CONTENT_HASHES', hashByTrackId);
-    },
-
-    // Flatten the merged tree to { [trackId]: contentHash }. Keyed by trackId
-    // rather than relPath because queue items carry trackId, not relPath.
-    collectContentHashesByTrackId(nodes, out) {
-      if (!Array.isArray(nodes)) return out;
-      for (const node of nodes) {
-        if (node.type === 'folder') {
-          this.collectContentHashesByTrackId(node.children, out);
-        } else if (node.type === 'audio' && node.contentHash) {
-          out[node.trackId || node.hash] = node.contentHash;
-        }
-      }
-      return out;
-    },
-
-    // Return a new tree with contentHash set on audio nodes by matching relPath.
-    // Purely functional — never mutates the input nodes (some are observed by
-    // Vuex strict mode, which throws on outside-mutation).
-    mergeContentHashes(nodes, contentHashMap) {
-      if (!Array.isArray(nodes)) return nodes;
-      return nodes.map((node) => {
-        if (node.type === 'audio' && node.relPath && contentHashMap[node.relPath] !== undefined) {
-          return { ...node, contentHash: contentHashMap[node.relPath] };
-        }
-        if (node.type === 'folder' && Array.isArray(node.children)) {
-          return { ...node, children: this.mergeContentHashes(node.children, contentHashMap) };
-        }
-        return node;
-      });
-    },
-    
     requestData () {
       this.requestMetaData();
       this.requestTracks();
