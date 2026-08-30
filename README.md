@@ -124,8 +124,16 @@ generates absolute URLs for its own assets, so it has to see the same paths the
 browser does. Both of these are correct:
 
 ```nginx
-# nginx — note the upstream has no trailing slash, which is what stops
-# nginx from rewriting /kikoeru/api/... down to /api/...
+# `location /kikoeru/` only matches the path WITH its trailing slash, so send
+# the bare form here rather than letting nginx 404 it.
+location = /kikoeru { return 301 /kikoeru/; }
+
+# The upstream deliberately has no trailing slash. Written as
+# `proxy_pass http://127.0.0.1:8888/;` — with a URI part, even a bare "/" —
+# nginx replaces the matched location prefix, and /kikoeru/api/works would
+# reach the app as /api/works. Without one it forwards the request URI
+# untouched, which is what this needs. Most reverse-proxy examples you will
+# find online include that slash.
 location /kikoeru/ {
     proxy_pass http://127.0.0.1:8888;
     proxy_http_version 1.1;
@@ -139,8 +147,12 @@ location /kikoeru/ {
 ```
 
 ```caddyfile
-# Caddy — handle_path would strip the prefix, so use handle
 example.com {
+    # /kikoeru/* does not match the bare path either; redir sorts ahead of
+    # handle in Caddy's default directive order, so this needs no route block.
+    redir /kikoeru /kikoeru/
+
+    # handle, not handle_path: handle_path strips the matched prefix.
     handle /kikoeru/* {
         reverse_proxy 127.0.0.1:8888
     }
