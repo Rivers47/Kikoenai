@@ -8,7 +8,7 @@ const expect = chai.expect;
 const { existsSync, unlinkSync } = require('fs');
 const { join } = require('path');
 
-const { parseSearchQuery } = require('../database/search-query');
+const { parseSearchQuery, formatSearchTerm, formatSearchQuery } = require('../database/search-query');
 const { makeQueries } = require('../database/queries');
 const { nameToUUID } = require('../scraper/utils');
 
@@ -66,6 +66,39 @@ describe('parseSearchQuery()', function () {
     expect(parseSearchQuery('tag:"unterminated')[0].value).to.equal('unterminated');
     expect(parseSearchQuery('')).to.deep.equal([]);
     expect(parseSearchQuery(undefined)).to.deep.equal([]);
+  });
+});
+
+describe('formatSearchQuery()', function () {
+  const fields = (terms) => terms.map(t => [t.field, t.value, t.exact, t.negate]);
+
+  it('builds a term from a label, quoting so the name survives verbatim', function () {
+    expect(formatSearchTerm({ field: 'tag', value: 'よしよし', exact: true }))
+      .to.equal('tag:"よしよし$"');
+    expect(formatSearchTerm({ field: 'va', value: 'Some Name', exact: true, negate: true }))
+      .to.equal('-va:"Some Name$"');
+    expect(formatSearchTerm({ field: null, value: 'free text' }))
+      .to.equal('"free text"');
+  });
+
+  it('round-trips whatever the parser produced', function () {
+    for (const query of [
+      'tag:"耳かき 囁き$" -va:"Some Name$"',
+      'free text tag:NTR -title:foo$',
+      'series:"第 1 期$"',
+      'va:"名前"',
+    ]) {
+      const terms = parseSearchQuery(query);
+      expect(fields(parseSearchQuery(formatSearchQuery(terms))), query).to.deep.equal(fields(terms));
+    }
+  });
+
+  // The bare form rewrites '_' as a space, so quoting is what keeps a name
+  // containing one pointing at its own row.
+  it('keeps an underscore in a name out of the space substitution', function () {
+    const built = formatSearchTerm({ field: 'circle', value: 'A_B', exact: true });
+    expect(built).to.equal('circle:"A_B$"');
+    expect(parseSearchQuery(built)[0].value).to.equal('A_B');
   });
 });
 

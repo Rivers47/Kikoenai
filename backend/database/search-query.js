@@ -16,6 +16,11 @@
  * "foo:bar", so titles containing a colon still work.
  *
  *   va:"space separated name$"   circle:underscore_name   -tag:NTR
+ *
+ * This module is the only definition of the grammar, and the frontend renders
+ * the same terms the backend matches on, so it is shared rather than mirrored:
+ * `frontend/quasar.config.js` aliases it as `app-search-query`. Keep it free of
+ * `require`s and of anything Node-only, or the browser bundle breaks.
  */
 
 /** Accepted namespaces (lower-cased) → canonical field name. */
@@ -103,4 +108,26 @@ const parseSearchQuery = (keyword) => {
   return terms;
 };
 
-module.exports = { parseSearchQuery, FIELD_ALIASES, RELATION_FIELDS };
+/**
+ * Render one term back into query syntax — the inverse of parseSearchQuery,
+ * used by the frontend to build a filter from a clicked label and to drop a
+ * term from an existing one.
+ *
+ * The value is always quoted, so it survives verbatim: the bare form rewrites
+ * '_' as a space, which would silently retarget any name containing one.
+ * @param {{field: ?String, value: String, exact: Boolean, negate: Boolean}} term
+ * @returns {String}
+ */
+const formatSearchTerm = ({ field, value, exact = false, negate = false }) =>
+  `${negate ? '-' : ''}${field ? `${field}:` : ''}"${value}${exact ? '$' : ''}"`;
+
+/** Join terms back into a single search box string. */
+const formatSearchQuery = (terms) => terms.map(formatSearchTerm).join(' ');
+
+module.exports = {
+  parseSearchQuery,
+  formatSearchTerm,
+  formatSearchQuery,
+  FIELD_ALIASES,
+  RELATION_FIELDS,
+};

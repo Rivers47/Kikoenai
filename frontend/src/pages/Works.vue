@@ -9,7 +9,14 @@
         <q-badge color="secondary" floating>{{pagination.totalCount}}</q-badge>
       </span>
       <div> <!--普通搜索模式的信息展示-->
-        <q-badge class="q-ma-xs" v-for="meta, index in searchMetas" :key="meta">{{ index == 0 ? "":"," }} {{ meta }}</q-badge>
+        <!-- A filter is a list of terms, so it is shown as one removable chip
+             each rather than as the raw query string. -->
+        <FilterTerms
+          v-if="$route.query.keyword"
+          :filter="$route.query.keyword"
+          @update:filter="applyFilter"
+        />
+        <q-badge v-else class="q-ma-xs" v-for="meta, index in searchMetas" :key="meta">{{ index == 0 ? "":"," }} {{ meta }}</q-badge>
       </div>
     </div>
 
@@ -157,6 +164,7 @@ import NotifyMixin from '../mixins/Notification.js'
 import RecentWorks from 'src/components/RecentWorks'
 import { mapState } from 'vuex'
 import OldWorkCard from 'src/components/OldWorkCard'
+import FilterTerms from 'components/FilterTerms'
 
 export default {
   name: 'Works',
@@ -168,6 +176,7 @@ export default {
     OldWorkCard,
     WorkListItem,
     RecentWorks,
+    FilterTerms,
   },
 
   data () {
@@ -315,6 +324,12 @@ export default {
   },
 
   methods: {
+    // Dropping the last term leaves no filter at all, which is the whole
+    // library rather than an empty search.
+    applyFilter (filter) {
+      this.$router.push(filter ? { path: '/works', query: { keyword: filter } } : '/works')
+    },
+
     onLoad (index, done) {
       this.requestWorksQueue()
         .then(() => done())
