@@ -25,7 +25,7 @@
       <router-link
         v-for="tag in tags"
         :key='tag.id'
-        :to="`/works?tagId=${tag.id}`"
+        :to="labelRoute('tag', tag.name)"
         >
         <q-chip dense square class="shadow-3" :lang="$tagLang">
           {{ $tTag(tag.name) }}
@@ -40,7 +40,7 @@
 
 <script>
 
-import { formatID, isFanzaId } from 'src/utils'
+import { formatID, isFanzaId, labelRoute } from 'src/utils'
 import { apiUrl } from 'src/base-path'
 
 export default {
@@ -109,6 +109,7 @@ export default {
   },
 
   methods: {
+    labelRoute,
     toggleBlurFlag () {
       this.blurFlag = !this.blurFlag
     }

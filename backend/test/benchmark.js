@@ -4,6 +4,7 @@ process.env.FREEZE_CONFIG_FILE = '1';
 const fs = require('fs');
 const path = require('path');
 const { makeQueries } = require('../database/queries');
+const { formatSearchTerm } = require('../database/search-query');
 const { config } = require('../config');
 const knex = require('knex');
 const knexfile = require('../database/knexfile');
@@ -81,23 +82,24 @@ describe('DB query benchmark', function () {
     const workRow = await myKnex('t_work').select('id').first();
     this.sample.workId = workRow ? workRow.id : null;
 
-    const circleRow = await myKnex('t_work').select('circle_id as id').whereNotNull('circle_id').first();
-    this.sample.circleId = circleRow ? circleRow.id : null;
+    // Label filters resolve by name, so that is what the benchmarks need.
+    const labelName = async (relTable, key, nameTable) => {
+      const rel = await myKnex(relTable).select(`${key} as id`).first();
+      if (!rel) return null;
+      const row = await myKnex(nameTable).select('name').where('id', rel.id).first();
+      return row ? row.name : null;
+    };
 
-    const tagRow = await myKnex('r_tag_work').select('tag_id as id').first();
-    this.sample.tagId = tagRow ? tagRow.id : null;
+    const circleRow = await myKnex('t_work')
+      .join('t_circle', 't_circle.id', 't_work.circle_id')
+      .select('t_circle.name').whereNotNull('circle_id').first();
+    this.sample.circleName = circleRow ? circleRow.name : null;
 
-    const vaRow = await myKnex('r_va_work').select('va_id as id').first();
-    this.sample.vaId = vaRow ? vaRow.id : null;
-
-    const illustratorRow = await myKnex('r_illustrator_work').select('illustrator_id as id').first();
-    this.sample.illustratorId = illustratorRow ? illustratorRow.id : null;
-
-    const scriptWriterRow = await myKnex('r_script_writer_work').select('script_writer_id as id').first();
-    this.sample.scriptWriterId = scriptWriterRow ? scriptWriterRow.id : null;
-
-    const seriesRow = await myKnex('r_series_work').select('series_id as id').first();
-    this.sample.seriesId = seriesRow ? seriesRow.id : null;
+    this.sample.tagName = await labelName('r_tag_work', 'tag_id', 't_tag');
+    this.sample.vaName = await labelName('r_va_work', 'va_id', 't_va');
+    this.sample.illustratorName = await labelName('r_illustrator_work', 'illustrator_id', 't_illustrator');
+    this.sample.scriptWriterName = await labelName('r_script_writer_work', 'script_writer_id', 't_script_writer');
+    this.sample.seriesName = await labelName('r_series_work', 'series_id', 't_series');
 
     // Numeric RJ id for keyword search
     if (this.sample.workId) {
@@ -138,39 +140,45 @@ describe('DB query benchmark', function () {
     expect(row).to.exist;
   });
 
-  it('getWorksBy circle', async function () {
-    if (!this.sample.circleId) { this.skip('no circle id'); return; }
-    const row = await bench('getWorksBy circle', () => Q.getWorksBy({ id: this.sample.circleId, field: 'circle', username: this.sample.username }));
+  it('label filter circle', async function () {
+    if (!this.sample.circleName) { this.skip('no circle name'); return; }
+    const keyword = formatSearchTerm({ field: 'circle', value: this.sample.circleName, exact: true });
+    const row = await bench('filter circle', () => Q.getWorksByKeyWord({ keyword, username: this.sample.username }));
     expect(row).to.exist;
   });
 
-  it('getWorksBy tag', async function () {
-    if (!this.sample.tagId) { this.skip('no tag id'); return; }
-    const row = await bench('getWorksBy tag', () => Q.getWorksBy({ id: this.sample.tagId, field: 'tag', username: this.sample.username }));
+  it('label filter tag', async function () {
+    if (!this.sample.tagName) { this.skip('no tag name'); return; }
+    const keyword = formatSearchTerm({ field: 'tag', value: this.sample.tagName, exact: true });
+    const row = await bench('filter tag', () => Q.getWorksByKeyWord({ keyword, username: this.sample.username }));
     expect(row).to.exist;
   });
 
-  it('getWorksBy va', async function () {
-    if (!this.sample.vaId) { this.skip('no va id'); return; }
-    const row = await bench('getWorksBy va', () => Q.getWorksBy({ id: this.sample.vaId, field: 'va', username: this.sample.username }));
+  it('label filter va', async function () {
+    if (!this.sample.vaName) { this.skip('no va name'); return; }
+    const keyword = formatSearchTerm({ field: 'va', value: this.sample.vaName, exact: true });
+    const row = await bench('filter va', () => Q.getWorksByKeyWord({ keyword, username: this.sample.username }));
     expect(row).to.exist;
   });
 
-  it('getWorksBy illustrator', async function () {
-    if (!this.sample.illustratorId) { this.skip('no illustrator id'); return; }
-    const row = await bench('getWorksBy illustrator', () => Q.getWorksBy({ id: this.sample.illustratorId, field: 'illustrator', username: this.sample.username }));
+  it('label filter illustrator', async function () {
+    if (!this.sample.illustratorName) { this.skip('no illustrator name'); return; }
+    const keyword = formatSearchTerm({ field: 'illustrator', value: this.sample.illustratorName, exact: true });
+    const row = await bench('filter illustrator', () => Q.getWorksByKeyWord({ keyword, username: this.sample.username }));
     expect(row).to.exist;
   });
 
-  it('getWorksBy script_writer', async function () {
-    if (!this.sample.scriptWriterId) { this.skip('no script_writer id'); return; }
-    const row = await bench('getWorksBy script_writer', () => Q.getWorksBy({ id: this.sample.scriptWriterId, field: 'script_writer', username: this.sample.username }));
+  it('label filter script_writer', async function () {
+    if (!this.sample.scriptWriterName) { this.skip('no script_writer name'); return; }
+    const keyword = formatSearchTerm({ field: 'script_writer', value: this.sample.scriptWriterName, exact: true });
+    const row = await bench('filter script_writer', () => Q.getWorksByKeyWord({ keyword, username: this.sample.username }));
     expect(row).to.exist;
   });
 
-  it('getWorksBy series', async function () {
-    if (!this.sample.seriesId) { this.skip('no series id'); return; }
-    const row = await bench('getWorksBy series', () => Q.getWorksBy({ id: this.sample.seriesId, field: 'series', username: this.sample.username }));
+  it('label filter series', async function () {
+    if (!this.sample.seriesName) { this.skip('no series name'); return; }
+    const keyword = formatSearchTerm({ field: 'series', value: this.sample.seriesName, exact: true });
+    const row = await bench('filter series', () => Q.getWorksByKeyWord({ keyword, username: this.sample.username }));
     expect(row).to.exist;
   });
 

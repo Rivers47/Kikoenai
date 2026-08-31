@@ -689,11 +689,9 @@ const makeQueries = (knex) => {
   };
 
   /**
-   * Returns list of works by circle, tag, VA, illustrator, script writer or series.
-   * Now async — returns { works, totalCount }.
+   * Returns a page of the whole library. Label filtering goes through
+   * getWorksByKeyWord, which is the only filter mechanism.
    * @param {Object} opts
-   * @param {String} [opts.id] - filter id (for field-specific queries)
-   * @param {String} [opts.field] - 'circle' | 'tag' | 'va' | 'illustrator' | 'script_writer' | 'series'
    * @param {String} [opts.username='']
    * @param {Number} [opts.nsfw=0] - 0=all, 1=全年龄, 2=R18
    * @param {String} [opts.order='release'] - sort column; 'rating' for userRating; 'random'/'betterRandom'
@@ -703,7 +701,7 @@ const makeQueries = (knex) => {
    * @param {Number} [opts.seed] - shuffle seed for random order
    * @returns {Promise<{works: Object[], totalCount: Array<{count: number}>}>}
    */
-  const getWorksBy = async ({id, field, username = '', nsfw = 0, order = 'release', sort = 'desc', limit, offset, seed} = {}) => {
+  const getWorksBy = async ({username = '', nsfw = 0, order = 'release', sort = 'desc', limit, offset, seed} = {}) => {
     // Build the core query (t_work ⋈ t_circle)
     let coreQ = knex('t_work')
       .join('t_circle', 't_circle.id', 't_work.circle_id')
@@ -714,35 +712,6 @@ const makeQueries = (knex) => {
         't_work.dl_count', 't_work.price', 't_work.review_count',
         't_work.rate_count', 't_work.rate_average_2dp',
         't_work.rate_count_detail', 't_work.rank');
-
-    // Apply field filter
-    if (field) {
-      switch (field) {
-        case 'circle':
-          coreQ = coreQ.where('t_work.circle_id', id);
-          break;
-        case 'tag':
-          coreQ = coreQ.whereIn('t_work.id', knex('r_tag_work').select('work_id').where('tag_id', id));
-          break;
-        case 'va':
-          coreQ = coreQ.whereIn('t_work.id', knex('r_va_work').select('work_id').where('va_id', id));
-          break;
-        case 'illustrator':
-          coreQ = coreQ.whereIn('t_work.id', knex('r_illustrator_work').select('work_id').where('illustrator_id', id));
-          break;
-        case 'script_writer':
-          coreQ = coreQ.whereIn('t_work.id', knex('r_script_writer_work').select('work_id').where('script_writer_id', id));
-          break;
-        case 'series':
-          coreQ = coreQ.whereIn('t_work.id', knex('r_series_work').select('work_id').where('series_id', id));
-          break;
-        case 'author':
-          coreQ = coreQ.whereIn('t_work.id', knex('r_author_work').select('work_id').where('author_id', id));
-          break;
-        default:
-          break;
-      }
-    }
 
     // Apply nsfw filter
     coreQ = nsfwFilter(nsfw, coreQ);

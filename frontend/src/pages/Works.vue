@@ -241,24 +241,7 @@ export default {
 
   computed: {
     url () {
-      const query = this.$route.query
-      if (query.circleId) {
-        return `/api/circles/${this.$route.query.circleId}/works`
-      } else if (query.tagId) {
-        return `/api/tags/${this.$route.query.tagId}/works`
-      } else if (query.vaId) {
-        return `/api/vas/${this.$route.query.vaId}/works`
-      } else if (query.illustratorId) {
-        return `/api/illustrators/${this.$route.query.illustratorId}/works`
-      } else if (query.scriptWriterId) {
-        return `/api/script_writers/${this.$route.query.scriptWriterId}/works`
-      } else if (query.seriesId) {
-        return `/api/seriess/${this.$route.query.seriesId}/works`
-      } else if (query.keyword) {
-        return `/api/search`
-      } else {
-        return '/api/works'
-      }
+      return this.$route.query.keyword ? '/api/search' : '/api/works'
     },
 
 
@@ -372,70 +355,9 @@ export default {
     },
 
     refreshPageTitle () {
-      const q = this.$route.query;
-      if (q.circleId || q.tagId || q.vaId || q.illustratorId || q.scriptWriterId || q.seriesId) {
-        let url = '', restrict = ''
-        if (q.circleId) {
-          restrict = 'circles'
-          url = `/api/${restrict}/${q.circleId}`
-        } else if (q.tagId) {
-          restrict = 'tags'
-          url = `/api/${restrict}/${q.tagId}`
-        } else if (q.vaId) {
-          restrict = 'vas'
-          url = `/api/${restrict}/${q.vaId}`
-        } else if (q.illustratorId) {
-          restrict = 'illustrators'
-          url = `/api/${restrict}/${q.illustratorId}`
-        } else if (q.scriptWriterId) {
-          restrict = 'script_writers'
-          url = `/api/${restrict}/${q.scriptWriterId}`
-        } else {
-          restrict = 'seriess'
-          url = `/api/${restrict}/${q.seriesId}`
-        }
-
-        this.$axios.get(url)
-          .then((response) => {
-            const name = response.data.name
-            let pageTitle
-
-            switch (restrict) {
-              case 'tags':
-                pageTitle = this.$t('works.searchTag')
-                break
-              case 'vas':
-                pageTitle = this.$t('works.searchVa')
-                break
-              case 'circles':
-                pageTitle = this.$t('works.searchCircle')
-                break
-              case 'illustrators':
-                pageTitle = this.$t('works.searchIllustrator')
-                break
-              case 'script_writers':
-                pageTitle = this.$t('works.searchScriptWriter')
-                break
-              case 'seriess':
-                pageTitle = this.$t('works.searchSeries')
-                break
-            }
-            this.searchMetas = [name]
-            this.pageTitle = pageTitle
-          })
-          .catch((error) => {
-            if (error.response) {
-              if (error.response.status !== 401) {
-                this.showErrNotif(error.response.data.error || `${error.response.status} ${error.response.statusText}`)
-              }
-            } else {
-              this.showErrNotif(error.message || error)
-            }
-          })
-      } else if (this.$route.query.keyword) {
+      if (this.$route.query.keyword) {
         this.pageTitle = this.$t('works.searchKeyword');
         this.searchMetas = [this.$route.query.keyword];
-
       } else {
         this.pageTitle = this.$t('works.allWorks')
         this.searchMetas = [];

@@ -1,6 +1,6 @@
 const { knex } = require('./db');
 
-const dbVersion = '20260828000000';
+const dbVersion = '20260831000000';
 
 // 数据库结构
 const createSchema = () => knex.schema
@@ -8,6 +8,7 @@ const createSchema = () => knex.schema
     table.string('id').notNullable(); // UUID v5, based on name
     table.string('name').notNullable(); // VARCHAR 类型 [社团名称]
     table.primary('id');
+    table.index(['name'], 't_circle_name_index'); // filter terms match on name
   })
   .createTable('t_work', (table) => {
     table.string('id').notNullable(); // TEXT PK: DLsite id (RJ-padded), Fanza id (d_XXXXXX)
@@ -41,11 +42,13 @@ const createSchema = () => knex.schema
     table.string('id').notNullable(); // UUID v5, based on name
     table.string('name').notNullable(); // VARCHAR 类型 [标签名称]
     table.primary('id');
+    table.index(['name'], 't_tag_name_index'); // filter terms match on name
   })
   .createTable('t_va', (table) => {
     table.string('id'); // UUID v5, 基于name生成的固定值
     table.string('name').notNullable(); // VARCHAR 类型 [声优名称]
     table.primary('id');
+    table.index(['name'], 't_va_name_index'); // filter terms match on name
   })
   .createTable('r_tag_work', (table) => {
     table.string('tag_id');
@@ -65,6 +68,7 @@ const createSchema = () => knex.schema
     table.string('id'); // UUID v5, 基于name生成的固定值
     table.string('name').notNullable(); // VARCHAR 类型 [イラスト名称]
     table.primary('id');
+    table.index(['name'], 't_illustrator_name_index'); // filter terms match on name
   })
   .createTable('r_illustrator_work', (table) => {
     table.string('illustrator_id');
@@ -77,6 +81,7 @@ const createSchema = () => knex.schema
     table.string('id'); // UUID v5, 基于name生成的固定值
     table.string('name').notNullable(); // VARCHAR 类型 [シナリオ名称]
     table.primary('id');
+    table.index(['name'], 't_script_writer_name_index'); // filter terms match on name
   })
   .createTable('r_script_writer_work', (table) => {
     table.string('script_writer_id');
@@ -89,6 +94,7 @@ const createSchema = () => knex.schema
     table.string('id'); // UUID v5, 基于name生成的固定值
     table.string('name').notNullable(); // VARCHAR 类型 [作者名称]
     table.primary('id');
+    table.index(['name'], 't_author_name_index'); // filter terms match on name
   })
   .createTable('r_author_work', (table) => {
     table.string('author_id');
@@ -101,6 +107,7 @@ const createSchema = () => knex.schema
     table.string('id').notNullable(); // UUID v5, based on name
     table.string('name').notNullable(); // VARCHAR 类型 [シリーズ名称]
     table.primary('id');
+    table.index(['name'], 't_series_name_index'); // filter terms match on name
   })
   .createTable('r_series_work', (table) => {
     table.string('series_id');

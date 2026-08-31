@@ -16,7 +16,7 @@
 
       <!-- 社团 -->
       <div class="q-ml-sm q-mt-sm q-mb-xs text-subtitle1 text-weight-regular ellipsis">
-        <router-link :to="`/works?circleId=${metadata.circle.id}`" class="text-muted">
+        <router-link :to="labelRoute('circle', metadata.circle.name)" class="text-muted">
           {{ metadata.circle.name }}
         </router-link>
       </div>
@@ -83,7 +83,7 @@
       <div class="q-ma-xs" v-if="showTags">
         <router-link
           v-for="(tag, index) in metadata.tags"
-          :to="`/works?tagId=${tag.id}`"
+          :to="labelRoute('tag', tag.name)"
           :key=index
         >
           <q-chip size="md" class="shadow-2" :lang="$tagLang">
@@ -96,7 +96,7 @@
       <div class="q-mx-xs q-my-sm">
         <router-link
           v-for="(va, index) in metadata.vas"
-          :to="`/works?vaId=${va.id}`"
+          :to="labelRoute('va', va.name)"
           :key=index
         >
           <q-chip square size="md" class="shadow-2" color="primary-container" text-color="on-primary-container" icon="mic">
@@ -111,7 +111,7 @@
 <script>
 import CoverSFW from 'components/CoverSFW'
 import NotifyMixin from '../mixins/Notification.js'
-import { isFanzaId, fanzaCid } from 'src/utils'
+import { isFanzaId, fanzaCid, labelRoute } from 'src/utils'
 
 export default {
   name: 'WorkCard',
@@ -197,6 +197,7 @@ export default {
   },
 
   methods: {
+    labelRoute,
     submitRating (payload) {
       this.$axios.put('/api/review', payload)
         .then((response) => {

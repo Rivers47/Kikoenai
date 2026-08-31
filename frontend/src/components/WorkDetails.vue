@@ -20,7 +20,7 @@
         <!-- 社团名 -->
         <div class="text-subtitle1 text-weight-regular">
           <SearchableLabel
-            :to="`/works?circleId=${metadata.circle.id}`"
+            :to="labelRoute('circle', metadata.circle.name)"
             field="circle"
             :name="metadata.circle.name || ''"
             link-class="text-muted"
@@ -90,7 +90,7 @@
       <div class="q-px-none q-py-sm" v-if="showTags">
         <SearchableLabel
           v-for="(tag, index) in metadata.tags"
-          :to="`/works?tagId=${tag.id}`"
+          :to="labelRoute('tag', tag.name)"
           field="tag"
           :name="tag.name"
           :key=index
@@ -105,7 +105,7 @@
       <div class="q-px-none q-pb-xs">
         <SearchableLabel
           v-for="(va, index) in metadata.vas"
-          :to="`/works?vaId=${va.id}`"
+          :to="labelRoute('va', va.name)"
           field="va"
           :name="va.name"
           :key=index
@@ -120,7 +120,7 @@
       <!-- <div class="q-px-none q-pb-xs" v-if="metadata.illustrators && metadata.illustrators.length > 0">
         <router-link
           v-for="(illustrator, index) in metadata.illustrators"
-          :to="`/works?illustratorId=${illustrator.id}`"
+          :to="labelRoute('illustrator', illustrator.name)"
           :key=index
         >
           <q-chip square size="md" class="shadow-4" color="tertiary-container" text-color="on-tertiary-container" icon="brush">
@@ -133,7 +133,7 @@
       <div class="q-px-none q-pb-xs" v-if="metadata.scriptWriters && metadata.scriptWriters.length > 0">
         <SearchableLabel
           v-for="(sw, index) in metadata.scriptWriters"
-          :to="`/works?scriptWriterId=${sw.id}`"
+          :to="labelRoute('script_writer', sw.name)"
           field="script_writer"
           :name="sw.name"
           :key=index
@@ -147,7 +147,7 @@
       <!-- 系列 -->
       <div class="q-px-none q-pb-xs" v-if="metadata.series">
         <SearchableLabel
-          :to="`/works?seriesId=${metadata.series.id}`"
+          :to="labelRoute('series', metadata.series.name)"
           field="series"
           :name="metadata.series.name"
         >
@@ -270,7 +270,7 @@ import EditMetadata from './EditMetadata'
 import SearchableLabel from './SearchableLabel'
 import NotifyMixin from '../mixins/Notification.js'
 import { mapState } from 'vuex'
-import { isFanzaId, fanzaCid } from 'src/utils'
+import { isFanzaId, fanzaCid, labelRoute } from 'src/utils'
 
 export default {
   name: 'WorkDetails',
@@ -387,6 +387,7 @@ export default {
   },
 
   methods: {
+    labelRoute,
     setProgress (newProgress) {
       this.progress = newProgress;
       const submitPayload = {

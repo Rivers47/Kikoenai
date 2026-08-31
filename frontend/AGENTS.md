@@ -512,7 +512,7 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 | `/api/review` | GET/PUT/DELETE | `WorkDetails.vue`, `Favourites.vue`, `AudioElement.vue` | Work reviews; the work is identified by a `work_id` body field or query param, not a path segment. PUT with `progressOnly=true` and `autoMark=true` only writes `progress='listened'` if existing is not terminal (listened/replay/postponed). |
 | `/api/review/progress` | DELETE | `WorkDetails.vue` | Clear only `progress` (NULL), preserving rating/review_text. If the row has no rating/review_text, the whole row is deleted. Query `work_id`. |
 | `/api/history` | GET | `Favourites.vue`, `RecentWorks.vue` | List works with playback history. Optional `excludeFinished` (`all`|`listened`, default `listened`). Response items include nullable `progress`. |
-| `/api/search` | GET | `Works.vue` | Keyword search — `keyword` supports E-Hentai style filters (`va:"name$"`, `circle:under_score`, `-tag:NTR`, ANDed); parsed server-side, see `backend/AGENTS.md` §2.3b |
+| `/api/search` | GET | `Works.vue` | **The only filter mechanism.** `keyword` is an E-Hentai style filter (`va:"name$"`, `circle:under_score`, `-tag:NTR`, ANDed); parsed server-side, see `backend/AGENTS.md` §2.3b. Every label link builds one via `labelRoute()` in `src/utils.js`; the per-entity `/:id/works` endpoints are gone |
 | `/api/version` | GET | `MainLayout.vue` | Version + update info |
 | `/api/config/admin` | GET/PUT | `Folders.vue`, `Advanced.vue` | Admin config read/write |
 | `/api/credentials/user` | POST/PUT/DELETE | `UserManage.vue` | Create / update / delete a user |
@@ -520,7 +520,6 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 | `/api/backfill/progress` | GET | `Backfill.vue` | Metadata backfill progress |
 | `/api/refresh/:id` | POST | `WorkDetails.vue` | Re-fetch metadata for one work |
 | `/api/work/scan/:id` | POST | `WorkDetails.vue` | Rescan a single work |
-| `/api/{tags,circles,vas,illustrators,script_writers,seriess}/:id/works` | GET | `List.vue`, `Works.vue` | Works filtered by that entity |
 | `/api/work/:id` | PUT | `EditMetadata.vue` | Manually edit work metadata (admin only). Work id is a string: DLsite RJ-padded (`\d{6,8}`) or Fanza (`d\d+`, underscore-free — `isFanzaId`/`fanzaCid` in `src/utils.js`; DMM's own `d_215444` only appears in links out to DMM). |
 | `/api/illustrators` | GET | `EditMetadata.vue` | List illustrators (autocomplete) |
 | `/api/script_writers` | GET | `EditMetadata.vue` | List script writers (autocomplete) |

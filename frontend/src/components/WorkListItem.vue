@@ -15,7 +15,7 @@
 
       <q-item-label>
         <div class="row q-gutter-x-sm q-gutter-y-xs">
-          <router-link :to="`/works?circleId=${metadata.circle.id}`" class="col-auto text-muted">
+          <router-link :to="labelRoute('circle', metadata.circle.name)" class="col-auto text-muted">
             {{ metadata.circle.name }}
           </router-link>
 
@@ -23,7 +23,7 @@
 
           <router-link
             v-for="(va, index) in metadata.vas"
-            :to="`/works?vaId=${va.id}`"
+            :to="labelRoute('va', va.name)"
             :key=index
             class="col-auto text-primary"
           >
@@ -36,7 +36,7 @@
         <div class="row q-gutter-x-sm q-gutter-y-xs">
           <router-link
             v-for="(tag, index) in metadata.tags"
-            :to="`/works?tagId=${tag.id}`"
+            :to="labelRoute('tag', tag.name)"
             :key=index
             class="col-auto text-muted"
             :lang="$tagLang"
@@ -51,6 +51,7 @@
 
 <script>
 import { apiUrl } from 'src/base-path'
+import { labelRoute } from 'src/utils'
 
 export default {
   name: 'WorkListItem',
@@ -64,6 +65,10 @@ export default {
       type: Boolean,
       default: true
     },
+  },
+
+  methods: {
+    labelRoute,
   },
 
   computed: {

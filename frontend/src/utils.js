@@ -1,5 +1,7 @@
 import axios from "axios";
 import { apiUrl } from './base-path';
+// Single implementation of the search grammar — see FilterTerms.vue.
+import { formatSearchTerm } from '../../backend/database/search-query';
 
 /**
  * Work ids are canonical everywhere in the app: DLsite ids are zero-padded
@@ -100,3 +102,15 @@ export function toQueueItem(node) {
 }
 
 
+
+/**
+ * Route to every work carrying a label. There is one filter mechanism, so a
+ * label link is an anchored term rather than an id lookup — which is what lets
+ * the result be narrowed further instead of replaced.
+ *
+ * `field` is a search namespace (tag, va, circle, illustrator, script_writer,
+ * series) and `name` the canonical name, not a translated display string.
+ */
+export function labelRoute(field, name) {
+  return { path: '/works', query: { keyword: formatSearchTerm({ field, value: name, exact: true }) } };
+}

@@ -15,7 +15,7 @@
         </q-item-label>
 
         <div class="row q-gutter-x-sm col-auto" >
-          <router-link :to="`/works?circleId=${metadata.circle.id}`" class="col-auto text-muted">
+          <router-link :to="labelRoute('circle', metadata.circle.name)" class="col-auto text-muted">
             {{metadata.circle.name}}
           </router-link>
 
@@ -26,7 +26,7 @@
           <router-link
             v-for="(va, index) in metadata.vas"
             :key=index
-            :to="`/works?vaId=${va.id}`"
+            :to="labelRoute('va', va.name)"
             class="col-auto text-primary"
           >
             {{ va.name }}
@@ -106,6 +106,7 @@
 import WriteReview from './WriteReview'
 import NotifyMixin from '../mixins/Notification.js'
 import { apiUrl } from 'src/base-path'
+import { labelRoute } from 'src/utils'
 
 export default {
   name: 'FavListItem',
@@ -169,6 +170,7 @@ export default {
   },
 
   methods: {
+    labelRoute,
     // Zero hours/minutes are omitted. The en-US unit strings carry a leading
     // space (CJK ones don't), so join with '' and trim what that leaves behind.
     humanReadableSeconds(seconds) {

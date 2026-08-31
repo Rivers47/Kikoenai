@@ -453,7 +453,7 @@ node filesystem/updater.js --reviews        # re-scrape every DLsite user review
 
 The following endpoints are consumed by the `frontend/` package:
 
-**Id formats:** work-id route params (`:id` on `/api/work`, `/api/cover`, `/api/tracks`, `/api/media/*`, `/api/refresh`, `/api/work/scan`) are **strings** matching `^(\d{6,8}|d_?\d+)$` — DLsite ids are already RJ-padded digit strings, Fanza ids are `d`-prefixed and underscore-free. `workIdParam`/`workIdBody`/`workIdQuery` in `routes/utils/validate.js` validate them and sanitize the legacy `d_` spelling away, so a stale PWA cache or an old bookmark (`/work/d_215444`) keeps resolving after the migration. Label-id params (`/api/:fields/:id/works`) are UUID strings.
+**Id formats:** work-id route params (`:id` on `/api/work`, `/api/cover`, `/api/tracks`, `/api/media/*`, `/api/refresh`, `/api/work/scan`) are **strings** matching `^(\d{6,8}|d_?\d+)$` — DLsite ids are already RJ-padded digit strings, Fanza ids are `d`-prefixed and underscore-free. `workIdParam`/`workIdBody`/`workIdQuery` in `routes/utils/validate.js` validate them and sanitize the legacy `d_` spelling away, so a stale PWA cache or an old bookmark (`/work/d_215444`) keeps resolving after the migration. Label ids are UUID v5 of the label's own name, so they are no longer addressable as route params: `/api/:fields/:id` still resolves a name, but filtering by label goes through `/api/search` (§2.3b).
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -462,7 +462,7 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/auth/logout` | POST | Destroy the server-side session and clear the cookie |
 | `/api/works` | GET | List/search works (supports pagination, sort, filter) |
 | `/api/search` | GET | Keyword search — `keyword` supports the advanced filter syntax (§2.3b), e.g. `va:"name$" -tag:NTR` |
-| `/api/:fields/:id/works` | GET | Works filtered
+| ~~`/api/:fields/:id/works`~~ | — | **Removed.** Label filtering goes through `/api/search`
 | `/api/work/:id` | GET | Get work metadata + playback state |
 | `/api/tags` | GET | List all tags |
 | `/api/circles` | GET | List all circles |
