@@ -19,9 +19,14 @@
 
         <!-- 社团名 -->
         <div class="text-subtitle1 text-weight-regular">
-          <router-link :to="`/works?circleId=${metadata.circle.id}`" class="text-muted">
+          <SearchableLabel
+            :to="`/works?circleId=${metadata.circle.id}`"
+            field="circle"
+            :name="metadata.circle.name || ''"
+            link-class="text-muted"
+          >
             {{metadata.circle.name}}
-          </router-link>
+          </SearchableLabel>
         </div>
 
 
@@ -83,28 +88,32 @@
 
       <!-- 标签 -->
       <div class="q-px-none q-py-sm" v-if="showTags">
-        <router-link
+        <SearchableLabel
           v-for="(tag, index) in metadata.tags"
           :to="`/works?tagId=${tag.id}`"
+          field="tag"
+          :name="tag.name"
           :key=index
         >
           <q-chip size="md" class="shadow-4" :lang="$tagLang">
             {{ $tTag(tag.name) }}
           </q-chip>
-        </router-link>
+        </SearchableLabel>
       </div>
 
       <!-- Voice Actor -->
       <div class="q-px-none q-pb-xs">
-        <router-link
+        <SearchableLabel
           v-for="(va, index) in metadata.vas"
           :to="`/works?vaId=${va.id}`"
+          field="va"
+          :name="va.name"
           :key=index
         >
           <q-chip square size="md" class="shadow-4" color="tertiary-container" text-color="on-tertiary-container" icon="mic">
             {{va.name}}
           </q-chip>
-        </router-link>
+        </SearchableLabel>
       </div>
 
       <!-- Illustrator -->
@@ -122,24 +131,30 @@
 
       <!-- Scriptwriter -->
       <div class="q-px-none q-pb-xs" v-if="metadata.scriptWriters && metadata.scriptWriters.length > 0">
-        <router-link
+        <SearchableLabel
           v-for="(sw, index) in metadata.scriptWriters"
           :to="`/works?scriptWriterId=${sw.id}`"
+          field="script_writer"
+          :name="sw.name"
           :key=index
         >
           <q-chip square size="md" class="shadow-4" color="secondary-container" text-color="on-secondary-container" icon="edit">
             {{sw.name}}
           </q-chip>
-        </router-link>
+        </SearchableLabel>
       </div>
 
       <!-- 系列 -->
       <div class="q-px-none q-pb-xs" v-if="metadata.series">
-        <router-link :to="`/works?seriesId=${metadata.series.id}`">
+        <SearchableLabel
+          :to="`/works?seriesId=${metadata.series.id}`"
+          field="series"
+          :name="metadata.series.name"
+        >
           <q-chip square size="md" class="shadow-4" color="surface-container-highest" text-color="on-surface" icon="collections_bookmark">
             {{metadata.series.name}}
           </q-chip>
-        </router-link>
+        </SearchableLabel>
       </div>
 
       <q-btn-dropdown
@@ -252,6 +267,7 @@
 import CoverSFW from 'components/CoverSFW'
 import WriteReview from './WriteReview'
 import EditMetadata from './EditMetadata'
+import SearchableLabel from './SearchableLabel'
 import NotifyMixin from '../mixins/Notification.js'
 import { mapState } from 'vuex'
 import { isFanzaId, fanzaCid } from 'src/utils'
@@ -264,7 +280,8 @@ export default {
   components: {
     CoverSFW,
     WriteReview,
-    EditMetadata
+    EditMetadata,
+    SearchableLabel
   },
 
   props: {
