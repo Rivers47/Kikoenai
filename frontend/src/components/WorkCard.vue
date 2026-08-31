@@ -1,8 +1,12 @@
 <template>
   <q-card class="card hover-show">
-    <router-link :to="`/work/${metadata.id}`">
+    <!-- The cover link is an overlay rather than a wrapper: the tag chips sit
+         on top of the cover, and nesting them inside the link would put an
+         anchor (and their menu button) inside another anchor. -->
+    <div class="cover-wrap">
       <CoverSFW :workid="metadata.id" :nsfw="false" :release="metadata.release" :tags="metadata.tags" />
-    </router-link>
+      <router-link class="cover-link" :to="`/work/${metadata.id}`" :aria-label="metadata.title" />
+    </div>
 
     <q-separator />
 
@@ -220,6 +224,20 @@ export default {
 .horize-scroll-va-list {
   display: flex;
   overflow-y: scroll;
+}
+
+.cover-wrap {
+  position: relative;
+}
+
+.cover-wrap .cover-link {
+  position: absolute;
+  inset: 0;
+}
+
+/* Above the cover link, so the chips and their carets stay clickable. */
+.cover-wrap :deep(.tags-panel) {
+  z-index: 1;
 }
 
 .hover-show {
