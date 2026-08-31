@@ -1,5 +1,5 @@
 <template>
-  <span class="searchable-label">
+  <span class="searchable-label" :class="{ 'searchable-label--chip': chip }">
     <router-link
       :to="to"
       :class="linkClass"
@@ -50,12 +50,10 @@
  * The caret is only reachable with a fine pointer, so it stays invisible until
  * the label is hovered or focused.
  *
- * It is taken out of the flow rather than given room of its own: reserving
- * space kept the line from reflowing, but it did so by padding every label by
- * the caret's width, which spread a row of chips out. Out of flow the row
- * measures exactly as it did before this existed, and there is still nothing to
- * reflow on hover. It lands on the chip's own margin, so it overlaps the gap
- * between chips rather than the text.
+ * It is out of the flow either way, so a row measures exactly as it did before
+ * this existed and there is nothing to reflow on hover. Where it lands differs:
+ * over a chip it sits inside the chip's own box (see below), and on plain text
+ * it falls on the label's trailing margin with a backdrop to stay legible.
  */
 .searchable-label__caret {
   position: absolute;
@@ -86,12 +84,43 @@
 }
 
 /*
+ * Inside the chip: the chip opens up room at its right edge and the caret sits
+ * in it, so the pair reads as one control rather than a chip with something
+ * next to it. Quasar's own numbers are what these offsets are built from —
+ * .q-chip is margin 4px / padding 0.5em 0.9em, .q-chip--dense padding 0 0.4em —
+ * and the caret needs about 1em of width at the chip's font size.
+ *
+ * The chip is not an ancestor of the button (it sits inside the link, and the
+ * caret must stay out of it), so the offset is measured from the wrapper and
+ * has to clear the chip's margin itself.
+ */
+.searchable-label--chip :deep(.q-chip) {
+  padding-right: 1.9em;
+}
+
+.searchable-label--chip :deep(.q-chip--dense) {
+  padding-right: 1.4em;
+}
+
+.searchable-label--chip .searchable-label__caret {
+  right: 4px;
+  background: none;
+  border-radius: 0;
+}
+
+/*
  * A coarse pointer cannot hit a 20px target, so the caret is removed entirely
  * there and long-press on the label opens the same menu instead.
  */
 @media (pointer: coarse) {
   .searchable-label__caret {
     display: none;
+  }
+
+  /* No caret to make room for. */
+  .searchable-label--chip :deep(.q-chip),
+  .searchable-label--chip :deep(.q-chip--dense) {
+    padding-right: unset;
   }
 
   /* Stop the long-press from selecting text or raising the OS callout menu. */
@@ -133,6 +162,12 @@ export default {
     linkClass: {
       type: String,
       default: ''
+    },
+    // The slot renders a q-chip, so the caret can live inside its box. Plain
+    // text has no box to put it in and keeps the margin placement.
+    chip: {
+      type: Boolean,
+      default: false
     }
   },
 

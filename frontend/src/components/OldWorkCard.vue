@@ -90,6 +90,7 @@
           v-for="(tag, index) in metadata.tags"
           :to="labelRoute('tag', tag.name)"
           field="tag"
+          chip
           :name="tag.name"
           :key=index
         >
@@ -105,6 +106,7 @@
           v-for="(va, index) in metadata.vas"
           :to="labelRoute('va', va.name)"
           field="va"
+          chip
           :name="va.name"
           :key=index
         >

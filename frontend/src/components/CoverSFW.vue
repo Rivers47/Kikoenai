@@ -27,6 +27,7 @@
         :key='tag.id'
         :to="labelRoute('tag', tag.name)"
         field="tag"
+        chip
         :name="tag.name"
         >
         <q-chip dense square class="shadow-3" :lang="$tagLang">

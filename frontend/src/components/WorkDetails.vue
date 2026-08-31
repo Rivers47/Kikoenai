@@ -92,6 +92,7 @@
           v-for="(tag, index) in metadata.tags"
           :to="labelRoute('tag', tag.name)"
           field="tag"
+          chip
           :name="tag.name"
           :key=index
         >
@@ -107,6 +108,7 @@
           v-for="(va, index) in metadata.vas"
           :to="labelRoute('va', va.name)"
           field="va"
+          chip
           :name="va.name"
           :key=index
         >
@@ -135,6 +137,7 @@
           v-for="(sw, index) in metadata.scriptWriters"
           :to="labelRoute('script_writer', sw.name)"
           field="script_writer"
+          chip
           :name="sw.name"
           :key=index
         >
@@ -149,6 +152,7 @@
         <SearchableLabel
           :to="labelRoute('series', metadata.series.name)"
           field="series"
+          chip
           :name="metadata.series.name"
         >
           <q-chip square size="md" class="shadow-4" color="surface-container-highest" text-color="on-surface" icon="collections_bookmark">

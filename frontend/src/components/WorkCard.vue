@@ -99,6 +99,7 @@
           v-for="(va, index) in metadata.vas"
           :to="labelRoute('va', va.name)"
           field="va"
+          chip
           :name="va.name"
           :key=index
         >
