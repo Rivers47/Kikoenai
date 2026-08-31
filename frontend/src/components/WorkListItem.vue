@@ -15,34 +15,46 @@
 
       <q-item-label>
         <div class="row q-gutter-x-sm q-gutter-y-xs">
-          <router-link :to="labelRoute('circle', metadata.circle.name)" class="col-auto text-muted">
+          <SearchableLabel
+            :to="labelRoute('circle', metadata.circle.name)"
+            field="circle"
+            :name="metadata.circle.name"
+            link-class="text-muted"
+            class="col-auto"
+          >
             {{ metadata.circle.name }}
-          </router-link>
+          </SearchableLabel>
 
           <span class="col-auto">/</span>
 
-          <router-link
+          <SearchableLabel
             v-for="(va, index) in metadata.vas"
             :to="labelRoute('va', va.name)"
+            field="va"
+            :name="va.name"
             :key=index
-            class="col-auto text-primary"
+            link-class="text-primary"
+            class="col-auto"
           >
             {{ va.name }}
-          </router-link>
+          </SearchableLabel>
         </div>
       </q-item-label>
 
       <q-item-label v-if="showLabel && $q.screen.width> 700">
         <div class="row q-gutter-x-sm q-gutter-y-xs">
-          <router-link
+          <SearchableLabel
             v-for="(tag, index) in metadata.tags"
             :to="labelRoute('tag', tag.name)"
+            field="tag"
+            :name="tag.name"
             :key=index
-            class="col-auto text-muted"
+            link-class="text-muted"
+            class="col-auto"
             :lang="$tagLang"
           >
             {{ $tTag(tag.name) }}
-          </router-link>
+          </SearchableLabel>
         </div>
       </q-item-label>
     </q-item-section>
@@ -52,9 +64,14 @@
 <script>
 import { apiUrl } from 'src/base-path'
 import { labelRoute } from 'src/utils'
+import SearchableLabel from './SearchableLabel'
 
 export default {
   name: 'WorkListItem',
+
+  components: {
+    SearchableLabel,
+  },
 
   props: {
     metadata: {

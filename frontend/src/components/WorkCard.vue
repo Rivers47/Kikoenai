@@ -16,9 +16,14 @@
 
       <!-- 社团 -->
       <div class="q-ml-sm q-mt-sm q-mb-xs text-subtitle1 text-weight-regular ellipsis">
-        <router-link :to="labelRoute('circle', metadata.circle.name)" class="text-muted">
+        <SearchableLabel
+          :to="labelRoute('circle', metadata.circle.name)"
+          field="circle"
+          :name="metadata.circle.name"
+          link-class="text-muted"
+        >
           {{ metadata.circle.name }}
-        </router-link>
+        </SearchableLabel>
       </div>
 
       <!-- 评价&评论 -->
@@ -86,15 +91,17 @@
         class="q-mx-xs q-my-sm"
         :class="{ 'horize-scroll-va-list': $q.platform.has.touch }"
       >
-        <router-link
+        <SearchableLabel
           v-for="(va, index) in metadata.vas"
           :to="labelRoute('va', va.name)"
+          field="va"
+          :name="va.name"
           :key=index
         >
           <q-chip square size="md" class="shadow-2" color="primary-container" text-color="on-primary-container">
             {{ va.name }}
           </q-chip>
-        </router-link>
+        </SearchableLabel>
       </div>
     </div>
   </q-card>
@@ -104,6 +111,7 @@
 import CoverSFW from 'components/CoverSFW'
 import NotifyMixin from '../mixins/Notification.js'
 import { labelRoute } from 'src/utils'
+import SearchableLabel from './SearchableLabel'
 
 export default {
   name: 'WorkCard',
@@ -111,6 +119,7 @@ export default {
   mixins: [NotifyMixin],
 
   components: {
+    SearchableLabel,
     CoverSFW
   },
 

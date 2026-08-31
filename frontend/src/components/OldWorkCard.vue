@@ -16,9 +16,14 @@
 
       <!-- 社团 -->
       <div class="q-ml-sm q-mt-sm q-mb-xs text-subtitle1 text-weight-regular ellipsis">
-        <router-link :to="labelRoute('circle', metadata.circle.name)" class="text-muted">
+        <SearchableLabel
+          :to="labelRoute('circle', metadata.circle.name)"
+          field="circle"
+          :name="metadata.circle.name"
+          link-class="text-muted"
+        >
           {{ metadata.circle.name }}
-        </router-link>
+        </SearchableLabel>
       </div>
 
       <!-- 评价&评论 -->
@@ -81,28 +86,32 @@
 
       <!-- 标签 -->
       <div class="q-ma-xs" v-if="showTags">
-        <router-link
+        <SearchableLabel
           v-for="(tag, index) in metadata.tags"
           :to="labelRoute('tag', tag.name)"
+          field="tag"
+          :name="tag.name"
           :key=index
         >
           <q-chip size="md" class="shadow-2" :lang="$tagLang">
             {{ $tTag(tag.name) }}
           </q-chip>
-        </router-link>
+        </SearchableLabel>
       </div>
 
       <!-- 声优 -->
       <div class="q-mx-xs q-my-sm">
-        <router-link
+        <SearchableLabel
           v-for="(va, index) in metadata.vas"
           :to="labelRoute('va', va.name)"
+          field="va"
+          :name="va.name"
           :key=index
         >
           <q-chip square size="md" class="shadow-2" color="primary-container" text-color="on-primary-container" icon="mic">
             {{ va.name }}
           </q-chip>
-        </router-link>
+        </SearchableLabel>
       </div>
     </div>
   </q-card>
@@ -112,6 +121,7 @@
 import CoverSFW from 'components/CoverSFW'
 import NotifyMixin from '../mixins/Notification.js'
 import { isFanzaId, fanzaCid, labelRoute } from 'src/utils'
+import SearchableLabel from './SearchableLabel'
 
 export default {
   name: 'WorkCard',
@@ -119,6 +129,7 @@ export default {
   mixins: [NotifyMixin],
 
   components: {
+    SearchableLabel,
     CoverSFW
   },
 

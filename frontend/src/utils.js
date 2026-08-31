@@ -1,7 +1,7 @@
 import axios from "axios";
 import { apiUrl } from './base-path';
 // Single implementation of the search grammar — see FilterTerms.vue.
-import { formatSearchTerm } from '../../backend/database/search-query';
+import { parseSearchQuery, formatSearchTerm, formatSearchQuery } from '../../backend/database/search-query';
 
 /**
  * Work ids are canonical everywhere in the app: DLsite ids are zero-padded
@@ -113,4 +113,23 @@ export function toQueueItem(node) {
  */
 export function labelRoute(field, name) {
   return { path: '/works', query: { filter: formatSearchTerm({ field, value: name, exact: true }) } };
+}
+
+/**
+ * Add a label to an existing filter, so a result can be narrowed by the labels
+ * on the works it returned.
+ *
+ * Any term already naming this label is dropped first, whichever way it pointed
+ * — asking to include something currently excluded flips it rather than putting
+ * the work in two contradictory terms.
+ *
+ * @param {String} filter - the filter being refined ('' to start a new one)
+ * @param {String} field - search namespace
+ * @param {String} name - canonical label name
+ * @param {Boolean} [negate=false] - exclude rather than include
+ * @returns {String} the new filter
+ */
+export function filterWithLabel(filter, field, name, negate = false) {
+  const kept = parseSearchQuery(filter).filter((t) => !(t.field === field && t.value === name));
+  return formatSearchQuery([...kept, { field, value: name, exact: true, negate }]);
 }

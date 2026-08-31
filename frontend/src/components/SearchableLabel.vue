@@ -21,14 +21,14 @@
 
     <q-menu v-model="menuOpen" anchor="bottom left" self="top left">
       <q-list dense style="min-width: 160px">
-        <q-item clickable v-close-popup @click="preview(false)">
+        <q-item clickable v-close-popup @click="apply(false)">
           <q-item-section avatar class="searchable-label__avatar">
             <q-icon name="add" size="xs" />
           </q-item-section>
           <q-item-section>{{ $t('searchablelabel.include') }}</q-item-section>
         </q-item>
 
-        <q-item clickable v-close-popup @click="preview(true)">
+        <q-item clickable v-close-popup @click="apply(true)">
           <q-item-section avatar class="searchable-label__avatar">
             <q-icon name="remove" size="xs" />
           </q-item-section>
@@ -96,12 +96,10 @@
 </style>
 
 <script>
-import NotifyMixin from '../mixins/Notification.js'
+import { filterWithLabel } from 'src/utils'
 
 export default {
   name: 'SearchableLabel',
-
-  mixins: [NotifyMixin],
 
   props: {
     // Route the label itself navigates to — unchanged from the plain link.
@@ -148,16 +146,11 @@ export default {
       event.stopPropagation()
     },
 
-    // UI prototype only: shows the term this action would contribute instead
-    // of running a search.
-    //
-    // Quoted, so the name reaches the parser verbatim. The unquoted form would
-    // turn any literal '_' in the name into a space (search-query.js) and match
-    // the wrong row; a quoted '_' survives as a LIKE wildcard, which still
-    // matches the intended name and at worst pulls in a near-neighbour.
-    preview (negate) {
-      const term = `${negate ? '-' : ''}${this.field}:"${this.name}$"`
-      this.showSuccNotif(term)
+    // Narrows whatever filter is already in the route. On a page carrying none
+    // — a work page — that is the same as starting one.
+    apply (negate) {
+      const filter = filterWithLabel(this.$route.query.filter || '', this.field, this.name, negate)
+      this.$router.push({ path: '/works', query: { filter } })
     }
   }
 }
