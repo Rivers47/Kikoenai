@@ -28,6 +28,26 @@
 
       <q-item style="height: 70px;">
         <q-item-section>
+          <q-item-label>{{ $t('settings.tagLanguage') }}</q-item-label>
+          <q-item-label caption>{{ $t('settings.tagLanguageCaption') }}</q-item-label>
+        </q-item-section>
+
+        <q-item-section avatar>
+          <q-select
+            v-model="currentTagLanguage"
+            :options="tagLanguageOptions"
+            emit-value
+            map-options
+            dense
+            outlined
+            style="min-width: 180px;"
+            @update:model-value="onTagLanguageChange"
+          />
+        </q-item-section>
+      </q-item>
+
+      <q-item style="height: 70px;">
+        <q-item-section>
           <q-item-label>{{ $t('settings.autoMarkListened') }}</q-item-label>
           <q-item-label caption>{{ $t('settings.autoMarkListenedCaption') }}</q-item-label>
         </q-item-section>
@@ -109,7 +129,7 @@
 <script>
 import { mapState } from 'vuex'
 import NotifyMixin from '../../mixins/Notification.js'
-import { changeLanguage, getCurrentLocale } from 'src/boot/i18n.js'
+import { changeLanguage, changeTagLanguage, getCurrentLocale, getTagLocalePref, FOLLOW_UI } from 'src/boot/i18n.js'
 
 export default {
   name: 'Settings',
@@ -119,6 +139,7 @@ export default {
   data () {
     return {
       currentLanguage: null,
+      currentTagLanguage: null,
     }
   },
 
@@ -139,16 +160,30 @@ export default {
         { value: 'zh-TW', label: this.$t('mainlayout.langZhTW') },
       ]
     },
+
+    // Same locales as the UI, plus a sentinel that tracks the UI language.
+    tagLanguageOptions () {
+      return [
+        { value: FOLLOW_UI, label: this.$t('settings.tagLanguageFollow') },
+        ...this.languageOptions,
+      ]
+    },
   },
 
   created () {
     this.currentLanguage = getCurrentLocale()
+    this.currentTagLanguage = getTagLocalePref()
   },
 
   methods: {
     async onLanguageChange (locale) {
       await changeLanguage(locale)
       this.showSuccNotif(this.$t('settings.languageSaved'))
+    },
+
+    onTagLanguageChange (locale) {
+      changeTagLanguage(locale)
+      this.showSuccNotif(this.$t('settings.tagLanguageSaved'))
     },
 
     onAutoMarkChange (value) {

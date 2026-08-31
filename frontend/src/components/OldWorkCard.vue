@@ -86,7 +86,7 @@
           :to="`/works?tagId=${tag.id}`"
           :key=index
         >
-          <q-chip size="md" class="shadow-2">
+          <q-chip size="md" class="shadow-2" :lang="$tagLang">
             {{ $tTag(tag.name) }}
           </q-chip>
         </router-link>

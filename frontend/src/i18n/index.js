@@ -3,16 +3,43 @@
 // without touching this index.
 //
 // Locales seeded: zh-CN (base/fallback), en-US, ja-JP, zh-TW — all complete.
+//
+// Two independent locales live here: the UI locale (vue-i18n catalog) and the
+// tag display locale (translateTag). The tag locale defaults to FOLLOW_UI, so
+// it tracks the UI locale until the user pins it to something else.
 
 import { createI18n } from 'vue-i18n'
 import { LocalStorage } from 'quasar'
 
 export const SUPPORTED_LOCALES = ['zh-CN', 'en-US', 'ja-JP', 'zh-TW']
 const STORAGE_KEY = 'app_language'
+const TAG_STORAGE_KEY = 'tag_language'
 const FALLBACK_LOCALE = 'zh-CN'
 
-// Current locale, readable by non-Vue code (translateTag). Updated by setLocale.
+/** Sentinel tag-locale value meaning "whatever the UI locale is". */
+export const FOLLOW_UI = 'follow'
+export const SUPPORTED_TAG_LOCALES = [FOLLOW_UI, ...SUPPORTED_LOCALES]
+
+// BCP-47 codes for the HTML `lang` attribute. Browsers pick the CJK font
+// fallback from this, which is what keeps Han characters out of the wrong
+// glyph variants (Japanese kanji drawn with Simplified-Chinese shapes).
+const HTML_LANG = {
+  'zh-CN': 'zh-Hans',
+  'zh-TW': 'zh-Hant',
+  'ja-JP': 'ja',
+  'en-US': 'en',
+}
+
+// Current locales, readable by non-Vue code (translateTag). Plain variables,
+// not refs: $tTag has no reactive dependency on them, so a switch does not
+// repaint anything already on screen. That is safe only because both switchers
+// live in Settings.vue under DashboardLayout, and reaching it unmounts
+// MainLayout — and with it the <keep-alive> holding Works/Favourites — so every
+// tag is re-rendered from scratch on the way back. Move a switcher into
+// MainLayout (a drawer item, a dialog) and this stops being true: make these
+// refs then, or the chips go stale.
 let currentLocale = FALLBACK_LOCALE
+let tagLocalePref = FOLLOW_UI
 
 // Webpack require.context auto-imports every partial per locale. Agents just
 // drop a new <scope>.js file into parts/<locale>/ and it's picked up here.
@@ -75,8 +102,36 @@ export function setLocale(locale, i18n) {
   LocalStorage.set(STORAGE_KEY, locale)
 }
 
+/** The stored tag-locale preference, which may be the FOLLOW_UI sentinel. */
+export function getTagLocalePref() {
+  return tagLocalePref
+}
+
+/** The tag locale actually in effect (FOLLOW_UI resolved against the UI locale). */
+export function getCurrentTagLocale() {
+  return tagLocalePref === FOLLOW_UI ? currentLocale : tagLocalePref
+}
+
+export function setTagLocale(locale) {
+  if (!SUPPORTED_TAG_LOCALES.includes(locale)) locale = FOLLOW_UI
+  tagLocalePref = locale
+  LocalStorage.set(TAG_STORAGE_KEY, locale)
+}
+
+export function getInitialTagLocale() {
+  const stored = LocalStorage.getItem(TAG_STORAGE_KEY)
+  if (stored && SUPPORTED_TAG_LOCALES.includes(stored)) return stored
+  return FOLLOW_UI
+}
+
+/** BCP-47 code for a locale, for use in an HTML `lang` attribute. */
+export function htmlLang(locale) {
+  return HTML_LANG[locale] || 'en'
+}
+
 const initialLocale = getInitialLocale()
 currentLocale = initialLocale
+tagLocalePref = getInitialTagLocale()
 
 const i18n = createI18n({
   legacy: true, // Options API: this.$t
@@ -86,4 +141,4 @@ const i18n = createI18n({
 })
 
 export default i18n
-export { STORAGE_KEY }
+export { STORAGE_KEY, TAG_STORAGE_KEY }

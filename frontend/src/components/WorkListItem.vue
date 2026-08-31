@@ -39,6 +39,7 @@
             :to="`/works?tagId=${tag.id}`"
             :key=index
             class="col-auto text-muted"
+            :lang="$tagLang"
           >
             {{ $tTag(tag.name) }}
           </router-link>
