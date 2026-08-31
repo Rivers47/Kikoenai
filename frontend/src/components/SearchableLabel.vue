@@ -48,15 +48,27 @@
 
 /*
  * The caret is only reachable with a fine pointer, so it stays invisible until
- * the label is hovered or focused. Space is reserved rather than collapsed
- * (opacity, not display) so revealing it never reflows the line.
+ * the label is hovered or focused.
+ *
+ * It is taken out of the flow rather than given room of its own: reserving
+ * space kept the line from reflowing, but it did so by padding every label by
+ * the caret's width, which spread a row of chips out. Out of flow the row
+ * measures exactly as it did before this existed, and there is still nothing to
+ * reflow on hover. It lands on the chip's own margin, so it overlaps the gap
+ * between chips rather than the text.
  */
 .searchable-label__caret {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
   display: inline-flex;
   align-items: center;
-  padding: 0 2px;
+  padding: 0;
   border: none;
-  background: none;
+  border-radius: 50%;
+  background: var(--surface-container-highest, rgba(127, 127, 127, 0.9));
   color: inherit;
   cursor: pointer;
   opacity: 0;
