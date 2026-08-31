@@ -17,9 +17,9 @@
  *
  *   va:"space separated name$"   circle:underscore_name   -tag:NTR
  *
- * This module is the only definition of the grammar, and the frontend renders
- * the same terms the backend matches on, so it is shared rather than mirrored:
- * `frontend/quasar.config.js` aliases it as `app-search-query`. Keep it free of
+ * This module is the only definition of the grammar. The frontend renders the
+ * same terms the backend matches on, so it imports this file directly rather
+ * than mirroring it (`FilterTerms.vue`, `src/utils.js`). Keep it free of
  * `require`s and of anything Node-only, or the browser bundle breaks.
  */
 
@@ -51,14 +51,14 @@ const isSpace = (char) => char === undefined || /\s/.test(char);
 
 /**
  * Split a raw search box string into filter terms.
- * @param {String} keyword
+ * @param {String} filter
  * @returns {Array<{field: ?String, value: String, raw: String, exact: Boolean, negate: Boolean}>}
  *          `field` is null for a free-text term; terms are ANDed by the caller.
  *          `raw` is the value before underscores become spaces — work codes
  *          such as `d_123456` have to be read off that one.
  */
-const parseSearchQuery = (keyword) => {
-  const input = String(keyword || '');
+const parseSearchQuery = (filter) => {
+  const input = String(filter || '');
   const terms = [];
   let i = 0;
 

@@ -690,7 +690,7 @@ const makeQueries = (knex) => {
 
   /**
    * Returns a page of the whole library. Label filtering goes through
-   * getWorksByKeyWord, which is the only filter mechanism.
+   * getWorksByFilter, which is the only filter mechanism.
    * @param {Object} opts
    * @param {String} [opts.username='']
    * @param {Number} [opts.nsfw=0] - 0=all, 1=全年龄, 2=R18
@@ -784,7 +784,7 @@ const makeQueries = (knex) => {
   /**
    * 根据关键字查询音声 (async, paged).
    * @param {Object} opts
-   * @param {String} opts.keyword
+   * @param {String} opts.filter
    * @param {String} [opts.username='admin']
    * @param {Number} [opts.nsfw=0]
    * @param {String} [opts.order='release']
@@ -870,7 +870,7 @@ const makeQueries = (knex) => {
       .orWhereIn('t_work.id', tags.union([vas, illustrators, scriptWriters, series, authors]));
   };
 
-  const getWorksByKeyWord = async ({keyword, username = 'admin', nsfw = 0, order = 'release', sort = 'desc', limit, offset, seed} = {}) => {
+  const getWorksByFilter = async ({filter, username = 'admin', nsfw = 0, order = 'release', sort = 'desc', limit, offset, seed} = {}) => {
     let coreQ = knex('t_work')
       .join('t_circle', 't_circle.id', 't_work.circle_id')
       .select(
@@ -883,7 +883,7 @@ const makeQueries = (knex) => {
 
     // Each parsed term is a separate, parenthesised AND clause, so the nsfw
     // filter below can never be swallowed by an OR group.
-    for (const term of parseSearchQuery(keyword)) {
+    for (const term of parseSearchQuery(filter)) {
       coreQ = term.negate
         ? coreQ.whereNot(function () { applySearchTerm(this, term); })
         : coreQ.where(function () { applySearchTerm(this, term); });
@@ -1329,7 +1329,7 @@ const makeQueries = (knex) => {
   return {
     nsfwFilter,
     resolveLabel, resolveTagLabel,
-    insertWorkMetadata, getWorkMetadata, removeWork, getWorksBy, getWorksByKeyWord, updateWorkMetadata,
+    insertWorkMetadata, getWorkMetadata, removeWork, getWorksBy, getWorksByFilter, updateWorkMetadata,
     editWorkMetadata,
     getLabels, getMetadata,
     createUser, updateUserPassword, resetUserPassword, deleteUser,

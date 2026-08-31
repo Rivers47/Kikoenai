@@ -191,8 +191,7 @@ for (const field of FIELDS) {
 
  
 router.get('/search', async (req, res, next) => {
-  // const keyword = req.params.keyword ? req.params.keyword.trim() : '';
-  const keyword = req.query.keyword ? req.query.keyword.trim() : '';
+  const filter = req.query.filter ? req.query.filter.trim() : '';
 
   const currentPage = parseInt(req.query.page) || 1;
   // 通过 "音声id, 贩卖日, 用户评价， 售出数, 评论数量, 价格, 平均评价, 全年龄新作" 排序
@@ -205,8 +204,8 @@ router.get('/search', async (req, res, next) => {
   const shuffleSeed = req.query.seed ? req.query.seed : 7;
   
   try {
-    const { works, totalCount } = await db.getWorksByKeyWord({
-      keyword, username, nsfw, order, sort, limit: PAGE_SIZE, offset, seed: shuffleSeed
+    const { works, totalCount } = await db.getWorksByFilter({
+      filter, username, nsfw, order, sort, limit: PAGE_SIZE, offset, seed: shuffleSeed
     });
     normalize(works);
 

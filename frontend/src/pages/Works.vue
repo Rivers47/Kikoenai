@@ -12,8 +12,8 @@
         <!-- A filter is a list of terms, so it is shown as one removable chip
              each rather than as the raw query string. -->
         <FilterTerms
-          v-if="$route.query.keyword"
-          :filter="$route.query.keyword"
+          v-if="$route.query.filter"
+          :filter="$route.query.filter"
           @update:filter="applyFilter"
         />
         <q-badge v-else class="q-ma-xs" v-for="meta, index in searchMetas" :key="meta">{{ index == 0 ? "":"," }} {{ meta }}</q-badge>
@@ -241,7 +241,7 @@ export default {
 
   computed: {
     url () {
-      return this.$route.query.keyword ? '/api/search' : '/api/works'
+      return this.$route.query.filter ? '/api/search' : '/api/works'
     },
 
 
@@ -298,7 +298,7 @@ export default {
       localStorage.detailMode = newModeSetting;
     },
 
-    '$route.query.keyword'() {
+    '$route.query.filter'() {
       if (this.isActive) {
         this.reset()
       }
@@ -310,7 +310,7 @@ export default {
     // Dropping the last term leaves no filter at all, which is the whole
     // library rather than an empty search.
     applyFilter (filter) {
-      this.$router.push(filter ? { path: '/works', query: { keyword: filter } } : '/works')
+      this.$router.push(filter ? { path: '/works', query: { filter } } : '/works')
     },
 
     onLoad (index, done) {
@@ -327,8 +327,8 @@ export default {
         seed: this.seed,
       }
 
-      if (this.$route.query.keyword) {
-        params.keyword = this.$route.query.keyword
+      if (this.$route.query.filter) {
+        params.filter = this.$route.query.filter
       }
 
       return this.$axios.get(this.url, { params })
@@ -355,9 +355,9 @@ export default {
     },
 
     refreshPageTitle () {
-      if (this.$route.query.keyword) {
+      if (this.$route.query.filter) {
         this.pageTitle = this.$t('works.searchKeyword');
-        this.searchMetas = [this.$route.query.keyword];
+        this.searchMetas = [this.$route.query.filter];
       } else {
         this.pageTitle = this.$t('works.allWorks')
         this.searchMetas = [];

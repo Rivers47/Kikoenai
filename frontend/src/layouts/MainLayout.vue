@@ -12,11 +12,11 @@
           </router-link>
         </q-toolbar-title>
 
-        <q-input dark dense rounded standout v-model="keyword" debounce="500" input-class="text-right" class="q-mr-sm"
+        <q-input dark dense rounded standout v-model="filter" debounce="500" input-class="text-right" class="q-mr-sm"
           @keyup.enter="search($event.target.value); $event.target.blur()">
           <template v-slot:append>
-            <q-icon v-if="keyword === ''" name="search" />
-            <q-icon v-else name="clear" class="cursor-pointer" @click="keyword = ''" />
+            <q-icon v-if="filter === ''" name="search" />
+            <q-icon v-else name="clear" class="cursor-pointer" @click="filter = ''" />
           </template>
         </q-input>
 
@@ -201,7 +201,7 @@ export default {
 
   data () {
     return {
-      keyword: '',
+      filter: '',
       drawerOpen: false,
       miniState: true,
       confirm: false,
@@ -221,8 +221,8 @@ export default {
   },
 
   watch: {
-    keyword () {
-      this.search(this.keyword)
+    filter () {
+      this.search(this.filter)
     },
 
     randId () {
@@ -274,10 +274,10 @@ export default {
     ...mapMutations('AudioPlayer', [
       'SET_AI_SERVER_URL',
     ]),
-    // Called by the keyword watcher and by Enter (which bypasses the input's debounce)
-    search (keyword) {
-      this.keyword = keyword
-      this.$router.push(keyword ? { path: '/works', query: { keyword } } : '/works')
+    // Called by the filter watcher and by Enter (which bypasses the input's debounce)
+    search (filter) {
+      this.filter = filter
+      this.$router.push(filter ? { path: '/works', query: { filter } } : '/works')
     },
 
     initUser () {

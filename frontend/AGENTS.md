@@ -512,7 +512,7 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 | `/api/review` | GET/PUT/DELETE | `WorkDetails.vue`, `Favourites.vue`, `AudioElement.vue` | Work reviews; the work is identified by a `work_id` body field or query param, not a path segment. PUT with `progressOnly=true` and `autoMark=true` only writes `progress='listened'` if existing is not terminal (listened/replay/postponed). |
 | `/api/review/progress` | DELETE | `WorkDetails.vue` | Clear only `progress` (NULL), preserving rating/review_text. If the row has no rating/review_text, the whole row is deleted. Query `work_id`. |
 | `/api/history` | GET | `Favourites.vue`, `RecentWorks.vue` | List works with playback history. Optional `excludeFinished` (`all`|`listened`, default `listened`). Response items include nullable `progress`. |
-| `/api/search` | GET | `Works.vue` | **The only filter mechanism.** `keyword` is an E-Hentai style filter (`va:"name$"`, `circle:under_score`, `-tag:NTR`, ANDed); parsed server-side, see `backend/AGENTS.md` §2.3b. Every label link builds one via `labelRoute()` in `src/utils.js`; the per-entity `/:id/works` endpoints are gone |
+| `/api/search` | GET | `Works.vue` | **The only filter mechanism.** `filter` is an E-Hentai style filter (`va:"name$"`, `circle:under_score`, `-tag:NTR`, ANDed); parsed server-side, see `backend/AGENTS.md` §2.3b. Every label link builds one via `labelRoute()` in `src/utils.js`; the per-entity `/:id/works` endpoints are gone |
 | `/api/version` | GET | `MainLayout.vue` | Version + update info |
 | `/api/config/admin` | GET/PUT | `Folders.vue`, `Advanced.vue` | Admin config read/write |
 | `/api/credentials/user` | POST/PUT/DELETE | `UserManage.vue` | Create / update / delete a user |

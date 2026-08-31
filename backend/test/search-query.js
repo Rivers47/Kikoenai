@@ -102,7 +102,7 @@ describe('formatSearchQuery()', function () {
   });
 });
 
-describe('getWorksByKeyWord() advanced filtering', function () {
+describe('getWorksByFilter() advanced filtering', function () {
   this.timeout(10000);
 
   const TEST_DB = join(__dirname, 'db-search-test.sqlite3');
@@ -125,8 +125,8 @@ describe('getWorksByKeyWord() advanced filtering', function () {
     { id: 'd100001', title: 'Fanza Work', circle: 'Other Circle', nsfw: true, va: ['他の人'], tag: ['癒し'] },
   ];
 
-  const search = async (keyword, opts = {}) => {
-    const { works } = await Q.getWorksByKeyWord({ keyword, ...opts });
+  const search = async (filter, opts = {}) => {
+    const { works } = await Q.getWorksByFilter({ filter, ...opts });
     return works.map(w => w.id).sort();
   };
 
@@ -247,7 +247,7 @@ describe('getWorksByKeyWord() advanced filtering', function () {
     expect(await search('癒し', { nsfw: 1 })).to.deep.equal(['100001']);
   });
 
-  it('returns the whole library for an empty keyword', async function () {
+  it('returns the whole library for an empty filter', async function () {
     expect(await search('')).to.deep.equal(['100001', '100002', 'd100001']);
   });
 });

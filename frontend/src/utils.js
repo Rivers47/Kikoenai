@@ -112,5 +112,5 @@ export function toQueueItem(node) {
  * series) and `name` the canonical name, not a translated display string.
  */
 export function labelRoute(field, name) {
-  return { path: '/works', query: { keyword: formatSearchTerm({ field, value: name, exact: true }) } };
+  return { path: '/works', query: { filter: formatSearchTerm({ field, value: name, exact: true }) } };
 }

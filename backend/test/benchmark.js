@@ -143,42 +143,42 @@ describe('DB query benchmark', function () {
   it('label filter circle', async function () {
     if (!this.sample.circleName) { this.skip('no circle name'); return; }
     const keyword = formatSearchTerm({ field: 'circle', value: this.sample.circleName, exact: true });
-    const row = await bench('filter circle', () => Q.getWorksByKeyWord({ keyword, username: this.sample.username }));
+    const row = await bench('filter circle', () => Q.getWorksByFilter({ filter: keyword, username: this.sample.username }));
     expect(row).to.exist;
   });
 
   it('label filter tag', async function () {
     if (!this.sample.tagName) { this.skip('no tag name'); return; }
     const keyword = formatSearchTerm({ field: 'tag', value: this.sample.tagName, exact: true });
-    const row = await bench('filter tag', () => Q.getWorksByKeyWord({ keyword, username: this.sample.username }));
+    const row = await bench('filter tag', () => Q.getWorksByFilter({ filter: keyword, username: this.sample.username }));
     expect(row).to.exist;
   });
 
   it('label filter va', async function () {
     if (!this.sample.vaName) { this.skip('no va name'); return; }
     const keyword = formatSearchTerm({ field: 'va', value: this.sample.vaName, exact: true });
-    const row = await bench('filter va', () => Q.getWorksByKeyWord({ keyword, username: this.sample.username }));
+    const row = await bench('filter va', () => Q.getWorksByFilter({ filter: keyword, username: this.sample.username }));
     expect(row).to.exist;
   });
 
   it('label filter illustrator', async function () {
     if (!this.sample.illustratorName) { this.skip('no illustrator name'); return; }
     const keyword = formatSearchTerm({ field: 'illustrator', value: this.sample.illustratorName, exact: true });
-    const row = await bench('filter illustrator', () => Q.getWorksByKeyWord({ keyword, username: this.sample.username }));
+    const row = await bench('filter illustrator', () => Q.getWorksByFilter({ filter: keyword, username: this.sample.username }));
     expect(row).to.exist;
   });
 
   it('label filter script_writer', async function () {
     if (!this.sample.scriptWriterName) { this.skip('no script_writer name'); return; }
     const keyword = formatSearchTerm({ field: 'script_writer', value: this.sample.scriptWriterName, exact: true });
-    const row = await bench('filter script_writer', () => Q.getWorksByKeyWord({ keyword, username: this.sample.username }));
+    const row = await bench('filter script_writer', () => Q.getWorksByFilter({ filter: keyword, username: this.sample.username }));
     expect(row).to.exist;
   });
 
   it('label filter series', async function () {
     if (!this.sample.seriesName) { this.skip('no series name'); return; }
     const keyword = formatSearchTerm({ field: 'series', value: this.sample.seriesName, exact: true });
-    const row = await bench('filter series', () => Q.getWorksByKeyWord({ keyword, username: this.sample.username }));
+    const row = await bench('filter series', () => Q.getWorksByFilter({ filter: keyword, username: this.sample.username }));
     expect(row).to.exist;
   });
 
@@ -191,15 +191,15 @@ describe('DB query benchmark', function () {
     expect(row).to.exist;
   });
 
-  it('getWorksByKeyWord numeric id', async function () {
+  it('getWorksByFilter numeric id', async function () {
     if (!this.sample.numericId) { this.skip('no numeric id'); return; }
-    const row = await bench('getWorksByKeyWord numeric', () => Q.getWorksByKeyWord({ keyword: `RJ${this.sample.numericId}`, username: this.sample.username }));
+    const row = await bench('getWorksByFilter numeric', () => Q.getWorksByFilter({ filter: `RJ${this.sample.numericId}`, username: this.sample.username }));
     expect(row).to.exist;
   });
 
-  it('getWorksByKeyWord text keyword', async function () {
+  it('getWorksByFilter text keyword', async function () {
     if (!this.sample.keyword) { this.skip('no keyword'); return; }
-    const row = await bench('getWorksByKeyWord text', () => Q.getWorksByKeyWord({ keyword: this.sample.keyword, username: this.sample.username }));
+    const row = await bench('getWorksByFilter text', () => Q.getWorksByFilter({ filter: this.sample.keyword, username: this.sample.username }));
     expect(row).to.exist;
   });
 
