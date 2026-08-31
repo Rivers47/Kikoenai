@@ -47,13 +47,14 @@
 }
 
 /*
- * The caret is only reachable with a fine pointer, so it stays invisible until
- * the label is hovered or focused.
- *
- * It is out of the flow either way, so a row measures exactly as it did before
- * this existed and there is nothing to reflow on hover. Where it lands differs:
- * over a chip it sits inside the chip's own box (see below), and on plain text
- * it falls on the label's trailing margin with a backdrop to stay legible.
+ * The caret is out of the flow, so a row measures exactly as it did before this
+ * existed and there is nothing to reflow. Where it lands, and whether it is
+ * always shown, both follow from that: over a chip it sits inside the chip's
+ * own box, whose padding reserves the room either way, so hiding it buys
+ * nothing and it simply stays visible. On plain text it falls on the label's
+ * trailing margin with a backdrop to stay legible, and a run of those — the
+ * '/'-separated circle and VA lists — would be a row of floating carets, so
+ * there it is still revealed on hover or focus.
  */
 .searchable-label__caret {
   position: absolute;
@@ -73,13 +74,19 @@
   transition: opacity 60ms;
 }
 
-.searchable-label:hover .searchable-label__caret,
-.searchable-label:focus-within .searchable-label__caret {
+.searchable-label:hover > .searchable-label__caret,
+.searchable-label:focus-within > .searchable-label__caret {
   opacity: 0.7;
 }
 
-.searchable-label__caret:hover,
-.searchable-label__caret:focus-visible {
+.searchable-label--chip > .searchable-label__caret {
+  opacity: 0.7;
+}
+
+/* Last, and matched on the button itself, so pointing at the caret wins over
+   both rules above rather than tying with the one for its own label. */
+.searchable-label > .searchable-label__caret:hover,
+.searchable-label > .searchable-label__caret:focus-visible {
   opacity: 1;
 }
 
