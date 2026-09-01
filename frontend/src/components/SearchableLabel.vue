@@ -12,7 +12,7 @@
     <button
       ref="caret"
       type="button"
-      class="searchable-label__caret"
+      :class="['searchable-label__caret', caretClass]"
       :aria-label="$t('searchablelabel.refineWith', { name })"
       @click.prevent.stop="menuOpen = true"
     >
@@ -113,6 +113,16 @@
   right: 4px;
   background: none;
   border-radius: 0;
+  /*
+   * The caret sits on the chip but is a sibling of it — it has to stay outside
+   * the link, and the chip is inside it — so `inherit` reaches past the chip to
+   * whatever the surrounding container's colour is, which has nothing to do
+   * with the surface being painted on. This is Quasar's default chip text
+   * colour, which an uncoloured chip has in both themes (there is no
+   * body--dark rule for a plain .q-chip). A chip with its own text-color
+   * passes the matching class as `caret-class`, which wins on !important.
+   */
+  color: rgba(0, 0, 0, 0.87);
 }
 
 /*
@@ -175,6 +185,16 @@ export default {
     chip: {
       type: Boolean,
       default: false
+    },
+    // Text colour of the chip the caret sits on, as the matching Quasar class
+    // (`text-color="on-primary-container"` -> `text-on-primary-container`).
+    // Needed because the caret is a sibling of the chip, not a descendant, so
+    // it cannot inherit that colour — see the note in the styles. Only for a
+    // chip carrying an explicit text-color; an uncoloured one is covered by
+    // the default.
+    caretClass: {
+      type: String,
+      default: ''
     }
   },
 

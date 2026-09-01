@@ -109,6 +109,7 @@
           :to="labelRoute('va', va.name)"
           field="va"
           chip
+          caret-class="text-on-tertiary-container"
           :name="va.name"
           :key=index
         >
@@ -138,6 +139,7 @@
           :to="labelRoute('script_writer', sw.name)"
           field="script_writer"
           chip
+          caret-class="text-on-secondary-container"
           :name="sw.name"
           :key=index
         >
@@ -153,6 +155,7 @@
           :to="labelRoute('series', metadata.series.name)"
           field="series"
           chip
+          caret-class="text-on-surface"
           :name="metadata.series.name"
         >
           <q-chip square size="md" class="shadow-4" color="surface-container-highest" text-color="on-surface" icon="collections_bookmark">

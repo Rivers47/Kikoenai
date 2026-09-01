@@ -100,6 +100,7 @@
           :to="labelRoute('va', va.name)"
           field="va"
           chip
+          caret-class="text-on-primary-container"
           :name="va.name"
           :key=index
         >
