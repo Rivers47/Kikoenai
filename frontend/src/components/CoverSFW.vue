@@ -134,8 +134,8 @@ export default {
   opacity: calc(var(--hover-work-card) + var(--active-work-card) + var(--sim-hover-work-card));
   transition: opacity 0.2s;
   padding: 0;
-  max-width: 70%;
-  background: rgba(0,0,0,0.5);
+  max-width: 100%;
+  background: rgb(var(--inverse-surface-rgb) / 0.5);
   border-radius: 5px;
   // background: radial-gradient(closest-side at center, rgba(0, 0, 0, 0.8) 0, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0) 100%);
   // background: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0,0,0,0.4) 30%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0.4) 70%, rgba(0,0,0,0));

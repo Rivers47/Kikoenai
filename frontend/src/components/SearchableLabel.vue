@@ -19,7 +19,10 @@
       <q-icon name="expand_more" size="16px" />
     </button>
 
-    <q-menu v-model="menuOpen" anchor="bottom left" self="top left">
+    <!-- no-parent-event: the menu's parent is the whole label, so without it
+         QMenu opens on any click in there — including the link. It is opened
+         only by the caret and by long-press. -->
+    <q-menu v-model="menuOpen" no-parent-event anchor="bottom left" self="top left">
       <q-list dense style="min-width: 160px">
         <q-item clickable v-close-popup @click="apply(false)">
           <q-item-section avatar class="searchable-label__avatar">
@@ -47,46 +50,28 @@
 }
 
 /*
- * The caret is out of the flow, so a row measures exactly as it did before this
- * existed and there is nothing to reflow. Where it lands, and whether it is
- * always shown, both follow from that: over a chip it sits inside the chip's
- * own box, whose padding reserves the room either way, so hiding it buys
- * nothing and it simply stays visible. On plain text it falls on the label's
- * trailing margin with a backdrop to stay legible, and a run of those — the
- * '/'-separated circle and VA lists — would be a row of floating carets, so
- * there it is still revealed on hover or focus.
+ * Plain text has nothing to sit inside — the wrapper hugs the label — so the
+ * caret is an ordinary flex item after it. Out of the flow it would land on the
+ * last characters of the text, and now that it is always drawn rather than
+ * revealed on hover, the space it takes is space it genuinely occupies. Being
+ * in the flow it also needs no backdrop: it sits beside the text, not over it,
+ * and `inherit` matches whatever that text is.
  */
 .searchable-label__caret {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 1;
   display: inline-flex;
   align-items: center;
+  margin-left: 1px;
   padding: 0;
   border: none;
-  border-radius: 50%;
-  background: var(--surface-container-highest, rgba(127, 127, 127, 0.9));
+  background: none;
   color: inherit;
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.7;
   transition: opacity 60ms;
 }
 
-.searchable-label:hover > .searchable-label__caret,
-.searchable-label:focus-within > .searchable-label__caret {
-  opacity: 0.7;
-}
-
-.searchable-label--chip > .searchable-label__caret {
-  opacity: 0.7;
-}
-
-/* Last, and matched on the button itself, so pointing at the caret wins over
-   both rules above rather than tying with the one for its own label. */
-.searchable-label > .searchable-label__caret:hover,
-.searchable-label > .searchable-label__caret:focus-visible {
+.searchable-label__caret:hover,
+.searchable-label__caret:focus-visible {
   opacity: 1;
 }
 
@@ -110,19 +95,13 @@
 }
 
 .searchable-label--chip .searchable-label__caret {
-  right: 4px;
-  background: none;
-  border-radius: 0;
-  /*
-   * The caret sits on the chip but is a sibling of it — it has to stay outside
-   * the link, and the chip is inside it — so `inherit` reaches past the chip to
-   * whatever the surrounding container's colour is, which has nothing to do
-   * with the surface being painted on. This is Quasar's default chip text
-   * colour, which an uncoloured chip has in both themes (there is no
-   * body--dark rule for a plain .q-chip). A chip with its own text-color
-   * passes the matching class as `caret-class`, which wins on !important.
-   */
-  color: rgba(0, 0, 0, 0.87);
+  position: absolute;
+  right: calc(4px + 0.4em);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  margin-left: 0;
+  color: var(--on-surface);
 }
 
 /*

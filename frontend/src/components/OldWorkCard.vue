@@ -91,10 +91,11 @@
           :to="labelRoute('tag', tag.name)"
           field="tag"
           chip
+          caret-class="text-on-surface"
           :name="tag.name"
           :key=index
         >
-          <q-chip size="md" class="shadow-2" :lang="$tagLang">
+          <q-chip size="md" class="shadow-2" color="surface-container" text-color="on-surface" :lang="$tagLang">
             {{ $tTag(tag.name) }}
           </q-chip>
         </SearchableLabel>

@@ -126,6 +126,8 @@ const tokenRoles = [
   ['surface-container-highest', 'surfaceContainerHighest'],
   ['outline', 'outline'],
   ['outline-variant', 'outlineVariant'],
+  ['inverse-surface', 'inverseSurface'],
+  ['inverse-on-surface', 'inverseOnSurface']
 ];
 
 const hexToRgb = (hex) => {
