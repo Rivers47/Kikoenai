@@ -1,6 +1,7 @@
 import { LocalStorage, SessionStorage } from 'quasar'
 import getters from './getters'
 import state, { SWAP_SEEK_BUTTON_KEY, FLIP_LR_CHANNEL_KEY, ENABLE_PIP_LYRICS, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, AUTO_MARK_LISTENED_KEY, REWIND_SEEK_TIME_KEY, FORWARD_SEEK_TIME_KEY, SLEEP_TIMER_KEY } from './state'
+import { apiUrl } from 'src/base-path'
 
 const mutations = {
   TOGGLE_HIDE (state) {
@@ -62,7 +63,7 @@ const mutations = {
       if (!coverUrl) {
         const file = getters.currentPlayingFile(state)
         const trackId = file.trackId || file.hash
-        coverUrl = `/api/cover/${trackId.split('/')[0]}`
+        coverUrl = apiUrl(`/api/cover/${trackId.split('/')[0]}`)
       }
       state.visualPlayerCoverUrl = coverUrl
     }

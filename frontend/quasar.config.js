@@ -1,12 +1,19 @@
 // Configuration for your app
 // https://quasar.dev/quasar-cli-webpack/quasar-config-js
 
+// The server owns the deploy-time URL prefix (config.basePath), so the token it
+// swaps in has to come from there rather than being spelled twice.
+const { PUBLIC_PATH_TOKEN } = require('../backend/base-path')
+
 module.exports = function (ctx) {
   return {
     // app boot file (/src/boot)
     // --> boot files are part of "main.js"
     // https://quasar.dev/quasar-cli-webpack/boot-files
     boot: [
+      // Must stay first: it fixes webpack's chunk loader for the deploy path
+      // prefix, before anything else can trigger a dynamic import.
+      'base-path',
       'axios',
       'i18n',
       'store',
@@ -54,6 +61,18 @@ module.exports = function (ctx) {
     // Full list of options: https://quasar.dev/quasar-cli-webpack/quasar-config-js#build
     build: {
       vueRouterMode: 'history',
+
+      // One build, deployable at the root or under any sub-path.
+      //
+      // Every URL webpack and Quasar bake into index.html, sw.js and
+      // manifest.json gets this placeholder instead of a real prefix; the
+      // backend replaces it with config.basePath as it serves those three
+      // files (backend/base-path.js). Anything the app builds at runtime reads
+      // the prefix from window.__KIKO_BASE__ instead -- see src/base-path.js.
+      //
+      // Dev keeps '/': `quasar dev` serves from the root and does not go
+      // through the backend, so there would be nothing to do the swap.
+      publicPath: ctx.dev ? '/' : PUBLIC_PATH_TOKEN,
 
       // Output directly to the backend's dist/ so it's served as static content
       distDir: '../backend/dist',
@@ -108,15 +127,25 @@ module.exports = function (ctx) {
     // https://quasar.dev/quasar-cli-webpack/developing-pwa/configuring-pwa
     pwa: {
       workboxMode: 'GenerateSW',
+      extendManifestJson (json) {
+        // Relative to the manifest's own URL, so an installed app scopes itself
+        // to wherever it was installed from. Quasar's default start_url is
+        // build.publicPath, which here is the unresolved placeholder.
+        json.start_url = '.'
+        json.scope = '.'
+      },
       extendGenerateSWOptions (opts) {
         opts.skipWaiting = true
         opts.clientsClaim = true
         opts.exclude = opts.exclude || []
         opts.exclude.push(/manifest\.json$/, /.*.js.map$/)
         opts.navigateFallbackDenylist = opts.navigateFallbackDenylist || []
+        // Unanchored on purpose: under config.basePath the pathname these are
+        // matched against is /prefix/api/..., which an anchored ^\/api\/ would
+        // miss, silently handing API requests the SPA shell when offline.
         opts.navigateFallbackDenylist.push(
-          /^\/api\/.*$/,
-          /\/media\/.*$/
+          /\/api\//,
+          /\/media\//
         )
       }
     },

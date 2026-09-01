@@ -130,6 +130,7 @@ import { mapState, mapGetters } from 'vuex'
 import { basenameWithoutExt, toQueueItem } from 'src/utils'
 import { formatSeconds } from '../utils'
 import NotifyMixin from '../mixins/Notification.js'
+import { apiUrl } from 'src/base-path'
 
 const MAX_ZOOM = 8
 const DOUBLE_TAP_ZOOM = 2.5
@@ -310,7 +311,7 @@ export default {
 
     download (file) {
       // Fallback to old API for an old backend
-      const url = file.mediaDownloadUrl ? `${file.mediaDownloadUrl}` : `/api/media/download/${file.trackId || file.hash}`;
+      const url = file.mediaDownloadUrl ? `${file.mediaDownloadUrl}` : apiUrl(`/api/media/download/${file.trackId || file.hash}`);
       const link = document.createElement('a');
       link.href = url;
       link.target="_blank";
@@ -319,7 +320,7 @@ export default {
 
     setVisualPlayerCover (imgFile) {
       if (!imgFile) return;
-      const urlWithoutToken = imgFile.mediaDownloadUrl ? `${imgFile.mediaDownloadUrl}` : `/api/media/download/${imgFile.trackId || imgFile.hash}`;
+      const urlWithoutToken = imgFile.mediaDownloadUrl ? `${imgFile.mediaDownloadUrl}` : apiUrl(`/api/media/download/${imgFile.trackId || imgFile.hash}`);
       this.$store.commit('AudioPlayer/SET_VISUAL_PLAYER_COVER_URL', urlWithoutToken);
       this.$q.notify({
         message: this.$t('worktree.coverSetSuccess'),
@@ -348,7 +349,7 @@ export default {
 
     originalImgSrc (file) {
       // Fallback to old API for an old backend
-      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}` : `/api/media/stream/${file.trackId || file.hash}`;
+      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}` : apiUrl(`/api/media/stream/${file.trackId || file.hash}`);
       return url
     },
 

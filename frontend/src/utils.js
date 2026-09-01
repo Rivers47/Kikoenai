@@ -1,4 +1,5 @@
 import axios from "axios";
+import { apiUrl } from './base-path';
 
 /**
  * Work ids are canonical everywhere in the app: DLsite ids are zero-padded
@@ -92,7 +93,7 @@ export function toQueueItem(node) {
     duration: node.duration,
     workTitle: node.workTitle,
   };
-  if (node.mediaStreamUrl && node.mediaStreamUrl !== `/api/media/stream/${trackId}`) {
+  if (node.mediaStreamUrl && node.mediaStreamUrl !== apiUrl(`/api/media/stream/${trackId}`)) {
     item.mediaStreamUrl = node.mediaStreamUrl;
   }
   return item;

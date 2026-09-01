@@ -99,6 +99,30 @@ Due to a bug in Firefox. If you use a local DNS with a public looking hostname
 that points at a LAN IP, axio could occur. The frontend will silently retry to
 fix it. Or you can add the domain to `network.lna.skip-domains` in `about:config`
 
+### Change base URL
+
+Set `basePath`
+in `config/config.json` or through the web UI.
+
+```json
+  "basePath": "/kikoeru"
+```
+
+The app is then at `https://example.com/kikoeru/`.
+
+> [!TIP]
+> **Your reverse proxy must pass the prefix through, not strip it.** 
+
+```nginx
+proxy_pass http://127.0.0.1:8888;  # NOT http://127.0.0.1:8888/  — that would strip /kikoeru
+```
+
+In Caddy, use `handle`, not `handle_path`.
+
+If you change the config, restart the server,
+and you might need to unregister the service worker
+in browser, or just reinstall the app.
+
 ### First Login
 
 On first run, a default administrator account is created: username `admin`,

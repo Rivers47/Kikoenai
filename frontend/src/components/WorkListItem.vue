@@ -49,6 +49,7 @@
 </template>
 
 <script>
+import { apiUrl } from 'src/base-path'
 
 export default {
   name: 'WorkListItem',
@@ -66,7 +67,7 @@ export default {
 
   computed: {
     samCoverUrl () {
-      return this.metadata.id ? `/api/cover/${this.metadata.id}?type=sam` : ""
+      return this.metadata.id ? apiUrl(`/api/cover/${this.metadata.id}?type=sam`) : ""
     },
   }
 }

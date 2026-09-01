@@ -200,6 +200,22 @@
 
         <q-item>
           <q-item-section>
+            <q-item-label>{{ $t('advanced.basePath') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.basePathCaption') }}</q-item-label>
+          </q-item-section>
+
+          <q-item-section avatar>
+            <q-input
+              v-model="config.basePath"
+              :placeholder="$t('advanced.basePathPlaceholder')"
+              input-class="text-right"
+              style="max-width: 180px;"
+            />
+          </q-item-section>
+        </q-item>
+
+        <q-item>
+          <q-item-section>
             <q-item-label>{{ $t('advanced.blockRemote') }}</q-item-label>
             <q-item-label caption>{{ $t('advanced.blockRemoteCaption') }}</q-item-label>
           </q-item-section>

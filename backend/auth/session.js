@@ -5,6 +5,17 @@ const { config } = require('../config');
 
 const SESSION_COOKIE = 'kikoeru_sid';
 
+// Frozen at require time, on purpose: config.js populates `config` as a module
+// side effect, so this is the same value app.js mounts its router at.
+//
+// basePath is editable from the admin panel and only takes effect on restart.
+// Reading it live would mean that saving a new prefix immediately started
+// issuing cookies scoped to a path the routes have not moved to yet -- so the
+// next login would set a cookie the browser then refuses to send back, locking
+// the admin out until the restart they were told to do. Pinning it here keeps
+// the cookie in step with the routes: nothing changes until the process does.
+const COOKIE_PATH = config.basePath || '/';
+
 // The client holds the secret; only its SHA-256 is ever stored. A leaked database
 // file therefore does not hand over live sessions.
 const hashSecret = (secret) => crypto.createHash('sha256').update(secret).digest('hex');
@@ -32,7 +43,10 @@ const sessionCookieOptions = () => ({
   // where an unconditional Secure flag would make login silently fail. Behind a
   // TLS-terminating reverse proxy, `false` is merely less strict, not broken.
   secure: config.httpsEnabled,
-  path: '/',
+  // Scoped to where the app is actually served from, so an install under
+  // config.basePath does not hand its session cookie to the other services
+  // sharing the hostname. '/' when the app owns the whole host, as before.
+  path: COOKIE_PATH,
 });
 
 // Create a session and return the secret handed to the client (only its hash is stored)

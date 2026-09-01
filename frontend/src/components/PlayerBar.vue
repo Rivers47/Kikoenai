@@ -77,6 +77,7 @@ import { mapState, mapGetters, mapMutations } from 'vuex'
 import { formatSeconds } from '../utils'
 import Scrollable from 'components/Scrollable'
 import { debounce } from 'quasar';
+import { apiUrl } from 'src/base-path'
 const OpState = {
   idle: 0,
   up: 1,
@@ -92,7 +93,7 @@ export default {
   computed: {
     samCoverUrl () {
       const id = this.currentPlayingFile.trackId || this.currentPlayingFile.hash
-      return id ? `/api/cover/${id.split('/')[0]}?type=sam` : ""
+      return id ? apiUrl(`/api/cover/${id.split('/')[0]}?type=sam`) : ""
     },
 
     showPlayBar () {

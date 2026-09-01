@@ -23,6 +23,7 @@ const { initApp }= require('./database/init');
 const initSocket = require('./socket');
 const { config } = require('./config');
 const api = require('./api');
+const { applyBasePath } = require('./base-path');
 const { sweepExpired } = require('./auth/session');
 const app = express();
 
@@ -139,16 +140,25 @@ app.use((req, res, next) => {
   next();
 });
 
+// Everything the browser addresses -- the WebApp, /api and the dev-only media
+// directories -- hangs off one router so config.basePath can move the whole lot
+// under a prefix in a single place. Socket.IO is mounted on the raw HTTP server
+// rather than on Express, so it applies the prefix itself (see socket.js).
+//
+// The Host and Local-Network-Access middleware above stay on `app`: they are
+// about the connection, not about where in the URL space the app lives.
+const site = express.Router();
+
 // For dev purpose only
 if (process.env.NODE_ENV === 'development') {
   // eslint-disable-next-line n/no-unpublished-require
-  app.use('/media/stream/VoiceWork', express.static('VoiceWork', { dotfiles: 'allow' /* Express 5: preserve v4 behavior */ }), require('serve-index')('VoiceWork', {'icons': true}));
+  site.use('/media/stream/VoiceWork', express.static('VoiceWork', { dotfiles: 'allow' /* Express 5: preserve v4 behavior */ }), require('serve-index')('VoiceWork', {'icons': true}));
   // eslint-disable-next-line n/no-unpublished-require
-  app.use('/media/download/VoiceWork', express.static('VoiceWork', { dotfiles: 'allow' /* Express 5: preserve v4 behavior */ }), require('serve-index')('VoiceWork', {'icons': true}));
+  site.use('/media/download/VoiceWork', express.static('VoiceWork', { dotfiles: 'allow' /* Express 5: preserve v4 behavior */ }), require('serve-index')('VoiceWork', {'icons': true}));
 }
 
 // connect-history-api-fallback 中间件后所有的 GET 请求都会变成 index (default: './index.html').
-app.use(history({
+site.use(history({
   // 将所有带 api 的 GET 请求都代理到 parsedUrl.path, 其实就是原来的路径
   rewrites: [
     {
@@ -157,11 +167,96 @@ app.use(history({
     }
   ]
 }));
-// Expose API routes
-api(app);
+// Built assets whose *contents* name the URL prefix, and the content type to
+// send them back as. Everything else in dist/ is prefix-agnostic and goes
+// straight through express.static.
+const DIST_DIR = path.join(__dirname, './dist');
+const PREFIXED_ASSETS = {
+  '/index.html': 'text/html; charset=utf-8',
+  '/sw.js': 'text/javascript; charset=utf-8',
+  '/manifest.json': 'application/manifest+json; charset=utf-8',
+};
 
-// Serve WebApp routes
-app.use(express.static(path.join(__dirname, './dist'), { dotfiles: 'allow' /* Express 5: preserve v4 behavior */ }));
+// The rewrite is the same on every request, so do it once. Skipped outside
+// production so a rebuilt dist/ shows up without restarting the server.
+const prefixedAssetCache = new Map();
+
+/**
+ * Tell the frontend where it is being served from.
+ *
+ * The asset URLs in index.html get their prefix from the token swap, but the
+ * URLs the app builds at runtime -- API calls, the router base, the Socket.IO
+ * path -- have no build-time representation to rewrite. They read this global
+ * instead. It is absent under `quasar dev`, where the app is always at the
+ * root, and src/base-path.js falls back to '' accordingly.
+ */
+const injectBaseGlobal = (html, basePath) => html.replace(
+  /<head(\s[^>]*)?>/i,
+  (headTag) => `${headTag}<script>window.__KIKO_BASE__=${JSON.stringify(basePath)}</script>`
+);
+
+const buildPrefixedAsset = (assetPath) => {
+  const raw = fs.readFileSync(path.join(DIST_DIR, assetPath), 'utf-8');
+  const rewritten = applyBasePath(raw, config.basePath);
+  return assetPath === '/index.html' ? injectBaseGlobal(rewritten, config.basePath) : rewritten;
+};
+
+const servePrefixedAssets = (req, res, next) => {
+  // `history` above has already rewritten WebApp routes to /index.html, so a
+  // GET usually arrives here as the real file name. A bare '/' still has to be
+  // handled: connect-history-api-fallback only rewrites GETs, and it declines
+  // any request that does not accept HTML -- either of which would otherwise
+  // fall through to express.static and be answered with the raw, still
+  // tokenized dist/index.html as a directory index.
+  const assetPath = req.path === '/' ? '/index.html' : req.path;
+  const contentType = PREFIXED_ASSETS[assetPath];
+  if (!contentType || (req.method !== 'GET' && req.method !== 'HEAD')) {
+    return next();
+  }
+
+  try {
+    let body = prefixedAssetCache.get(assetPath);
+    if (body === undefined) {
+      body = buildPrefixedAsset(assetPath);
+      if (config.production) {
+        prefixedAssetCache.set(assetPath, body);
+      }
+    }
+    // express.static would have sent `public, max-age=0` here. Say it
+    // explicitly, because res.send() sets no Cache-Control at all and a
+    // response with only an ETag is free to be heuristically cached -- which
+    // for the SPA shell means a stale app, and for sw.js means a stale service
+    // worker that outlives the deploy that replaced it.
+    res.setHeader('Cache-Control', 'no-cache');
+    res.type(contentType).send(body);
+  } catch (err) {
+    // No frontend build in dist/ -- let express.static produce the 404 it
+    // always did rather than turning a missing build into a 500.
+    if (err.code === 'ENOENT') return next();
+    next(err);
+  }
+};
+
+// Expose API routes
+api(site);
+
+// Serve WebApp routes.
+//
+// Three built assets carry the deploy-time URL prefix in their contents rather
+// than only in their name, so they are rewritten on the way out instead of
+// being handed to express.static: index.html (script/link hrefs, plus the
+// window.__KIKO_BASE__ the frontend reads), sw.js (the precache manifest) and
+// manifest.json (start_url/scope). See base-path.js.
+site.use(servePrefixedAssets);
+// `index: false` so dist/index.html has exactly one way out of this server --
+// the rewriting middleware above. Left on, express.static would answer a
+// directory request with the raw file, deploy-path placeholder and all.
+site.use(express.static(DIST_DIR, {
+  index: false,
+  dotfiles: 'allow' /* Express 5: preserve v4 behavior */
+}));
+
+app.use(config.basePath || '/', site);
 
 // 返回错误响应
  

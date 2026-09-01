@@ -41,6 +41,7 @@
 <script>
 
 import { formatID, isFanzaId } from 'src/utils'
+import { apiUrl } from 'src/base-path'
 
 export default {
   name: 'CoverSFW',
@@ -75,7 +76,7 @@ export default {
 
   computed: {
     coverUrl () {
-      return this.workid ? `/api/cover/${this.workid}` : ""
+      return this.workid ? apiUrl(`/api/cover/${this.workid}`) : ""
     },
 
     rjcode () {

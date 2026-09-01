@@ -81,11 +81,19 @@
    - `trust proxy` (if behind reverse proxy)
    - `compression` (gzip, if enabled)
    - `express.json` + `express.urlencoded` (built-in body parsing, Express 5)
-   - Dev-only: static file serving for `VoiceWork/`
-   - `connect-history-api-fallback` (SPA routing, except `/api/*`)
-   - API routes (via `api.js`)
-   - Static files from `dist/`
+   - Host-header check, then the Local-Network-Access preflight answer
+   - **`site` router**, mounted at `config.basePath || '/'` — everything below
+     this line lives on it, not on `app`:
+     - Dev-only: static file serving for `VoiceWork/`
+     - `connect-history-api-fallback` (SPA routing, except `/api/*`)
+     - API routes (via `api.js`)
+     - `servePrefixedAssets` (index.html / sw.js / manifest.json)
+     - Static files from `dist/`
    - Error handler (401 for `UnauthorizedError`, 500 for others)
+
+   The two middlewares above the router stay on `app` on purpose: they are
+   about the connection (which Host, which Origin), not about where in the URL
+   space the app lives, so they must run for a request aimed anywhere.
 4. **Dual HTTP/HTTPS** server creation.
 5. **Socket.IO** attached to both servers.
 
@@ -172,6 +180,63 @@ value     := '"' anything '"' | bare       # bare: '_' stands for a space
 - **The `Containerfile` declares no `VOLUME`, deliberately.** `VOLUME` only does anything when the operator mounts nothing at that path, and then it creates *anonymous* volumes — unnamed, easy to orphan, silently removed by `podman rm -v`, and impossible to undo in a derived image. Explicit mounts are unaffected either way.
 - **Legacy-layout startup warning.** When `IS_DOCKER` is set, `dataRoot !== appDir`, the app directory holds a `sqlite/db.sqlite3` and the current data root does not, `config.js` prints a four-line `!!!` warning naming both paths and both remedies. It is **advisory only** — it changes no behaviour. It exists because the alternative failure mode is silent: an empty data root looks like a fresh install, and a rescan then rebuilds the library without ratings, reviews, progress or play history, none of which scanning can recover.
 - **Removed:** the legacy `tagLanguage` config key (was non-functional — scrapers always fetch Japanese). It is no longer in `defaultConfig`; a stale `tagLanguage` left in a pre-existing `config.json` is harmless and ignored. UI language is now per-user in the browser (see `frontend/AGENTS.md` i18n).
+
+### 2.4b Sub-path Deployment (`base-path.js`, `config.basePath`)
+
+`config.basePath` (default `''`) serves the whole app — WebApp, `/api` and
+`/socket.io` — under a prefix such as `/kikoeru`, so one hostname can carry
+several self-hosted services. `normalizeBasePath` in `base-path.js` reduces
+whatever is in `config.json` to `''` or `/one/or/more/segments`, and every
+consumer just concatenates it. **A bad value falls back to `''` with a warning
+rather than throwing** — an optional setting must not stop the server booting.
+Normalization runs in `resolveBasePath()`, called next to `resolveDataFolders()`
+after any assignment into `config`, so the tidied value is also what gets
+written back.
+
+**The frontend is built once and works at any prefix.** That takes two halves,
+and the split is the thing to understand before touching either side:
+
+| URL kind | Carries the prefix how |
+|----------|------------------------|
+| Baked in at build time — `<script>`/`<link>` hrefs, the service worker precache manifest, the web app manifest | `frontend/quasar.config.js` sets `build.publicPath` to `PUBLIC_PATH_TOKEN` (`/__KIKO_BASE__/`), which `applyBasePath` swaps for the real prefix as the file is served |
+| Built at runtime — API calls, router base, Socket.IO path, SW registration | Read from `window.__KIKO_BASE__`, injected into `index.html` by the same pass (`frontend/src/base-path.js`) |
+
+Consequences worth knowing:
+
+- **Only three files are rewritten**: `index.html`, `sw.js`, `manifest.json`
+  (`PREFIXED_ASSETS` in `app.js`). Everything else in `dist/` goes through
+  `express.static` untouched. The token also survives inside `js/app.*.js`
+  (webpack's baked chunk-loader path) — that copy is *not* rewritten and is
+  overridden at runtime by `frontend/src/boot/base-path.js` instead.
+- **`backend/dist/` is no longer servable by a plain static file server.** It
+  has always been served by this Express app (`distDir` points here), but a
+  build now genuinely depends on the rewrite pass.
+- `quasar dev` keeps `publicPath: '/'` and injects no global, so dev is
+  byte-for-byte what it was and always serves from the root.
+- The rewritten assets are cached in memory, but **only when `config.production`
+  is set**, so a rebuilt `dist/` shows up without restarting in development.
+- **Socket.IO is not on the router.** It attaches to the raw HTTP server, so
+  `socket.js` sets `path: \`${config.basePath}/socket.io\`` itself, and
+  `frontend/src/boot/socket.io.js` mirrors it. Change one, change the other.
+- **The session cookie's `path` follows `basePath`**, so an install under a
+  prefix does not hand its cookie to the other services on the hostname. It is
+  **pinned at require time** (`COOKIE_PATH` in `auth/session.js`), not read
+  live: the setting is editable from the admin panel but the router only moves
+  on restart, and a cookie scoped ahead of the routes would lock the admin out
+  of the session they saved the change from.
+- **Editable from the admin panel** (Dashboard → Advanced → Web server
+  settings), so it round-trips through `PUT /api/config/admin` → `setConfig` →
+  `resolveBasePath`, and the normalized value is what lands in `config.json`.
+  Like everything else in that card, it needs a restart to take effect.
+- **`offloadStreamPath`/`offloadDownloadPath` are deliberately not prefixed.**
+  They address the reverse proxy's own virtual directories, not routes here.
+  `mediaStreamBaseUrl`/`mediaDownloadBaseUrl` in `filesystem/utils.js` *are*
+  prefixed — those go to the browser as `<audio>`/`<a href>` sources.
+- The reverse proxy must **pass the prefix through, not strip it** (nginx:
+  upstream without a trailing slash; Caddy: `handle`, not `handle_path`). See
+  `README.md` → *Serving under a sub-path*.
+
+Covered by `test/base-path.js`.
 
 ### 2.5 Scanning System (`filesystem/`)
 
