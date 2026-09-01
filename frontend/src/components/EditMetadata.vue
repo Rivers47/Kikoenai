@@ -36,6 +36,7 @@
                 v-for="(tag, idx) in editable.tags"
                 :key="'tag-' + idx"
                 removable
+                lang="ja"
                 @remove="removeTag(idx)"
               >
                 {{ tag.name }}
@@ -55,6 +56,7 @@
               :options="tagOptions"
               emit-value
               map-options
+              :lang="$tagLang"
               style="max-width: 400px"
             >
               <template v-slot:no-option>

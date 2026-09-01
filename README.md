@@ -189,6 +189,7 @@ The frontend builds directly into `backend/dist/`, which is served as static con
 - [ ] metadata cache server to replace hvdb/asmrone
 - [x] Smarter Play status, hide finished work in history
 - [x] Advanced search
+- [ ] Fix machine translations of UI and missing tag translations
 
 ## License
 

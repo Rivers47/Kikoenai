@@ -27,7 +27,7 @@
         :key='tag.id'
         :to="`/works?tagId=${tag.id}`"
         >
-        <q-chip dense square class="shadow-3">
+        <q-chip dense square class="shadow-3" :lang="$tagLang">
           {{ $tTag(tag.name) }}
         </q-chip>
       </router-link>

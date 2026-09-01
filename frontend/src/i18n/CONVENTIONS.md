@@ -11,7 +11,13 @@ catalog files don't collide.
 
 ## Two translation layers (kept apart)
 1. **Static UI strings** → vue-i18n. Use `$t('scope.key')` in templates, `this.$t(...)` in Options API script.
-2. **Dynamic tag names** → `translateTag(name)` / `$tTag(name)` in `src/utils.js` + `src/boot/i18n.js`. Tag names are DATA (canonical Japanese from the backend), never go in the vue-i18n catalog.
+2. **Dynamic tag names** → `translateTag(name, locale)` in `src/i18n/tags/index.js`, exposed as `$tTag(name)` by `src/boot/i18n.js`. Tag names are DATA (canonical Japanese from the backend), never go in the vue-i18n catalog.
+
+**Tag display language is a separate setting from the UI language** (LocalStorage
+`tag_language`, default `follow` = track the UI). `$tTag` resolves against it, not
+against the vue-i18n locale. Any element rendering `$tTag` must also carry
+`:lang="$tagLang"` so the browser picks the right Han glyph variants — see
+`frontend/AGENTS.md` §2.10.
 
 ## Key naming
 - Format: `<scope>.<id>` — lowercase scope, camelCase id.
@@ -24,7 +30,7 @@ catalog files don't collide.
 - Ids should be descriptive: `workdetails.releaseDate`, not `workdetails.label3`.
 
 ## Catalog files (per-scope partials, no collisions)
-Each .vue file you own gets **three partial files**, one per locale:
+Each .vue file you own gets **four partial files**, one per locale:
 ```
 src/i18n/parts/<locale>/<scope>.js
 ```
