@@ -173,7 +173,6 @@
       <q-btn-dropdown
         dense
         class="q-mt-sm shadow-4 q-mx-xs q-px-md"
-        
         color="primary"
         text-color="on-primary"
         :label="progressLabel"
@@ -224,7 +223,7 @@
           <q-separator />
 
           <q-item clickable @click="clearProgress" class="text-negative">
-            <q-item-section avatar class="q-pa-none">
+            <q-item-section avatar>
               <q-icon  name="remove_circle_outline" />
             </q-item-section>
             <q-item-section>
@@ -266,15 +265,6 @@
   </div>
 </template>
 
-<style scoped>
-.progress-menu :deep(.q-item__section--avatar) {
-  min-width: 0;
-  padding-right: 4px;
-}
-.progress-menu :deep(.q-item__section--main) {
-  align-items: flex-end;
-}
-</style>
 
 <script>
 import CoverSFW from 'components/CoverSFW'
