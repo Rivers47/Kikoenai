@@ -15,7 +15,7 @@
 
         <div class="row justify-center q-gutter-sm">
           <div class="col-auto" v-for="item in (keyword ? filteredItems : items)" :key="item.id">
-            <q-btn no-caps rounded color="primary" :label="itemLabel(item)" :lang="restrict === 'tags' ? $tagLang : null" :to="`/works?${queryField}=${item.id}`" />
+            <q-btn no-caps rounded color="primary" :label="itemLabel(item)" :lang="restrict === 'tags' ? $tagLang : null" :to="labelRoute(searchField, item.name)" />
           </div>
         </div>
       </div>
@@ -25,6 +25,7 @@
 
 <script>
 import NotifyMixin from '../mixins/Notification.js'
+import { labelRoute } from 'src/utils'
 
 export default {
   name: 'List',
@@ -53,16 +54,15 @@ export default {
       return `/api/${this.restrict}/`
     },
 
-    queryField () {
+    // Route segment ('tags') -> search namespace ('tag').
+    searchField () {
       switch (this.restrict) {
-        case 'circles':
-          return 'circleId'
         case 'tags':
-          return 'tagId'
+          return 'tag'
         case 'vas':
-          return 'vaId'
+          return 'va'
         default:
-          return 'circleId'
+          return 'circle'
       }
     },
 
@@ -78,6 +78,7 @@ export default {
   },
 
   methods: {
+    labelRoute,
     itemLabel (item) {
       const name = this.restrict === 'tags' ? this.$tTag(item.name) : item.name
       return `${name} (${item.count})`

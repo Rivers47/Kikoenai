@@ -9,7 +9,14 @@
         <q-badge color="secondary" floating>{{pagination.totalCount}}</q-badge>
       </span>
       <div> <!--普通搜索模式的信息展示-->
-        <q-badge class="q-ma-xs" v-for="meta, index in searchMetas" :key="meta">{{ index == 0 ? "":"," }} {{ meta }}</q-badge>
+        <!-- A filter is a list of terms, so it is shown as one removable chip
+             each rather than as the raw query string. -->
+        <FilterTerms
+          v-if="$route.query.filter"
+          :filter="$route.query.filter"
+          @update:filter="applyFilter"
+        />
+        <q-badge v-else class="q-ma-xs" v-for="meta, index in searchMetas" :key="meta">{{ index == 0 ? "":"," }} {{ meta }}</q-badge>
       </div>
     </div>
 
@@ -157,6 +164,7 @@ import NotifyMixin from '../mixins/Notification.js'
 import RecentWorks from 'src/components/RecentWorks'
 import { mapState } from 'vuex'
 import OldWorkCard from 'src/components/OldWorkCard'
+import FilterTerms from 'components/FilterTerms'
 
 export default {
   name: 'Works',
@@ -168,6 +176,7 @@ export default {
     OldWorkCard,
     WorkListItem,
     RecentWorks,
+    FilterTerms,
   },
 
   data () {
@@ -232,24 +241,7 @@ export default {
 
   computed: {
     url () {
-      const query = this.$route.query
-      if (query.circleId) {
-        return `/api/circles/${this.$route.query.circleId}/works`
-      } else if (query.tagId) {
-        return `/api/tags/${this.$route.query.tagId}/works`
-      } else if (query.vaId) {
-        return `/api/vas/${this.$route.query.vaId}/works`
-      } else if (query.illustratorId) {
-        return `/api/illustrators/${this.$route.query.illustratorId}/works`
-      } else if (query.scriptWriterId) {
-        return `/api/script_writers/${this.$route.query.scriptWriterId}/works`
-      } else if (query.seriesId) {
-        return `/api/seriess/${this.$route.query.seriesId}/works`
-      } else if (query.keyword) {
-        return `/api/search`
-      } else {
-        return '/api/works'
-      }
+      return this.$route.query.filter ? '/api/search' : '/api/works'
     },
 
 
@@ -306,7 +298,7 @@ export default {
       localStorage.detailMode = newModeSetting;
     },
 
-    '$route.query.keyword'() {
+    '$route.query.filter'() {
       if (this.isActive) {
         this.reset()
       }
@@ -315,6 +307,12 @@ export default {
   },
 
   methods: {
+    // Dropping the last term leaves no filter at all, which is the whole
+    // library rather than an empty search.
+    applyFilter (filter) {
+      this.$router.push(filter ? { path: '/works', query: { filter } } : '/works')
+    },
+
     onLoad (index, done) {
       this.requestWorksQueue()
         .then(() => done())
@@ -329,8 +327,8 @@ export default {
         seed: this.seed,
       }
 
-      if (this.$route.query.keyword) {
-        params.keyword = this.$route.query.keyword
+      if (this.$route.query.filter) {
+        params.filter = this.$route.query.filter
       }
 
       return this.$axios.get(this.url, { params })
@@ -357,70 +355,9 @@ export default {
     },
 
     refreshPageTitle () {
-      const q = this.$route.query;
-      if (q.circleId || q.tagId || q.vaId || q.illustratorId || q.scriptWriterId || q.seriesId) {
-        let url = '', restrict = ''
-        if (q.circleId) {
-          restrict = 'circles'
-          url = `/api/${restrict}/${q.circleId}`
-        } else if (q.tagId) {
-          restrict = 'tags'
-          url = `/api/${restrict}/${q.tagId}`
-        } else if (q.vaId) {
-          restrict = 'vas'
-          url = `/api/${restrict}/${q.vaId}`
-        } else if (q.illustratorId) {
-          restrict = 'illustrators'
-          url = `/api/${restrict}/${q.illustratorId}`
-        } else if (q.scriptWriterId) {
-          restrict = 'script_writers'
-          url = `/api/${restrict}/${q.scriptWriterId}`
-        } else {
-          restrict = 'seriess'
-          url = `/api/${restrict}/${q.seriesId}`
-        }
-
-        this.$axios.get(url)
-          .then((response) => {
-            const name = response.data.name
-            let pageTitle
-
-            switch (restrict) {
-              case 'tags':
-                pageTitle = this.$t('works.searchTag')
-                break
-              case 'vas':
-                pageTitle = this.$t('works.searchVa')
-                break
-              case 'circles':
-                pageTitle = this.$t('works.searchCircle')
-                break
-              case 'illustrators':
-                pageTitle = this.$t('works.searchIllustrator')
-                break
-              case 'script_writers':
-                pageTitle = this.$t('works.searchScriptWriter')
-                break
-              case 'seriess':
-                pageTitle = this.$t('works.searchSeries')
-                break
-            }
-            this.searchMetas = [name]
-            this.pageTitle = pageTitle
-          })
-          .catch((error) => {
-            if (error.response) {
-              if (error.response.status !== 401) {
-                this.showErrNotif(error.response.data.error || `${error.response.status} ${error.response.statusText}`)
-              }
-            } else {
-              this.showErrNotif(error.message || error)
-            }
-          })
-      } else if (this.$route.query.keyword) {
+      if (this.$route.query.filter) {
         this.pageTitle = this.$t('works.searchKeyword');
-        this.searchMetas = [this.$route.query.keyword];
-
+        this.searchMetas = [this.$route.query.filter];
       } else {
         this.pageTitle = this.$t('works.allWorks')
         this.searchMetas = [];

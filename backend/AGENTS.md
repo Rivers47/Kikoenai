@@ -146,7 +146,7 @@ SQLite3 via Knex.js with the following tables:
 
 ### 2.3b Search Syntax (`database/search-query.js`)
 
-`GET /api/search?keyword=` accepts an E-Hentai style filter language. `parseSearchQuery()` splits the raw box into terms; `applySearchTerm()` in `queries.js` turns each into one parenthesised clause on the `t_work` query, and **every term must match (AND)**.
+`GET /api/search?filter=` accepts an E-Hentai style filter language — the app's **only** filter mechanism, since every label link builds one. `parseSearchQuery()` splits the raw box into terms; `applySearchTerm()` in `queries.js` turns each into one parenthesised clause on the `t_work` query, and **every term must match (AND)**.
 
 ```
 term      := ['-'] [ namespace ':' ] value
@@ -453,7 +453,7 @@ node filesystem/updater.js --reviews        # re-scrape every DLsite user review
 
 The following endpoints are consumed by the `frontend/` package:
 
-**Id formats:** work-id route params (`:id` on `/api/work`, `/api/cover`, `/api/tracks`, `/api/media/*`, `/api/refresh`, `/api/work/scan`) are **strings** matching `^(\d{6,8}|d_?\d+)$` — DLsite ids are already RJ-padded digit strings, Fanza ids are `d`-prefixed and underscore-free. `workIdParam`/`workIdBody`/`workIdQuery` in `routes/utils/validate.js` validate them and sanitize the legacy `d_` spelling away, so a stale PWA cache or an old bookmark (`/work/d_215444`) keeps resolving after the migration. Label-id params (`/api/:fields/:id/works`) are UUID strings.
+**Id formats:** work-id route params (`:id` on `/api/work`, `/api/cover`, `/api/tracks`, `/api/media/*`, `/api/refresh`, `/api/work/scan`) are **strings** matching `^(\d{6,8}|d_?\d+)$` — DLsite ids are already RJ-padded digit strings, Fanza ids are `d`-prefixed and underscore-free. `workIdParam`/`workIdBody`/`workIdQuery` in `routes/utils/validate.js` validate them and sanitize the legacy `d_` spelling away, so a stale PWA cache or an old bookmark (`/work/d_215444`) keeps resolving after the migration. Label ids are UUID v5 of the label's own name, so they are no longer addressable as route params: `/api/:fields/:id` still resolves a name, but filtering by label goes through `/api/search` (§2.3b).
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -461,8 +461,8 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/auth/me` | POST | Log in; sets the session cookie, returns `{ user, session }` |
 | `/api/auth/logout` | POST | Destroy the server-side session and clear the cookie |
 | `/api/works` | GET | List/search works (supports pagination, sort, filter) |
-| `/api/search` | GET | Keyword search — `keyword` supports the advanced filter syntax (§2.3b), e.g. `va:"name$" -tag:NTR` |
-| `/api/:fields/:id/works` | GET | Works filtered
+| `/api/search` | GET | Filter search — `filter` is the advanced filter syntax (§2.3b), e.g. `va:"name$" -tag:NTR`. Was `keyword` |
+| ~~`/api/:fields/:id/works`~~ | — | **Removed.** Label filtering goes through `/api/search`
 | `/api/work/:id` | GET | Get work metadata + playback state |
 | `/api/tags` | GET | List all tags |
 | `/api/circles` | GET | List all circles |
@@ -536,7 +536,7 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 - **Linting:** ESLint (node plugin)
 - **Tests:** Located in `test/` directory:
   - `edit-metadata.js` — covers the `PUT /api/work/:id` flow and `db.editWorkMetadata` (uses shared `db-test.sqlite3` singleton)
-  - `search-query.js` — advanced search parser + `getWorksByKeyWord` behaviour (builds its own throwaway `db-search-test.sqlite3`)
+  - `search-query.js` — advanced filter parser/serializer + `getWorksByFilter` behaviour (builds its own throwaway `db-search-test.sqlite3`)
   - `work-id.js` — id canonicalization, cover/image file naming, `getFolderList` work-code detection, and migration `20260828000000` up/down
   - `benchmark.js` — DB query benchmark; Skips if `backend/sqlite/db.sqlite3` is missing/empty;
 - **Run:** `npm test` (sets `NODE_ENV=test`)

@@ -49,6 +49,10 @@
   --outline-rgb: 117 118 128;
   --outline-variant: #C5C6D0;
   --outline-variant-rgb: 197 198 208;
+  --inverse-surface: #2F3036;
+  --inverse-surface-rgb: 47 48 54;
+  --inverse-on-surface: #F1F0F7;
+  --inverse-on-surface-rgb: 241 240 247;
   // extended colors from extendedColors
   --warning: #835500;
   --warning-rgb: 131 85 0;
@@ -179,6 +183,10 @@ body.body--dark {
   --outline-rgb: 143 144 154;
   --outline-variant: #45464F;
   --outline-variant-rgb: 69 70 79;
+  --inverse-surface: #E3E2E9;
+  --inverse-surface-rgb: 227 226 233;
+  --inverse-on-surface: #2F3036;
+  --inverse-on-surface-rgb: 47 48 54;
   // extended colors from extendedColors
   --warning: #feb955;
   --warning-rgb: 254 185 85;
@@ -311,6 +319,10 @@ body.body--dark {
   --outline-rgb: 42 44 52;
   --outline-variant: #474951;
   --outline-variant-rgb: 71 73 81;
+  --inverse-surface: #2F3036;
+  --inverse-surface-rgb: 47 48 54;
+  --inverse-on-surface: #FFFFFF;
+  --inverse-on-surface-rgb: 255 255 255;
     // extended colors from extendedColors
     --warning: #452b00;
     --warning-rgb: 69 43 0;
@@ -440,6 +452,10 @@ body.body--dark {
   --outline-rgb: 239 239 250;
   --outline-variant: #C2C2CC;
   --outline-variant-rgb: 194 194 204;
+  --inverse-surface: #E3E2E9;
+  --inverse-surface-rgb: 227 226 233;
+  --inverse-on-surface: #000000;
+  --inverse-on-surface-rgb: 0 0 0;
     // extended colors from extendedColors
     --warning: #ffddb4;
     --warning-rgb: 255 221 180;
@@ -572,6 +588,10 @@ body.contrast-medium {
   --outline-rgb: 81 82 91;
   --outline-variant: #6B6C75;
   --outline-variant-rgb: 107 108 117;
+  --inverse-surface: #2F3036;
+  --inverse-surface-rgb: 47 48 54;
+  --inverse-on-surface: #F1F0F7;
+  --inverse-on-surface-rgb: 241 240 247;
   // extended colors from extendedColors
   --warning: #633f00;
   --warning-rgb: 99 63 0;
@@ -701,6 +721,10 @@ body.body--dark.contrast-medium {
   --outline-rgb: 177 177 187;
   --outline-variant: #8F9099;
   --outline-variant-rgb: 143 144 153;
+  --inverse-surface: #E3E2E9;
+  --inverse-surface-rgb: 227 226 233;
+  --inverse-on-surface: #292A2F;
+  --inverse-on-surface-rgb: 41 42 47;
   // extended colors from extendedColors
   --warning: #ffcc88;
   --warning-rgb: 255 204 136;
@@ -832,6 +856,10 @@ body.contrast-high {
   --outline-rgb: 42 44 52;
   --outline-variant: #474951;
   --outline-variant-rgb: 71 73 81;
+  --inverse-surface: #2F3036;
+  --inverse-surface-rgb: 47 48 54;
+  --inverse-on-surface: #FFFFFF;
+  --inverse-on-surface-rgb: 255 255 255;
   // extended colors from extendedColors
   --warning: #452b00;
   --warning-rgb: 69 43 0;
@@ -961,6 +989,10 @@ body.body--dark.contrast-high {
   --outline-rgb: 239 239 250;
   --outline-variant: #C2C2CC;
   --outline-variant-rgb: 194 194 204;
+  --inverse-surface: #E3E2E9;
+  --inverse-surface-rgb: 227 226 233;
+  --inverse-on-surface: #000000;
+  --inverse-on-surface-rgb: 0 0 0;
   // extended colors from extendedColors
   --warning: #ffddb4;
   --warning-rgb: 255 221 180;

@@ -1,8 +1,12 @@
 <template>
   <q-card class="card hover-show">
-    <router-link :to="`/work/${metadata.id}`">
+    <!-- The cover link is an overlay rather than a wrapper: the tag chips sit
+         on top of the cover, and nesting them inside the link would put an
+         anchor (and their menu button) inside another anchor. -->
+    <div class="cover-wrap">
       <CoverSFW :workid="metadata.id" :nsfw="false" :release="metadata.release" :tags="metadata.tags" />
-    </router-link>
+      <router-link class="cover-link" :to="`/work/${metadata.id}`" :aria-label="metadata.title" />
+    </div>
 
     <q-separator />
 
@@ -16,9 +20,14 @@
 
       <!-- 社团 -->
       <div class="q-ml-sm q-mt-sm q-mb-xs text-subtitle1 text-weight-regular ellipsis">
-        <router-link :to="`/works?circleId=${metadata.circle.id}`" class="text-muted">
+        <SearchableLabel
+          :to="labelRoute('circle', metadata.circle.name)"
+          field="circle"
+          :name="metadata.circle.name"
+          link-class="text-muted"
+        >
           {{ metadata.circle.name }}
-        </router-link>
+        </SearchableLabel>
       </div>
 
       <!-- 评价&评论 -->
@@ -86,15 +95,19 @@
         class="q-mx-xs q-my-sm"
         :class="{ 'horize-scroll-va-list': $q.platform.has.touch }"
       >
-        <router-link
+        <SearchableLabel
           v-for="(va, index) in metadata.vas"
-          :to="`/works?vaId=${va.id}`"
+          :to="labelRoute('va', va.name)"
+          field="va"
+          chip
+          caret-class="text-on-primary-container"
+          :name="va.name"
           :key=index
         >
           <q-chip square size="md" class="shadow-2" color="primary-container" text-color="on-primary-container">
             {{ va.name }}
           </q-chip>
-        </router-link>
+        </SearchableLabel>
       </div>
     </div>
   </q-card>
@@ -103,6 +116,8 @@
 <script>
 import CoverSFW from 'components/CoverSFW'
 import NotifyMixin from '../mixins/Notification.js'
+import { labelRoute } from 'src/utils'
+import SearchableLabel from './SearchableLabel'
 
 export default {
   name: 'WorkCard',
@@ -110,6 +125,7 @@ export default {
   mixins: [NotifyMixin],
 
   components: {
+    SearchableLabel,
     CoverSFW
   },
 
@@ -180,6 +196,7 @@ export default {
   },
 
   methods: {
+    labelRoute,
     submitRating (payload) {
       this.$axios.put('/api/review', payload)
         .then((response) => {
@@ -209,6 +226,20 @@ export default {
 .horize-scroll-va-list {
   display: flex;
   overflow-y: scroll;
+}
+
+.cover-wrap {
+  position: relative;
+}
+
+.cover-wrap .cover-link {
+  position: absolute;
+  inset: 0;
+}
+
+/* Above the cover link, so the chips and their carets stay clickable. */
+.cover-wrap :deep(.tags-panel) {
+  z-index: 1;
 }
 
 .hover-show {

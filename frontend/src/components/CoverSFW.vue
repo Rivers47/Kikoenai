@@ -22,15 +22,18 @@
 
     <!-- 标签 -->
     <div class="q-pa-none q-ma-sm absolute-bottom-left tags-panel">
-      <router-link
+      <SearchableLabel
         v-for="tag in tags"
         :key='tag.id'
-        :to="`/works?tagId=${tag.id}`"
+        :to="labelRoute('tag', tag.name)"
+        field="tag"
+        chip
+        :name="tag.name"
         >
         <q-chip dense square class="shadow-3" :lang="$tagLang">
           {{ $tTag(tag.name) }}
         </q-chip>
-      </router-link>
+      </SearchableLabel>
     </div>
 
     <!--其他自定义组件-->
@@ -40,11 +43,16 @@
 
 <script>
 
-import { formatID, isFanzaId } from 'src/utils'
+import { formatID, isFanzaId, labelRoute } from 'src/utils'
+import SearchableLabel from './SearchableLabel'
 import { apiUrl } from 'src/base-path'
 
 export default {
   name: 'CoverSFW',
+
+  components: {
+    SearchableLabel,
+  },
 
   props: {
     workid: {
@@ -109,6 +117,7 @@ export default {
   },
 
   methods: {
+    labelRoute,
     toggleBlurFlag () {
       this.blurFlag = !this.blurFlag
     }
@@ -125,8 +134,8 @@ export default {
   opacity: calc(var(--hover-work-card) + var(--active-work-card) + var(--sim-hover-work-card));
   transition: opacity 0.2s;
   padding: 0;
-  max-width: 70%;
-  background: rgba(0,0,0,0.5);
+  max-width: 100%;
+  background: rgb(var(--inverse-surface-rgb) / 0.5);
   border-radius: 5px;
   // background: radial-gradient(closest-side at center, rgba(0, 0, 0, 0.8) 0, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0) 100%);
   // background: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0,0,0,0.4) 30%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0.4) 70%, rgba(0,0,0,0));

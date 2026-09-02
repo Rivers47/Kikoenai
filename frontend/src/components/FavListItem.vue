@@ -15,22 +15,31 @@
         </q-item-label>
 
         <div class="row q-gutter-x-sm col-auto" >
-          <router-link :to="`/works?circleId=${metadata.circle.id}`" class="col-auto text-muted">
+          <SearchableLabel
+            :to="labelRoute('circle', metadata.circle.name)"
+            field="circle"
+            :name="metadata.circle.name"
+            link-class="text-muted"
+            class="col-auto"
+          >
             {{metadata.circle.name}}
-          </router-link>
+          </SearchableLabel>
 
           <span class="col-auto">/</span>
           <span class="col-auto text-muted"> {{metadata.release}}</span>
           <span class="col-auto">/</span>
 
-          <router-link
+          <SearchableLabel
             v-for="(va, index) in metadata.vas"
             :key=index
-            :to="`/works?vaId=${va.id}`"
-            class="col-auto text-primary"
+            :to="labelRoute('va', va.name)"
+            field="va"
+            :name="va.name"
+            link-class="text-primary"
+            class="col-auto"
           >
             {{ va.name }}
-          </router-link>
+          </SearchableLabel>
         </div>
 
         <div class="row items-center q-gutter-x-xs">
@@ -106,6 +115,8 @@
 import WriteReview from './WriteReview'
 import NotifyMixin from '../mixins/Notification.js'
 import { apiUrl } from 'src/base-path'
+import { labelRoute } from 'src/utils'
+import SearchableLabel from './SearchableLabel'
 
 export default {
   name: 'FavListItem',
@@ -113,6 +124,7 @@ export default {
   mixins: [NotifyMixin],
 
   components: {
+    SearchableLabel,
     WriteReview
   },
 
@@ -169,6 +181,7 @@ export default {
   },
 
   methods: {
+    labelRoute,
     // Zero hours/minutes are omitted. The en-US unit strings carry a leading
     // space (CJK ones don't), so join with '' and trim what that leaves behind.
     humanReadableSeconds(seconds) {

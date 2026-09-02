@@ -191,8 +191,7 @@ for (const field of FIELDS) {
 
  
 router.get('/search', async (req, res, next) => {
-  // const keyword = req.params.keyword ? req.params.keyword.trim() : '';
-  const keyword = req.query.keyword ? req.query.keyword.trim() : '';
+  const filter = req.query.filter ? req.query.filter.trim() : '';
 
   const currentPage = parseInt(req.query.page) || 1;
   // 通过 "音声id, 贩卖日, 用户评价， 售出数, 评论数量, 价格, 平均评价, 全年龄新作" 排序
@@ -205,8 +204,8 @@ router.get('/search', async (req, res, next) => {
   const shuffleSeed = req.query.seed ? req.query.seed : 7;
   
   try {
-    const { works, totalCount } = await db.getWorksByKeyWord({
-      keyword, username, nsfw, order, sort, limit: PAGE_SIZE, offset, seed: shuffleSeed
+    const { works, totalCount } = await db.getWorksByFilter({
+      filter, username, nsfw, order, sort, limit: PAGE_SIZE, offset, seed: shuffleSeed
     });
     normalize(works);
 
@@ -224,47 +223,6 @@ router.get('/search', async (req, res, next) => {
     // next(err);
   }
 });
-
-// GET list of work ids, restricted by circle/tag/VA/illustrator/script_writer/series
-for (const field of FIELDS) {
-  router.get(`/${field}s/:id/works`,
-     
-    async (req, res, next) => {
-      if(!isValidRequest(req, res)) return;
-
-      const currentPage = parseInt(req.query.page) || 1;
-      // 通过 "音声id, 贩卖日, 用户评价, 售出数, 评论数量, 价格, 平均评价, 全年龄新作" 排序
-      // ['id', 'release', 'rating', 'dl_count', 'review_count', 'price', 'rate_average_2dp, 'nsfw']
-      const order = req.query.order || 'release';
-      const sort = req.query.sort || 'desc'; // ['desc', 'asc]
-      const nsfw = parseInt(req.query.nsfw || '0'); 
-      const offset = (currentPage - 1) * PAGE_SIZE;
-      const username = config.auth ? req.user.name : 'admin';
-      const shuffleSeed = req.query.seed ? req.query.seed : 7;
-
-      try {
-        const { works, totalCount } = await db.getWorksBy({
-          id: req.params.id, field,
-          username, nsfw, order, sort, limit: PAGE_SIZE, offset, seed: shuffleSeed
-        });
-
-        normalize(works);
-
-        res.send({
-          works,
-          pagination: {
-            currentPage,
-            pageSize: PAGE_SIZE,
-            totalCount: totalCount[0]['count']
-          }
-        });
-      } catch(err) {
-        res.status(500).send({error: '查询过程中出错'});
-        console.error(err);
-        // next(err);
-      }
-  });
-}
 
 // GET list of circles/tags/VAs/illustrators/script_writers/series
 for (const field of FIELDS) {
