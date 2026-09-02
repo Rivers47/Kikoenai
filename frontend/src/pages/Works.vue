@@ -115,23 +115,14 @@
           <WorkListItem v-for="work in works" :key="work.id" :metadata="work" :showLabel="showLabel && $q.screen.width > 700" />
         </q-list>
 
-        <!--旧式的workCard展示-->
-        <div v-if="oldWorkCardUIStyle" class="row q-col-gutter-x-md q-col-gutter-y-lg">
-          <div class="col-xs-12 col-sm-6 col-md-4" v-for="work in works" :key="work.id"
-            :class="detailMode ? 'col-lg-3 col-xl-2': 'col-lg-2 col-xl-2'"
-          >
-            <OldWorkCard :metadata="work" :thumbnailMode="!detailMode" class="fit"/>
-          </div>
-        </div>
-
         <!--解决android平台hover事件不像safari那样及时响应的问题，需要手动添加触摸响应时间-->
-        <div v-else-if="$q.platform.is.android && $q.platform.has.touch" class="row q-col-gutter-x-md q-col-gutter-y-lg">
+        <div v-if="$q.platform.is.android && $q.platform.has.touch" class="row q-col-gutter-x-md q-col-gutter-y-lg">
           <div class="col-xs-12 col-sm-6 col-md-4" v-for="work in works" :key="work.id"
             @touchstart="()=>onWorkCardTouch(work.id)"
             :class="detailMode ? 'col-lg-3 col-xl-2': 'col-lg-2 col-xl-2'"
             :style="{ '--sim-hover-work-card': work.id === touchedWorkId ? '1' : '0'}"
           >
-            <WorkCard :metadata="work" :thumbnailMode="!detailMode" class="fit"/>
+            <WorkCard :metadata="work" :thumbnailMode="!detailMode" :oldStyle="oldWorkCardUIStyle" class="fit"/>
           </div>
         </div>
 
@@ -141,7 +132,7 @@
             :class="detailMode ? 'col-lg-3 col-xl-2': 'col-lg-2 col-xl-2'"
             style="--sim-hover-work-card: 0"
           >
-            <WorkCard :metadata="work" :thumbnailMode="!detailMode" class="fit"/>
+            <WorkCard :metadata="work" :thumbnailMode="!detailMode" :oldStyle="oldWorkCardUIStyle" class="fit"/>
           </div>
         </div>
 
@@ -163,7 +154,6 @@ import WorkListItem from 'components/WorkListItem'
 import NotifyMixin from '../mixins/Notification.js'
 import RecentWorks from 'src/components/RecentWorks'
 import { mapState } from 'vuex'
-import OldWorkCard from 'src/components/OldWorkCard'
 import FilterTerms from 'components/FilterTerms'
 
 export default {
@@ -173,7 +163,6 @@ export default {
 
   components: {
     WorkCard,
-    OldWorkCard,
     WorkListItem,
     RecentWorks,
     FilterTerms,

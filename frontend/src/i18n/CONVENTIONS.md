@@ -79,7 +79,7 @@ placeholder (it will fall back anyway, but keeping the shape is cleaner).
 Anywhere a tag NAME is shown read-only (`{{ tag.name }}`), replace with
 `{{ $tTag(tag.name) }}`. This is the dynamic tag layer, NOT `$t`. The helper
 falls back to the Japanese name when no translation exists.
-Sites: WorkDetails.vue tag chips, OldWorkCard.vue tag chips, WorkCard.vue /
+Sites: WorkDetails.vue tag chips, WorkCard.vue tag chips (legacy style) /
 CoverSFW.vue tag tooltip, List.vue tag column.
 In EditMetadata.vue (the editor), keep `tag.name` canonical for storage but show
 the translated label in the option list (see EditMetadata section below).

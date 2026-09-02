@@ -4,7 +4,7 @@
          on top of the cover, and nesting them inside the link would put an
          anchor (and their menu button) inside another anchor. -->
     <div class="cover-wrap">
-      <CoverSFW :workid="metadata.id" :nsfw="false" :release="metadata.release" :tags="metadata.tags" />
+      <CoverSFW :workid="metadata.id" :nsfw="false" :release="metadata.release" :tags="oldStyle ? [] : metadata.tags" />
       <router-link class="cover-link" :to="`/work/${metadata.id}`" :aria-label="metadata.title" />
     </div>
 
@@ -45,15 +45,15 @@
 
           <!-- 评价分布明细 -->
           <q-tooltip content-class="text-subtitle1" v-if=metadata.rate_count_detail>
-            <div>{{ $t('workcard.average') }}: {{ metadata.rate_average_2dp }}</div>
+            <div>{{ $t('workcard.average', { avg: metadata.rate_average_2dp }) }}</div>
             <div v-for="(rate, index) in sortedRatings" :key=index class="row items-center">
               <div class="col">{{ $t('workcard.stars', { n: rate.review_point }) }}</div>
 
               <!-- 评价占比 -->
               <q-linear-progress
                 :value="rate.ratio/100"
-                color="on-info-container"
-                track-color="info-container"
+                :color="'warning'"
+                :track-color="oldStyle ? 'surface-container-highest' : 'info-container'"
                 style="height: 15px; width: 100px"
                 class="col-auto"
               />
@@ -77,12 +77,17 @@
         <!-- DLsite链接 -->
         <div class="col-auto">
           <q-icon name="launch" size="xs" />
-          <a class="text-primary" :href="`https://www.dlsite.com/home/work/=/product_id/RJ${dlsiteCode}.html`" rel="noreferrer noopener" target="_blank">DLsite</a>
+          <a class="text-primary" :href="sourceLink" rel="noreferrer noopener" target="_blank">{{sourceLabel}}</a>
         </div>
       </div>
 
       <!-- 价格&售出数 -->
-      <div v-show="metadata.title" class="row items-center">
+      <div v-show="metadata.title" v-if="oldStyle">
+        <span class="q-mx-sm text-weight-medium text-h6 text-negative">{{ $t('workcard.priceYen', { price: metadata.price }) }}</span>
+        <span>{{ $t('workcard.dlCount', { count: metadata.dl_count }) }}</span>
+        <span v-if="!metadata.nsfw" class="q-mx-sm sfw-badge">{{ $t('workcard.allAges') }}</span>
+      </div>
+      <div v-show="metadata.title" v-else class="row items-center">
         <span class="q-ml-sm text-weight-medium text-h6 text-negative">
           {{ metadata.price }}¥
         </span>
@@ -90,10 +95,27 @@
         <q-chip v-if="!metadata.nsfw" class="q-mx-sm sfw-badge" dense>{{ $t('workcard.allAges') }}</q-chip>
       </div>
 
+      <!-- 标签，新版样式下改在封面上显示 -->
+      <div class="q-ma-xs" v-if="oldStyle && showTags">
+        <SearchableLabel
+          v-for="(tag, index) in metadata.tags"
+          :to="labelRoute('tag', tag.name)"
+          field="tag"
+          chip
+          caret-class="text-on-surface"
+          :name="tag.name"
+          :key=index
+        >
+          <q-chip size="md" class="shadow-2" color="surface-container" text-color="on-surface" :lang="$tagLang">
+            {{ $tTag(tag.name) }}
+          </q-chip>
+        </SearchableLabel>
+      </div>
+
       <!-- 声优 -->
       <div
         class="q-mx-xs q-my-sm"
-        :class="{ 'horize-scroll-va-list': $q.platform.has.touch }"
+        :class="{ 'horize-scroll-va-list': !oldStyle && $q.platform.has.touch }"
       >
         <SearchableLabel
           v-for="(va, index) in metadata.vas"
@@ -104,7 +126,7 @@
           :name="va.name"
           :key=index
         >
-          <q-chip square size="md" class="shadow-2" color="primary-container" text-color="on-primary-container">
+          <q-chip square size="md" class="shadow-2" color="primary-container" text-color="on-primary-container" :icon="oldStyle ? 'mic' : undefined">
             {{ va.name }}
           </q-chip>
         </SearchableLabel>
@@ -116,7 +138,7 @@
 <script>
 import CoverSFW from 'components/CoverSFW'
 import NotifyMixin from '../mixins/Notification.js'
-import { labelRoute } from 'src/utils'
+import { isFanzaId, fanzaCid, labelRoute } from 'src/utils'
 import SearchableLabel from './SearchableLabel'
 
 export default {
@@ -135,6 +157,10 @@ export default {
       required: true
     },
     thumbnailMode: {
+      type: Boolean,
+      default: false
+    },
+    oldStyle: {
       type: Boolean,
       default: false
     }
@@ -156,12 +182,17 @@ export default {
 
       return this.metadata.rate_count_detail.slice().sort(compare);
     },
-    dlsiteCode() {
-      let c = String(this.metadata.id);
-      c = this.metadata.id > 1000000 
-        ? c.padStart(8,'0')  // 8位RJ番号
-        : c.padStart(6,'0'); // 6位RJ番号
-      return c;
+    isFanza() {
+      return isFanzaId(this.metadata.id);
+    },
+    sourceLink() {
+      if (this.isFanza) {
+        return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${fanzaCid(this.metadata.id)}/`;
+      }
+      return `https://www.dlsite.com/home/work/=/product_id/RJ${this.metadata.id}.html`;
+    },
+    sourceLabel() {
+      return this.isFanza ? 'Fanza' : 'DLsite';
     }
   },
 
