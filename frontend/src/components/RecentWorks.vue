@@ -19,10 +19,9 @@
           style="width: 500px; max-width: 80vw;"
           @click.stop.prevent="resumeThisHistory(item)"
         >
-          <CoverSFW
+          <Cover
             class="card q-mx-sm shadow-4"
             :workid="item.id"
-            :nsfw="false"
             :release="''"
             >
             <template v-slot:cover>
@@ -35,7 +34,7 @@
                 </div>
               </div>
             </template>
-          </CoverSFW>
+          </Cover>
         </div>
       </template>
     </q-virtual-scroll>
@@ -44,13 +43,13 @@
 
 <script>
 
-import CoverSFW from './CoverSFW.vue';
+import Cover from './Cover.vue';
 
 export default {
   name: 'RecentWorks',
 
   components: {
-    CoverSFW
+    Cover
 },
 
   data () {

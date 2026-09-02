@@ -4,7 +4,7 @@
          on top of the cover, and nesting them inside the link would put an
          anchor (and their menu button) inside another anchor. -->
     <div class="cover-wrap">
-      <CoverSFW :workid="metadata.id" :nsfw="false" :release="metadata.release" :tags="oldStyle ? [] : metadata.tags" />
+      <Cover :workid="metadata.id" :release="metadata.release" :tags="oldStyle ? [] : metadata.tags" />
       <router-link class="cover-link" :to="`/work/${metadata.id}`" :aria-label="metadata.title" />
     </div>
 
@@ -136,7 +136,7 @@
 </template>
 
 <script>
-import CoverSFW from 'components/CoverSFW'
+import Cover from 'components/Cover'
 import NotifyMixin from '../mixins/Notification.js'
 import { isFanzaId, fanzaCid, labelRoute } from 'src/utils'
 import SearchableLabel from './SearchableLabel'
@@ -148,7 +148,7 @@ export default {
 
   components: {
     SearchableLabel,
-    CoverSFW
+    Cover
   },
 
   props: {

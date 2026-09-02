@@ -1,9 +1,8 @@
 <template>
   <div class="row">
-      <CoverSFW 
+      <Cover 
         class="col q-ma-sm row justify-start shadow-4"
         :workid="metadata.id" 
-        :nsfw="false" 
         :release="metadata.release" 
         style="border-radius: 8px; overflow: hidden;"
       />
@@ -267,7 +266,7 @@
 
 
 <script>
-import CoverSFW from 'components/CoverSFW'
+import Cover from 'components/Cover'
 import WriteReview from './WriteReview'
 import EditMetadata from './EditMetadata'
 import SearchableLabel from './SearchableLabel'
@@ -282,7 +281,7 @@ export default {
   mixins: [NotifyMixin],
 
   components: {
-    CoverSFW,
+    Cover,
     WriteReview,
     EditMetadata,
     SearchableLabel,
