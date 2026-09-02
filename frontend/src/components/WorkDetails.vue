@@ -88,36 +88,39 @@
 
       <!-- 标签 -->
       <div class="q-px-none q-py-sm" v-if="showTags">
-        <SearchableLabel
+        <LabelDropdown
           v-for="(tag, index) in metadata.tags"
           :to="labelRoute('tag', tag.name)"
           field="tag"
-          chip
-          caret-class="text-on-surface"
           :name="tag.name"
+          :label="$tTag(tag.name)"
           :key=index
-        >
-          <q-chip size="md" class="shadow-4" color="surface-container" text-color="on-surface" :lang="$tagLang">
-            {{ $tTag(tag.name) }}
-          </q-chip>
-        </SearchableLabel>
+          dense
+          size="md"
+          rounded
+          color="surface-container"
+          text-color="on-surface"
+          class="shadow-4 q-ma-xs"
+          :lang="$tagLang"
+        />
       </div>
 
       <!-- Voice Actor -->
       <div class="q-px-none q-pb-xs">
-        <SearchableLabel
+        <LabelDropdown
           v-for="(va, index) in metadata.vas"
           :to="labelRoute('va', va.name)"
           field="va"
-          chip
-          caret-class="text-on-tertiary-container"
           :name="va.name"
+          :label="va.name"
           :key=index
-        >
-          <q-chip square size="md" class="shadow-4" color="tertiary-container" text-color="on-tertiary-container" icon="mic">
-            {{va.name}}
-          </q-chip>
-        </SearchableLabel>
+          dense
+          size="md"
+          icon="mic"
+          color="tertiary-container"
+          text-color="on-tertiary-container"
+          class="shadow-4 q-ma-xs"
+        />
       </div>
 
       <!-- Illustrator -->
@@ -135,40 +138,42 @@
 
       <!-- Scriptwriter -->
       <div class="q-px-none q-pb-xs" v-if="metadata.scriptWriters && metadata.scriptWriters.length > 0">
-        <SearchableLabel
+        <LabelDropdown
           v-for="(sw, index) in metadata.scriptWriters"
           :to="labelRoute('script_writer', sw.name)"
           field="script_writer"
-          chip
-          caret-class="text-on-secondary-container"
           :name="sw.name"
+          :label="sw.name"
           :key=index
-        >
-          <q-chip square size="md" class="shadow-4" color="secondary-container" text-color="on-secondary-container" icon="edit">
-            {{sw.name}}
-          </q-chip>
-        </SearchableLabel>
+          dense
+          size="md"
+          icon="edit"
+          color="secondary-container"
+          text-color="on-secondary-container"
+          class="shadow-4 q-ma-xs"
+        />
       </div>
 
       <!-- 系列 -->
       <div class="q-px-none q-pb-xs" v-if="metadata.series">
-        <SearchableLabel
+        <LabelDropdown
           :to="labelRoute('series', metadata.series.name)"
           field="series"
-          chip
-          caret-class="text-on-surface"
           :name="metadata.series.name"
-        >
-          <q-chip square size="md" class="shadow-4" color="surface-container-highest" text-color="on-surface" icon="collections_bookmark">
-            {{metadata.series.name}}
-          </q-chip>
-        </SearchableLabel>
+          :label="metadata.series.name"
+          dense
+          size="md"
+          icon="collections_bookmark"
+          color="surface-container-highest"
+          text-color="on-surface"
+          class="shadow-4 q-ma-xs"
+        />
       </div>
 
       <q-btn-dropdown
         dense
         class="q-mt-sm shadow-4 q-mx-xs q-px-md"
-        style="min-width: 120px"
+        
         color="primary"
         text-color="on-primary"
         :label="progressLabel"
@@ -276,6 +281,7 @@ import CoverSFW from 'components/CoverSFW'
 import WriteReview from './WriteReview'
 import EditMetadata from './EditMetadata'
 import SearchableLabel from './SearchableLabel'
+import LabelDropdown from './LabelDropdown'
 import NotifyMixin from '../mixins/Notification.js'
 import { mapState } from 'vuex'
 import { isFanzaId, fanzaCid, labelRoute } from 'src/utils'
@@ -289,7 +295,8 @@ export default {
     CoverSFW,
     WriteReview,
     EditMetadata,
-    SearchableLabel
+    SearchableLabel,
+    LabelDropdown
   },
 
   props: {

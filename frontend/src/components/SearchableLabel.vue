@@ -14,15 +14,11 @@
       type="button"
       :class="['searchable-label__caret', caretClass]"
       :aria-label="$t('searchablelabel.refineWith', { name })"
-      @click.prevent.stop="menuOpen = true"
     >
       <q-icon name="expand_more" size="16px" />
     </button>
 
-    <!-- no-parent-event: the menu's parent is the whole label, so without it
-         QMenu opens on any click in there — including the link. It is opened
-         only by the caret and by long-press. -->
-    <q-menu v-model="menuOpen" no-parent-event anchor="bottom left" self="top left">
+    <q-menu v-model="menuOpen" :target="caretEl" anchor="bottom left" self="top left">
       <q-list dense style="min-width: 160px">
         <q-item clickable v-close-popup @click="apply(false)">
           <q-item-section avatar class="searchable-label__avatar">
@@ -86,12 +82,14 @@
  * caret must stay out of it), so the offset is measured from the wrapper and
  * has to clear the chip's margin itself.
  */
-.searchable-label--chip :deep(.q-chip) {
-  padding-right: 1.9em;
-}
+@media (pointer: fine) {
+  .searchable-label--chip :deep(.q-chip) {
+    padding-right: 1.9em;
+  }
 
-.searchable-label--chip :deep(.q-chip--dense) {
-  padding-right: 1.4em;
+  .searchable-label--chip :deep(.q-chip--dense) {
+    padding-right: 1.4em;
+  }
 }
 
 .searchable-label--chip .searchable-label__caret {
@@ -111,12 +109,6 @@
 @media (pointer: coarse) {
   .searchable-label__caret {
     display: none;
-  }
-
-  /* No caret to make room for. */
-  .searchable-label--chip :deep(.q-chip),
-  .searchable-label--chip :deep(.q-chip--dense) {
-    padding-right: unset;
   }
 
   /* Stop the long-press from selecting text or raising the OS callout menu. */
@@ -180,8 +172,13 @@ export default {
   data () {
     return {
       menuOpen: false,
-      justHeld: false
+      justHeld: false,
+      caretEl: null
     }
+  },
+
+  mounted () {
+    this.caretEl = this.$refs.caret
   },
 
   methods: {

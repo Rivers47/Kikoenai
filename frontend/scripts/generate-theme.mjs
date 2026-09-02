@@ -264,7 +264,8 @@ ${extendedContainerRoles
   )
   .join('\n')}
 
-// Surface container helpers (only highest is used today)
+// Surface container helpers
+.bg-surface-container { background: var(--surface-container) !important; }
 .bg-surface-container-highest { background: var(--surface-container-highest) !important; }
 
 // Bare on-color text helpers (on-<role>); Quasar provides some, but not all M3 roles
