@@ -30,6 +30,7 @@ import NotifyMixin from '../mixins/Notification.js'
 import { formatSeconds } from '../utils'
 import { MAX_LYRIC_STREAMS } from 'src/utils/lyrics'
 import { convert_srt_vtt_to_lrc_streams, mergeLyricStreams } from 'src/utils/subtitles'
+import { sendOrQueue } from '../utils/outbox'
 import { debounce } from 'quasar';
 import Plyr from 'plyr'
 import { apiUrl } from 'src/base-path'
@@ -66,14 +67,24 @@ export default {
     },
 
     source () {
+      const trackId = this.currentPlayingFile.trackId || this.currentPlayingFile.hash
       if (this.currentPlayingFile.mediaStreamUrl) {
         return `${this.currentPlayingFile.mediaStreamUrl}`
-      } else if (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) {
-        return apiUrl(`/api/media/stream/${this.currentPlayingFile.trackId || this.currentPlayingFile.hash}`)
+      } else if (trackId && this.isDownloaded(trackId)) {
+        // Once downloaded, always play from the offline copy -- online or
+        // offline -- rather than re-streaming full quality. See
+        // frontend/CLAUDE.md for why. This only changes the returned URL
+        // value; _loadSource()'s no-op comparison and the synchronous call in
+        // the native `ended` handler are untouched.
+        return apiUrl(`/api/media/offline/${trackId}`)
+      } else if (trackId) {
+        return apiUrl(`/api/media/stream/${trackId}`)
       } else {
         return ""
       }
     },
+
+    ...mapGetters('Downloads', ['isDownloaded', 'isFileDownloaded']),
 
     ...mapState('AudioPlayer', [
       'playing',
@@ -339,13 +350,15 @@ export default {
       const seconds = this.plyr ? this.plyr.currentTime : 0
       const duration = this.plyr ? this.plyr.duration : 0
       const completed = duration > 0 && seconds >= 0.95 * duration
-      this.$axios.put('/api/track-progress', {
-        work_id: this.playWorkId,
-        contentHash: file.contentHash,
-        seconds: Math.round(seconds * 100) / 100,
-        completed: completed
-      }).catch((err) => {
-        console.error('track progress report failed:', err)
+      sendOrQueue(this.$axios, {
+        method: 'PUT',
+        url: '/api/track-progress',
+        body: {
+          work_id: this.playWorkId,
+          contentHash: file.contentHash,
+          seconds: Math.round(seconds * 100) / 100,
+          completed: completed
+        }
       })
     },
 
@@ -537,7 +550,13 @@ export default {
             }];
 
         const fetched = await Promise.all(sources.map(async (source) => {
-          const response = await this.$axios.get(`/api/media/stream/${source.trackId}`);
+          // Same mechanism as the audio source computed: once a work is
+          // downloaded, its lyric files are downloaded too (see downloadWork in
+          // WorkDetails.vue), so prefer serving them from the offline copy.
+          const lrcUrl = this.isFileDownloaded(source.trackId)
+            ? `/api/media/offline/${source.trackId}`
+            : `/api/media/stream/${source.trackId}`;
+          const response = await this.$axios.get(lrcUrl);
           const lyricExtension = (source.lyricExtension || '').toLowerCase();
           if (lyricExtension === '.srt' || lyricExtension === '.vtt') {
             console.log('srt convert to lrc');

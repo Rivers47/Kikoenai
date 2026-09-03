@@ -186,6 +186,8 @@ import NotifyMixin from '../mixins/Notification.js'
 import { mapMutations, mapState, mapGetters } from 'vuex'
 import { Dark } from 'quasar'
 import { CONTRAST_MODES, getContrastMode, setContrastMode } from 'src/utils/contrast'
+import { onDownloadMessage, reconcileDownloads } from 'src/utils/downloads'
+import { requestSync } from 'src/utils/outbox'
 
 export default {
   name: 'MainLayout',
@@ -207,11 +209,15 @@ export default {
       confirm: false,
       randId: null,
       showScroller: false,
+      // Teardown for the service-worker download listener (see
+      // initOfflineDownloads). Not reactive state -- just held for unmount.
+      unsubscribeDownloadMessages: null,
       contrastMode: getContrastMode(),
       links: [
         { titleKey: 'mediaLibrary', icon: 'widgets', path: '/' },
         { titleKey: 'fullScreenMode', icon: 'play_circle', path: '/fullScreenPlayer' },
         { titleKey: 'favourites', icon: 'favorite', path: '/favourites' },
+        { titleKey: 'downloads', icon: 'download_done', path: '/downloads' },
         { titleKey: 'circles', icon: 'group', path: '/circles' },
         { titleKey: 'tags', icon: 'label', path: '/tags' },
         { titleKey: 'voiceActors', icon: 'mic', path: '/vas' },
@@ -233,6 +239,12 @@ export default {
   mounted () {
     this.initUser();
     this.checkLockFileNotice();
+    this.fetchSharedConfig();
+    this.initOfflineDownloads();
+  },
+
+  beforeUnmount () {
+    if (this.unsubscribeDownloadMessages) this.unsubscribeDownloadMessages();
   },
 
   computed: {
@@ -278,6 +290,58 @@ export default {
     search (filter) {
       this.filter = filter
       this.$router.push(filter ? { path: '/works', query: { filter } } : '/works')
+    },
+
+    // A whole-work download runs as a Background Fetch and completes in the
+    // service worker, which may happen with no tab open. So on boot the
+    // manifest is reconciled against Cache Storage (the source of truth for
+    // what is actually downloaded), and a listener keeps an open tab in sync
+    // with fetches that finish while it is running.
+    initOfflineDownloads () {
+      if (!('serviceWorker' in navigator)) return;
+
+      // Rows survive a process that was killed outright, with no chance to
+      // register a sync of its own. Boot is where those get picked up.
+      requestSync();
+
+      this.unsubscribeDownloadMessages = onDownloadMessage({
+        onSuccess: (workId, stored) => {
+          this.$store.commit('Downloads/PROMOTE_DOWNLOADED_FILES', stored);
+          const work = this.$store.state.Downloads.downloadedFiles.find(f => f.workId === workId);
+          this.showSuccNotif(this.$t('mainlayout.downloadComplete', { title: work?.workTitle || workId }));
+        },
+        onFail: (workId) => {
+          this.discardPendingDownload(workId);
+          this.showErrNotif(this.$t('mainlayout.downloadFailed', { title: workId }));
+        },
+        onAbort: (workId) => this.discardPendingDownload(workId),
+      });
+
+      reconcileDownloads(this.$store.state.Downloads.downloadedFiles)
+        .then(({ promote, drop }) => {
+          if (promote.length) this.$store.commit('Downloads/PROMOTE_DOWNLOADED_FILES', promote);
+          if (drop.length) this.$store.commit('Downloads/REMOVE_DOWNLOADED_FILES', drop);
+        })
+        .catch((error) => {
+          console.error(error)
+        });
+    },
+
+    discardPendingDownload (workId) {
+      const urls = this.$store.state.Downloads.downloadedFiles
+        .filter(f => f.pending && f.workId === workId)
+        .map(f => f.url);
+      if (urls.length) this.$store.commit('Downloads/REMOVE_DOWNLOADED_FILES', urls);
+    },
+
+    fetchSharedConfig () {
+      this.$axios.get('/api/config/shared')
+        .then((res) => {
+          this.$store.commit('Downloads/SET_ENABLE_TRANSCODING', !!res.data.sharedConfig.enableTranscoding)
+        })
+        .catch((error) => {
+          console.error(error)
+        })
     },
 
     initUser () {

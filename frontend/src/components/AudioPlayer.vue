@@ -304,6 +304,7 @@ import Scrollable from 'components/Scrollable'
 import SleepMode from 'components/SleepMode'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import { formatSeconds } from '../utils'
+import { sendOrQueue, requestSync } from '../utils/outbox'
 import { debounce } from 'quasar'
 import { apiUrl } from 'src/base-path'
 
@@ -685,51 +686,32 @@ export default {
       }
     },
 
-    // 使用 keepalive fetch 确保页面关闭时播放进度能够送达服务器
+    // Hiding is the last moment we are guaranteed to run -- the OS may freeze
+    // the process immediately after. Both writes go through the outbox, so what
+    // matters here is that the rows are durable before we lose the thread; the
+    // requests themselves may well be killed in flight, and the service worker
+    // delivers whatever survives.
     flushHistoryOnHide() {
       if (this.queueCopy.length <= 0) return;
       if (!this.resumeHistoryDone) return;
 
-      const data = {
-        work_id: this.playWorkId,
-        state: {
-          queue: this.queueCopy,
-          index: this.queueIndex,
-        }
-      }
-
-      fetch(apiUrl('/api/history'), {
+      sendOrQueue(this.$axios, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-        keepalive: true,
-      }).catch(() => {})
-
-      // Also report per-track progress (Phase 2)
-      this._flushTrackProgressOnHide()
-    },
-
-    // Fire-and-forget per-track progress on page hide (Phase 2)
-    _flushTrackProgressOnHide () {
-      const file = this.queueCopy[this.queueIndex]
-      if (!file || !file.contentHash || this.playWorkId === 0) return
-      const seconds = this.currentTime
-      const duration = file.duration
-      const completed = duration > 0 && seconds >= 0.95 * duration
-      fetch(apiUrl('/api/track-progress'), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        url: '/api/history',
+        body: {
           work_id: this.playWorkId,
-          contentHash: file.contentHash,
-          seconds: Math.round(seconds * 100) / 100,
-          completed: completed
-        }),
-        keepalive: true,
-      }).catch(() => {})
+          state: {
+            queue: this.queueCopy,
+            index: this.queueIndex,
+          }
+        }
+      })
+
+      this._reportTrackProgressOnUpdate()
+      requestSync()
     },
 
-    
+
     onUpdatePlayingStatus() {
       // 当前播放列表为空，禁止记录播放历史
       if (this.queueCopy.length <= 0) return;
@@ -762,7 +744,11 @@ export default {
           this.latestUpdatedHistory = data;
         })
         .catch((err) => {
-          console.error(err.response.data.error)
+          // No `err.response` when the request never reached the server --
+          // which is the normal case during offline playback of a downloaded
+          // work, not an exceptional one. History is fire-and-forget, so log
+          // and move on rather than throwing out of the handler.
+          console.error(err.response?.data?.error || err.message || err)
         })
     },
 
@@ -772,13 +758,15 @@ export default {
       const seconds = this.currentTime
       const duration = file.duration
       const completed = duration > 0 && seconds >= 0.95 * duration
-      this.$axios.put('/api/track-progress', {
-        work_id: this.playWorkId,
-        contentHash: file.contentHash,
-        seconds: Math.round(seconds * 100) / 100,
-        completed: completed
-      }).catch((err) => {
-        console.error('track progress report failed:', err)
+      sendOrQueue(this.$axios, {
+        method: 'PUT',
+        url: '/api/track-progress',
+        body: {
+          work_id: this.playWorkId,
+          contentHash: file.contentHash,
+          seconds: Math.round(seconds * 100) / 100,
+          completed: completed
+        }
       })
     },
 

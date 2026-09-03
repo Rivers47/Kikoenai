@@ -1,6 +1,6 @@
 <template>
   <q-img
-    :src="coverUrl"
+    :src="resolvedCoverUrl"
     :ratio="4/3"
     style="max-width: 560px;"
     transition="fade"
@@ -66,10 +66,19 @@ export default {
       require: false,
       default() {return [];}
     },
+
+    // Optional override for the cover source. Used by the Downloads page,
+    // which points at the exact URL it cached offline (`?type=main`) rather
+    // than the default variant, which may not be in Cache Storage.
+    coverUrl: {
+      type: String,
+      default: ''
+    },
   },
 
   computed: {
-    coverUrl () {
+    resolvedCoverUrl () {
+      if (this.coverUrl) return this.coverUrl
       return this.workid ? apiUrl(`/api/cover/${this.workid}`) : ""
     },
 

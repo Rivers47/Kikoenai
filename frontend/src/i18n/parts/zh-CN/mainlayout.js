@@ -12,6 +12,7 @@ export default {
   mediaLibrary: '媒体库',
   fullScreenMode: '大图模式',
   favourites: '我的收藏',
+  downloads: '离线下载',
   circles: '社团',
   tags: '标签',
   voiceActors: '声优',
@@ -25,4 +26,6 @@ export default {
   langZhTW: '繁體中文',
   remindLater: '以后提醒我',
   goToScanner: '前往扫描页',
+  downloadComplete: '{title} 已可离线使用',
+  downloadFailed: '{title} 的离线下载失败',
 }

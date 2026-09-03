@@ -12,6 +12,7 @@ export default {
   mediaLibrary: 'ライブラリ',
   fullScreenMode: 'フルスクリーン',
   favourites: 'お気に入り',
+  downloads: 'オフラインダウンロード',
   circles: 'サークル',
   tags: 'タグ',
   voiceActors: '声優',
@@ -25,4 +26,6 @@ export default {
   langZhTW: '繁體中文',
   remindLater: '後で通知',
   goToScanner: 'スキャナーページへ',
+  downloadComplete: '{title} のオフライン再生の準備ができました',
+  downloadFailed: '{title} のオフラインダウンロードに失敗しました',
 }

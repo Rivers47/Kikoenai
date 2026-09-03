@@ -116,6 +116,9 @@
                 <q-item-section>{{ $t('worktree.download') }}</q-item-section>
               </q-item>
 
+              <q-item clickable @click="toggleOfflineDownload(item)" v-if="item.type === 'audio' && enableTranscoding">
+                <q-item-section>{{ isDownloaded(item.trackId || item.hash) ? $t('worktree.removeOfflineDownload') : $t('worktree.downloadOffline') }}</q-item-section>
+              </q-item>
 
             </q-list>
           </q-menu>
@@ -129,6 +132,7 @@
 import { mapState, mapGetters } from 'vuex'
 import { basenameWithoutExt, toQueueItem } from 'src/utils'
 import { formatSeconds } from '../utils'
+import { cacheFile, uncacheFile } from '../utils/downloads'
 import NotifyMixin from '../mixins/Notification.js'
 import { apiUrl } from 'src/base-path'
 
@@ -225,6 +229,14 @@ export default {
 
     ...mapGetters('AudioPlayer', [
       'currentPlayingFile'
+    ]),
+
+    ...mapState('Downloads', [
+      'enableTranscoding',
+    ]),
+
+    ...mapGetters('Downloads', [
+      'isDownloaded',
     ])
   },
 
@@ -316,6 +328,34 @@ export default {
       link.href = url;
       link.target="_blank";
       link.click();
+    },
+
+    async toggleOfflineDownload (item) {
+      const trackId = item.trackId || item.hash;
+      const url = `/api/media/offline/${trackId}`;
+
+      if (this.isDownloaded(trackId)) {
+        await uncacheFile(url);
+        this.$store.commit('Downloads/REMOVE_DOWNLOADED_FILE', url);
+        return;
+      }
+
+      try {
+        const bytes = await cacheFile(url);
+        this.$store.commit('Downloads/ADD_DOWNLOADED_FILE', {
+          url,
+          workId: this.metadata.id,
+          trackId,
+          type: 'audio',
+          title: item.title,
+          workTitle: this.metadata.title,
+          bytes,
+          downloadedAt: Date.now(),
+        });
+      } catch (err) {
+        console.error(err);
+        this.showErrNotif(err.message || err);
+      }
     },
 
     setVisualPlayerCover (imgFile) {
