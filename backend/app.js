@@ -283,21 +283,8 @@ app.use((err, req, res, next) => {
 // Create HTTP and HTTPS server
 const server = http.createServer(app);
 
-// Keep idle keep-alive connections open longer than whoever is reusing them --
-// Node's default of 5s is far too short and makes the peer race us to the close,
-// which surfaces in the browser as "Network Error" (NS_ERROR_NET_RESET).
-//
-// The value has to sit ABOVE the idle timeout of the peer that owns the
-// connection pool, so that side always closes first and never hands a request
-// to a socket we just tore down. Two peers matter:
-//   - a browser talking to us directly (Firefox idles at 115s, Chrome at 300s)
-//   - a reverse proxy's upstream pool (Caddy's reverse_proxy defaults to 2m,
-//     nginx keepalive to 60s)
-// 300s was previously 120s, which exactly matched Caddy's 2m default -- both
-// ends expiring the same idle socket at the same instant is the very race this
-// is meant to remove. headersTimeout must stay greater than keepAliveTimeout.
-server.keepAliveTimeout = 300000; // 300s
-server.headersTimeout = 305000;   // 305s
+server.keepAliveTimeout = 300000;
+server.headersTimeout = 300500;
 
 let httpsServer = null;
 let httpsSuccess = false;
