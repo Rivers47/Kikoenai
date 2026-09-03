@@ -20,10 +20,18 @@
  * URLs this app used before any of this existed.
  */
 
+function resolveBasePath () {
+  if (typeof window !== 'undefined' && typeof window.__KIKO_BASE__ === 'string') {
+    return window.__KIKO_BASE__
+  }
+  if (typeof self !== 'undefined' && self.registration && self.registration.scope) {
+    return new URL(self.registration.scope).pathname.replace(/\/$/, '')
+  }
+  return ''
+}
+
 /** '' (served from the root) or '/prefix' -- never with a trailing slash. */
-export const basePath = typeof window !== 'undefined' && typeof window.__KIKO_BASE__ === 'string'
-  ? window.__KIKO_BASE__
-  : ''
+export const basePath = resolveBasePath()
 
 /**
  * Put the deploy prefix in front of a root-relative `/api/...` path.
@@ -44,4 +52,23 @@ export function apiUrl (url) {
   // mistaken for an already-prefixed URL.
   if (!url.startsWith('/api') || url.startsWith(`${basePath}/api`)) return url
   return basePath + url
+}
+
+/**
+ * Put the deploy prefix in front of any root-relative path.
+ *
+ * @param {String} url A root-relative path.
+ * @returns {String}
+ */
+export function appUrl (url) {
+  if (!basePath || typeof url !== 'string' || !url.startsWith('/')) return url
+  if (url === basePath || url.startsWith(`${basePath}/`)) return url
+  return basePath + url
+}
+
+export function stripBasePath (pathname) {
+  if (!basePath || typeof pathname !== 'string') return pathname
+  if (pathname === basePath) return '/'
+  if (pathname.startsWith(`${basePath}/`)) return pathname.slice(basePath.length)
+  return pathname
 }

@@ -289,8 +289,19 @@ rebuild — which splits every URL in the app into two kinds:
 | Baked in at build time — `<script>`/`<link>` hrefs, SW precache manifest, web app manifest | `build.publicPath` is the placeholder `/__KIKO_BASE__/`; the backend swaps it for the real prefix while serving `index.html`, `sw.js` and `manifest.json` |
 | Built at runtime — API calls, router base, Socket.IO path, SW registration | `src/base-path.js` reads `window.__KIKO_BASE__`, injected into `index.html` by that same pass |
 
-`src/base-path.js` exports `basePath` (`''` or `/prefix`, never trailing-slashed)
-and `apiUrl(url)`.
+`src/base-path.js` exports `basePath` (`''` or `/prefix`, never trailing-slashed),
+`apiUrl(url)`, `appUrl(url)` (the same for non-`/api` paths — the Background
+Fetch notification icon, the worker's `openWindow` target) and
+`stripBasePath(pathname)` (the inverse, for matching an incoming URL against a root-relative
+pattern).
+
+**It resolves the prefix differently in the service worker.** There is no
+`window` there and no `index.html` to read the injection from, so it falls back
+to `self.registration.scope`, which carries the prefix because the worker is
+registered with an explicit `scope` (below). The worker imports this module
+(via `utils/outbox.js` and its own caching routes), and without that fallback
+every offline route would match against a prefix of `''` and silently never
+fire on a sub-path install.
 
 **Rules when adding a request:**
 
@@ -304,6 +315,11 @@ and `apiUrl(url)`.
 - **Backend-supplied URLs (`mediaStreamUrl`, `mediaDownloadUrl`) already carry
   the prefix.** Do not wrap them; only the `/api/media/...` fallback branch
   beside them needs it (`WorkTree.vue`, `AudioElement.vue`).
+- **A URL that becomes a Cache Storage key must be prefixed at the point it is
+  built** — `buildWorkDownloadPlan`/`cacheFile` in `src/utils/downloads.js`, and
+  the rows `sendOrQueue` writes to the outbox. These go to Background Fetch, a
+  bare `fetch()` and `cache.put()`, none of which run an interceptor, and a
+  CacheFirst route that looks up a key nobody wrote is just a cache miss.
 - **`quasar dev` injects no global**, so `basePath` is `''` and every URL is
   exactly what it was before this existed. A prefix is only ever exercised
   through the backend.
@@ -452,7 +468,7 @@ Two separate translation layers, kept apart:
 - **Dev Server Proxy:** In development (`quasar dev`), `quasar.config.js` proxies `/api` and `/socket.io` to `localhost:8888` (the backend).
 - **Service Worker:** PWA mode uses Workbox in **InjectManifest** mode — the worker is hand-written at `src-pwa/custom-service-worker.js`, not generated. `quasar.config.js` now carries only *build-time* PWA options (`extendInjectManifestOptions` → the precache `exclude` list, and `extendPWACustomSWConf` → the esbuild target); all *runtime* behaviour (`skipWaiting`/`clientsClaim`, navigation fallback, caching routes) lives in the worker file. The switch from GenerateSW was required because a generated worker can only express routes, and the offline-download feature needs SW event handlers (Background Fetch).
   - The worker excludes `/api/*` and `/media/*` from navigation fallback, and registers three routes (all into a single `offline-tracks` Cache Storage bucket): `CacheFirst` + `RangeRequestsPlugin` on `/api/media/offline/*` (tracks/lyrics), `CacheFirst` on `/api/cover/*` (work covers), and `NetworkFirst` on `/api/work/:id`, `/api/tracks/:id`, `/api/review` (work-detail page JSON — live data when online, cached snapshot as offline fallback). The first two are populated only by the explicit download action (`src/utils/downloads.js`), never by ordinary streaming; the third also auto-populates on any successful browse, since JSON metadata is small and bounding it risks evicting a downloaded work's snapshot.
-  - **Match routes on `url.pathname`, never on an `^/api/...`-anchored RegExp.** Workbox's `RegExpRoute` execs the pattern against the *absolute* URL (`url.href`, e.g. `https://host/api/...`), so a leading `^\/api\/` can never match. The original `runtimeCaching` config made exactly this mistake and all three routes were silently dead — downloads were written to Cache Storage by the page but never served back from it, so offline playback did not work. (`NavigationRoute`'s denylist is unaffected: it matches on `url.pathname + url.search`, which is why navigation exclusion always worked. **Keep those denylist patterns unanchored** — under a deploy path prefix the pathname is `/kikoeru/api/...`, and an anchored `^\/api\/` would miss it, silently handing API requests the SPA shell while offline.)
+  - **Match routes on the pathname, never on an `^/api/...`-anchored RegExp — and strip the deploy prefix first.** The matchers call `appPath(url)` (`stripBasePath(url.pathname)`), because under a sub-path install every pathname arrives as `/prefix/api/...`; on a root-served install it is the identity. Workbox's `RegExpRoute` execs the pattern against the *absolute* URL (`url.href`, e.g. `https://host/api/...`), so a leading `^\/api\/` can never match. The original `runtimeCaching` config made exactly this mistake and all three routes were silently dead — downloads were written to Cache Storage by the page but never served back from it, so offline playback did not work. (`NavigationRoute`'s denylist is unaffected: it matches on `url.pathname + url.search`, which is why navigation exclusion always worked. **Keep those denylist patterns unanchored** — under a deploy path prefix the pathname is `/kikoeru/api/...`, and an anchored `^\/api\/` would miss it, silently handing API requests the SPA shell while offline.)
   - The old warning about `require('workbox-range-requests')` no longer applies — that package only crashed when imported from the Node-side config file; inside the worker it is imported normally.
   - The custom SW is bundled by **esbuild**, not webpack/babel — the only part of the app that is. Quasar's default browser target includes `safari14`, and esbuild refuses to emit the destructuring the `workbox-*` packages use for that target (a Safari 14.0 engine bug it cannot lower). `extendPWACustomSWConf` raises the floor to `safari14.1` for this bundle alone; the app's own target is untouched. The `workbox-{core,precaching,routing,strategies,range-requests}` packages are now explicit devDependencies rather than transitive ones.
   - See `module-Downloads` (§2.3) and the `/api/media/offline/:id/:index` endpoint (§6, `backend/AGENTS.md` §6) for the rest of the feature.
@@ -466,6 +482,7 @@ Two separate translation layers, kept apart:
   - **No capability detection, by design.** `assertBackgroundFetchSupport()` throws `[kikoenai] missing required API: BackgroundFetch` on engines without it. This branch targets Chromium and fails loudly on purpose; the fallback to the foreground path is deliberately not written yet. Per-track downloads still use the foreground `cacheFile()` and work everywhere.
 - **Playback-state writes go through an IndexedDB outbox (`src/utils/outbox.js`), replayed by Background Sync.** A write is captured whenever it cannot be shown to have reached the server. That is *not* only the offline case — the common one is a locked phone whose radio is throttled or whose process is frozen mid-request. Nothing in the module consults `navigator.onLine`.
   - DB `kikoenai` v1, one store `outbox`, keyPath `key` = `` `${method}:${url}:${work_id}:${contentHash}` ``. The key *is* the coalescing key, so `put()` overwrites and a track re-reported every 10s stays one row. Replay is oldest-first by `createdAt`.
+  - **Rows store the URL that will actually be sent**, deploy prefix included — `drain()` replays them with a bare `fetch()`, where no axios interceptor runs to add one. The `QUEUEABLE` patterns stay root-relative, so every match strips the prefix first (`endpointPath`).
   - **Queueable endpoints only:** `/api/track-progress`, `/api/history`, `/api/review` (which covers `/api/review/progress`). Admin config, credentials, metadata edits and scan/refresh are deliberately excluded — replaying those hours later is a footgun.
   - **Two capture paths.** `sendOrQueue()` enqueues *before* sending and deletes the row on success — used by the player, because a request killed when the OS freezes the page runs no `catch` at all. Everything else is captured by the `boot/axios.js` response interceptor, which enqueues on transport error and resolves with a **synthetic success** (`{ data: { message: t('common.success') } }`), so no call site needs a "queued" code path and the deferral is invisible. `sendOrQueue` marks its config `__outboxed` so the interceptor does not queue the same request twice and delete the row it just wrote.
   - `boot/axios.js` also sets a 10s timeout **on queueable writes only** — without one a throttled radio hangs forever and no handler runs. It is not a global default because `POST /api/backfill/progress` runs the whole library synchronously.
