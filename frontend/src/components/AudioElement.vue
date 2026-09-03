@@ -40,6 +40,10 @@ const MEDIA_SESSION_ACTIONS = [
   'play', 'pause', 'nexttrack', 'previoustrack', 'seekbackward', 'seekforward'
 ]
 
+// A seek landing within this many seconds of the end is treated as a seek to
+// the end of the track rather than as the user scrubbing back into it.
+const SEEK_END_TOLERANCE_SECONDS = 1
+
 export default {
   name: 'AudioElement',
 
@@ -86,6 +90,7 @@ export default {
       'sleepModeType',
       'sleepStopAt',
       'sleepTracksLeft',
+      'sleepStoppedTrackId',
       'rewindSeekTime',
       'forwardSeekTime',
       'rewindSeekMode',
@@ -108,6 +113,13 @@ export default {
       'currentPlayingFile',
       'resumeHistoryDone',
     ]),
+
+    // Identity of the track the queue is parked on, in the same
+    // trackId-or-hash form the queue items and the sleep marker use.
+    currentTrackId() {
+      const file = this.currentPlayingFile
+      return file.trackId || file.hash || ''
+    },
 
     displayCurrentTime() {
       if (this.isChangingCurrentTime) return this.changeCurrentTime;
@@ -259,6 +271,8 @@ export default {
       'PLAY',
       'SET_TRACK',
       'NEXT_TRACK',
+      'SET_SLEEP_STOPPED_TRACK',
+      'CLEAR_SLEEP_STOPPED_TRACK',
       'PREVIOUS_TRACK',
       'SET_CURRENT_LYRICS',
       'SET_LYRIC_SPEAKERS',
@@ -353,13 +367,24 @@ export default {
     // finished, so nothing writes progress for a track the user never played.
     // Their next play consumes that here and moves on instead of replaying it.
     _advanceIfSleepStopped () {
-      const stoppedAt = this._sleepStoppedIndex
-      this._sleepStoppedIndex = null
-      // Index check: if the user picked a different track meanwhile, that
-      // choice wins. Watcher order makes clearing the flag on track change
-      // unreliable, comparing the index does not.
-      if (stoppedAt == null || stoppedAt !== this.queueIndex) return false
+      const stoppedTrackId = this.sleepStoppedTrackId
+      if (!stoppedTrackId) return false
+      this.CLEAR_SLEEP_STOPPED_TRACK()
+      // Track check: if the user picked a different track meanwhile, that
+      // choice wins. Watcher order makes clearing the marker on track change
+      // unreliable, comparing the track does not. It is compared by trackId
+      // rather than by queue index because the queue is rebuilt from scratch
+      // when the player is resumed from history.
+      if (stoppedTrackId !== this.currentTrackId) return false
       if (this.queueIndex >= this.queue.length - 1) return false
+      // Any pending history resume belongs to the finished track, not to the
+      // one about to load -- onCanplay would otherwise drop the next track in
+      // at the previous track's position.
+      this.RESUME_HISTORY_SECONDS_DONE()
+      // The stored position is still the finished track's, and AudioPlayer's
+      // queueIndex watcher reports progress from it against whatever track the
+      // queue now points at. The next track really is at 0 until it loads.
+      this.SET_CURRENT_TIME(0)
       this.NEXT_TRACK()
       return true
     },
@@ -388,7 +413,7 @@ export default {
           // Stay on the finished track: advancing here would make the
           // queueIndex watcher report progress for a track the user never
           // played. The advance is deferred to their next play.
-          this._sleepStoppedIndex = this.queueIndex
+          this.SET_SLEEP_STOPPED_TRACK(this.currentTrackId)
           this._stopBySleepTimer()
           return
         }
@@ -471,8 +496,15 @@ export default {
 
     onSeeked() {
       // Scrubbing back into the finished track means the user wants that
-      // track, not the next one.
-      this._sleepStoppedIndex = null
+      // track, not the next one -- but only a seek that actually lands inside
+      // the track counts. A seek to its end is not the user at all: onCanplay
+      // seeks there itself when a history resume is pending, and Chrome
+      // replays that seek whenever it reloads the media resource it reclaimed
+      // from a paused background page.
+      const duration = this.duration
+      const landedInsideTrack = !(duration > 0) ||
+        this.plyr.currentTime < duration - SEEK_END_TOLERANCE_SECONDS
+      if (landedInsideTrack) this.CLEAR_SLEEP_STOPPED_TRACK()
       this.playLrc(this.playing);
     },
 
@@ -644,7 +676,7 @@ export default {
         this.resumeAudioContext()
         // Don't restart the finished track when a sleep-timer advance is
         // pending -- the `playing` watcher swaps in the next one.
-        if (this._sleepStoppedIndex == null && this.plyr && this.plyr.paused) {
+        if (!this.sleepStoppedTrackId && this.plyr && this.plyr.paused) {
           this.plyr.play().catch(() => {})
         }
         this.PLAY()

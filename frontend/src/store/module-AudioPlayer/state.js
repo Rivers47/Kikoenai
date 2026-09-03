@@ -1,4 +1,4 @@
-import { LocalStorage } from 'quasar'
+import { LocalStorage, SessionStorage } from 'quasar'
 
 export const SWAP_SEEK_BUTTON_KEY = 'swap_seek_button'
 export const FLIP_LR_CHANNEL_KEY = 'flip_lr_channel'
@@ -10,6 +10,8 @@ export const REWIND_SEEK_TIME_KEY = 'rewind_seek_time'
 export const FORWARD_SEEK_TIME_KEY = 'forward_seek_time'
 // sessionStorage 中持久化睡眠定时的键，值为 { type, stopAt, tracksLeft }
 export const SLEEP_TIMER_KEY = 'sleepTimer'
+// sessionStorage key holding the trackId a tracks-mode sleep timer stopped on
+export const SLEEP_STOPPED_TRACK_KEY = 'sleepStoppedTrack'
 
 export default function () {
   return {
@@ -47,6 +49,7 @@ export default function () {
     sleepModeType: null,       // 'minutes' | 'tracks'
     sleepStopAt: null,         // minutes 模式：停止播放的时间戳 (ms)
     sleepTracksLeft: 0,        // tracks 模式：当前曲目之后还需播放的曲目数，为 0 时当前曲目结束即停止
+    sleepStoppedTrackId: SessionStorage.getItem(SLEEP_STOPPED_TRACK_KEY) || '',
     rewindSeekTime: LocalStorage.has(REWIND_SEEK_TIME_KEY) ? LocalStorage.getItem(REWIND_SEEK_TIME_KEY) : 5,
     forwardSeekTime: LocalStorage.has(FORWARD_SEEK_TIME_KEY) ? LocalStorage.getItem(FORWARD_SEEK_TIME_KEY) : 30,
     rewindSeekMode: false,

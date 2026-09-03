@@ -1,7 +1,16 @@
 import { LocalStorage, SessionStorage } from 'quasar'
 import getters from './getters'
-import state, { SWAP_SEEK_BUTTON_KEY, FLIP_LR_CHANNEL_KEY, ENABLE_PIP_LYRICS, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, AUTO_MARK_LISTENED_KEY, REWIND_SEEK_TIME_KEY, FORWARD_SEEK_TIME_KEY, SLEEP_TIMER_KEY } from './state'
+import state, { SWAP_SEEK_BUTTON_KEY, FLIP_LR_CHANNEL_KEY, ENABLE_PIP_LYRICS, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, AUTO_MARK_LISTENED_KEY, REWIND_SEEK_TIME_KEY, FORWARD_SEEK_TIME_KEY, SLEEP_TIMER_KEY, SLEEP_STOPPED_TRACK_KEY } from './state'
 import { apiUrl } from 'src/base-path'
+
+// How close to a track's end a resume position has to be for that track to
+// count as finished.
+const FINISHED_EPSILON_SECONDS = 2
+
+const forgetSleepStoppedTrack = (state) => {
+  state.sleepStoppedTrackId = ''
+  SessionStorage.remove(SLEEP_STOPPED_TRACK_KEY)
+}
 
 const mutations = {
   TOGGLE_HIDE (state) {
@@ -30,12 +39,14 @@ const mutations = {
 
     state.playing = true
     state.queueIndex = index
+    forgetSleepStoppedTrack(state)
   },
   NEXT_TRACK: (state) => {
     if (state.queueIndex < state.queue.length - 1) {
       // Go to next track only if it exists.
       state.playing = true
       state.queueIndex += 1
+      forgetSleepStoppedTrack(state)
     }
   },
   PREVIOUS_TRACK: (state) => {
@@ -43,12 +54,31 @@ const mutations = {
       // Go to previous track only if it exists.
       state.playing = true
       state.queueIndex -= 1
+      forgetSleepStoppedTrack(state)
     }
   },
 
   SET_QUEUE (state, payload) {
+    let index = payload.index
+    let resumeSeconds = payload.resumeHistorySeconds
+
+    // see if at the end of track, if so go to the next track
+    if (payload.advancePastFinishedTrack) {
+      const parked = payload.queue[index]
+      const duration = parked ? Number(parked.duration) : NaN
+      const seconds = Number(resumeSeconds)
+      const playedOut = Number.isFinite(duration) && duration > 0 &&
+        Number.isFinite(seconds) && seconds >= duration - FINISHED_EPSILON_SECONDS
+      if (playedOut) {
+        // Nothing to advance to on the last track, but starting it over beats
+        // parking on its end, which is the browser-dependent state above.
+        if (index < payload.queue.length - 1) index += 1
+        resumeSeconds = -1
+      }
+    }
+
     state.queue = payload.queue
-    state.queueIndex = payload.index
+    state.queueIndex = index
 
     if (payload.resetPlaying) {
       state.playing = true
@@ -79,12 +109,13 @@ const mutations = {
       // History rows carry no `seconds` of their own (PUT /api/history sends
       // only { queue, index }); it is resolved server-side from
       // t_track_progress, and stays undefined when that lookup misses.
-      const seconds = Number(payload.resumeHistorySeconds)
+      const seconds = Number(resumeSeconds)
       state.resumeHistorySeconds = Number.isFinite(seconds) ? seconds : -1
     }
   },
   EMPTY_QUEUE: (state) => {
     state.playing = false
+    forgetSleepStoppedTrack(state)
     state.queue = []
     state.queueIndex = 0
     state.playWorkVas = []
@@ -194,6 +225,19 @@ const mutations = {
         SessionStorage.set(SLEEP_TIMER_KEY, { type: 'tracks', stopAt: null, tracksLeft: state.sleepTracksLeft })
       }
     }
+  },
+
+  SET_SLEEP_STOPPED_TRACK: (state, trackId) => {
+    state.sleepStoppedTrackId = trackId || ''
+    if (state.sleepStoppedTrackId) {
+      SessionStorage.set(SLEEP_STOPPED_TRACK_KEY, state.sleepStoppedTrackId)
+    } else {
+      SessionStorage.remove(SLEEP_STOPPED_TRACK_KEY)
+    }
+  },
+
+  CLEAR_SLEEP_STOPPED_TRACK: (state) => {
+    forgetSleepStoppedTrack(state)
   },
 
   CLEAR_SLEEP_MODE: (state) => {

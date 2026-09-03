@@ -285,6 +285,7 @@ export default {
         index: historyState.index,
         resetPlaying: false,
         resumeHistorySeconds: historyState.seconds,
+        advancePastFinishedTrack: true,
         workLastTrackId: historyState.queue.length ? (historyState.queue[historyState.queue.length - 1].trackId || historyState.queue[historyState.queue.length - 1].hash) : ''
       })
       // this.$store.commit('AudioPlayer/SET_RESUME_HISTORY_SECONDS', historyState.seconds)

@@ -110,6 +110,7 @@ export default {
         index: this.metadata.state.index,
         resetPlaying: false,
         resumeHistorySeconds: this.metadata.state.seconds ?? -1,
+        advancePastFinishedTrack: true,
         workLastTrackId: this.metadata.state.queue.length ? (this.metadata.state.queue[this.metadata.state.queue.length - 1].trackId || this.metadata.state.queue[this.metadata.state.queue.length - 1].hash) : ''
       })
     }
