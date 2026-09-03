@@ -40,6 +40,8 @@ const MEDIA_SESSION_ACTIONS = [
   'play', 'pause', 'nexttrack', 'previoustrack', 'seekbackward', 'seekforward'
 ]
 
+const FINISHED_EPSILON_SECONDS = 1
+
 export default {
   name: 'AudioElement',
 
@@ -121,7 +123,7 @@ export default {
         this.resumeAudioContext()
         // Advancing sets playing = true again (no-op) and swaps `source`,
         // whose watcher loads and plays the next track.
-        if (this._advanceIfSleepStopped()) return
+        if (this._advanceIfAtEndOfTrack()) return
       }
       if (this.plyr && this.plyr.duration) {
         // Only touch the element when it actually disagrees with the state.
@@ -349,19 +351,42 @@ export default {
       })
     },
 
-    // The tracks-mode sleep timer leaves the queue on the track that just
-    // finished, so nothing writes progress for a track the user never played.
-    // Their next play consumes that here and moves on instead of replaying it.
-    _advanceIfSleepStopped () {
-      const stoppedAt = this._sleepStoppedIndex
-      this._sleepStoppedIndex = null
-      // Index check: if the user picked a different track meanwhile, that
-      // choice wins. Watcher order makes clearing the flag on track change
-      // unreliable, comparing the index does not.
-      if (stoppedAt == null || stoppedAt !== this.queueIndex) return false
-      if (this.queueIndex >= this.queue.length - 1) return false
-      this.NEXT_TRACK()
-      return true
+    // Playing from the end of a track is the position browsers disagree on:
+    // Chrome rewinds to 0 and replays it, Firefox fires `ended`. See §2.7.3.
+    _atEndOfTrack () {
+      if (!this.plyr) return false
+      const duration = Number(this.currentPlayingFile.duration) || this.plyr.duration
+      if (!(duration > 0)) return false
+      let position
+      if (!this.resumeHistoryDone) {
+        position = this.resumeHistorySeconds
+      } else if (this._mediaHoldsCurrentTrack()) {
+        position = this.plyr.currentTime
+      } else {
+        // Element still holds the outgoing track: `playing` watcher runs first.
+        return false
+      }
+      return position >= duration - FINISHED_EPSILON_SECONDS
+    },
+
+    _mediaHoldsCurrentTrack () {
+      const media = this.plyr.media
+      if (!media || !media.currentSrc || !this.source) return false
+      return media.currentSrc === new URL(this.source, window.location.href).href
+    },
+
+    _advanceIfAtEndOfTrack () {
+      if (!this._atEndOfTrack()) return false
+      // Both still describe the finished track.
+      this.RESUME_HISTORY_SECONDS_DONE()
+      this.SET_CURRENT_TIME(0)
+      if (this.queueIndex < this.queue.length - 1) {
+        this.NEXT_TRACK()
+        return true
+      }
+      // Nothing to advance to on the last track.
+      this.plyr.currentTime = 0
+      return false
     },
 
     _stopBySleepTimer () {
@@ -376,6 +401,7 @@ export default {
     },
 
     onEnded () {
+      if (!this.playing) return
       this.maybeMarkWorkComplete()
       // Fire-and-forget per-track progress report (Phase 2).
       // Must run before the switch below so currentPlayingFile still
@@ -388,7 +414,6 @@ export default {
           // Stay on the finished track: advancing here would make the
           // queueIndex watcher report progress for a track the user never
           // played. The advance is deferred to their next play.
-          this._sleepStoppedIndex = this.queueIndex
           this._stopBySleepTimer()
           return
         }
@@ -470,9 +495,6 @@ export default {
     },
 
     onSeeked() {
-      // Scrubbing back into the finished track means the user wants that
-      // track, not the next one.
-      this._sleepStoppedIndex = null
       this.playLrc(this.playing);
     },
 
@@ -642,9 +664,8 @@ export default {
         // Resume here as well as in onPlaying: a media session action counts as
         // an activation gesture, which iOS requires to honour resume().
         this.resumeAudioContext()
-        // Don't restart the finished track when a sleep-timer advance is
-        // pending -- the `playing` watcher swaps in the next one.
-        if (this._sleepStoppedIndex == null && this.plyr && this.plyr.paused) {
+        // The `playing` watcher swaps in the next track instead.
+        if (this.plyr && this.plyr.paused && !this._atEndOfTrack()) {
           this.plyr.play().catch(() => {})
         }
         this.PLAY()
