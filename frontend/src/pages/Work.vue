@@ -36,8 +36,8 @@ export default {
   },
 
   watch: {
-    $route (to) {
-      this.workid = to.params.id;
+    '$route.params.id' (id) {
+      this.workid = id;
       this.metadata.state = null;
       this.requestData();
     },

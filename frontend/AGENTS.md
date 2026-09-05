@@ -140,7 +140,7 @@ Main layout routes:
 |-------|------|------|-------------|
 | `/` | `works` | Works | Media library (grid/list, sort, filter, search) — this is the real route |
 | `/works` | — | redirect→`/` | Legacy path, redirects to `/` preserving query. Deliberate: the reverse direction caused a `replaceState` loop that broke back navigation |
-| `/work/:id` | — | Work | Work detail + track list |
+| `/work/:id` | — | Work | Work detail + track list. The browsed folder is in the query: `?path=foo/bar` (slash-joined folder names — a slash cannot occur in a folder name, so nothing needs escaping) plus the `#work-tree` anchor, and an open image preview adds `&img=<filename>`, so walking into a folder or opening an image is a history entry and Back goes up one level / closes the preview instead of leaving the work. Paging through images `replace`s rather than pushes, so a folder of 200 images does not need 200 Backs. `Work.vue` therefore watches `$route.params.id`, not `$route` — a query change must not refetch |
 | `/fullScreenPlayer/:id?` | — | FullScreenPlayer | Full-screen player mode |
 | `/text/:trackId(.*)` | — | TextViewer | In-app viewer for `.txt`/`.lrc`/`.srt`/`.ass`/`.vtt`. The param spans a slash because `trackId` is `${workId}/${index}`. Never link to `/api/media/stream/...` directly — a real navigation kills the SPA document (playback stops) and in an installed PWA back exits the app |
 | `/circles` | — | List | Browse by circle (artist group) |

@@ -24,6 +24,11 @@ export default function (/* { store, ssrContext } */) {
       if (savedPosition) {
         return savedPosition
       }
+      // Walking the work tree navigates to #work-tree; keep the list in view
+      // instead of jumping back up to the work details on every folder click.
+      if (to.hash && typeof document !== 'undefined' && document.querySelector(to.hash)) {
+        return { el: to.hash }
+      }
       return { x: 0, y: 0 }
     },
     routes,

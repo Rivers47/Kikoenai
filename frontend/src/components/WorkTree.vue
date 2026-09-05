@@ -1,8 +1,8 @@
 <template>
-  <div class="q-ma-md " style="">
+  <div id="work-tree" class="q-ma-md " style="">
     <q-breadcrumbs gutter="xs" v-if="path.length">
       <q-breadcrumbs-el   >
-        <q-btn no-caps flat dense size="md" icon="folder" @click="path = []">{{ $t('worktree.root') }}</q-btn>
+        <q-btn no-caps flat dense size="md" icon="folder" @click="goToPath([])">{{ $t('worktree.root') }}</q-btn>
       </q-breadcrumbs-el>
       
       <q-breadcrumbs-el v-for="(folderName, index) in path"  :key="index"  class="cursor-pointer" >
@@ -10,7 +10,7 @@
       </q-breadcrumbs-el>
     </q-breadcrumbs>
 
-    <q-dialog v-model="preview_img" maximized>
+    <q-dialog v-model="preview_img" maximized no-route-dismiss>
       <q-card v-if="preview_img_list.length" class="column no-wrap">
         <q-card-section class="q-py-sm">
           <div class="row items-center no-wrap">
@@ -141,12 +141,7 @@ export default {
 
   data() {
     return {
-      path: [],
       internalTree: [],
-      preview_img: false,
-      preview_img_idx: 0,
-      preview_img_list: [],
-      preview_img_hash: "",
       // Image viewer transform: translate(img_tx, img_ty) scale(img_scale),
       // transform-origin at the element's centre.
       img_scale: 1,
@@ -179,13 +174,30 @@ export default {
   },
 
   computed: {
-    fatherFolder () {
-      let fatherFolder = this.internalTree.concat()
-      this.path.forEach(folderName => {
-        fatherFolder = fatherFolder.find(item => item.type === 'folder' && item.title === folderName).children
-      })
+    queryPath () {
+      return (this.$route.query.path || '').split('/').filter(Boolean)
+    },
 
-      return fatherFolder
+    // Resolve the query path against the tree, stopping at the first segment
+    // that does not exist.
+    resolved () {
+      const path = []
+      let fatherFolder = this.internalTree
+      for (const folderName of this.queryPath) {
+        const folder = fatherFolder.find(item => item.type === 'folder' && item.title === folderName)
+        if (!folder) break
+        path.push(folderName)
+        fatherFolder = folder.children
+      }
+      return { path, fatherFolder }
+    },
+
+    path () {
+      return this.resolved.path
+    },
+
+    fatherFolder () {
+      return this.resolved.fatherFolder
     },
 
     queue () {
@@ -199,6 +211,27 @@ export default {
       })
 
       return queue
+    },
+
+    preview_img_list () {
+      return this.fatherFolder.filter(item => item.type === 'image')
+    },
+
+    preview_img_idx () {
+      return this.preview_img_list.findIndex(item => item.title === this.$route.query.img)
+    },
+
+    preview_img: {
+      get () {
+        return this.preview_img_idx >= 0
+      },
+      set (value) {
+        // Only ever set to false, by the dialog closing itself (Esc, backdrop,
+        // the close button). A close driven by the route emits nothing.
+        if (!value) {
+          this.closePreviewImg()
+        }
+      }
     },
 
     preview_img_url () {
@@ -244,6 +277,9 @@ export default {
     },
 
     initPath () {
+      if (this.$route.query.path) {
+        return
+      }
       const initialPath = []
       let fatherFolder = this.internalTree.concat()
       while (fatherFolder.length === 1) {
@@ -253,16 +289,34 @@ export default {
         initialPath.push(fatherFolder[0].title)
         fatherFolder = fatherFolder[0].children
       }
-      this.path = initialPath
+      if (initialPath.length) {
+        this.goToPath(initialPath, true)
+      }
     },
-    
+
+    goToPath (path, replace) {
+      const query = { ...this.$route.query }
+      // Leaving the folder closes whatever image was open in it.
+      delete query.img
+      if (path.length) {
+        query.path = path.join('/')
+      } else {
+        delete query.path
+      }
+      if (query.path === this.$route.query.path && query.img === this.$route.query.img) {
+        return
+      }
+      const location = { query, hash: '#work-tree' }
+      replace ? this.$router.replace(location) : this.$router.push(location)
+    },
+
     onClickBreadcrumb (index) {
-      this.path = this.path.slice(0, index+1)
+      this.goToPath(this.path.slice(0, index + 1))
     },
 
     onClickItem (item) {
       if (item.type === 'folder') {
-        this.path.push(item.title);
+        this.goToPath(this.path.concat(item.title));
       } else if (item.type === 'image') {
         this.openPreviewImg(item);
       } else if (item.type === 'text') {
@@ -466,30 +520,44 @@ export default {
     },
 
     openPreviewImg(item) {
-      const preview_img_list = this.fatherFolder.filter(item => item.type === 'image')
-      let preview_img_idx = -1;
-      preview_img_list.forEach((i, idx) => {
-        if ((i.trackId || i.hash) === (item.trackId || item.hash)) {
-          preview_img_idx = idx;
-        }
-      });
-      this.preview_img = true;
-      this.preview_img_list = preview_img_list;
-      this.preview_img_idx = preview_img_idx;
-      this.resetZoom();
+      this.previewPushed = true;
+      this.goToImg(item.title);
     },
 
     changePreviewImg(next) {
-      if (this.preview_img_list.length <= 1) return;
       const length = this.preview_img_list.length;
-      this.preview_img_idx = (length +this.preview_img_idx + (next ? 1 : -1) ) % length;
+      if (length <= 1) return;
+      const idx = (length + this.preview_img_idx + (next ? 1 : -1)) % length;
       this.resetZoom();
+      this.goToImg(this.preview_img_list[idx].title, true);
+    },
+
+    closePreviewImg() {
+      if (this.previewPushed) {
+        this.previewPushed = false;
+        this.$router.back();
+      } else {
+        // Opened from a pasted link: there is no entry of ours to pop.
+        this.goToImg(null, true);
+      }
+    },
+
+    goToImg (title, replace) {
+      const query = { ...this.$route.query };
+      if (title) {
+        query.img = title;
+      } else {
+        delete query.img;
+      }
+      const location = { query, hash: '#work-tree' };
+      replace ? this.$router.replace(location) : this.$router.push(location);
     },
 
   },
 
   created() {
     // Gesture bookkeeping — deliberately not in data(), nothing renders from it.
+    this.previewPushed = false;
     this.zoomPointers = new Map();
     this.pinchDist = 0;
     this.gestureMoved = false;
