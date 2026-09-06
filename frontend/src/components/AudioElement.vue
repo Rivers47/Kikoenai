@@ -401,7 +401,8 @@ export default {
     },
 
     onEnded () {
-      if (!this.playing) return
+      // Firefox fires `ended` for a seek that lands at the end; nothing played.
+      if (!this.plyr.media.played.length) return
       this.maybeMarkWorkComplete()
       // Fire-and-forget per-track progress report (Phase 2).
       // Must run before the switch below so currentPlayingFile still
