@@ -4,18 +4,38 @@ import { apiUrl } from './base-path';
 import { parseSearchQuery, formatSearchTerm, formatSearchQuery } from '../../backend/database/search-query';
 
 /**
- * Work ids are canonical everywhere in the app: DLsite ids are zero-padded
- * digits, Fanza ids are `d` + digits (`d215444`). Fanza's own underscore form
+ * Work ids are canonical everywhere in the app: DLsite doujin ids are
+ * zero-padded digits, DLsite books ids keep their `BJ` prefix (`BJ635795`),
+ * Fanza ids are `d` + digits (`d215444`). Fanza's own underscore form
  * (`d_215444`) is only used when addressing DMM itself — see backend
- * `work-id.js`, which owns the same two helpers.
+ * `work-id.js`, which owns the same helpers.
  */
 export function isFanzaId(id) {
   return /^d_?\d+$/i.test(String(id));
 }
 
+/** True for a DLsite books-floor id — the 成年コミック/出版社 floor. */
+export function isBooksId(id) {
+  return /^bj\d+$/i.test(String(id));
+}
+
 /** `d215444` → `d_215444`, the content id DMM's own URLs take. */
 export function fanzaCid(id) {
   return String(id).replace(/^d(\d+)$/i, 'd_$1');
+}
+
+/** The prefixed spelling DLsite and Fanza use: `'635795'` → `'RJ635795'`. */
+export function workno(id) {
+  const canonical = String(id).replace(/^bj(\d+)$/i, 'BJ$1');
+  if (isFanzaId(canonical)) return fanzaCid(canonical);
+  if (isBooksId(canonical)) return canonical;
+  return `RJ${canonical}`;
+}
+
+/** The DLsite work page for a work id, on the floor that actually serves it. */
+export function dlsiteWorkUrl(id) {
+  const floor = isBooksId(id) ? 'books' : 'home';
+  return `https://www.dlsite.com/${floor}/work/=/product_id/${workno(id)}.html`;
 }
 
 export function formatSeconds(seconds) {

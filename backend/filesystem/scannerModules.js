@@ -5,7 +5,7 @@ const LimitPromise = require('limit-promise'); // 限制并发数量
 const axios = require('../scraper/axios.js'); // 数据请求
 const { scrapeWorkMetadataFromDLsite, scrapeWorkMetadataFromDLsiteJson, scrapeDynamicWorkMetadataFromDLsite, scrapeCoverIdForTranslatedWorkFromDLsite } = require('../scraper/dlsite');
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
-const { isFanzaId, fanzaCid } = require('../work-id');
+const { isFanzaId, isBooksId, fanzaCid, workno } = require('../work-id');
 const { scrapeWorkMetadataFromAsmrOne } = require('../scraper/asmrOne');
 const db = require('../database/db');
 const { createSchema } = require('../database/schema');
@@ -86,7 +86,7 @@ const LOG = {
   task: {
     // 添加作品专门的log记录
     add(taskId) { // taskId == rjcode or cid, e.g. "443322" or "01134321" or "d215444"
-      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8 || isFanzaId(taskId)));
+      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8 || isFanzaId(taskId) || isBooksId(taskId)));
       tasks.push({
         rjcode: taskId,
         result: null,
@@ -113,8 +113,8 @@ const LOG = {
       }
     },
     __internal_task__(taskId, level, msg) {
-      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8 || isFanzaId(taskId)));
-      console[level](`task[${taskId}] log`, msg);
+      console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8 || isFanzaId(taskId) || isBooksId(taskId)));
+      console[level](`task[${workno(taskId)}] log`, msg);
 
       const task = tasks.find(task => task.rjcode === taskId);
       if (task) {
@@ -327,17 +327,16 @@ async function getCoverImageForTranslated(id, types, asmrOneCoverUrls) {
     // <translation-product-slider> (see dlsite.js); prefer them over the guess.
     realCoverUrls = tryScrapResult.coverUrls || {};
     if (coverFromId != rjcode) {
-      LOG.task.info(rjcode, `当前作品RJ${rjcode}似乎不包含封面资源，例如一些翻译作品。从 DLsite 对应的原始作品RJ${coverFromId}下载封面...`);
+      LOG.task.info(rjcode, `当前作品${workno(rjcode)}似乎不包含封面资源，例如一些翻译作品。从 DLsite 对应的原始作品${workno(coverFromId)}下载封面...`);
     }
   } catch (err) {
     LOG.task.error(rjcode, `在获取真实的封面id（适配那些翻译作品的封面问题） 过程中出错: ${err.message}`);
   }
 
   LOG.task.info(rjcode, `从 DLsite 下载封面...`);
-  const coverFromIdNumber = parseInt(coverFromId);
   let failedTypes = await downloadCovers(id, types, (type) => [
     realCoverUrls[type],
-    guessDLsiteCoverUrl(coverFromIdNumber, type),
+    guessDLsiteCoverUrl(coverFromId, type),
   ]);
 
   if (failedTypes.length) {
@@ -353,7 +352,7 @@ async function getCoverImageForTranslated(id, types, asmrOneCoverUrls) {
   }
 
   if (isNoImgMain) {
-    LOG.main.warn(`RJ${rjcode} 作品本身在DlSite上没有封面图片，无法抓取封面`);
+    LOG.main.warn(`${workno(rjcode)} 作品本身在DlSite上没有封面图片，无法抓取封面`);
     return 'skipped';
   }
 
@@ -393,13 +392,18 @@ async function getAsmrOneCoverUrls(id, known) {
  * @returns {String} guessed cover URL
  */
 function guessDLsiteCoverUrl(cover_from_id, type) {
-  const rjcode = formatID(cover_from_id); // zero-pad to 6 or 8 digits
-  const id2 = (cover_from_id % 1000 === 0) ? cover_from_id : Math.floor(cover_from_id / 1000) * 1000 + 1000;
-  const rjcode2 = formatID(id2); // zero-pad to 6 or 8 digits
+  // The books floor keeps its assets under work/books/BJ..., the doujin floor
+  // under work/doujin/RJ...; the bucket rule is the same on both.
+  const books = isBooksId(cover_from_id);
+  const floor = books ? 'books' : 'doujin';
+  const codeFor = num => workno(books ? `BJ${formatID(num)}` : formatID(num));
+
+  const n = parseInt(String(cover_from_id).replace(/\D/g, ''), 10);
+  const id2 = (n % 1000 === 0) ? n : Math.floor(n / 1000) * 1000 + 1000;
 
   return (type === '240x240' || type === '360x360')
-    ? `https://img.dlsite.jp/resize/images2/work/doujin/RJ${rjcode2}/RJ${rjcode}_img_main_${type}.jpg`
-    : `https://img.dlsite.jp/modpub/images2/work/doujin/RJ${rjcode2}/RJ${rjcode}_img_${type}.jpg`;
+    ? `https://img.dlsite.jp/resize/images2/work/${floor}/${codeFor(id2)}/${codeFor(n)}_img_main_${type}.jpg`
+    : `https://img.dlsite.jp/modpub/images2/work/${floor}/${codeFor(id2)}/${codeFor(n)}_img_${type}.jpg`;
 }
 
 /**

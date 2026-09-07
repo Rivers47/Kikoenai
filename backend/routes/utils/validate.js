@@ -21,7 +21,7 @@ const isValidRequest = (req, res, sendMessage = true) => {
  * pads to either 6 or 8 digits — so padding it here is always safe and lets
  * legacy ids self-heal on every route using these validators.
  */
-const padLegacyId = (id) => (/^\d{7}$/.test(id) ? `0${id}` : id);
+const padLegacyId = (id) => String(id).replace(/^(bj)?(\d{7})$/i, (m, prefix, digits) => `${prefix || ''}0${digits}`);
 
 /**
  * Sanitizer for every work-id route parameter: pads a legacy 7-digit DLsite id
@@ -32,20 +32,26 @@ const padLegacyId = (id) => (/^\d{7}$/.test(id) ? `0${id}` : id);
 const normalizeWorkId = (id) => canonicalizeWorkId(padLegacyId(id));
 
 /**
- * Returns an express-validator chain for a work id param (route param).
- * DLsite ids are \d{6,8} (zero-padded 6 or 8 digits), Fanza ids are d\d+ —
- * the legacy d_\d+ spelling is accepted and sanitized to the canonical form.
+ * Work-id shape shared by all three validators: a DLsite doujin id is
+ * \d{6,8} (zero-padded 6 or 8 digits), a DLsite books id keeps its BJ prefix,
+ * a Fanza id is d\d+ — the legacy d_\d+ spelling is accepted and sanitized to
+ * the canonical form.
  */
-const workIdParam = () => require('express-validator').param('id').isString().matches(/^(\d{6,8}|d_?\d+)$/).customSanitizer(normalizeWorkId);
+const WORK_ID_RE = /^(bj\d{6,8}|\d{6,8}|d_?\d+)$/i;
+
+/**
+ * Returns an express-validator chain for a work id param (route param).
+ */
+const workIdParam = () => require('express-validator').param('id').isString().matches(WORK_ID_RE).customSanitizer(normalizeWorkId);
 
 /**
  * Returns an express-validator chain for a work_id body field.
  */
-const workIdBody = () => require('express-validator').body('work_id').isString().matches(/^(\d{6,8}|d_?\d+)$/).customSanitizer(normalizeWorkId);
+const workIdBody = () => require('express-validator').body('work_id').isString().matches(WORK_ID_RE).customSanitizer(normalizeWorkId);
 
 /**
  * Returns an express-validator chain for a work_id query parameter.
  */
-const workIdQuery = () => require('express-validator').query('work_id').isString().matches(/^(\d{6,8}|d_?\d+)$/).customSanitizer(normalizeWorkId);
+const workIdQuery = () => require('express-validator').query('work_id').isString().matches(WORK_ID_RE).customSanitizer(normalizeWorkId);
 
 module.exports = { isValidRequest, workIdParam, workIdBody, workIdQuery };

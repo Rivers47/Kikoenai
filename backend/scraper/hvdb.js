@@ -3,6 +3,7 @@ const cheerio = require('cheerio'); // 解析器
 const axios = require('./axios'); // 数据请求
 const { nameToUUID } = require('./utils');
 const { formatID } = require('../filesystem/utils');
+const { isBooksId } = require('../work-id');
 
 // 修复之前抓取hvdb数据的bug，之前声优名字只能抓到最后一个单字而不是完整的名字，这里修复
 function scrapeHvdbHtml(data) {
@@ -54,6 +55,12 @@ function scrapeHvdbHtml(data) {
  * @param {number} id Work id.
  */
 const scrapeWorkMetadataFromHVDB = id => new Promise((resolve, reject) => {
+  // HVDB is doujin-only and keyed by bare digits; see the same guard in asmrOne.js.
+  if (isBooksId(id)) {
+    reject(new Error('HVDB does not index DLsite books works.'));
+    return;
+  }
+
   const rjcode = formatID(id);
   const url = `https://hvdb.me/Dashboard/WorkDetails/${id}`;
 

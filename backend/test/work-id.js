@@ -8,7 +8,7 @@ const expect = chai.expect;
 const { existsSync, unlinkSync } = require('fs');
 const { join } = require('path');
 
-const { isFanzaId, canonicalizeWorkId, fanzaCid } = require('../work-id');
+const { isFanzaId, isBooksId, canonicalizeWorkId, fanzaCid, workno } = require('../work-id');
 const { coverFileName, workImageFileName, getFolderList } = require('../filesystem/utils');
 const migration = require('../database/migrations/20260828000000_canonical_fanza_id');
 
@@ -40,6 +40,25 @@ describe('work-id helpers', function () {
     expect(coverFileName('123456', 'main')).to.equal('RJ123456_img_main.jpg');
     expect(workImageFileName('d215444', 'smp', 2)).to.equal('d_215444_img_smp2.jpg');
   });
+
+  it('keeps the BJ prefix, which is not implicit the way RJ is', function () {
+    expect(isBooksId('BJ635795')).to.be.true;
+    expect(isBooksId('bj635795')).to.be.true;
+    expect(isBooksId('635795')).to.be.false;
+    expect(isBooksId('d215444')).to.be.false;
+    expect(canonicalizeWorkId('bj635795')).to.equal('BJ635795');
+    // Without the prefix these two works would share a primary key.
+    expect(canonicalizeWorkId('BJ635795')).to.not.equal(canonicalizeWorkId('635795'));
+    expect(coverFileName('BJ635795', 'main')).to.equal('BJ635795_img_main.jpg');
+    expect(workImageFileName('BJ635795', 'smp', 2)).to.equal('BJ635795_img_smp2.jpg');
+  });
+
+  it('spells every work code the way its store does', function () {
+    expect(workno('635795')).to.equal('RJ635795');
+    expect(workno('01134567')).to.equal('RJ01134567');
+    expect(workno('BJ635795')).to.equal('BJ635795');
+    expect(workno('d215444')).to.equal('d_215444');
+  });
 });
 
 describe('getFolderList() work-code detection', function () {
@@ -59,6 +78,8 @@ describe('getFolderList() work-code detection', function () {
       'd_215444',               // Fanza, its own spelling
       'd987654 タイトル',       // Fanza, underscore-free
       '[FANZA] d_111222',       // Fanza, prefixed
+      'BJ635795 楓と鈴',        // DLsite books floor
+      'BJ01622225',             // books, 8-digit
       'Sound_CD1',              // NOT a work code
     ]) mkdirSync(join(root, name));
   });
@@ -69,7 +90,9 @@ describe('getFolderList() work-code detection', function () {
 
   it('reads both Fanza spellings and yields the canonical id', async function () {
     // Sound_CD1 is not a work folder, so it is recursed into (and is empty).
-    expect(await scan()).to.deep.equal(['123456', 'd111222', 'd215444', 'd987654']);
+    expect(await scan()).to.deep.equal(
+      ['123456', 'BJ01622225', 'BJ635795', 'd111222', 'd215444', 'd987654'].sort()
+    );
   });
 });
 

@@ -15,13 +15,13 @@ const db = require('../database/db');
 const { config } = require('../config');
 const { scrapeWorkReviewsFromDLsite } = require('../scraper/dlsite');
 const { formatID, workImageFileName, saveWorkImageToDisk } = require('./utils');
-const { isFanzaId } = require('../work-id');
+const { isFanzaId, workno } = require('../work-id');
 
 const displayIdOf = id => (isFanzaId(id) ? id : formatID(id));
 
 const consoleLogger = {
-  info: (id, message) => console.log(`[${id}] ${message}`),
-  warn: (id, message) => console.warn(`[${id}] ${message}`),
+  info: (id, message) => console.log(`[${workno(id)}] ${message}`),
+  warn: (id, message) => console.warn(`[${workno(id)}] ${message}`),
 };
 
 /**

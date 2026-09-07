@@ -4,6 +4,7 @@ const axios = require('./axios'); // 数据请求
 const { nameToUUID, hasLetter } = require('./utils');
 const { scrapeWorkMetadataFromHVDB } = require('./hvdb');
 const { formatID } = require('../filesystem/utils');
+const { workno } = require('../work-id');
 
 // 常に日本語ロケールを使用
 const LOCALE_PARAM = '/?locale=ja_JP';
@@ -156,8 +157,8 @@ const parseSampleImages = ($) => {
  * @param {number} id Work id.
  */
 const scrapeStaticWorkMetadataFromDLsite = (id) => new Promise((resolve, reject) => {
-  const rjcode = formatID(id);
-  const url = `https://www.dlsite.com/maniax/work/=/product_id/RJ${rjcode}.html${LOCALE_PARAM}`;
+  const code = workno(formatID(id));
+  const url = `https://www.dlsite.com/maniax/work/=/product_id/${code}.html${LOCALE_PARAM}`;
 
   const work = { id, tags: [], vas: [], illustrators: [], scriptWriters: [], authors: [], sampleImages: [] };
 
@@ -182,9 +183,7 @@ const scrapeStaticWorkMetadataFromDLsite = (id) => new Promise((resolve, reject)
       const circleElement = $('span[class="maker_name"]').children('a');
       const circleUrl = circleElement.attr('href');
       const circleName = circleElement.text();
-      work.circle = (circleUrl && circleName)
-        ? { id: parseInt(circleUrl.substr(-10,5)), name: circleName }
-        : {};
+      work.circle = (circleUrl && circleName) ? { name: circleName } : {};
 
       const workOutline = $('#work_outline');
       // NSFW
@@ -326,8 +325,8 @@ const scrapeStaticWorkMetadataFromDLsite = (id) => new Promise((resolve, reject)
 });
 
 const scrapeStaticWorkMetadataFromDLsiteJson = (id) => new Promise((resolve, reject) => {
-  const rjcode = formatID(id);
-  const url = `https://www.dlsite.com/maniax/api/=/product.json?workno=RJ${rjcode}`;
+  const code = workno(formatID(id));
+  const url = `https://www.dlsite.com/maniax/api/=/product.json?workno=${code}`;
 
   const work = { id, tags: [], vas: [], illustrators: [], scriptWriters: [], authors: [], sampleImages: [] };
   axios.retryGet(url, {
@@ -341,20 +340,14 @@ const scrapeStaticWorkMetadataFromDLsiteJson = (id) => new Promise((resolve, rej
       const titlePattern = / \[.+\] \| DLsite$/;
       work.title = work.title.replace(titlePattern, '');
 
-      work.circle = {
-        id: parseInt(data.maker_id.replace("RG", "")),
-        name: data.maker_name
-      };
+      work.circle = { name: data.maker_name };
 
       work.nsfw = data.age_category == 3;
       work.release = /\d{4}-\d{2}-\d{2}/.exec(data.regist_date);
 
       // 系列
       if (data.series_id) {
-        work.series = {
-          id: parseInt(data.series_id.replace('SRI', '')),
-          name: data.series_name
-        };
+        work.series = { name: data.series_name };
       }
       
       work.tags = data.genres.map((v) => ({
@@ -452,11 +445,11 @@ const scrapeStaticWorkMetadataFromDLsiteJson = (id) => new Promise((resolve, rej
  * @param {number} id Work id.
  */
 const scrapeDynamicWorkMetadataFromDLsite = id => new Promise((resolve, reject) => {
-  const rjcode = formatID(id);
-  const url = `https://www.dlsite.com/maniax-touch/product/info/ajax?product_id=RJ${rjcode}`;
+  const code = workno(formatID(id));
+  const url = `https://www.dlsite.com/maniax-touch/product/info/ajax?product_id=${code}`;
 
   axios.retryGet(url, { retry: {} })
-    .then(response => response.data[`RJ${rjcode}`])
+    .then(response => response.data[code])
     .then((data) => {
       const work = {};
       work.dl_count = data.dl_count ? data.dl_count : "0";
@@ -468,7 +461,7 @@ const scrapeDynamicWorkMetadataFromDLsite = id => new Promise((resolve, reject) 
       if (data.rank.length) {
         work.rank = data.rank;
       }
-      console.log(`[RJ${rjcode}] 成功从 DLSite 抓取Dynamic元数据...`);
+      console.log(`[${code}] 成功从 DLSite 抓取Dynamic元数据...`);
       resolve(work);
     })
     .catch((error) => {
@@ -569,7 +562,7 @@ const normalizeReview = (raw) => {
  * @returns {Promise<Array<Object>>} Normalized reviews, de-duplicated by id.
  */
 const scrapeWorkReviewsFromDLsite = async (id, options = {}) => {
-  const rjcode = formatID(id);
+  const code = workno(formatID(id));
   const order = options.order || 'regist_d';
   const limit = options.limit || REVIEW_PAGE_SIZE;
   const maxPages = options.maxPages || REVIEW_MAX_PAGES;
@@ -582,10 +575,10 @@ const scrapeWorkReviewsFromDLsite = async (id, options = {}) => {
 
   for (let page = 1; page <= maxPages; page += 1) {
     if (Date.now() > deadline) {
-      console.log(`[RJ${rjcode}] 评论抓取超时，已获取 ${reviews.length} 条，停止翻页.`);
+      console.log(`[${code}] 评论抓取超时，已获取 ${reviews.length} 条，停止翻页.`);
       break;
     }
-    const url = `https://www.dlsite.com/maniax/api/review?product_id=RJ${rjcode}`
+    const url = `https://www.dlsite.com/maniax/api/review?product_id=${code}`
       + `&order=${order}&limit=${limit}&page=${page}&locale=ja_JP`;
 
     let data;
@@ -600,7 +593,7 @@ const scrapeWorkReviewsFromDLsite = async (id, options = {}) => {
     }
 
     if (!data || data.is_success !== true) {
-      throw new Error(`Couldn't parse reviews for RJ${rjcode}: ${(data && data.error_msg) || 'unexpected response'}.`);
+      throw new Error(`Couldn't parse reviews for ${code}: ${(data && data.error_msg) || 'unexpected response'}.`);
     }
 
     const rows = Array.isArray(data.review_list) ? data.review_list : [];
@@ -628,8 +621,8 @@ const scrapeWorkReviewsFromDLsite = async (id, options = {}) => {
  * @param {number} id_translated Work id.
  */
 const scrapeCoverIdForTranslatedWorkFromDLsite = (id_translated) => new Promise((resolve, reject) => {
-  const rjcode = formatID(id_translated);
-  const url = `https://www.dlsite.com/maniax/work/=/product_id/RJ${rjcode}.html${LOCALE_PARAM}`;
+  const code = workno(formatID(id_translated));
+  const url = `https://www.dlsite.com/maniax/work/=/product_id/${code}.html${LOCALE_PARAM}`;
 
   axios.retryGet(url, {
     retry: {}
@@ -698,7 +691,7 @@ const scrapeCoverIdForTranslatedWorkFromDLsite = (id_translated) => new Promise(
           const mainUrlMatch = /RJ(\d{6,8})[_\w.]+$/.exec(new URL(mainUrl).pathname);
           if (mainUrlMatch) {
             const realCoverFromId = mainUrlMatch[1];
-            if (realCoverFromId !== rjcode && !hit_id_list.includes(realCoverFromId)) {
+            if (realCoverFromId !== formatID(id_translated) && !hit_id_list.includes(realCoverFromId)) {
               hit_id_list.unshift(realCoverFromId);
             }
           }

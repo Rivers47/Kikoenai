@@ -3,6 +3,7 @@ const cheerio = require('cheerio'); // 解析器
 const axios = require('./axios'); // 数据请求
 const { nameToUUID } = require('./utils');
 const { formatID } = require('../filesystem/utils');
+const { isBooksId } = require('../work-id');
 
 let asmrOneApiUrl = '';
 
@@ -25,6 +26,11 @@ async function updateAsmrOneApiUrl() {
 }
 
 async function scrapeWorkMetadataFromAsmrOne(id) {
+  // ASMR.one indexes the doujin floor only, and its API takes bare digits — a
+  // books id would either 404 or, worse, resolve to the RJ work of the same
+  // number and store a different work's metadata under this id.
+  if (isBooksId(id)) throw new Error('ASMR.one does not index DLsite books works.');
+
   if (asmrOneApiUrl === '') await updateAsmrOneApiUrl();
 
   const rjcode = formatID(id);

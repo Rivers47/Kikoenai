@@ -59,7 +59,7 @@
 ├── sqlite/
 │   └── db.sqlite3           # SQLite database file
 ├── static/                  # Static assets
-├── work-id.js               # Work-id helpers: isFanzaId / canonicalizeWorkId / fanzaCid
+├── work-id.js               # Work-id helpers: isFanzaId / isBooksId / canonicalizeWorkId / fanzaCid / workno
 ├── api.js                   # API setup: session middleware + route mounting
 ├── app.js                   # Entry point: Express app, HTTP/HTTPS, Socket.IO
 ├── config.js                # Config file read/write, defaults, migration
@@ -138,7 +138,7 @@ SQLite3 via Knex.js with the following tables:
 | `t_play_history` | Playback state | `user_name`, `work_id`, `state` (JSON) |
 | `t_dlsite_review` | Scraped DLsite user reviews | `id` (DLsite `member_review_id`), `work_id`, `rate`, `review_title`, `review_text`, `genres` (JSON) |
 
-**Work id / label id note (since migration `20260802000000`):** `t_work.id` and all `work_id` foreign keys are **TEXT**. A DLsite work id is stored already RJ-padded (`'123456'` 6-digit, or `'01134567'` 8-digit — matching `formatID`), so the work URL `/work/123456` shows the original RJ id directly; a Fanza (DMM doujin) work id is the content-id **without its underscore**, `'d215444'` (migration `20260828000000`; DMM writes it `d_215444`). The leading `d` distinguishes the source — there is no separate source column. `work-id.js` owns the three helpers: `isFanzaId`, `canonicalizeWorkId` (`d_215444` → `d215444`), `fanzaCid` (back to DMM's form). **All** label ids (circle/tag/va/illustrator/script_writer/series/author) are name-based UUIDs (TEXT PK) resolved by `resolveLabel` in `queries.js`; DLsite RG/genre/SRI ids scraped from the storefront are no longer used as DB ids, and a label shared across DLsite + Fanza merges into one row.
+**Work id / label id note (since migration `20260802000000`):** `t_work.id` and all `work_id` foreign keys are **TEXT**. A DLsite doujin work id is stored already RJ-padded (`'123456'` 6-digit, or `'01134567'` 8-digit — matching `formatID`), so the work URL `/work/123456` shows the original RJ id directly; a DLsite **books** work id keeps its prefix, `'BJ635795'`; a Fanza (DMM doujin) work id is the content-id **without its underscore**, `'d215444'` (migration `20260828000000`; DMM writes it `d_215444`). The prefix distinguishes the source — there is no separate source column. **`RJ` is stripped because it is implicit; `BJ` is not, and dropping it would collide `BJ635795` with `RJ635795`.** `work-id.js` owns the helpers: `isFanzaId`, `isBooksId`, `canonicalizeWorkId` (`d_215444` → `d215444`, `bj…` → `BJ…`), `fanzaCid` (back to DMM's form), and `workno` (the prefixed spelling each store uses in URLs and asset file names — the single source for `RJ…`/`BJ…`/`d_…`). **All** label ids (circle/tag/va/illustrator/script_writer/series/author) are name-based UUIDs (TEXT PK) resolved by `resolveLabel` in `queries.js`; DLsite RG/genre/SRI ids scraped from the storefront are no longer used as DB ids, and a label shared across DLsite + Fanza merges into one row.
 
 **Tag canonicalization (rename protection):** tag names are canonicalized via `scraper/tag-aliases.json` before UUID resolution. `resolveTagLabel` in `queries.js` (the single choke point covering scan-insert, scan-update, and admin-edit) maps a scraped new Japanese tag name back to its canonical old name so a DLsite rename folds onto the existing `t_tag` row instead of splitting into two. The map is hand-maintained (`scraper/tag-aliases.json`, loaded once at require time — restart to apply); tags not in the map pass through unchanged. Rows that already exist in a deployed DB are folded by migration `20260825000000_merge_tag_aliases.js`, which reads the same JSON — **adding a new alias entry after that migration has run needs a fresh migration** (or a re-scan of the affected works) to merge the existing rows. Other label tables (circle/illustrator/script_writer/series) are not canonicalized. The backend always serves canonical Japanese tag names; UI/tag translation is client-side (see `frontend/AGENTS.md` i18n).
 
@@ -251,9 +251,9 @@ Only one scanner process can run at a time (guarded by `scanner` variable in `so
 
 ### 2.6 Scraping (`scraper/`)
 
-- **DLsite** (`dlsite.js`): Primary scraper. Fetches work pages, parses HTML with Cheerio.
-- **ASMR.one** (`asmrOne.js`): Secondary source.
-- **HVDB** (`hvdb.js`): Another metadata source.
+- **DLsite** (`dlsite.js`): Primary scraper. Fetches work pages, parses HTML with Cheerio. Every request site addresses the work by `workno(id)`, so the **books floor** (`BJ…`, 成年コミック/出版社 — publishers whose ASMR releases get a `BJ` number instead of `RJ`) needs no separate scraper: `maniax/work/=/product_id/BJ….html`, `maniax/api/=/product.json?workno=BJ…` and `maniax-touch/product/info/ajax` all serve books works, returning `site_id: books`, `work_type: SOU`. Two floor differences that do matter: covers live under `images2/work/books/BJ…` rather than `work/doujin/RJ…` (same round-up-to-next-1000 bucket — see `guessDLsiteCoverUrl`), and `maker_id`/`series_id` come back as `BG…`/`TITLE…` instead of `RG…`/`SRI…`. The latter is a non-issue because `resolveLabel` keys every label off the **name** (see §2.3): the scraper no longer emits a circle/series id at all, matching `fanza.js`. It used to `parseInt` the storefront id into a field nothing read — which quietly became `NaN` on the books floor. A publisher lands in `t_circle` like any circle — the UI calls it a Circle.
+- **ASMR.one** (`asmrOne.js`): Secondary source. **Doujin floor only** — it is keyed by bare digits, so a `BJ` id is rejected up front rather than silently resolving to the `RJ` work of the same number and storing another work's metadata. Same guard in `hvdb.js`.
+- **HVDB** (`hvdb.js`): Another metadata source. Doujin only; see above.
 - **Fanza** (`fanza.js`): Scrapes Fanza (DMM) doujin detail pages. Uses age-check cookies to bypass the adult interstitial. Takes a work id in either spelling, addresses the detail page by `fanzaCid()` (`cid=d_215444`), and returns the canonical `d215444` on the metadata object.
 - All scrapers use a shared Axios instance (`axios.js`) with proxy support, retry logic, and configurable timeouts.
 
@@ -453,7 +453,7 @@ node filesystem/updater.js --reviews        # re-scrape every DLsite user review
 
 The following endpoints are consumed by the `frontend/` package:
 
-**Id formats:** work-id route params (`:id` on `/api/work`, `/api/cover`, `/api/tracks`, `/api/media/*`, `/api/refresh`, `/api/work/scan`) are **strings** matching `^(\d{6,8}|d_?\d+)$` — DLsite ids are already RJ-padded digit strings, Fanza ids are `d`-prefixed and underscore-free. `workIdParam`/`workIdBody`/`workIdQuery` in `routes/utils/validate.js` validate them and sanitize the legacy `d_` spelling away, so a stale PWA cache or an old bookmark (`/work/d_215444`) keeps resolving after the migration. Label ids are UUID v5 of the label's own name, so they are no longer addressable as route params: `/api/:fields/:id` still resolves a name, but filtering by label goes through `/api/search` (§2.3b).
+**Id formats:** work-id route params (`:id` on `/api/work`, `/api/cover`, `/api/tracks`, `/api/media/*`, `/api/refresh`, `/api/work/scan`) are **strings** matching `WORK_ID_RE` = `^(bj\d{6,8}|\d{6,8}|d_?\d+)$` (case-insensitive) — DLsite doujin ids are already RJ-padded digit strings, DLsite books ids keep their `BJ` prefix, Fanza ids are `d`-prefixed and underscore-free. `workIdParam`/`workIdBody`/`workIdQuery` in `routes/utils/validate.js` validate them and sanitize the legacy `d_` spelling away, so a stale PWA cache or an old bookmark (`/work/d_215444`) keeps resolving after the migration. Label ids are UUID v5 of the label's own name, so they are no longer addressable as route params: `/api/:fields/:id` still resolves a name, but filtering by label goes through `/api/search` (§2.3b).
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -537,7 +537,7 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 - **Tests:** Located in `test/` directory:
   - `edit-metadata.js` — covers the `PUT /api/work/:id` flow and `db.editWorkMetadata` (uses shared `db-test.sqlite3` singleton)
   - `search-query.js` — advanced filter parser/serializer + `getWorksByFilter` behaviour (builds its own throwaway `db-search-test.sqlite3`)
-  - `work-id.js` — id canonicalization, cover/image file naming, `getFolderList` work-code detection, and migration `20260828000000` up/down
+  - `work-id.js` — id canonicalization (Fanza + DLsite books), `workno` spelling, cover/image file naming, `getFolderList` work-code detection, and migration `20260828000000` up/down
   - `benchmark.js` — DB query benchmark; Skips if `backend/sqlite/db.sqlite3` is missing/empty;
 - **Run:** `npm test` (sets `NODE_ENV=test`)
 

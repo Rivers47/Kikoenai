@@ -138,7 +138,7 @@
 <script>
 import Cover from 'components/Cover'
 import NotifyMixin from '../mixins/Notification.js'
-import { isFanzaId, fanzaCid, labelRoute } from 'src/utils'
+import { isFanzaId, fanzaCid, dlsiteWorkUrl, labelRoute } from 'src/utils'
 import SearchableLabel from './SearchableLabel'
 
 export default {
@@ -189,7 +189,7 @@ export default {
       if (this.isFanza) {
         return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${fanzaCid(this.metadata.id)}/`;
       }
-      return `https://www.dlsite.com/home/work/=/product_id/RJ${this.metadata.id}.html`;
+      return dlsiteWorkUrl(this.metadata.id);
     },
     sourceLabel() {
       return this.isFanza ? 'Fanza' : 'DLsite';

@@ -533,7 +533,7 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 | `/api/backfill/progress` | GET | `Backfill.vue` | Metadata backfill progress |
 | `/api/refresh/:id` | POST | `WorkDetails.vue` | Re-fetch metadata for one work |
 | `/api/work/scan/:id` | POST | `WorkDetails.vue` | Rescan a single work |
-| `/api/work/:id` | PUT | `EditMetadata.vue` | Manually edit work metadata (admin only). Work id is a string: DLsite RJ-padded (`\d{6,8}`) or Fanza (`d\d+`, underscore-free — `isFanzaId`/`fanzaCid` in `src/utils.js`; DMM's own `d_215444` only appears in links out to DMM). |
+| `/api/work/:id` | PUT | `EditMetadata.vue` | Manually edit work metadata (admin only). Work id is a string: DLsite doujin RJ-padded (`\d{6,8}`), DLsite books (`BJ\d{6,8}`, prefix kept) or Fanza (`d\d+`, underscore-free). `src/utils.js` mirrors backend `work-id.js`: `isFanzaId`/`isBooksId`/`fanzaCid`, plus `workno` (the code as its store spells it — use it for any `RJ`/`BJ` prefix in a template) and `dlsiteWorkUrl` (books works link to the `/books/` floor, doujin to `/home/`). |
 | `/api/illustrators` | GET | `EditMetadata.vue` | List illustrators (autocomplete) |
 | `/api/script_writers` | GET | `EditMetadata.vue` | List script writers (autocomplete) |
 | `/api/seriess` | GET | `EditMetadata.vue` | List series (autocomplete; irregular plural) |

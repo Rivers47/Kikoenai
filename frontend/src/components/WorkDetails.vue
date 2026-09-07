@@ -273,7 +273,7 @@ import SearchableLabel from './SearchableLabel'
 import LabelDropdown from './LabelDropdown'
 import NotifyMixin from '../mixins/Notification.js'
 import { mapState } from 'vuex'
-import { isFanzaId, fanzaCid, labelRoute } from 'src/utils'
+import { isFanzaId, fanzaCid, dlsiteWorkUrl, labelRoute } from 'src/utils'
 
 export default {
   name: 'WorkDetails',
@@ -326,14 +326,6 @@ export default {
       return labels[this.progress] || this.$t('workdetails.markProgress');
     },
     
-    dlsiteCode() {
-      let c = String(this.metadata.id);
-      c = this.metadata.id > 1000000 
-        ? c.padStart(8,'0')  // 8位RJ番号
-        : c.padStart(6,'0'); // 6位RJ番号
-      return c;
-    },
-
     isFanza() {
       return isFanzaId(this.metadata.id);
     },
@@ -342,7 +334,7 @@ export default {
       if (this.isFanza) {
         return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${fanzaCid(this.metadata.id)}/`;
       }
-      return `https://www.dlsite.com/home/work/=/product_id/RJ${this.metadata.id}.html`;
+      return dlsiteWorkUrl(this.metadata.id);
     },
 
     sourceLabel() {

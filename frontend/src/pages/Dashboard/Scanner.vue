@@ -104,7 +104,7 @@
 
                   <q-item-section>
                     <q-item-label v-if="item.logs.length > 0" class="ellipsis">{{item.logs[item.logs.length - 1].message}}</q-item-label>
-                    <q-item-label caption>{{ isFanzaId(item.rjcode) ? item.rjcode : `RJ${item.rjcode}` }}</q-item-label>
+                    <q-item-label caption>{{ workno(item.rjcode) }}</q-item-label>
                   </q-item-section>
                 </template>
                 
@@ -145,7 +145,7 @@
                     </q-item-label>
 
                     <q-item-label caption class="text-white">
-                      {{ isFanzaId(item.rjcode) ? item.rjcode : `RJ${item.rjcode}` }}
+                      {{ workno(item.rjcode) }}
                     </q-item-label>
                   </q-item-section>
                 </template>
@@ -169,7 +169,7 @@
 
 <script>
 import NotifyMixin from '../../mixins/Notification.js'
-import { isFanzaId } from 'src/utils'
+import { workno } from 'src/utils'
 
 export default {
   name: 'Scanner',
@@ -189,7 +189,7 @@ export default {
   },
 
   methods: {
-    isFanzaId, // template: Fanza ids print as-is, DLsite ids get the RJ prefix
+    workno, // template: prints the work code as DLsite/Fanza spell it
 
     cleanRerun() {
       this.tasks = []
@@ -266,8 +266,7 @@ export default {
   computed: {
     allLogs () {
       const resultLogs = this.results.map(res => {
-        const prefix = isFanzaId(res.rjcode) ? '' : 'RJ'
-        const code = `${prefix}${res.rjcode}`
+        const code = workno(res.rjcode)
         const count = res.count
         if (res.result === 'added') {
           return { level: 'info', message: this.$t('scanner.addedSuccess', { code, count }) }

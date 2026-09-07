@@ -9,7 +9,7 @@ const recursiveReaddir = (dir) => {
 const { orderBy } = require('natural-orderby');
 const { joinFragments } = require('../routes/utils/url');
 const { config } = require('../config');
-const { isFanzaId, fanzaCid } = require('../work-id');
+const { workno } = require('../work-id');
 
 const supportedMediaExtList = ['.mp3', '.ogg', '.opus', '.wav', '.aac', '.flac', '.webm', '.mp4', '.m4a', '.mka'];
 const supportedSubtitleExtList = ['.lrc', '.srt', '.ass', ".vtt"]; // '.ass' only support show on file list, not for play lyric
@@ -407,7 +407,11 @@ async function* getFolderList(rootFolder, current = '', depth = 0, logger = cons
     try {
      
       if ((await fs.promises.stat(absolutePath)).isDirectory()) { // 检查是否为文件夹
-          const rjMatch = folder.match(/RJ(\d+)/);
+          const rjMatch = folder.match(/RJ(\d+)/i);
+          // DLsite's books floor (成年コミック/出版社) numbers its voice works
+          // BJ instead of RJ; the prefix is kept in the id because the digits
+          // alone would collide with an RJ work.
+          const bjMatch = folder.match(/BJ(\d+)/i);
           // Fanza names its folders after the cid (`d_215444`); the
           // underscore-free spelling is accepted too, but only at a word
           // boundary and with enough digits that a folder like `Sound_CD1`
@@ -416,6 +420,9 @@ async function* getFolderList(rootFolder, current = '', depth = 0, logger = cons
           if (rjMatch) {
             // Found a DLsite work folder
             yield { absolutePath, relativePath, rootFolderName: rootFolder.name, id: formatID(parseInt(rjMatch[1], 10)) };
+          } else if (bjMatch) {
+            // Found a DLsite books work folder
+            yield { absolutePath, relativePath, rootFolderName: rootFolder.name, id: `BJ${formatID(parseInt(bjMatch[1], 10))}` };
           } else if (fanzaMatch) {
             // Found a Fanza work folder
             yield { absolutePath, relativePath, rootFolderName: rootFolder.name, id: 'd' + fanzaMatch[1] };
@@ -445,10 +452,7 @@ async function* getFolderList(rootFolder, current = '', depth = 0, logger = cons
  *          (on-disk names keep Fanza's own underscore form — see work-id.js)
  */
 function coverFileName(id, type) {
-  if (isFanzaId(id)) {
-    return `${fanzaCid(id)}_img_${type}.jpg`;
-  }
-  return `RJ${id}_img_${type}.jpg`;
+  return `${workno(id)}_img_${type}.jpg`;
 }
 
 /**
@@ -503,7 +507,7 @@ const saveCoverImageToDisk = (stream, id, type) => new Promise((resolve, reject)
  */
 function workImageFileName(id, kind, index, ext = 'jpg') {
   const safeExt = /^[a-z0-9]{1,5}$/i.test(ext) ? ext.toLowerCase() : 'jpg';
-  const prefix = isFanzaId(id) ? fanzaCid(id) : `RJ${id}`;
+  const prefix = workno(id);
   return `${prefix}_img_${kind}${index}.${safeExt}`;
 }
 
@@ -534,7 +538,7 @@ const saveWorkImageToDisk = (stream, fileName) => new Promise((resolve, reject) 
  * @param {String} id Work id (e.g. '123456', '01134567', 'd215444').
  */
 const deleteWorkImagesFromDisk = async (id) => {
-  const prefix = isFanzaId(id) ? fanzaCid(id) : `RJ${id}`;
+  const prefix = workno(id);
   const pattern = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_img_(smp|part)\\d+\\.[a-z0-9]+$`, 'i');
 
   let entries;

@@ -40,7 +40,7 @@
 
 <script>
 
-import { isFanzaId, labelRoute } from 'src/utils'
+import { workno, labelRoute } from 'src/utils'
 import SearchableLabel from './SearchableLabel'
 import { apiUrl } from 'src/base-path'
 
@@ -74,11 +74,7 @@ export default {
     },
 
     code () {
-      const id = String(this.workid)
-      if (isFanzaId(id)) {
-        return id
-      }
-      return 'RJ' + id
+      return workno(this.workid)
     },
 
   },
