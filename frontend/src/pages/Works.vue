@@ -196,13 +196,13 @@ export default {
       touchedWorkId: 0, // 用来解决android移动端设备没有hover事件导致workCard不能跟随手指显示标签的问题
 
       isActive: false,
-      _lastUrl: null,
+      _lastFilter: null,
     }
   },
   created () {
     this.refreshPageTitle();
     this.seed = Math.floor(Math.random() * 100);
-    this._lastUrl = this.url
+    this._lastFilter = this.filter
   },
 
   mounted() {
@@ -229,8 +229,12 @@ export default {
   },
 
   computed: {
+    filter () {
+      return this.$route.query.filter || ''
+    },
+
     url () {
-      return this.$route.query.filter ? '/api/search' : '/api/works'
+      return this.filter ? '/api/search' : '/api/works'
     },
 
 
@@ -243,7 +247,7 @@ export default {
     this.$nextTick(() => {
       this.stopLoad = false
     })
-    if (this._lastUrl !== null && this.url !== this._lastUrl) {
+    if (this.filter !== this._lastFilter) {
       this.reset()
     }
   },
@@ -253,8 +257,10 @@ export default {
   },
 
   watch: {
-    url () {
-      if (this.isActive && this.$route.name === 'works') {
+    // Navigating away changes the query too, so compare against the filter the
+    // current list was actually loaded with.
+    filter () {
+      if (this.isActive && this.$route.name === 'works' && this.filter !== this._lastFilter) {
         this.reset()
       }
     },
@@ -287,12 +293,6 @@ export default {
       localStorage.detailMode = newModeSetting;
     },
 
-    '$route.query.filter'() {
-      if (this.isActive) {
-        this.reset()
-      }
-    },
-
   },
 
   methods: {
@@ -316,8 +316,8 @@ export default {
         seed: this.seed,
       }
 
-      if (this.$route.query.filter) {
-        params.filter = this.$route.query.filter
+      if (this.filter) {
+        params.filter = this.filter
       }
 
       return this.$axios.get(this.url, { params })
@@ -344,9 +344,9 @@ export default {
     },
 
     refreshPageTitle () {
-      if (this.$route.query.filter) {
+      if (this.filter) {
         this.pageTitle = this.$t('works.searchKeyword');
-        this.searchMetas = [this.$route.query.filter];
+        this.searchMetas = [this.filter];
       } else {
         this.pageTitle = this.$t('works.allWorks')
         this.searchMetas = [];
@@ -358,7 +358,7 @@ export default {
       this.stopLoad = true
       this.refreshPageTitle()
       this.pagination = { currentPage:0, pageSize:12, totalCount:0 }
-      this._lastUrl = this.url
+      this._lastFilter = this.filter
       window.scrollTo(0, 0)
       this.requestWorksQueue()
         .then(() => {
