@@ -28,12 +28,13 @@
  * a per-work tool, not a batch job. Loop it from a shell if you really want to.
  *
  * Usage:
- *   node scripts/extract-track-titles.js RJ01234567 --dry-run  # inspect only
+ *   node scripts/extract-track-titles.js RJ01234567 --dry-run  # inspect, then confirm
  *   node scripts/extract-track-titles.js 01234567              # same work, bare id
  *   node scripts/extract-track-titles.js d215444 --force       # overwrite existing
  */
 
 const path = require('path');
+const readline = require('readline/promises');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 
@@ -48,7 +49,7 @@ const argv = yargs(hideBin(process.argv))
     type: 'string',
     description: "Work id: RJ01234567, 01234567, or Fanza d215444",
   }))
-  .option('dry-run', { type: 'boolean', description: 'Print, do not write' })
+  .option('dry-run', { type: 'boolean', description: 'Print, then ask before writing' })
   .option('force', { type: 'boolean', description: 'Overwrite titles this work already has' })
   .demandCommand(0)
   .strict()
@@ -292,14 +293,21 @@ function validate(parsed, haystack, fileNames) {
       rejected.push([row.file, title, 'not verbatim in description']);
       continue;
     }
-    if (Object.values(accepted).includes(title)) {
-      rejected.push([row.file, title, 'duplicate title']);
-      continue;
-    }
     accepted[row.file] = title;
   }
 
   return { accepted, rejected };
+}
+
+// Without a terminal there is no one to answer, so a piped run stays a dry run.
+async function confirm(question) {
+  if (!process.stdin.isTTY) return false;
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return /^y(es)?$/i.test((await rl.question(question)).trim());
+  } finally {
+    rl.close();
+  }
 }
 
 async function run() {
@@ -382,8 +390,9 @@ async function run() {
     return;
   }
 
-  if (argv.dryRun) {
-    console.log(`  dry run, not written (${Object.keys(accepted).length} titles)`);
+  const count = Object.keys(accepted).length;
+  if (argv.dryRun && !(await confirm(`  write ${count} titles? [y/N] `))) {
+    console.log(`  dry run, not written (${count} titles)`);
     return;
   }
 
