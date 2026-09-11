@@ -29,7 +29,7 @@ export default function (/* { store, ssrContext } */) {
       if (to.hash && typeof document !== 'undefined' && document.querySelector(to.hash)) {
         return { el: to.hash }
       }
-      return { x: 0, y: 0 }
+      return { top: 0 }
     },
     routes,
 
