@@ -37,13 +37,8 @@
  * passed: existing t_track_progress keys, t_play_history rows and non-empty
  * review fields are left alone, so the import is safe to re-run.
  *
- * No scan is required first. track_key is the file's CRC32, which the scanner
- * caches in t_work.memo.contentHash; where that cache is cold the import reads
- * the file and computes it (see resolveHash). Only the tracks the import
- * touches are read -- the legacy rows' own tracks, plus the rest of the folder
- * the play-history queue is built from -- so the cost tracks what the user
- * listened to, not the size of the library. On a cold library expect the run to
- * be I/O-bound rather than instant.
+ * No scan is required first, and no audio file is read: track_key is the
+ * work-relative path, which comes straight off the directory listing.
  *
  * Usage:
  *   node ./scripts/import-legacy-history.js ../old_sqlite/db.sqlite3 --dry-run
@@ -56,7 +51,7 @@ const path = require('path');
 const Knex = require('knex');
 const db = require(path.join(__dirname, '..', 'database', 'db'));
 const { config } = require(path.join(__dirname, '..', 'config'));
-const { getTrackList, getContentHash, formatID } = require(path.join(__dirname, '..', 'filesystem', 'utils'));
+const { getTrackList, formatID } = require(path.join(__dirname, '..', 'filesystem', 'utils'));
 
 // Same threshold the player uses to call a track finished.
 const COMPLETE_RATIO = 0.95;
@@ -88,45 +83,13 @@ const toCanonicalId = (oldId) => formatID(parseInt(String(oldId), 10));
  * from trackId, and a present-but-default value shadows the offline-copy
  * branch in AudioElement.
  */
-const toQueueItem = (track, contentHash, workTitle) => ({
+const toQueueItem = (track, workTitle) => ({
   trackId: track.trackId,
-  contentHash,
   title: track.title,
   duration: track.duration,
   workTitle,
 });
 
-/**
- * CRC32 of a track's file, which is what t_track_progress.track_key holds.
- *
- * The scanner warms these into t_work.memo.contentHash, but this import must
- * work on a library that has not been rescanned since -- so an absent memo
- * entry means "compute it", not "skip the work". Only tracks the import
- * actually touches get read, so the cost scales with what the user listened to
- * rather than with the library.
- *
- * The path is reconstructed the way routes/media.js and backfill-progress.js
- * do it; getTrackList drops fullPath from the objects it returns.
- * Results are cached per run: an SE-on/SE-off pair and a track matched by two
- * legacy rows would otherwise be read twice.
- */
-async function resolveHash(track, workDir, cache, summary, log) {
-  if (track.contentHash) return track.contentHash;
-
-  const fullPath = path.join(workDir, track.subtitle || '', track.title);
-  if (cache.has(fullPath)) return cache.get(fullPath);
-
-  let hash = null;
-  try {
-    hash = await getContentHash(fullPath);
-    summary.hashesComputed++;
-  } catch (err) {
-    summary.hashFailed++;
-    log(`  [HASH] cannot read ${fullPath}: ${err.message}`);
-  }
-  cache.set(fullPath, hash);
-  return hash;
-}
 
 /**
  * Resolve one old history row to the current track(s) it refers to.
@@ -178,16 +141,11 @@ async function runImport({
   const summary = {
     historyRows: 0, matchedRows: 0, unmatchedRows: 0,
     worksTotal: 0, worksMissing: 0, worksNoDir: 0, worksFailed: 0,
-    hashesComputed: 0, hashFailed: 0,
     progressWritten: 0, progressSkipped: 0,
     playHistoryWritten: 0, playHistorySkipped: 0,
     reviewsWritten: 0, reviewsSkipped: 0,
     dryRun,
   };
-
-  // Keyed by absolute path, so the two mixes of one track and a track matched
-  // by several legacy rows are each read at most once.
-  const hashCache = new Map();
 
   try {
     log(`[import-legacy-history] Reading ${oldDbPath}${dryRun ? ' (DRY RUN)' : ''}`);
@@ -270,12 +228,10 @@ async function runImport({
         anchorRow = row;
 
         for (const track of matched) {
-          const contentHash = await resolveHash(track, workDir, hashCache, summary, log);
-          if (!contentHash) {
-            summary.progressSkipped++;
-            continue;
-          }
-          const key = `${user}\u0000${workId}\u0000${contentHash}`;
+          // track_key is the work-relative path, which getTrackList already
+          // produced -- no file is read to import a row.
+          const relPath = track.shortFilePath;
+          const key = `${user}\u0000${workId}\u0000${relPath}`;
           if (existingProgress.has(key) && !overwrite) {
             summary.progressSkipped++;
             continue;
@@ -286,7 +242,7 @@ async function runImport({
           if (dryRun) {
             log(`  [P-DRY] ${user} / ${workId} / ${track.title} -> ${row.play_time}s${completed ? ' (completed)' : ''}`);
           } else {
-            await dbApi.upsertTrackProgress(user, workId, contentHash, row.play_time, completed);
+            await dbApi.upsertTrackProgress(user, workId, relPath, row.play_time, completed);
             existingProgress.add(key);
           }
           summary.progressWritten++;
@@ -301,14 +257,12 @@ async function runImport({
         continue;
       }
 
-      // The queue must carry content hashes: the resume-from-history path
-      // never refetches the tree, so a queue persisted without them can never
-      // report per-track progress again (backend/AGENTS.md 6, "Tracks
-      // response"). That means hashing the anchor's whole folder, not just the
-      // tracks the legacy rows named.
+      // The whole folder, not just the tracks the legacy rows named: the queue
+      // is what the player advances through, and the resume-from-history path
+      // never refetches the tree.
       const queue = [];
       for (const t of tracks.filter(t => t.subtitle === anchor.subtitle)) {
-        queue.push(toQueueItem(t, await resolveHash(t, workDir, hashCache, summary, log), work.title));
+        queue.push(toQueueItem(t, work.title));
       }
       const index = queue.findIndex(q => q.trackId === anchor.trackId);
       if (index === -1) {
@@ -385,7 +339,6 @@ async function runImport({
     log(`    not in library:        ${summary.worksMissing}`);
     log(`    root folder missing:   ${summary.worksNoDir}`);
     log(`    unreadable on disk:    ${summary.worksFailed}`);
-    log(`  Hashes computed:         ${summary.hashesComputed} (${summary.hashFailed} unreadable)`);
     log(`  t_track_progress rows:   ${summary.progressWritten} written, ${summary.progressSkipped} skipped`);
     log(`  t_play_history rows:     ${summary.playHistoryWritten} written, ${summary.playHistorySkipped} skipped`);
     log(`  t_review rows:           ${summary.reviewsWritten} written, ${summary.reviewsSkipped} skipped`);

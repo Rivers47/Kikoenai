@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { param, query, body } = require('express-validator');
 const db = require('../database/db');
-const { getTrackList, toTree, scrapeWorkHashes } = require('../filesystem/utils');
+const { getTrackList, toTree } = require('../filesystem/utils');
 const { config } = require('../config');
 const normalize = require('./utils/normalize');
 const { isValidRequest, workIdParam } = require('./utils/validate');
@@ -155,15 +155,7 @@ router.get('/tracks/:id',
       if (rootFolder) {
         try {
           const workDir = path.join(rootFolder.path, work.dir);
-          // Compute (and cache) content hashes before building the tree, so the
-          // response always carries a complete contentHash per audio node.
-          const { memo, changed, files } = await scrapeWorkHashes(work_id, workDir, JSON.parse(work.memo));
-          if (changed) {
-            await db.setWorkMemo(work_id, memo);
-          }
-          // Hand over the already-walked file list so getTrackList doesn't
-          // re-read the same directory.
-          const tracks = await getTrackList(work_id, workDir, memo, files);
+          const tracks = await getTrackList(work_id, workDir, JSON.parse(work.memo || '{}'));
           const tree = toTree(tracks, work.title, work.dir, rootFolder);
           // Bundle per-track progress for the requesting user
           const username = config.auth ? req.user.name : 'admin';

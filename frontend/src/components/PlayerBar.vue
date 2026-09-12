@@ -92,12 +92,12 @@ export default {
   },
   computed: {
     samCoverUrl () {
-      const id = this.currentPlayingFile.trackId || this.currentPlayingFile.hash
+      const id = this.currentPlayingFile.trackId
       return id ? apiUrl(`/api/cover/${id.split('/')[0]}?type=sam`) : ""
     },
 
     showPlayBar () {
-      return (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) && this.hide;
+      return this.currentPlayingFile.trackId && this.hide;
     },
 
     playingIcon () {

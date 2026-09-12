@@ -257,7 +257,7 @@
               </q-item-section>
 
               <q-item-section avatar>
-                <q-img transition="fade" :src="samCoverUrl(track.trackId || track.hash)" style="height: 38px; width: 38px" class="rounded-borders" />
+                <q-img transition="fade" :src="samCoverUrl(track.trackId)" style="height: 38px; width: 38px" class="rounded-borders" />
               </q-item-section>
 
               <q-item-section>
@@ -425,7 +425,7 @@ export default {
 
   computed: {
     showAudioPlayer () {
-      return (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) && !this.hide;
+      return this.currentPlayingFile.trackId && !this.hide;
     },
 
     isFullScreenPage () {
@@ -447,7 +447,7 @@ export default {
     },
 
     workDetailUrl () {
-      const id = this.currentPlayingFile.trackId || this.currentPlayingFile.hash
+      const id = this.currentPlayingFile.trackId
       return id ? `/work/${id.split('/')[0]}` : ""
     },
 
@@ -673,7 +673,7 @@ export default {
       if (ha.state.index != hb.state.index) return false;
       if (ha.state.queue.length != hb.state.queue.length) return false;
       for (let i = 0; i < ha.state.queue.length; ++i) {
-        if ((ha.state.queue[i].trackId || ha.state.queue[i].hash) != (hb.state.queue[i].trackId || hb.state.queue[i].hash)) return false;
+        if (ha.state.queue[i].trackId != hb.state.queue[i].trackId) return false;
       }
       return true;
     },
@@ -712,15 +712,14 @@ export default {
     // Fire-and-forget per-track progress on page hide (Phase 2)
     _flushTrackProgressOnHide () {
       const file = this.queueCopy[this.queueIndex]
-      if (!file || !file.contentHash || this.playWorkId === 0) return
+      if (!file || !file.trackId || this.playWorkId === 0) return
       const seconds = this.currentTime
       const duration = file.duration
       const completed = duration > 0 && seconds >= 0.95 * duration
-      fetch(apiUrl(`/api/track-progress/${this.playWorkId}`), {
+      fetch(apiUrl(`/api/track-progress/${file.trackId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contentHash: file.contentHash,
           seconds: Math.round(seconds * 100) / 100,
           completed: completed
         }),
@@ -767,12 +766,11 @@ export default {
 
     _reportTrackProgressOnUpdate () {
       const file = this.queueCopy[this.queueIndex]
-      if (!file || !file.contentHash || this.playWorkId === 0) return
+      if (!file || !file.trackId || this.playWorkId === 0) return
       const seconds = this.currentTime
       const duration = file.duration
       const completed = duration > 0 && seconds >= 0.95 * duration
-      this.$axios.put(`/api/track-progress/${this.playWorkId}`, {
-        contentHash: file.contentHash,
+      this.$axios.put(`/api/track-progress/${file.trackId}`, {
         seconds: Math.round(seconds * 100) / 100,
         completed: completed
       }).catch((err) => {

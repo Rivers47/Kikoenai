@@ -44,15 +44,15 @@ describe('play history seconds come from t_track_progress', () => {
     ]);
     await knex('t_play_history').insert([
       // seconds here is the stale value history last wrote
-      { user_name: 'admin', work_id: '000001', state: JSON.stringify({ queue: [{ contentHash: 'aaa' }], index: 0, seconds: 12 }) },
-      // no contentHash on the queue item -> nothing to look up, keep stored value
+      { user_name: 'admin', work_id: '000001', state: JSON.stringify({ queue: [{ trackId: '000001/01 intro.mp3' }], index: 0, seconds: 12 }) },
+      // legacy positional handle -> no relPath to look up, keep stored value
       { user_name: 'admin', work_id: '000002', state: JSON.stringify({ queue: [{ trackId: '000002/0' }], index: 0, seconds: 34 }) },
-      // same track_key as 000001 (byte-identical file), own position
-      { user_name: 'admin', work_id: '000003', state: JSON.stringify({ queue: [{ contentHash: 'aaa' }], index: 0, seconds: 56 }) },
+      // same relPath as 000001 (an identically named file), own position
+      { user_name: 'admin', work_id: '000003', state: JSON.stringify({ queue: [{ trackId: '000003/01 intro.mp3' }], index: 0, seconds: 56 }) },
     ]);
     await knex('t_track_progress').insert([
-      { user_name: 'admin', work_id: '000001', track_key: 'aaa', seconds: 999, completed: 0 },
-      { user_name: 'admin', work_id: '000003', track_key: 'aaa', seconds: 111, completed: 0 },
+      { user_name: 'admin', work_id: '000001', track_key: '01 intro.mp3', seconds: 999, completed: 0 },
+      { user_name: 'admin', work_id: '000003', track_key: '01 intro.mp3', seconds: 111, completed: 0 },
     ]);
 
     queries = makeQueries(knex);
@@ -72,7 +72,7 @@ describe('play history seconds come from t_track_progress', () => {
     expect(JSON.parse(works.find(w => w.id === '000003').state).seconds).to.equal(111);
   });
 
-  it('keeps the stored seconds when the queue item has no contentHash', async () => {
+  it('keeps the stored seconds when the queue item still has a legacy handle', async () => {
     const { works } = await queries.getPlayHistory({ username: 'admin', excludeFinished: 'all' });
     const legacy = works.find(w => w.id === '000002');
     expect(JSON.parse(legacy.state).seconds).to.equal(34);

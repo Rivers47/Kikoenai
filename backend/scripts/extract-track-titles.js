@@ -432,7 +432,7 @@ async function run() {
     return;
   }
 
-  // Key by relPath, matching memo.duration and memo.contentHash.
+  // Key by relPath, matching memo.duration and memo.mtime.
   const byRelPath = {};
   for (const t of audio) {
     if (accepted[t.title]) byRelPath[t.shortFilePath] = accepted[t.title];

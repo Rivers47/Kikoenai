@@ -272,7 +272,7 @@ All routes mounted under `/api`:
 | `metadata.js` | `/api/*` | List works, search, sort, filter; work metadata, tracks, covers, images; label lists; `PUT /api/work/:id` admin metadata edit |
 | `review.js` | `/api/review/*` | Create/update/delete reviews, ratings, progress |
 | `play_history.js` | `/api/history/*` | Save/load playback state |
-| `track_progress.js` | `/api/track-progress/*` | Per-track playback progress (CRC32 content-hashed) |
+| `track_progress.js` | `/api/track-progress/*` | Per-track playback position, keyed by relPath |
 
 > **Route note:** the label-list routes (`/api/circles`, `/api/tags`, `/api/vas`, `/api/illustrators`, `/api/script_writers`, `/api/series`) are registered as **literal-path loops** over a `FIELDS` array in `metadata.js` (a `for...of` loop registering one `router.get` per field), with the segment coming from `ROUTE_SEGMENT(field)` — `${field}s` for all but `series`, which is already plural. Express 5 (path-to-regexp v8) no longer supports regex char-classes in route strings, so the old `/:field(circle|tag|va|...|series)s/...` single-regex-route form was replaced. Each handler receives its `field` via closure.
 
@@ -313,17 +313,17 @@ match, which are orphaned and why, and whether each one parses — run
 
 ### 2.9a Writing `t_work.memo`
 
-`setWorkMemo` replaces the **whole** JSON column, so anything that builds a memo must spread the old one first. The keys are written by different producers and none of them knows about the others: `duration`/`mtime`/`isContainLyric` by `scrapeWorkMemo` (scan and `POST /api/scan/:id`), `contentHash` by `scrapeWorkHashes` (`GET /api/tracks/:id`), `trackTitles` by `scripts/extract-track-titles.js`. `scrapeWorkMemo` used to start from a bare `{ duration, isContainLyric, mtime }`, so every rescan silently wiped the hashes and the extracted track titles.
+`setWorkMemo` replaces the **whole** JSON column, so anything that builds a memo must spread the old one first. The keys are written by different producers and none of them knows about the others: `duration`/`mtime`/`isContainLyric` by `scrapeWorkMemo` (scan and `POST /api/scan/:id`), `trackTitles` by `scripts/extract-track-titles.js`. `scrapeWorkMemo` used to start from a bare `{ duration, isContainLyric, mtime }`, so every rescan silently wiped the extracted track titles.
 
-The scanner warms `contentHash` so `GET /api/tracks/:id` rarely has to compute it: `scanWork` (new folders) and `scanWorkFile` (the "Scan file changes" pass, `PERFORM_LYRIC_SCAN`) both chain `scrapeWorkHashes` after `scrapeWorkMemo` and write once. **The order is load-bearing** — `scrapeWorkMemo` rewrites mtimes and drops the hashes of changed files, so hashing first would throw the fresh hashes away. Scans run in a forked child process (`socket.js`), so the cost lands off the request path. `POST /api/scan/:id` deliberately does *not* hash: it only invalidates changed files, leaving the next tree build to re-hash those few, so the button stays fast.
+**Every memo map is keyed by relPath, and so is everything else.** `duration`, `mtime` and `trackTitles` all use it, `trackId` is `${workId}/${relPath}`, and `t_track_progress.track_key` holds the relPath alone. Both places that build a relPath — `getTrackList` and `scrapeWorkMemo` — normalize the platform separator to `/`; **change one and you must change the other**, or a Windows server writes memo keys the track list cannot look up.
 
-One coupling to keep in mind when touching either function: `scrapeWorkHashes` invalidates a cached hash by comparing `memo.mtime[relPath]`. A rescan rewrites those mtimes, so it must also drop the `contentHash` of any file whose mtime actually changed — otherwise the fresh mtime makes a stale hash look valid forever. It must *not* drop hashes for the other reasons that branch fires (a missing duration, e.g. from a failed ffprobe), or every rescan would force a full re-read of the work.
+> **Removed: the content hash.** `memo.contentHash` held a CRC32 per file and `t_track_progress` was keyed by it, on the theory that a rename should not lose a position. It was deleted in migration `20260912000000` because it never bought that: its own cache was invalidated by mtime, so a content change that preserved mtime left a stale hash forever — the hash inherited mtime's trust level while costing a full read of every audio byte on the first open of a work. It also made *global* content identity a liability rather than a feature, since reused SE/BGM/trial tracks are byte-identical across works and one work's position could overwrite another's (which is why the progress lookup is compound `(work_id, track_key)` — still necessary, as two works can share a relPath too). Deleting it removed `scrapeWorkHashes`, a load-bearing ordering constraint between it and `scrapeWorkMemo`, and the hash-warming passes in `scanWork`/`scanWorkFile` (`filesystem/scannerModules.js`). The accepted trade-off is that renaming or moving a file loses that track's position; `memo.trackTitles` already exists so display names need no renaming on disk. `scripts/rekey-track-progress.js` is the opt-in recovery tool for rows the migration could not convert, and is the only place CRC32 still lives.
 
 ### 2.9b Track Titles (`memo.trackTitles`)
 
-Works whose audio files are named `01.mp3` / `#2.wav` show only the filename. `t_work.memo.trackTitles` maps **relPath → display name**, exactly like `memo.duration` and `memo.contentHash`:
+Works whose audio files are named `01.mp3` / `#2.wav` show only the filename. `t_work.memo.trackTitles` maps **relPath → display name**, exactly like `memo.duration` and `memo.mtime`:
 
-- `getTrackList` (`filesystem/utils.js`) merges it onto audio files as **`trackTitle`**, next to the existing duration/contentHash merges. `toTree` carries it onto the audio node.
+- `getTrackList` (`filesystem/utils.js`) merges it onto audio files as **`trackTitle`**, next to the existing duration merge. `toTree` carries it onto the audio node.
 - **`trackTitle` is a separate field, never a replacement for `title`.** `title` is the real filename and `toTree` builds the offload stream/download URLs from it — overwriting it breaks playback.
 - Frontend renders `item.trackTitle || item.title`, with the filename demoted to a caption when a title exists (`WorkTree.vue`).
 - No migration, no new route: `memo` is already JSON and `GET /api/tracks/:id` already selects it.
@@ -459,6 +459,11 @@ node filesystem/updater.js --author         # 作者 only
 node filesystem/updater.js --description    # description + image list, no downloads
 node filesystem/updater.js --images         # implies --description, then downloads the images
 node filesystem/updater.js --reviews        # re-scrape every DLsite user review
+
+# One-off recovery after migration 20260912000000 (relPath track keys). Opt-in
+# because it reads every audio file of the affected works -- the cost that
+# migration removed from the request path. --purge discards instead.
+node ./scripts/rekey-track-progress.js --dry-run
 ```
 
 > **Packaging:** the deprecated `pkg` single-executable path has been removed. A
@@ -516,7 +521,7 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 | `/api/history` | GET | Works the user has playback history for. Query `excludeFinished` (`all`\|`listened`, default `listened`): when `listened`, excludes rows where `t_review.progress='listened'`. Items carry a nullable `progress` |
 | `/api/history/:id` | PUT | Save playback state. Body `{state}` (the serialized queue + index; carries no position) |
 | `/api/history/:id` | DELETE | Delete this work's playback history |
-| `/api/track-progress/:id` | PUT | Report per-track position. Body `{contentHash, seconds, completed}`. Upserts `t_track_progress` keyed by contentHash directly — no file read |
+| `/api/track-progress/:id/*path` | PUT | Report per-track position. Body `{seconds, completed}`. The track is addressed exactly as the media routes address it, so the client posts to `/api/track-progress/${trackId}` and carries no second identifier. The path is resolved against the work's track list, so a path that is not a file of this work is a 404 rather than a row keyed by junk |
 | `/api/review` | GET | Works the user has reviewed/rated/progress-marked. Query `filter` (one of the five progress values) |
 | `/api/review/:id` | PUT | Create/update review, rating, or progress. Query `starOnly`, `progressOnly`, `autoMark`. With `progressOnly=true&autoMark=true` it only writes `progress='listened'` when existing progress is null/empty/marked/listening; no-op on listened/replay/postponed |
 | `/api/review/:id` | DELETE | Delete the whole review row (rating + review_text + progress) |
@@ -526,11 +531,46 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/media/stream/:id/:index` | GET | Stream one file (Range supported). Redirects to the reverse proxy when `config.offloadMedia` is on, except `.txt`/`.lrc`, which Express serves itself for `jschardet` charset detection |
-| `/api/media/download/:id/:index` | GET | Same file as an attachment |
-| `/api/media/check-lrc/:id/:index` | GET | Lyric sidecars for a track → `{result, message, lyrics: [{trackId, lyricExtension}]}`, one entry per speaker — see §2.8b |
+| `/api/media/stream/:id/*path` | GET | Stream one file (Range supported). Redirects to the reverse proxy when `config.offloadMedia` is on, except `.txt`/`.lrc`, which Express serves itself for `jschardet` charset detection |
+| `/api/media/download/:id/*path` | GET | Same file as an attachment |
+| `/api/media/check-lrc/:id/*path` | GET | Lyric sidecars for a track → `{result, message, lyrics: [{trackId, lyricExtension}]}`, one entry per speaker — see §2.8b |
 
-> **`:index` is positional** — the offset into the work's sorted, filtered file list (`getTrackList`), which includes text, image and pdf files, not just audio. Adding or removing *any* file in a work renumbers everything after it, which silently repoints stored history queues at the wrong file; `DELETE /api/history/:id` exists because of it. Inherited from upstream, where the same value was misleadingly called `hash`.
+> **`*path` is the work-relative path, and it is the file's one identity.** A
+> `trackId` is `${workId}/${relPath}`, so the same value identifies a file,
+> addresses it in every media URL, and keys its `t_track_progress` row — the
+> client needs no second field. Express 5 hands a `*path` back as an array of
+> already-decoded segments, so `relPath = req.params.path.join('/')`.
+>
+> `routes/utils/track.js` (`resolveTrack`) is the single resolver for all four
+> routes. It matches the joined path against `getTrackList`'s `shortFilePath`,
+> i.e. against a directory walk the server did itself — **caller input is never
+> joined onto a path**, so traversal cannot escape the work folder. A miss is a
+> 404. `shortFilePath` is normalized to forward slashes at the one place it is
+> built, so a Windows server keys a file the same way a Linux one does.
+>
+> **One deliberate legacy branch:** a single path segment of pure digits is read
+> as the old positional index. That handle is what play-history queues written
+> before migration `20260912000000` still carry, and stored user data cannot be
+> refetched the way a client cache can — 71% of rows in the author's database
+> were older than per-track progress and would otherwise have stopped playing.
+> It is unambiguous because a tracked file always carries a supported extension
+> and so always contains a `.`.
+>
+> **Do not expect these rows to age out.** A stored queue is only rewritten in
+> the new form when it is rebuilt from the tree, which happens in `WorkTree.vue`
+> via `toQueueItem` — i.e. when the user plays from the work page. Resuming from
+> Recent Works or Favourites hands the *stored* queue to `SET_QUEUE` and
+> `PUT /api/history/:id` persists it back unchanged, so a work that is only ever
+> resumed keeps its legacy handles forever. Retiring this branch therefore needs
+> a deliberate one-off normalizer that resolves each legacy handle against the
+> work's file list (the same index → relPath step `resolveRelPath` in
+> `scripts/backfill-progress.js` already does), not the passage of time.
+>
+> The index it replaces was an offset into the work's sorted, filtered file list,
+> which includes text, image and pdf files. Adding a lyric sidecar renumbered
+> every later track and silently repointed stored queues at the wrong file;
+> `DELETE /api/history/:id` exists because of it. Inherited from upstream, where
+> the same value was misleadingly called `hash`.
 
 ### Config & version
 
@@ -541,7 +581,20 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 | `/api/config/admin` | PUT | Write config; `production`/`md5secret`/`jwtsecret` are never writable (admin only) |
 | `/api/version` | GET | `{current, lockFileExists, lockReason}`. Local only — no GitHub call |
 
-> **Tracks response:** `GET /api/tracks/:id` returns `{ tree, trackProgress }` instead of a bare array. It is the only endpoint that reads audio file bytes: it computes any missing content hashes (CRC32 via zlib, mtime-invalidated, cached in `t_work.memo.contentHash`) **before** building the tree, so every audio node's `contentHash` is populated in the response. The first open of a work therefore streams its audio once; every later open is cache-hit and reads no bytes. A file that cannot be read is logged and left without a hash rather than failing the request. Audio nodes carry `trackId` (the `:id/:index` file handle, was `hash`), `contentHash` and `relPath` (relative path from work root); text/image/pdf nodes carry only `trackId`. `trackProgress` is a `{contentHash: {seconds, completed}}` map. **Superseded:** hashing was briefly split into a separate `GET /api/work/:id/memo` that the frontend merged in afterwards. The gap between the two responses let a queue be committed — and persisted to `t_play_history` — without hashes, which permanently silenced per-track progress for that row, since the resume-from-history path never refetches the tree. The endpoint is gone.
+> **Tracks response:** `GET /api/tracks/:id` returns `{ tree, trackProgress }`
+> instead of a bare array. Every node carries `trackId` (`${workId}/${relPath}`)
+> and `relPath` — text, image and pdf nodes too, since the path is the identity
+> rather than a debugging extra. `trackProgress` is a
+> `{trackId: {seconds, completed}}` map, keyed by the same handle the nodes carry,
+> so a progress badge needs no second lookup key. **It reads no audio bytes.**
+> **Superseded twice, both worth knowing:** hashing was briefly split into a
+> separate `GET /api/work/:id/memo` that the frontend merged in afterwards, and
+> the gap let a queue be committed — and persisted to `t_play_history` — before
+> the hashes arrived, permanently silencing per-track progress for that row since
+> the resume-from-history path never refetches the tree. That was fixed by
+> hashing inline here, which made the first open of a work read every audio byte
+> (450MB+ for a wav-heavy work). Both problems were the content hash being used
+> as identity; see §2.9a.
 
 > **Note:** Library scanning is **not** a REST endpoint. The frontend triggers it over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN`) and listens for the `SCAN_*` events (§7). `POST /api/scan/:id` is unrelated — it re-reads one work's files, it does not scrape.
 
@@ -608,6 +661,9 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
   - `work-id.js` — id canonicalization (Fanza + DLsite books), `workno` spelling, cover/image file naming, `getFolderList` work-code detection, and migration `20260828000000` up/down
   - `description-html.js` — `looksLikeHtml`, and the sanitizer allowlist: tag/attribute filtering, script removal, unknown-tag unwrapping, colour stripping, image rewriting (incl. `basePath`) and link handling
   - `work-images.js` — `collectWorkImages` ordering/dedup, the `deleteWorkImagesFromDisk` wipe **and** its `keep`-set prune (against a real temp folder), and what `workImageFileNamePattern` will and will not match
+  - `track-identity.js` — relPath as the one file identity: `trackId` construction, non-ASCII and subdirectory paths, forward-slash normalization, `relPath` on every node type, the legacy positional-index branch, migration `20260912000000`, and `scripts/rekey-track-progress.js` (the only place CRC32 survives)
+  - `work-memo.js` — `scrapeWorkMemo` mtime/duration caching, `trackTitles` preservation across a rescan, and that its keys match `getTrackList`'s
+  - `history-seconds.js` — `applyTrackProgressSeconds` overriding stale history positions, and the compound `(work_id, track_key)` lookup that keeps two works with an identically named file apart
   - `benchmark.js` — DB query benchmark; Skips if `backend/sqlite/db.sqlite3` is missing/empty;
 - **Run:** `npm test` (sets `NODE_ENV=test`)
 

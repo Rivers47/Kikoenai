@@ -118,7 +118,7 @@ export default {
         index: work.state.index,
         resetPlaying: false,
         resumeHistorySeconds: work.state.seconds,
-        workLastTrackId: work.state.queue.length ? (work.state.queue[work.state.queue.length - 1].trackId || work.state.queue[work.state.queue.length - 1].hash) : ''
+        workLastTrackId: work.state.queue.length ? work.state.queue[work.state.queue.length - 1].trackId : ''
       })
       console.log(`resume seconds = ${work.state.seconds}`)
     }

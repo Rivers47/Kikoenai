@@ -118,10 +118,9 @@ export default {
         const response = await this.$axios.get(`/api/tracks/${this.workid}`);
         this.tree = response.data.tree || response.data;
         this.trackProgress = response.data.trackProgress || {};
-        // The tree arrives with contentHash already on every audio node, so
-        // progress badges paint on first render and any queue committed from
-        // here carries its hashes. The first open of a work is slower for it
-        // (the backend hashes the audio once, then caches by mtime).
+        // trackProgress is keyed by trackId, the same handle every node and
+        // queue item carries, so progress badges paint on first render with no
+        // second lookup key.
       } catch (error) {
         if (error.response) {
           // 请求已发出，但服务器响应的状态码不在 2xx 范围内
@@ -156,11 +155,9 @@ export default {
     resumeMetadataPlayHistory() {
       // Position comes from state.seconds, which GET /api/work/:id resolved
       // from t_track_progress -- the same value the "played to" line shows.
-      // Not this.trackProgress: it is keyed by the parked queue item's
-      // contentHash, which history rows written before per-track progress do
-      // not carry, and it only arrives with GET /api/tracks/:id, which lists
-      // the work directory and so resolves after the metadata request that
-      // renders this button. Either way the lookup missed and resumed at 0.
+      // Not this.trackProgress: it only arrives with GET /api/tracks/:id, which
+      // lists the work directory and so resolves after the metadata request
+      // that renders this button, so the lookup missed and resumed at 0.
       // -1 is the "nothing to resume" sentinel for rows with no position yet.
 
       // 以最小化形式打开播放器
@@ -172,7 +169,7 @@ export default {
         index: this.metadata.state.index,
         resetPlaying: false,
         resumeHistorySeconds: this.metadata.state.seconds ?? -1,
-        workLastTrackId: this.metadata.state.queue.length ? (this.metadata.state.queue[this.metadata.state.queue.length - 1].trackId || this.metadata.state.queue[this.metadata.state.queue.length - 1].hash) : ''
+        workLastTrackId: this.metadata.state.queue.length ? this.metadata.state.queue[this.metadata.state.queue.length - 1].trackId : ''
       })
     }
   }
