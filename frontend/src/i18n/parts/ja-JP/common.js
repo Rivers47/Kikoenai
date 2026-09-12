@@ -9,6 +9,8 @@ export default {
   add: '追加',
   refresh: '更新',
   search: '検索',
+  previous: '前へ',
+  next: '次へ',
   back: '戻る',
   retry: '再試行',
   loading: '読み込み中…',

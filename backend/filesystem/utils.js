@@ -494,6 +494,41 @@ const saveCoverImageToDisk = (stream, id, type) => new Promise((resolve, reject)
 });
 
 /**
+ * Collects every image a work page offers, in the order they should be
+ * numbered on disk: the sample slider first, then the ones embedded in the
+ * description blocks.
+ * @param {Object} metadata Scraped work metadata.
+ * @returns {Array<Object>} [{ kind, url, thumb, width, height }]
+ */
+function collectWorkImages(metadata) {
+  const images = [];
+  const seen = new Set();
+
+  const push = (kind, image) => {
+    if (!image || !image.url || seen.has(image.url)) return;
+    seen.add(image.url);
+    images.push({
+      kind,
+      url: image.url,
+      thumb: image.thumb || null,
+      width: image.width || null,
+      height: image.height || null,
+    });
+  };
+
+  for (const sample of metadata.sampleImages || []) {
+    push('smp', sample);
+  }
+  for (const part of metadata.descriptionParts || []) {
+    for (const url of part.images || []) {
+      push('part', { url });
+    }
+  }
+
+  return images;
+}
+
+/**
  * Generate the on-disk filename for one scraped work image.
  *
  * Named by position rather than by the remote basename: description images
@@ -509,6 +544,17 @@ function workImageFileName(id, kind, index, ext = 'jpg') {
   const safeExt = /^[a-z0-9]{1,5}$/i.test(ext) ? ext.toLowerCase() : 'jpg';
   const prefix = workno(id);
   return `${prefix}_img_${kind}${index}.${safeExt}`;
+}
+
+/**
+ * Matches every on-disk image name belonging to a work.
+ *
+ * @param {String} id Work id (e.g. '123456', '01134567', 'd215444').
+ * @returns {RegExp}
+ */
+function workImageFileNamePattern(id) {
+  const prefix = workno(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${prefix}_img_(smp|part)\\d+\\.[a-z0-9]+$`, 'i');
 }
 
 /**
@@ -529,35 +575,37 @@ const saveWorkImageToDisk = (stream, fileName) => new Promise((resolve, reject) 
 });
 
 /**
- * Deletes every scraped image belonging to a work.
+ * Deletes the scraped images belonging to a work.
  *
  * Matched by pattern rather than from the stored list, so images left behind
- * by an earlier scrape (a work whose sample count shrank) go too. The match is
- * deliberately narrow — a deployment that points imageFolderDir at the cover
- * folder must not lose its covers here.
+ * by an earlier scrape (a work whose sample count shrank, or whose images were
+ * renumbered when its description changed) go too.
  * @param {String} id Work id (e.g. '123456', '01134567', 'd215444').
+ * @param {Set<String>} [keep] File names to spare, for pruning after a download.
+ * @returns {Promise<Number>} How many files were deleted.
  */
-const deleteWorkImagesFromDisk = async (id) => {
-  const prefix = workno(id);
-  const pattern = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_img_(smp|part)\\d+\\.[a-z0-9]+$`, 'i');
+const deleteWorkImagesFromDisk = async (id, keep) => {
+  const pattern = workImageFileNamePattern(id);
 
   let entries;
   try {
     entries = await fs.promises.readdir(config.imageFolderDir);
   } catch (err) {
-    if (err.code === 'ENOENT') return; // no image folder yet, nothing to delete
+    if (err.code === 'ENOENT') return 0; // no image folder yet, nothing to delete
     throw err;
   }
 
-  await Promise.all(entries
-    .filter(name => pattern.test(name))
-    .map(async (name) => {
-      try {
-        await fs.promises.unlink(path.join(config.imageFolderDir, name));
-      } catch (err) {
-        if (err.code !== 'ENOENT') throw err;
-      }
-    }));
+  const doomed = entries.filter(name => pattern.test(name) && !(keep && keep.has(name)));
+
+  await Promise.all(doomed.map(async (name) => {
+    try {
+      await fs.promises.unlink(path.join(config.imageFolderDir, name));
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+  }));
+
+  return doomed.length;
 };
 
 /**
@@ -578,7 +626,9 @@ module.exports = {
   getFolderList,
   deleteCoverImageFromDisk,
   saveCoverImageToDisk,
+  collectWorkImages,
   workImageFileName,
+  workImageFileNamePattern,
   saveWorkImageToDisk,
   deleteWorkImagesFromDisk,
   formatID,

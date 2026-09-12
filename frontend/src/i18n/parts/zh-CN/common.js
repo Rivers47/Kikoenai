@@ -9,6 +9,8 @@ export default {
   add: '添加',
   refresh: '刷新',
   search: '搜索',
+  previous: '上一个',
+  next: '下一个',
   back: '返回',
   retry: '重试',
   loading: '加载中…',

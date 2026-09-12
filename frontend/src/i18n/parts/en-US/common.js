@@ -9,6 +9,8 @@ export default {
   add: 'Add',
   refresh: 'Refresh',
   search: 'Search',
+  previous: 'Previous',
+  next: 'Next',
   back: 'Back',
   retry: 'Retry',
   loading: 'Loading…',

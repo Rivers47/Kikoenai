@@ -509,6 +509,40 @@ describe('updateWorkMetadata refresh merge semantics', function () {
     const dlsiteLink = await db.knex('r_va_work').select('va_id').where({ va_id: dlsiteVaId, work_id: workId }).first();
     expect(dlsiteLink).to.not.be.undefined;
   });
+
+  it('11. Refresh keeps the `file` of images already downloaded', async function () {
+    const sliderUrl = 'https://img.dlsite.jp/work/RJ654321_img_smp1.jpg';
+    const partUrl = 'https://img.dlsite.jp/parts/abcdef.jpg';
+    const newSliderUrl = 'https://img.dlsite.jp/work/RJ654321_img_smp2.jpg';
+
+    // What a --images run leaves behind: both kinds, each with its file.
+    await db.setWorkSampleImages(workId, [
+      { kind: 'smp', url: sliderUrl, file: 'RJ654321_img_smp1.jpg' },
+      { kind: 'part', url: partUrl, file: 'RJ654321_img_part1.jpg' },
+    ]);
+
+    // A scrape knows nothing about the download: no `file` anywhere, the
+    // description images live in descriptionParts, and the slider has grown.
+    await db.updateWorkMetadata({
+      id: workId,
+      title: 'DLsite标题',
+      circle: { id: null, name: origCircleName },
+      vas: [], illustrators: [], scriptWriters: [], series: null, tags: [],
+      description: '描述',
+      descriptionParts: [{ type: 'image', heading: '', text: '', images: [partUrl], tracks: [] }],
+      sampleImages: [{ url: sliderUrl }, { url: newSliderUrl }],
+    }, { refreshAll: true });
+
+    const { sampleImages } = await db.getWorkExtras(workId);
+    const byUrl = Object.fromEntries(sampleImages.map(image => [image.url, image]));
+
+    expect(byUrl[sliderUrl].file).to.equal('RJ654321_img_smp1.jpg');
+    // The description image is only in this list because the download put it
+    // there — a wholesale overwrite would drop it entirely.
+    expect(byUrl[partUrl].file).to.equal('RJ654321_img_part1.jpg');
+    // Newly scraped, never downloaded.
+    expect(byUrl[newSliderUrl].file).to.equal(null);
+  });
 });
 
 after('Tear down test database', async function () {

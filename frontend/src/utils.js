@@ -32,6 +32,17 @@ export function workno(id) {
   return `RJ${canonical}`;
 }
 
+/**
+ * Where to load one scraped work image from, '' when there is nothing to load.
+ *
+ * @param {String|Number} workid
+ * @param {Object} image Entry from t_work.sample_images: { url, file? }
+ * @returns {String}
+ */
+export function workImageUrl(workid, image) {
+  return (image && image.file) ? apiUrl(`/api/image/${workid}/${image.file}`) : ''
+}
+
 /** The DLsite work page for a work id, on the floor that actually serves it. */
 export function dlsiteWorkUrl(id) {
   const floor = isBooksId(id) ? 'books' : 'home';

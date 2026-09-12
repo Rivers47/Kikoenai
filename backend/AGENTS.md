@@ -340,7 +340,7 @@ Every precondition failure is loud and exits non-zero — unknown id, no scraped
 
 ### 2.9 Work-Page Extras (description, images, author, reviews)
 
-The DLsite scraper reads more than the `#work_outline` spec table. **None of this is exposed over `/api` or rendered by the frontend yet** — it is scaffolding for later features (LLM track-title/VA extraction, tag classification). Everything below is DLsite-only; `fanza.js` is unchanged and Fanza works get none of it.
+The DLsite scraper reads more than the `#work_outline` spec table. The description and the images are served by `GET /api/work/:id/extras` and `GET /api/image/:id/:name` and rendered on the work page (`WorkDescription.vue`, `WorkGallery.vue`); **the scraped DLsite reviews and `authors[]` are still unexposed** — scaffolding for later features. Everything below is DLsite-only; `fanza.js` is unchanged and Fanza works get none of it, so a Fanza work shows no description tab.
 
 **Scraped fields** (`scraper/dlsite.js`, returned on the metadata object):
 
@@ -363,7 +363,7 @@ The JSON fallback (`scrapeStaticWorkMetadataFromDLsiteJson`) fills the same fiel
 
 **Storage** — `db.getWorkExtras(id)`, `db.setWorkSampleImages(id, list)`, `db.replaceWorkDlsiteReviews(id, reviews)`, `db.getWorkDlsiteReviews(id)`. Reviews are **replaced**, not merged: DLsite lets reviewers edit and delete, and the rows carry no local state.
 
-**Images on disk** — `config.imageFolderDir` (default `images/`, sibling of `covers/`, with the same relative-path and `imageUseDefaultPath` handling). Named by position, not by remote basename: `RJ<id>_img_smp<N>.<ext>` for slider images and `RJ<id>_img_part<N>.<ext>` for images embedded in description blocks — description images are served under opaque hash names that collide across works. `deleteWorkImagesFromDisk` matches that exact pattern rather than a bare prefix, so pointing `imageFolderDir` at the cover folder cannot delete covers.
+**Images on disk** — `config.imageFolderDir` (default `images/`, sibling of `covers/`, with the same relative-path and `imageUseDefaultPath` handling). `collectWorkImages(metadata)` in `filesystem/utils.js` is the single source for *which* images a work has and *in what order* — slider first, then description images, deduplicated by url — shared by the downloader and by the refresh merge in `queries.js`. Named by position, not by remote basename: `RJ<id>_img_smp<N>.<ext>` for slider images and `RJ<id>_img_part<N>.<ext>` for images embedded in description blocks — description images are served under opaque hash names that collide across works. `deleteWorkImagesFromDisk(id, [keep])` matches that exact pattern rather than a bare prefix, so pointing `imageFolderDir` at the cover folder cannot delete covers; the optional `keep` set is what turns it into the post-download prune (below) instead of a full wipe.
 
 **`config.skipWorkExtras` (default `true`) switches off the two expensive halves** — the image downloads and the review scrape — on every **implicit** path: library scans, `refreshAll` (the Scanner page's update button), and `POST /api/refresh/:id`. Together they are what makes a scan expensive (N image downloads plus paginated review requests per work) and what gets it rate-limited by DLsite. It does **not** gate the explicit `updater.js --images` / `--reviews` flags — naming one on the command line is already opting in. A missing config key counts as "skip".
 
@@ -382,6 +382,13 @@ The JSON fallback (`scrapeStaticWorkMetadataFromDLsiteJson`) fills the same fiel
 ¹ Only when `config.skipWorkExtras` is `false`; it defaults to `true`, so out of the box no images are downloaded and no reviews fetched. The first two columns are unaffected by the switch.
 
 Downloads and review pagination cost extra requests per work, so they deliberately do **not** ride along with `refreshAll` — the UI's update button would otherwise turn into thousands of image fetches. `--refreshAll` still writes the image *list* (URLs, `file: null`); a later `--images` fills in the files.
+
+> **A refresh without a download merges the image list; a download overwrites it.** The two halves are separate writers and the order matters.
+>
+> 1. `updateWorkMetadata`'s `includeDescription || refreshAll` branch (`updater.js --refreshAll` / `--description`, the Scanner page's update button, `POST /api/refresh/:id`) rebuilds the list from `collectWorkImages(metadata)` and **carries the `file` of each already-downloaded image across by url**. It used to assign the scraped slider list wholesale, which dropped every `file` **and** every description-image entry — those only exist because the download added them. With `skipWorkExtras` on (the default) nothing re-downloads afterwards, so pressing "Refresh metadata" silently orphaned a work's images and blanked its gallery. Covered by test 11 in `test/edit-metadata.js`.
+> 2. When the download does run, `saveWorkImages` → `setWorkSampleImages` **replaces** the list right afterwards, so the merge above is invisible on that path: every image is re-fetched and renamed by position, and the fresh list is the truth.
+>
+> **The download also prunes.** File names are positional (`_img_part3`), so inserting or removing one image renumbers every image after it, and last run's copies stop being referenced by anything. `downloadWorkImages` ends by calling `deleteWorkImagesFromDisk(id, keep)` with the names *this run claimed* — including names whose fetch failed, since an older copy there is the best thing available to the next attempt — and deletes the rest. Without it, a work whose description keeps changing accumulates orphans nothing will ever serve or delete. The no-download refresh path never deletes anything: a url that vanishes from the description just leaves a file behind, which the next `--images` run prunes. Covered by `test/work-images.js`.
 
 > **Two different refresh paths, don't confuse them.** `PERFORM_UPDATE` (Scanner page button → `socket.js` → forks `updater.js --refreshAll`) iterates **every** row of `t_work` and skips the network-heavy extras. `POST /api/refresh/:id` (`WorkDetails.vue`) refreshes **one** user-initiated work and does everything, including image download and review scraping. It calls `db.updateWorkMetadata` directly and never touches `scannerModules`, so the `includeImages`/`includeReviews` option handling in `updateMetadata` does not apply to it — it calls `filesystem/workExtras.js` itself.
 
@@ -464,6 +471,8 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/search` | GET | Filter search — `filter` is the advanced filter syntax (§2.3b), e.g. `va:"name$" -tag:NTR`. Was `keyword` |
 | ~~`/api/:fields/:id/works`~~ | — | **Removed.** Label filtering goes through `/api/search`
 | `/api/work/:id` | GET | Get work metadata + playback state |
+| `/api/work/:id/extras` | GET | Scraped work-page extras: `{description, descriptionParts, sampleImages}`. Kept off `/api/work/:id` because that row is assembled by `assembleWorks`, shared with every list endpoint, and a description dwarfs the rest of a work's metadata. 404 when the work is unknown; a work with nothing scraped returns empty values, not a 404 |
+| `/api/image/:id/:name` | GET | One scraped sample/description image from `config.imageFolderDir`. `name` must match `workImageFileNamePattern(id)` (`filesystem/utils.js`, shared with `deleteWorkImagesFromDisk`) — caller-supplied, so it is matched, never sanitized. 30-day `public` cache like covers. **404 with no placeholder when the file is absent.** The frontend only asks for images whose stored entry has a `file`, and **never falls back to the remote DLsite url** — an undownloaded image is simply not shown, rather than hotlinking img.dlsite.jp from every viewer's browser |
 | `/api/tags` | GET | List all tags |
 | `/api/circles` | GET | List all circles |
 | `/api/vas` | GET | List all VAs |
@@ -538,6 +547,7 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
   - `edit-metadata.js` — covers the `PUT /api/work/:id` flow and `db.editWorkMetadata` (uses shared `db-test.sqlite3` singleton)
   - `search-query.js` — advanced filter parser/serializer + `getWorksByFilter` behaviour (builds its own throwaway `db-search-test.sqlite3`)
   - `work-id.js` — id canonicalization (Fanza + DLsite books), `workno` spelling, cover/image file naming, `getFolderList` work-code detection, and migration `20260828000000` up/down
+  - `work-images.js` — `collectWorkImages` ordering/dedup, the `deleteWorkImagesFromDisk` wipe **and** its `keep`-set prune (against a real temp folder), and what `workImageFileNamePattern` will and will not match
   - `benchmark.js` — DB query benchmark; Skips if `backend/sqlite/db.sqlite3` is missing/empty;
 - **Run:** `npm test` (sets `NODE_ENV=test`)
 

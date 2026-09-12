@@ -45,6 +45,10 @@
   --surface-container-high-rgb: 232 231 239;
   --surface-container-highest: #E3E2E9;
   --surface-container-highest-rgb: 227 226 233;
+  --inverse-surface: #2F3036;
+  --inverse-surface-rgb: 47 48 54;
+  --inverse-on-surface: #F1F0F7;
+  --inverse-on-surface-rgb: 241 240 247;
   --outline: #757680;
   --outline-rgb: 117 118 128;
   --outline-variant: #C5C6D0;
@@ -179,6 +183,10 @@ body.body--dark {
   --surface-container-high-rgb: 41 42 47;
   --surface-container-highest: #34343A;
   --surface-container-highest-rgb: 52 52 58;
+  --inverse-surface: #E3E2E9;
+  --inverse-surface-rgb: 227 226 233;
+  --inverse-on-surface: #2F3036;
+  --inverse-on-surface-rgb: 47 48 54;
   --outline: #8F909A;
   --outline-rgb: 143 144 154;
   --outline-variant: #45464F;
@@ -315,6 +323,10 @@ body.body--dark {
   --surface-container-high-rgb: 213 211 219;
   --surface-container-highest: #C6C6CD;
   --surface-container-highest-rgb: 198 198 205;
+  --inverse-surface: #2F3036;
+  --inverse-surface-rgb: 47 48 54;
+  --inverse-on-surface: #FFFFFF;
+  --inverse-on-surface-rgb: 255 255 255;
   --outline: #2A2C34;
   --outline-rgb: 42 44 52;
   --outline-variant: #474951;
@@ -448,6 +460,10 @@ body.body--dark {
   --surface-container-high-rgb: 58 59 65;
   --surface-container-highest: #46464C;
   --surface-container-highest-rgb: 70 70 76;
+  --inverse-surface: #E3E2E9;
+  --inverse-surface-rgb: 227 226 233;
+  --inverse-on-surface: #000000;
+  --inverse-on-surface-rgb: 0 0 0;
   --outline: #EFEFFA;
   --outline-rgb: 239 239 250;
   --outline-variant: #C2C2CC;
@@ -584,6 +600,10 @@ body.contrast-medium {
   --surface-container-high-rgb: 221 220 227;
   --surface-container-highest: #D2D1D8;
   --surface-container-highest-rgb: 210 209 216;
+  --inverse-surface: #2F3036;
+  --inverse-surface-rgb: 47 48 54;
+  --inverse-on-surface: #F1F0F7;
+  --inverse-on-surface-rgb: 241 240 247;
   --outline: #51525B;
   --outline-rgb: 81 82 91;
   --outline-variant: #6B6C75;
@@ -717,6 +737,10 @@ body.body--dark.contrast-medium {
   --surface-container-high-rgb: 49 50 56;
   --surface-container-highest: #3C3D43;
   --surface-container-highest-rgb: 60 61 67;
+  --inverse-surface: #E3E2E9;
+  --inverse-surface-rgb: 227 226 233;
+  --inverse-on-surface: #292A2F;
+  --inverse-on-surface-rgb: 41 42 47;
   --outline: #B1B1BB;
   --outline-rgb: 177 177 187;
   --outline-variant: #8F9099;
@@ -852,6 +876,10 @@ body.contrast-high {
   --surface-container-high-rgb: 213 211 219;
   --surface-container-highest: #C6C6CD;
   --surface-container-highest-rgb: 198 198 205;
+  --inverse-surface: #2F3036;
+  --inverse-surface-rgb: 47 48 54;
+  --inverse-on-surface: #FFFFFF;
+  --inverse-on-surface-rgb: 255 255 255;
   --outline: #2A2C34;
   --outline-rgb: 42 44 52;
   --outline-variant: #474951;
@@ -985,6 +1013,10 @@ body.body--dark.contrast-high {
   --surface-container-high-rgb: 58 59 65;
   --surface-container-highest: #46464C;
   --surface-container-highest-rgb: 70 70 76;
+  --inverse-surface: #E3E2E9;
+  --inverse-surface-rgb: 227 226 233;
+  --inverse-on-surface: #000000;
+  --inverse-on-surface-rgb: 0 0 0;
   --outline: #EFEFFA;
   --outline-rgb: 239 239 250;
   --outline-variant: #C2C2CC;

@@ -1,9 +1,9 @@
 <template>
   <div class="row">
-      <Cover 
-        class="col q-ma-sm row justify-start shadow-4"
-        :workid="metadata.id" 
-        :release="metadata.release" 
+      <WorkGallery
+        class="col q-ma-md shadow-4"
+        :workid="metadata.id"
+        :images="images"
         style="border-radius: 8px; overflow: hidden;"
       />
 
@@ -266,14 +266,14 @@
 
 
 <script>
-import Cover from 'components/Cover'
+import WorkGallery from 'components/WorkGallery'
 import WriteReview from './WriteReview'
 import EditMetadata from './EditMetadata'
 import SearchableLabel from './SearchableLabel'
 import LabelDropdown from './LabelDropdown'
 import NotifyMixin from '../mixins/Notification.js'
 import { mapState } from 'vuex'
-import { isFanzaId, fanzaCid, dlsiteWorkUrl, labelRoute } from 'src/utils'
+import { isFanzaId, fanzaCid, dlsiteWorkUrl, labelRoute, workno } from 'src/utils'
 
 export default {
   name: 'WorkDetails',
@@ -281,7 +281,7 @@ export default {
   mixins: [NotifyMixin],
 
   components: {
-    Cover,
+    WorkGallery,
     WriteReview,
     EditMetadata,
     SearchableLabel,
@@ -292,6 +292,14 @@ export default {
     metadata: {
       type: Object,
       required: true
+    },
+
+    // Scraped work images (t_work.sample_images); the gallery shows them after
+    // the cover.
+    images: {
+      type: Array,
+      required: false,
+      default() { return [] }
     }
   },
 

@@ -7,7 +7,7 @@ const { getTrackList, toTree, scrapeWorkHashes } = require('../filesystem/utils'
 const { config } = require('../config');
 const normalize = require('./utils/normalize');
 const { isValidRequest, workIdParam } = require('./utils/validate');
-const { formatID, scrapeWorkMemo, coverFileName } = require('../filesystem/utils');
+const { formatID, scrapeWorkMemo, coverFileName, workImageFileNamePattern } = require('../filesystem/utils');
 const { scrapeWorkMetadataFromDLsite } = require('../scraper/dlsite');
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
 const { isFanzaId } = require('../work-id');
@@ -21,6 +21,7 @@ const { saveWorkImages, saveWorkReviews, skipWorkExtras } = require('../filesyst
 // by the `private, no-cache` default in api.js.
 const COVER_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
 const COVER_FALLBACK_MAX_AGE = 5 * 60;   // 5 minutes
+const IMAGE_MAX_AGE = COVER_MAX_AGE;
 
 const PAGE_SIZE = config.pageSize || 12;
 const FIELDS = ['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series'];
@@ -72,6 +73,49 @@ router.get('/work/:id',
         res.send(work[0]);
       })
       .catch(err => next(err));
+  });
+
+// GET the scraped work-page extras: description, its per-part structure
+// (headings, embedded images, track list) and the sample image list.
+router.get('/work/:id/extras',
+  workIdParam(),
+  async (req, res, next) => {
+    if(!isValidRequest(req, res)) return;
+
+    try {
+      const extras = await db.getWorkExtras(req.params.id);
+      if (!extras) {
+        res.status(404).send({error: `没有 id 为 "${req.params.id}" 的作品`});
+        return;
+      }
+      res.send(extras);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+// GET one scraped sample/description image.
+router.get('/image/:id/:name',
+  workIdParam(),
+  (req, res, next) => {
+    if(!isValidRequest(req, res)) return;
+
+    const { id, name } = req.params;
+    if (!workImageFileNamePattern(id).test(name)) {
+      res.status(404).send({error: `没有名为 "${name}" 的作品图片`});
+      return;
+    }
+
+    res.setHeader('Cache-Control', `public, max-age=${IMAGE_MAX_AGE}`);
+    res.sendFile(path.join(config.imageFolderDir, name), (err) => {
+      if (!err) return;
+      // Never downloaded (config.skipWorkExtras defaults to true), or deleted
+      // since. The work page asks only for images the stored list says are on
+      // disk, so this is the mismatched case, and an error page would only be
+      // rendered as a broken image anyway.
+      if (res.headersSent) return next(err); // died mid-stream, nothing to answer with
+      res.status(404).end();
+    });
   });
 
 // GET track list in work folder

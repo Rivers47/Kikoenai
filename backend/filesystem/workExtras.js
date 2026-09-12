@@ -14,7 +14,7 @@ const axios = require('../scraper/axios');
 const db = require('../database/db');
 const { config } = require('../config');
 const { scrapeWorkReviewsFromDLsite } = require('../scraper/dlsite');
-const { formatID, workImageFileName, saveWorkImageToDisk } = require('./utils');
+const { formatID, workImageFileName, saveWorkImageToDisk, collectWorkImages, deleteWorkImagesFromDisk } = require('./utils');
 const { isFanzaId, workno } = require('../work-id');
 
 const displayIdOf = id => (isFanzaId(id) ? id : formatID(id));
@@ -31,41 +31,6 @@ const consoleLogger = {
  * @returns {Boolean}
  */
 const skipWorkExtras = () => config.skipWorkExtras !== false;
-
-/**
- * Collects every image a work page offers, in the order they should be
- * numbered on disk: the sample slider first, then the ones embedded in the
- * description blocks.
- * @param {Object} metadata Scraped work metadata.
- * @returns {Array<Object>} [{ kind, url, thumb, width, height }]
- */
-function collectWorkImages(metadata) {
-  const images = [];
-  const seen = new Set();
-
-  const push = (kind, image) => {
-    if (!image || !image.url || seen.has(image.url)) return;
-    seen.add(image.url);
-    images.push({
-      kind,
-      url: image.url,
-      thumb: image.thumb || null,
-      width: image.width || null,
-      height: image.height || null,
-    });
-  };
-
-  for (const sample of metadata.sampleImages || []) {
-    push('smp', sample);
-  }
-  for (const part of metadata.descriptionParts || []) {
-    for (const url of part.images || []) {
-      push('part', { url });
-    }
-  }
-
-  return images;
-}
 
 /**
  * Downloads a work's sample and description images into the image folder and
@@ -117,6 +82,9 @@ async function downloadWorkImages(id, metadata, log = consoleLogger) {
 
   const downloaded = results.filter(r => r.file).length;
   log.info(displayId, `作品图片下载完成: ${downloaded}/${targets.length}`);
+
+  const pruned = await deleteWorkImagesFromDisk(id, new Set(targets.map(target => target.file)));
+  if (pruned) log.info(displayId, `清理无用的作品图片 ${pruned} 张.`);
 
   return results;
 }
@@ -170,7 +138,6 @@ async function saveWorkReviews(id, log = consoleLogger) {
 
 module.exports = {
   skipWorkExtras,
-  collectWorkImages,
   downloadWorkImages,
   saveWorkImages,
   saveWorkReviews,
