@@ -142,7 +142,7 @@ export default {
 
     addNewUser () {
       this.loadingAddNewUser = true
-      this.$axios.post('/api/credentials/user', {
+      this.$axios.post('/api/credentials/users', {
         name: this.newuser.name,
         password: this.newuser.password,
         group: this.newuser.group
@@ -169,7 +169,7 @@ export default {
 
     deleteUsers () {
       this.loadingDeleteUsers = true
-      this.$axios.delete('/api/credentials/user', {
+      this.$axios.delete('/api/credentials/users', {
         data: { users: this.selected },
       })
         .then((response) => {
@@ -198,7 +198,7 @@ export default {
 
     updateAdminPassword () {
       this.loadingUpdateAdminPassword = true
-      this.$axios.put('/api/credentials/user', {
+      this.$axios.put('/api/credentials/users', {
         name: 'admin',
         newPassword: this.adminNewPassword
       })

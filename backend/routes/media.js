@@ -151,14 +151,9 @@ router.get('/check-lrc/:id/:index',
                   result: true,
                   message: 'Found lyrics file',
                   lyrics,
-                  // Single-file fields kept for clients cached from before
-                  // multi-speaker lyrics existed: the PWA can serve a bundle
-                  // older than the backend it talks to.
-                  trackId: lyrics[0].trackId,
-                  lyricExtension: lyrics[0].lyricExtension,
                 });
               } else {
-                res.send({result: false, message:'Found no lyrics file', trackId: '', lyrics: []});
+                res.send({result: false, message:'Found no lyrics file', lyrics: []});
               }
             })
             .catch(err => next(err));

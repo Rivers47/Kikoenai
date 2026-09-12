@@ -134,7 +134,6 @@ export default {
     reviewPayload () {
       const submitPayload = {
         'user_name': this.$store.state.User.name, // 用户名不会被后端使用
-        'work_id': this.workid,
         'rating': this.rating,
         'review_text': this.reviewText,
         'progress': this.progress
@@ -147,7 +146,7 @@ export default {
         starOnly: false
       }
       const payload = this.reviewPayload();
-      this.$axios.put('/api/review', payload, {params})
+      this.$axios.put(`/api/review/${this.workid}`, payload, {params})
         .then((response) => {
           this.modified =true
           // TODO 修复callback graph
@@ -165,10 +164,7 @@ export default {
     },
 
     deleteReview () {
-      const params = {
-        'work_id': this.workid
-      }
-      this.$axios.delete('/api/review', {params})
+      this.$axios.delete(`/api/review/${this.workid}`)
         .then((response) => {
           this.modified = true
           this.showSuccNotif(response.data.message)

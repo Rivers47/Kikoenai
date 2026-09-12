@@ -380,7 +380,7 @@ export default {
     },
 
     async filterSeries(val, update) {
-      const options = await this.fetchOptions('/api/seriess');
+      const options = await this.fetchOptions('/api/series');
       update(() => {
         this.seriesOptions = val ? options.filter(o => o.name.toLowerCase().includes(val.toLowerCase())) : options;
       });

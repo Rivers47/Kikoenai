@@ -4,7 +4,7 @@ const { query, body } = require('express-validator');
 const { config } = require('../config');
 const db = require('../database/db');
 const normalize = require('./utils/normalize');
-const { isValidRequest, workIdBody } = require('./utils/validate');
+const { isValidRequest, workIdParam } = require('./utils/validate');
 
 const PAGE_SIZE = config.pageSize || 12;
 
@@ -50,13 +50,8 @@ router.get('/',
 });
 
 // 更新播放状态
-router.put('/',
-  // Not body('work_id').isInt(): work ids are TEXT since migration
-  // 20260802000000 -- DLsite ids are zero-padded digit strings and Fanza ids
-  // are 'd_'-prefixed, so isInt() rejected every Fanza work with a 400. Use the
-  // shared validator, which also self-heals legacy 7-digit ids. Matches the
-  // DELETE below and every other work_id route.
-  workIdBody(),
+router.put('/:id',
+  workIdParam(),
   body('state').isObject(),
    
   (req, res, next) => {
@@ -67,7 +62,7 @@ router.put('/',
     // console.log('update historoy =', username, req.body.work_id, req.body.state)
     // console.log(`config.auth = ${config.auth}`)
     
-    db.updatePlayHistory(username, req.body.work_id, JSON.stringify(req.body.state))
+    db.updatePlayHistory(username, req.params.id, JSON.stringify(req.body.state))
         .then(() => {
           res.send({ message: '更新历史成功' });
         }).catch((err) =>{
@@ -77,14 +72,14 @@ router.put('/',
 });
 
 // 删除播放历史，适用于当前场景下，某些文件被删除后，作品只有一个文件，无法播放正确文件的bug
-router.delete('/',
-  workIdBody(),
+router.delete('/:id',
+  workIdParam(),
   async (req, res, next) => {
     if(!isValidRequest(req, res)) return;
 
     let username = config.auth ? req.user.name : 'admin';
     try {
-      await db.deletePlayHistory(username, req.body.work_id);
+      await db.deletePlayHistory(username, req.params.id);
       res.send({message: '删除历史记录成功'});
     } catch (err) {
       console.error(err);

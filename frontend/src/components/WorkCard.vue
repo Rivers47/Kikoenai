@@ -217,7 +217,6 @@ export default {
       if (oldRating) {
         const submitPayload = {
           'user_name': this.$store.state.User.name, // 用户名不会被后端使用
-          'work_id': this.metadata.id,
           'rating': newRating
         };
         this.userMarked = true;
@@ -229,7 +228,7 @@ export default {
   methods: {
     labelRoute,
     submitRating (payload) {
-      this.$axios.put('/api/review', payload)
+      this.$axios.put(`/api/review/${this.metadata.id}`, payload)
         .then((response) => {
           this.showSuccNotif(response.data.message)
         })

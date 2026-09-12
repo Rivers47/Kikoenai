@@ -67,7 +67,6 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 │   │       ├── Scanner.vue               # Scan controls + progress
 │   │       ├── Advanced.vue              # Advanced settings
 │   │       ├── Settings.vue              # General settings
-│   │       ├── Backfill.vue              # Metadata backfill progress
 │   │       └── UserManage.vue            # User management (admin)
 │   ├── components/
 │   │   ├── AudioPlayer.vue               # Main audio player (floating panel)
@@ -133,7 +132,7 @@ Three route groups:
 
 | Route | Layout | Description |
 |-------|--------|-------------|
-| `/admin` | `DashboardLayout` | Admin dashboard (folders, scanner, advanced, settings, backfill, user mgmt) |
+| `/admin` | `DashboardLayout` | Admin dashboard (folders, scanner, advanced, settings, user mgmt) |
 | `/` | `MainLayout` | Main app with persistent audio player at bottom |
 | `/login` | None | Standalone login page |
 
@@ -322,7 +321,7 @@ sub-path install would otherwise register a worker that controls nothing.
 5. **Dark Mode:** Toggled via Quasar's `Dark` plugin, persisted in browser across sessions.
 6. **Progress Tracking:** Users can mark works as `listening`, `listened`, `replay`, or `postponed`.
 7. **Work Card Variants:** One component, `WorkCard.vue`, renders both styles: the modern one (tags revealed on hover over the cover) and, with `oldStyle` set, the legacy one (tag chips below the body, text price/sold line, `mic` icon on VA chips). `Works.vue` binds the prop to `oldWorkCardUIStyle`, persisted under LocalStorage key `old_work_card_ui_style_key`. Both share the `workcard` i18n scope.
-8. **Metadata Editing (admin only):** `WorkDetails.vue` shows an "edit metadata" button (i18n key) only when the current user is an admin (computed `isAdmin`: auth disabled, or `group === 'administrator'`, or `name === 'admin'`). It opens `EditMetadata.vue`, which PUTs to `/api/work/:id` with `{title, nsfw, release, circle, tags[], vas[], illustrators[], scriptWriters[], series}` — **tag names sent are the canonical Japanese names** (the backend canonicalizes them again via `resolveTagLabel`). Tag/VA/illustrator/script-writer/series inputs use Quasar `q-select` with `use-input` autocomplete, fetching options from `/api/tags`, `/api/vas`, `/api/illustrators`, `/api/script_writers`, `/api/seriess` (note the irregular plural `seriess`). For tags, the option **label** is the translated name (`$tTag`) but the bound **value** is the canonical Japanese name, so storage stays canonical. **`filterTags` matches the typed text against the canonical name only** (`o.name`), not against the displayed label — deliberately, to stay consistent with `/api/search`, which is parsed server-side and understands canonical Japanese alone. The same applies to `filteredItems` in `List.vue`. Do not "fix" either to match the translated name without changing the backend too. On save, the dialog emits `saved` and `WorkDetails.vue` re-reads the work metadata.
+8. **Metadata Editing (admin only):** `WorkDetails.vue` shows an "edit metadata" button (i18n key) only when the current user is an admin (computed `isAdmin`: auth disabled, or `group === 'administrator'`, or `name === 'admin'`). It opens `EditMetadata.vue`, which PUTs to `/api/work/:id` with `{title, nsfw, release, circle, tags[], vas[], illustrators[], scriptWriters[], series}` — **tag names sent are the canonical Japanese names** (the backend canonicalizes them again via `resolveTagLabel`). Tag/VA/illustrator/script-writer/series inputs use Quasar `q-select` with `use-input` autocomplete, fetching options from `/api/tags`, `/api/vas`, `/api/illustrators`, `/api/script_writers`, `/api/series`. For tags, the option **label** is the translated name (`$tTag`) but the bound **value** is the canonical Japanese name, so storage stays canonical. **`filterTags` matches the typed text against the canonical name only** (`o.name`), not against the displayed label — deliberately, to stay consistent with `/api/search`, which is parsed server-side and understands canonical Japanese alone. The same applies to `filteredItems` in `List.vue`. Do not "fix" either to match the translated name without changing the backend too. On save, the dialog emits `saved` and `WorkDetails.vue` re-reads the work metadata.
 9. **Keyboard Shortcuts:** Space for play/pause, arrow keys for seeking, etc. (handled in AudioPlayer).
 
 ### 2.9 Multi-speaker lyrics
@@ -525,27 +524,27 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 | `/api/vas` | GET | `List.vue` | List all VAs |
 | `/api/media/stream/:trackId` | GET | `AudioElement.vue`, `WorkTree.vue` | Stream a track (supports Range). Feeds `<audio src>` directly; the session cookie authenticates it, so the URL carries no credential |
 | `/api/media/download/:trackId` | GET | `WorkTree.vue` | Download a file |
-| `/api/media/check-lrc/:trackId` | GET | `AudioElement.vue` | Lyric sidecar files for a track; returns `{result, lyrics: [{trackId, lyricExtension}]}`, one entry per speaker (see §2.9). `trackId`/`lyricExtension` are also returned flat for pre-multi-speaker clients, and `AudioElement.vue` still falls back to them. |
+| `/api/media/check-lrc/:trackId` | GET | `AudioElement.vue` | Lyric sidecar files for a track; returns `{result, message, lyrics: [{trackId, lyricExtension}]}`, one entry per speaker (see §2.9). The flat pre-multi-speaker `trackId`/`lyricExtension` fields were removed at the 1.0 freeze, along with the fallback that read them. |
 | `/api/cover/:id` | GET | `Cover.vue`, `AudioElement.vue` | Get cover image (`?type=main\|240x240\|sam`) |
 | `/api/tracks/:id` | GET | `Work.vue` | Track tree for a work (see Phase 2 note below) |
-| `/api/review` | GET/PUT/DELETE | `WorkDetails.vue`, `Favourites.vue`, `AudioElement.vue` | Work reviews; the work is identified by a `work_id` body field or query param, not a path segment. PUT with `progressOnly=true` and `autoMark=true` only writes `progress='listened'` if existing is not terminal (listened/replay/postponed). |
-| `/api/review/progress` | DELETE | `WorkDetails.vue` | Clear only `progress` (NULL), preserving rating/review_text. If the row has no rating/review_text, the whole row is deleted. Query `work_id`. |
+| `/api/review` | GET | `Favourites.vue` | List works the user has reviewed/rated/progress-marked |
+| `/api/review/:id` | PUT/DELETE | `WorkDetails.vue`, `WorkCard.vue`, `FavListItem.vue`, `WriteReview.vue`, `AudioElement.vue` | Create/update or delete one work's review. PUT with `progressOnly=true` and `autoMark=true` only writes `progress='listened'` if existing is not terminal (listened/replay/postponed) |
+| `/api/review/:id/progress` | DELETE | `WorkDetails.vue` | Clear only `progress` (NULL), preserving rating/review_text. If the row has no rating/review_text, the whole row is deleted |
 | `/api/history` | GET | `Favourites.vue`, `RecentWorks.vue` | List works with playback history. Optional `excludeFinished` (`all`|`listened`, default `listened`). Response items include nullable `progress`. |
+| `/api/history/:id` | PUT/DELETE | `AudioPlayer.vue`, `WorkDetails.vue` | Save or delete one work's playback state. Body `{state}` — the queue plus index, no position |
 | `/api/search` | GET | `Works.vue` | **The only filter mechanism.** `filter` is an E-Hentai style filter (`va:"name$"`, `circle:under_score`, `-tag:NTR`, ANDed); parsed server-side, see `backend/AGENTS.md` §2.3b. Every label link builds one via `labelRoute()` in `src/utils.js`; the per-entity `/:id/works` endpoints are gone |
 | `/api/version` | GET | `MainLayout.vue` | Version + update info |
 | `/api/config/admin` | GET/PUT | `Folders.vue`, `Advanced.vue` | Admin config read/write |
-| `/api/credentials/user` | POST/PUT/DELETE | `UserManage.vue` | Create / update / delete a user |
-| `/api/credentials/users` | GET | `UserManage.vue` | List users (admin) |
-| `/api/backfill/progress` | GET | `Backfill.vue` | Metadata backfill progress |
+| `/api/credentials/users` | GET/POST/PUT/DELETE | `UserManage.vue` | List / create / update / delete users (admin). Was `/user` for the three write verbs |
 | `/api/refresh/:id` | POST | `WorkDetails.vue` | Re-fetch metadata for one work |
-| `/api/work/scan/:id` | POST | `WorkDetails.vue` | Rescan a single work |
+| `/api/scan/:id` | POST | `WorkDetails.vue` | Re-read one work's files (durations, lyric presence). Was `/api/work/scan/:id` |
 | `/api/work/:id` | PUT | `EditMetadata.vue` | Manually edit work metadata (admin only). Work id is a string: DLsite doujin RJ-padded (`\d{6,8}`), DLsite books (`BJ\d{6,8}`, prefix kept) or Fanza (`d\d+`, underscore-free). `src/utils.js` mirrors backend `work-id.js`: `isFanzaId`/`isBooksId`/`fanzaCid`, plus `workno` (the code as its store spells it — use it for any `RJ`/`BJ` prefix in a template) and `dlsiteWorkUrl` (books works link to the `/books/` floor, doujin to `/home/`). |
 | `/api/illustrators` | GET | `EditMetadata.vue` | List illustrators (autocomplete) |
 | `/api/script_writers` | GET | `EditMetadata.vue` | List script writers (autocomplete) |
-| `/api/seriess` | GET | `EditMetadata.vue` | List series (autocomplete; irregular plural) |
-| `/api/track-progress` | PUT | `AudioElement.vue`, `AudioPlayer.vue` | Report per-track playback progress. Accepts `{work_id, contentHash, seconds, completed}`. Fire-and-forget write. |
+| `/api/series` | GET | `EditMetadata.vue` | List series (autocomplete). Was the irregular `/api/seriess` |
+| `/api/track-progress/:id` | PUT | `AudioElement.vue`, `AudioPlayer.vue` | Report per-track playback position. Body `{contentHash, seconds, completed}`. Fire-and-forget write |
 
-> **Tracks response:** `GET /api/tracks/:id` returns `{ tree, trackProgress }` (breaking shape change; `Work.vue` handles both via `response.data.tree || response.data`). Audio nodes arrive with `contentHash` already populated — the backend hashes before building the tree — so progress badges paint on first render and any queue committed from the tree carries its hashes. The first open of a work is slower for it (the backend streams the audio once, then caches by mtime). `trackProgress` is a `{contentHash: {seconds, completed}}` map. **Do not reintroduce a second request for hashes:** a queue committed before hashes arrive is serialized into `t_play_history` by `toQueueItem`, and the resume-from-history paths (`RecentWorks.vue`, `FavListItem.vue`) never fetch the tree, so such a row can never recover its hashes — `POST /api/backfill/progress` is the only repair.
+> **Tracks response:** `GET /api/tracks/:id` returns `{ tree, trackProgress }` (breaking shape change; `Work.vue` handles both via `response.data.tree || response.data`). Audio nodes arrive with `contentHash` already populated — the backend hashes before building the tree — so progress badges paint on first render and any queue committed from the tree carries its hashes. The first open of a work is slower for it (the backend streams the audio once, then caches by mtime). `trackProgress` is a `{contentHash: {seconds, completed}}` map. **Do not reintroduce a second request for hashes:** a queue committed before hashes arrive is serialized into `t_play_history` by `toQueueItem`, and the resume-from-history paths (`RecentWorks.vue`, `FavListItem.vue`) never fetch the tree, so such a row can never recover its hashes — `scripts/backfill-progress.js` (CLI; the route was removed at the 1.0 freeze) is the only repair.
 
 > **Note:** Library scanning is **not** a REST endpoint. `Scanner.vue` triggers scans over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN` / `KILL_SCAN_PROCESS`) and listens for the `SCAN_*` events.
 

@@ -4,7 +4,7 @@ const { query, body } = require('express-validator');
 const { config } = require('../config');
 const db = require('../database/db');
 const normalize = require('./utils/normalize');
-const { isValidRequest, workIdBody, workIdQuery } = require('./utils/validate');
+const { isValidRequest, workIdParam } = require('./utils/validate');
 
 const PAGE_SIZE = config.pageSize || 12;
 
@@ -47,8 +47,8 @@ router.get('/',
 });
 
 // 提交用户评价
-router.put('/',
-  workIdBody(),
+router.put('/:id',
+  workIdParam(),
   body('rating').optional().isInt(),
   body('progress').optional().isIn(['marked', 'listening', 'listened', 'replay', 'postponed']),
   body('starOnly').optional().isBoolean(),
@@ -72,7 +72,7 @@ router.put('/',
       autoMark = true;
     }
     
-    db.updateUserReview(username, req.body.work_id, req.body.rating, req.body.review_text, req.body.progress, starOnly, progressOnly, autoMark)
+    db.updateUserReview(username, req.params.id, req.body.rating, req.body.review_text, req.body.progress, starOnly, progressOnly, autoMark)
         .then(() => {
           if (progressOnly) {
             res.send({ message: '更新进度成功' });
@@ -86,26 +86,26 @@ router.put('/',
 });
 
 // 删除用户标记
-router.delete('/',
-  workIdQuery(),
+router.delete('/:id',
+  workIdParam(),
   (req, res, next) => {
     if(!isValidRequest(req, res)) return;
 
     let username = config.auth ? req.user.name : 'admin';
-    db.deleteUserReview(username, req.query.work_id)
+    db.deleteUserReview(username, req.params.id)
       .then(() => {
         res.send({message: '删除标记成功'});
       }).catch((err) => next(err));
 });
 
 // 只清除进度，保留评分与评论
-router.delete('/progress',
-  workIdQuery(),
+router.delete('/:id/progress',
+  workIdParam(),
   (req, res, next) => {
     if(!isValidRequest(req, res)) return;
 
     let username = config.auth ? req.user.name : 'admin';
-    db.resetUserProgress(username, req.query.work_id)
+    db.resetUserProgress(username, req.params.id)
       .then(() => {
         res.send({message: '清除进度成功'});
       }).catch((err) => next(err));

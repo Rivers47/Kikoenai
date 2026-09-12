@@ -3,13 +3,13 @@ const router = express.Router();
 const { body } = require('express-validator');
 const { config } = require('../config');
 const db = require('../database/db');
-const { isValidRequest, workIdBody } = require('./utils/validate');
+const { isValidRequest, workIdParam } = require('./utils/validate');
 
 // Report per-track playback progress (Phase 2)
 // Fire-and-forget write: keyed directly by the contentHash the frontend
 // already carries — no file read, no hash computation at write time.
-router.put('/',
-  workIdBody(),
+router.put('/:id',
+  workIdParam(),
   body('contentHash').isString().isLength({ min: 8, max: 8 }), // CRC32 hex
   body('seconds').isFloat({ min: 0 }),
   body('completed').isBoolean(),
@@ -20,7 +20,7 @@ router.put('/',
     try {
       await db.upsertTrackProgress(
         username,
-        req.body.work_id,
+        req.params.id,
         req.body.contentHash,
         req.body.seconds,
         req.body.completed

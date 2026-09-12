@@ -19,10 +19,11 @@
 │   ├── auth.js              # Login, user info, password change
 │   ├── config.js            # Read/write server config
 │   ├── credentials.js       # User CRUD (admin only)
-│   ├── media.js             # Audio streaming, file listing, covers, download
+│   ├── media.js             # Audio streaming, download, lyric sidecar lookup
 │   ├── metadata.js          # Works listing, search, sort, filter, tag/VA queries
 │   ├── play_history.js      # Playback state persistence
 │   ├── review.js            # Reviews, ratings, progress
+│   ├── track_progress.js    # Per-track playback position
 │   ├── version.js           # Version info, release notes
 │   └── utils/               # Shared route utilities (normalize, strftime, url, validate)
 ├── auth/
@@ -109,7 +110,7 @@ Session details:
 - Read from the `kikoeru_sid` cookie (`HttpOnly`, `SameSite=Lax`, `Secure` only when `config.httpsEnabled`), falling back to `Authorization: Bearer <secret>` for non-browser clients. `POST /api/auth/me` returns the secret as `session` in the body for exactly that case; the web app ignores it and relies on the cookie.
 - **There is no `?token=` query parameter.** It was removed with the JWT migration — a credential in a URL leaks into access logs, browser history, and Cache Storage keys.
 - `group` is read live from `t_user` on every request, so demoting an administrator takes effect immediately.
-- Revocation: `DELETE /api/credentials/user` relies on the `ON DELETE CASCADE` FK; `PUT /api/credentials/user` (password change) calls `destroyUserSessions`. Expired rows are swept hourly from `app.js`.
+- Revocation: `DELETE /api/credentials/users` relies on the `ON DELETE CASCADE` FK; `PUT /api/credentials/users` (password change) calls `destroyUserSessions`. Expired rows are swept hourly from `app.js`.
 
 **CSRF:** `SameSite=Lax` is the only defense, and it is sufficient *only* because every state-changing route is POST/PUT/DELETE. Adding a GET with side effects would reintroduce CSRF.
 
@@ -267,14 +268,13 @@ All routes mounted under `/api`:
 | `credentials.js` | `/api/credentials/*` | User CRUD (admin only) |
 | `version.js` | `/api/version/*` | App version, changelog |
 | `config.js` | `/api/config/*` | Get/set server config |
-| `media.js` | `/api/media/*` | Stream audio (range requests), list files, serve covers, download |
-| `metadata.js` | `/api/*` | List works, search, sort, filter; list tags/VAs/illustrators/script writers/series; `PUT /api/work/:id` admin metadata edit |
-
-> **Route note:** the plural field-list routes (`/api/circles`, `/api/tags`, `/api/vas`, `/api/illustrators`, `/api/script_writers`, `/api/seriess` — note the irregular double-`s` plural) are registered as **literal-path loops** over a `FIELDS` array in `metadata.js` (a `for...of` loop registering one `router.get` per field). Express 5 (path-to-regexp v8) no longer supports regex char-classes in route strings, so the old `/:field(circle|tag|va|...|series)s/...` single-regex-route form was replaced. Each handler receives its `field` via closure.
+| `media.js` | `/api/media/*` | Stream audio (range requests), download, lyric sidecar lookup |
+| `metadata.js` | `/api/*` | List works, search, sort, filter; work metadata, tracks, covers, images; label lists; `PUT /api/work/:id` admin metadata edit |
 | `review.js` | `/api/review/*` | Create/update/delete reviews, ratings, progress |
 | `play_history.js` | `/api/history/*` | Save/load playback state |
 | `track_progress.js` | `/api/track-progress/*` | Per-track playback progress (CRC32 content-hashed) |
-| `backfill.js` | `/api/backfill/*` | Admin: replay play history to backfill listened markers + track progress (`POST /api/backfill/progress`, `{ dryRun?: bool }` → `{ logs[], summary }`) |
+
+> **Route note:** the label-list routes (`/api/circles`, `/api/tags`, `/api/vas`, `/api/illustrators`, `/api/script_writers`, `/api/series`) are registered as **literal-path loops** over a `FIELDS` array in `metadata.js` (a `for...of` loop registering one `router.get` per field), with the segment coming from `ROUTE_SEGMENT(field)` — `${field}s` for all but `series`, which is already plural. Express 5 (path-to-regexp v8) no longer supports regex char-classes in route strings, so the old `/:field(circle|tag|va|...|series)s/...` single-regex-route form was replaced. Each handler receives its `field` via closure.
 
 ### 2.8 Media Streaming (`routes/media.js`)
 
@@ -313,9 +313,9 @@ match, which are orphaned and why, and whether each one parses — run
 
 ### 2.9a Writing `t_work.memo`
 
-`setWorkMemo` replaces the **whole** JSON column, so anything that builds a memo must spread the old one first. The keys are written by different producers and none of them knows about the others: `duration`/`mtime`/`isContainLyric` by `scrapeWorkMemo` (scan and `POST /api/work/scan/:id`), `contentHash` by `scrapeWorkHashes` (`GET /api/tracks/:id`), `trackTitles` by `scripts/extract-track-titles.js`. `scrapeWorkMemo` used to start from a bare `{ duration, isContainLyric, mtime }`, so every rescan silently wiped the hashes and the extracted track titles.
+`setWorkMemo` replaces the **whole** JSON column, so anything that builds a memo must spread the old one first. The keys are written by different producers and none of them knows about the others: `duration`/`mtime`/`isContainLyric` by `scrapeWorkMemo` (scan and `POST /api/scan/:id`), `contentHash` by `scrapeWorkHashes` (`GET /api/tracks/:id`), `trackTitles` by `scripts/extract-track-titles.js`. `scrapeWorkMemo` used to start from a bare `{ duration, isContainLyric, mtime }`, so every rescan silently wiped the hashes and the extracted track titles.
 
-The scanner warms `contentHash` so `GET /api/tracks/:id` rarely has to compute it: `scanWork` (new folders) and `scanWorkFile` (the "Scan file changes" pass, `PERFORM_LYRIC_SCAN`) both chain `scrapeWorkHashes` after `scrapeWorkMemo` and write once. **The order is load-bearing** — `scrapeWorkMemo` rewrites mtimes and drops the hashes of changed files, so hashing first would throw the fresh hashes away. Scans run in a forked child process (`socket.js`), so the cost lands off the request path. `POST /api/work/scan/:id` deliberately does *not* hash: it only invalidates changed files, leaving the next tree build to re-hash those few, so the button stays fast.
+The scanner warms `contentHash` so `GET /api/tracks/:id` rarely has to compute it: `scanWork` (new folders) and `scanWorkFile` (the "Scan file changes" pass, `PERFORM_LYRIC_SCAN`) both chain `scrapeWorkHashes` after `scrapeWorkMemo` and write once. **The order is load-bearing** — `scrapeWorkMemo` rewrites mtimes and drops the hashes of changed files, so hashing first would throw the fresh hashes away. Scans run in a forked child process (`socket.js`), so the cost lands off the request path. `POST /api/scan/:id` deliberately does *not* hash: it only invalidates changed files, leaving the next tree build to re-hash those few, so the button stays fast.
 
 One coupling to keep in mind when touching either function: `scrapeWorkHashes` invalidates a cached hash by comparing `memo.mtime[relPath]`. A rescan rewrites those mtimes, so it must also drop the `contentHash` of any file whose mtime actually changed — otherwise the fresh mtime makes a stale hash look valid forever. It must *not* drop hashes for the other reasons that branch fires (a missing duration, e.g. from a failed ffprobe), or every rescan would force a full re-read of the work.
 
@@ -471,48 +471,94 @@ node filesystem/updater.js --reviews        # re-scrape every DLsite user review
 
 ## 6. API Contract (Exposed to Frontend)
 
-The following endpoints are consumed by the `frontend/` package:
+Every route mounted under `/api`, as of the 1.0 freeze. **This table is the contract** — keep it exact, and mirror any change into `frontend/AGENTS.md` §6.
 
-**Id formats:** work-id route params (`:id` on `/api/work`, `/api/cover`, `/api/tracks`, `/api/media/*`, `/api/refresh`, `/api/work/scan`) are **strings** matching `WORK_ID_RE` = `^(bj\d{6,8}|\d{6,8}|d_?\d+)$` (case-insensitive) — DLsite doujin ids are already RJ-padded digit strings, DLsite books ids keep their `BJ` prefix, Fanza ids are `d`-prefixed and underscore-free. `workIdParam`/`workIdBody`/`workIdQuery` in `routes/utils/validate.js` validate them and sanitize the legacy `d_` spelling away, so a stale PWA cache or an old bookmark (`/work/d_215444`) keeps resolving after the migration. Label ids are UUID v5 of the label's own name, so they are no longer addressable as route params: `/api/:fields/:id` still resolves a name, but filtering by label goes through `/api/search` (§2.3b).
+**Id formats:** work-id route params (`:id` on `/api/work`, `/api/cover`, `/api/tracks`, `/api/media/*`, `/api/refresh`, `/api/scan`, `/api/review`, `/api/history`, `/api/track-progress`) are **strings** matching `WORK_ID_RE` = `^(bj\d{6,8}|\d{6,8}|d_?\d+)$` (case-insensitive) — DLsite doujin ids are already RJ-padded digit strings, DLsite books ids keep their `BJ` prefix, Fanza ids are `d`-prefixed and underscore-free. `workIdParam` in `routes/utils/validate.js` validates and sanitizes them (the legacy `d_` spelling and 7-digit ids self-heal), so a stale PWA cache or an old bookmark (`/work/d_215444`) keeps resolving. Label ids are UUID v5 of the label's own name, so they are no longer addressable as route params: `/api/<field>s/:id` still resolves a *name*, but filtering by label goes through `/api/search` (§2.3b).
+
+**Work id is always a path param.** No route takes `work_id` in a body or query string; `workIdBody`/`workIdQuery` are gone.
+
+### Auth & users
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/auth/me` | GET | Get current user + auth status |
-| `/api/auth/me` | POST | Log in; sets the session cookie, returns `{ user, session }` |
+| `/api/health` | GET | Liveness probe. The only route reachable without a session besides login |
+| `/api/auth/me` | GET | Current user + auth status |
+| `/api/auth/me` | POST | Log in; sets the session cookie, returns `{ user, session }`. Public |
 | `/api/auth/logout` | POST | Destroy the server-side session and clear the cookie |
-| `/api/works` | GET | List/search works (supports pagination, sort, filter) |
-| `/api/search` | GET | Filter search — `filter` is the advanced filter syntax (§2.3b), e.g. `va:"name$" -tag:NTR`. Was `keyword` |
-| ~~`/api/:fields/:id/works`~~ | — | **Removed.** Label filtering goes through `/api/search`
-| `/api/work/:id` | GET | Get work metadata + playback state |
+| `/api/credentials/users` | GET | List users (admin only) |
+| `/api/credentials/users` | POST | Create a user (admin only). Body `{name, password, group}` |
+| `/api/credentials/users` | PUT | Change a password (admin, or the user's own). Body `{name, newPassword}`; revokes every session for that user |
+| `/api/credentials/users` | DELETE | Delete users (admin only). Body `{users: [{name}]}`; refuses the built-in `admin` |
+
+### Works, search & labels
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/works` | GET | List works. Query `page`, `order`, `sort`, `nsfw`, `seed` → `{works, pagination}` |
+| `/api/search` | GET | Filter search — `filter` is the advanced filter syntax (§2.3b), e.g. `va:"name$" -tag:NTR`. Same response shape as `/api/works` |
+| `/api/work/:id` | GET | Work metadata + playback state |
+| `/api/work/:id` | PUT | Manually edit metadata — title, nsfw, release, circle, tags[], vas[], illustrators[], scriptWriters[], series (admin only) |
 | `/api/work/:id/extras` | GET | Scraped work-page extras: `{description, descriptionHtml, descriptionParts, sampleImages}`. The stored `description` column goes out as **one or the other**: markup is **sanitized here, per request** (`routes/utils/description-html.js`) and returned as `descriptionHtml` with `description: ''`; a plain-text row (older scrape, or the JSON fallback) is returned as `description` with `descriptionHtml: ''`. Kept off `/api/work/:id` because that row is assembled by `assembleWorks`, shared with every list endpoint, and a description dwarfs the rest of a work's metadata. 404 when the work is unknown; a work with nothing scraped returns empty values, not a 404 |
+| `/api/tracks/:id` | GET | `{tree, trackProgress}` — see the note below |
+| `/api/cover/:id` | GET | Cover image. Query `type` (`main`\|`sam`\|`240x240`\|`360x360`). 30-day `public` cache; the `no-image.jpg` fallback gets 5 minutes |
 | `/api/image/:id/:name` | GET | One scraped sample/description image from `config.imageFolderDir`. `name` must match `workImageFileNamePattern(id)` (`filesystem/utils.js`, shared with `deleteWorkImagesFromDisk`) — caller-supplied, so it is matched, never sanitized. 30-day `public` cache like covers. **404 with no placeholder when the file is absent.** The frontend only asks for images whose stored entry has a `file`, and **never falls back to the remote DLsite url** — an undownloaded image is simply not shown, rather than hotlinking img.dlsite.jp from every viewer's browser |
-| `/api/tags` | GET | List all tags |
-| `/api/circles` | GET | List all circles |
-| `/api/vas` | GET | List all VAs |
-| `/api/media/:id/:file` | GET | Stream audio file (supports Range) |
-| `/api/media/check-lrc/:id/:index` | GET | Lyric sidecar files for a track. Returns `{result, lyrics: [{trackId, lyricExtension}]}`, one entry per speaker — see §2.8b. `trackId`/`lyricExtension` are also returned flat (first entry) for pre-multi-speaker clients. |
-| `/api/cover/:id` | GET | Get cover image |
-| `/api/files/:id` | GET | List files in a work |
-| `/api/review` | GET | List works the user has reviewed/rated/progress-marked
-| `/api/review/:id` | GET/POST/PUT/DELETE | Work reviews
-| `/api/review` | PUT | Create/update review, rating, or progress. Optional query `autoMark` (boolean): when `progressOnly=true` and `autoMark=true`, only writes `progress='listened'` if existing progress is null/empty/marked/listening; no-op on listened/replay/postponed.
-| `/api/review` | DELETE | Delete the whole review row (rating + review_text + progress). Query `work_id`.
-| `/api/review/progress` | DELETE | Clear only `progress` (set NULL), preserving rating/review_text. If the row has no rating AND no review_text (e.g. an auto-marked rating-null row), the whole row is deleted to avoid an all-NULL empty row. Query `work_id`.
-| `/api/history` | GET | List works the user has playback history for. Optional query `excludeFinished` (`all`|`listened`, default `listened`): when `listened`, excludes rows where `t_review.progress='listened'`. Response items include nullable `progress` field.
-| `/api/history/:id` | GET/POST | Playback state (history) |
-| `/api/config/shared` | GET | Public config (seek times) |
-| `/api/version` | GET | Version + update info |
-| `/api/work/:id` | PUT | Manually edit work metadata — title, nsfw, release, circle, tags[], vas[], illustrators[], scriptWriters[], series (admin only) |
-| `/api/refresh/:id` | POST | Re-scrape one work from DLsite/Fanza: metadata (`refreshAll`), then sample/description images and DLsite reviews. Returns `{message, metadata, images, reviews}` where `images`/`reviews` are counts. Image and review failures are non-fatal (metadata is already committed). |
-| `/api/illustrators` | GET | List all illustrators (autocomplete for metadata editor) |
-| `/api/script_writers` | GET | List all script writers (autocomplete for metadata editor) |
-| `/api/seriess` | GET | List all series (autocomplete for metadata editor) |
-| `/api/track-progress` | PUT | Report per-track playback progress. Accepts `{work_id, contentHash, seconds, completed}`. Upserts `t_track_progress` keyed by contentHash directly — no file read. |
-| `/api/backfill/progress` | POST | Admin: replay play history to mark finished works `listened` and seed `t_track_progress`. Position comes from `state.seconds` on legacy history rows and from `t_track_progress` on current ones (history no longer carries a position); the track key is the queue item's `contentHash`, CRC32'd from disk only when the row predates it. Body `{ dryRun?: bool }` → `{ logs[], summary }`. |
+| `/api/circles` `/api/tags` `/api/vas` `/api/illustrators` `/api/script_writers` `/api/series` | GET | List all labels of that kind, ordered by name |
+| `/api/circles/:id` … `/api/series/:id` | GET | Resolve one label id (UUID) to its row; 404 otherwise |
+| `/api/scan/:id` | POST | Re-read one work's files (durations, lyric presence, changed mtimes) → `{memo}`. Deliberately does **not** hash — see §2.9a |
+| `/api/refresh/:id` | POST | Re-scrape one work from DLsite/Fanza: metadata (`refreshAll`), then sample/description images and DLsite reviews. Returns `{message, metadata, images, reviews}` where `images`/`reviews` are counts. Image and review failures are non-fatal (metadata is already committed) |
 
-> **Tracks response:** `GET /api/tracks/:id` returns `{ tree, trackProgress }` instead of a bare array. It is the only endpoint that reads audio file bytes: it computes any missing content hashes (CRC32 via zlib, mtime-invalidated, cached in `t_work.memo.contentHash`) **before** building the tree, so every audio node's `contentHash` is populated in the response. The first open of a work therefore streams its audio once; every later open is cache-hit and reads no bytes. A file that cannot be read is logged and left without a hash rather than failing the request. Audio nodes carry `trackId` (session-stable file handle, was `hash`) and `relPath` (relative path from work root). `trackProgress` is a `{contentHash: {seconds, completed}}` map. This is a breaking response-shape change; `Work.vue` handles both via `response.data.tree || response.data`. **Superseded:** hashing was briefly split into a separate `GET /api/work/:id/memo` that the frontend merged in afterwards. The gap between the two responses let a queue be committed — and persisted to `t_play_history` — without hashes, which permanently silenced per-track progress for that row, since the resume-from-history path never refetches the tree. The endpoint is gone.
+> **The six label route segments are `ROUTE_SEGMENT(field)` in `metadata.js`**, which is `${field}s` for everything except `series` (already plural). They are registered as a **literal-path loop** over `FIELDS`, because Express 5 (path-to-regexp v8) dropped regex char-classes in route strings; each handler gets its `field` by closure.
 
-> **Note:** Library scanning is **not** a REST endpoint. The frontend triggers it over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN`) and listens for the `SCAN_*` events above. The plural-list route `/:field(circle\|tag\|va\|illustrator\|script_writer\|series)s/` powers the `/api/illustrators`, `/api/script_writers`, and `/api/seriess` endpoints above (note the irregular plural `seriess`).
+### Playback, progress & reviews
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/history` | GET | Works the user has playback history for. Query `excludeFinished` (`all`\|`listened`, default `listened`): when `listened`, excludes rows where `t_review.progress='listened'`. Items carry a nullable `progress` |
+| `/api/history/:id` | PUT | Save playback state. Body `{state}` (the serialized queue + index; carries no position) |
+| `/api/history/:id` | DELETE | Delete this work's playback history |
+| `/api/track-progress/:id` | PUT | Report per-track position. Body `{contentHash, seconds, completed}`. Upserts `t_track_progress` keyed by contentHash directly — no file read |
+| `/api/review` | GET | Works the user has reviewed/rated/progress-marked. Query `filter` (one of the five progress values) |
+| `/api/review/:id` | PUT | Create/update review, rating, or progress. Query `starOnly`, `progressOnly`, `autoMark`. With `progressOnly=true&autoMark=true` it only writes `progress='listened'` when existing progress is null/empty/marked/listening; no-op on listened/replay/postponed |
+| `/api/review/:id` | DELETE | Delete the whole review row (rating + review_text + progress) |
+| `/api/review/:id/progress` | DELETE | Clear only `progress` (set NULL), preserving rating/review_text. If the row has no rating **and** no review_text (e.g. an auto-marked rating-null row), the whole row is deleted to avoid an all-NULL empty row |
+
+### Media
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/media/stream/:id/:index` | GET | Stream one file (Range supported). Redirects to the reverse proxy when `config.offloadMedia` is on, except `.txt`/`.lrc`, which Express serves itself for `jschardet` charset detection |
+| `/api/media/download/:id/:index` | GET | Same file as an attachment |
+| `/api/media/check-lrc/:id/:index` | GET | Lyric sidecars for a track → `{result, message, lyrics: [{trackId, lyricExtension}]}`, one entry per speaker — see §2.8b |
+
+> **`:index` is positional** — the offset into the work's sorted, filtered file list (`getTrackList`), which includes text, image and pdf files, not just audio. Adding or removing *any* file in a work renumbers everything after it, which silently repoints stored history queues at the wrong file; `DELETE /api/history/:id` exists because of it. Inherited from upstream, where the same value was misleadingly called `hash`.
+
+### Config & version
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/config/shared` | GET | Public config subset (seek times) |
+| `/api/config/admin` | GET | Full config minus `md5secret`/`jwtsecret` (admin only) |
+| `/api/config/admin` | PUT | Write config; `production`/`md5secret`/`jwtsecret` are never writable (admin only) |
+| `/api/version` | GET | `{current, lockFileExists, lockReason}`. Local only — no GitHub call |
+
+> **Tracks response:** `GET /api/tracks/:id` returns `{ tree, trackProgress }` instead of a bare array. It is the only endpoint that reads audio file bytes: it computes any missing content hashes (CRC32 via zlib, mtime-invalidated, cached in `t_work.memo.contentHash`) **before** building the tree, so every audio node's `contentHash` is populated in the response. The first open of a work therefore streams its audio once; every later open is cache-hit and reads no bytes. A file that cannot be read is logged and left without a hash rather than failing the request. Audio nodes carry `trackId` (the `:id/:index` file handle, was `hash`), `contentHash` and `relPath` (relative path from work root); text/image/pdf nodes carry only `trackId`. `trackProgress` is a `{contentHash: {seconds, completed}}` map. **Superseded:** hashing was briefly split into a separate `GET /api/work/:id/memo` that the frontend merged in afterwards. The gap between the two responses let a queue be committed — and persisted to `t_play_history` — without hashes, which permanently silenced per-track progress for that row, since the resume-from-history path never refetches the tree. The endpoint is gone.
+
+> **Note:** Library scanning is **not** a REST endpoint. The frontend triggers it over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN`) and listens for the `SCAN_*` events (§7). `POST /api/scan/:id` is unrelated — it re-reads one work's files, it does not scrape.
+
+### Removed at the 1.0 freeze
+
+Each of these was a compatibility shim or a one-shot tool, deleted before the API stability promise rather than after:
+
+| Gone | Was | Why |
+|------|-----|-----|
+| `GET /api/me` | 302 → `/api/auth/me` | Shim for PWA bundles cached before the auth routes moved |
+| `check-lrc` flat `trackId`/`lyricExtension` | duplicated the first `lyrics[]` entry | Shim for bundles cached before multi-speaker lyrics |
+| `POST /api/backfill/progress` | replayed history into `t_review` + `t_track_progress` | One-shot migration for installs predating `t_track_progress`. The CLI (`scripts/backfill-progress.js`) stays |
+| `POST /api/debug/playback` | logged arbitrary client JSON to the console | Mobile-playback debugging aid; unbounded, unauthenticated when `config.auth` was off, and had no callers |
+| `GET /api/:fields/:id/works` | label-filtered work list | Label filtering goes through `/api/search` |
+| `GET /api/work/:id/memo` | hashes, fetched separately | See the tracks note above |
+
+Renamed in the same pass: `/api/credentials/user` → `/users` (all four verbs now agree), `/api/seriess` → `/api/series`, `POST /api/work/scan/:id` → `POST /api/scan/:id`, and `work_id` moved out of every body/query into the path on `/api/review`, `/api/history` and `/api/track-progress`.
 
 ---
 

@@ -26,6 +26,9 @@ const IMAGE_MAX_AGE = COVER_MAX_AGE;
 
 const PAGE_SIZE = config.pageSize || 12;
 const FIELDS = ['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series'];
+// Route segment for each field. Everything takes a plain `-s` except `series`,
+// which is already plural -- `seriess` was what `${field}s` produced.
+const ROUTE_SEGMENT = (field) => (field === 'series' ? 'series' : `${field}s`);
 
 // GET work cover image
 router.get('/cover/:id',
@@ -222,7 +225,7 @@ router.get('/works',
 
 // GET name of a circle/tag/VA/illustrator/script_writer/series
 for (const field of FIELDS) {
-  router.get(`/${field}s/:id`,
+  router.get(`/${ROUTE_SEGMENT(field)}/:id`,
     (req, res, next) => {
       if(!isValidRequest(req, res)) return;
 
@@ -283,7 +286,7 @@ router.get('/search', async (req, res, next) => {
 
 // GET list of circles/tags/VAs/illustrators/script_writers/series
 for (const field of FIELDS) {
-  router.get(`/${field}s/`,
+  router.get(`/${ROUTE_SEGMENT(field)}/`,
     (req, res, next) => {
       if(!isValidRequest(req, res)) return;
 
@@ -355,7 +358,7 @@ router.put('/work/:id',
 );
 
 // 刷新单个作品文件夹中的文件信息记录，例如音频文件发生变动后，通过这个请求重新扫描音频文件时长
-router.post('/work/scan/:id',
+router.post('/scan/:id',
   workIdParam(),
   async function(req, res) {
     if(!isValidRequest(req, res)) return;

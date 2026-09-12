@@ -396,7 +396,6 @@ export default {
       this.progress = newProgress;
       const submitPayload = {
         'user_name': this.$store.state.User.name, // 用户名不会被后端使用
-        'work_id': this.metadata.id,
         'progress': newProgress
       };
       this.submitProgress(submitPayload);
@@ -407,7 +406,7 @@ export default {
         starOnly: false,
         progressOnly: true
       }
-      this.$axios.put('/api/review', payload, {params})
+      this.$axios.put(`/api/review/${this.metadata.id}`, payload, {params})
         .then((response) => {
           this.showSuccNotif(response.data.message);
           this.$emit('reset');
@@ -431,7 +430,7 @@ export default {
         ok: this.$t('common.ok'),
         persistent: true
       }).onOk(() => {
-        this.$axios.delete('/api/review/progress', { params: { work_id: this.metadata.id } })
+        this.$axios.delete(`/api/review/${this.metadata.id}/progress`)
           .then((response) => {
             this.showSuccNotif(response.data.message)
             this.$emit('reset')
@@ -449,14 +448,13 @@ export default {
     setRating (newRating) {
       const submitPayload = {
         'user_name': this.$store.state.User.name, // 用户名不会被后端使用
-        'work_id': this.metadata.id,
         'rating': newRating
       };
       this.submitRating(submitPayload);
     },
 
     submitRating (payload) {
-      this.$axios.put('/api/review', payload)
+      this.$axios.put(`/api/review/${this.metadata.id}`, payload)
         .then((response) => {
           this.showSuccNotif(response.data.message);
           this.$emit('reset');
@@ -491,7 +489,7 @@ export default {
         cancel: this.$t('common.cancel'),
         ok: this.$t('common.ok')
       }).onOk(async () => {
-        this.$axios.delete('/api/history', { data: { work_id: this.metadata.id } })
+        this.$axios.delete(`/api/history/${this.metadata.id}`)
           .then((_) => {
             this.$q.notify(this.$t('workdetails.deleteHistorySuccess'))
           })
@@ -504,7 +502,7 @@ export default {
 
     async scanWorkFile() {
       try {
-        const response = await this.$axios.post(`/api/work/scan/${this.metadata.id}`);
+        const response = await this.$axios.post(`/api/scan/${this.metadata.id}`);
         if (response.data.memo) {
           this.$router.go(0);
         }

@@ -13,7 +13,6 @@ import Folders from 'pages/Dashboard/Folders'
 import Scanner from 'pages/Dashboard/Scanner'
 import Advanced from 'pages/Dashboard/Advanced'
 import UserManage from 'pages/Dashboard/UserManage'
-import Backfill from 'pages/Dashboard/Backfill'
 import Settings from 'pages/Dashboard/Settings'
 
 function prefixRoutes(prefix, routes) {
@@ -43,10 +42,6 @@ const routes = [
       {
         path: 'usermanage',
         component: UserManage
-      },
-      {
-        path: 'backfill',
-        component: Backfill
       },
       {
         path: 'settings',

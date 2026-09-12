@@ -8,7 +8,7 @@ const db = require('../database/db');
 
 
 // 创建一个新用户 (只有 admin 账号拥有权限)
-router.post('/user', [
+router.post('/users', [
   check('name')
     .isLength({ min: 5 })
     .withMessage('用户名长度至少为 5'),
@@ -55,7 +55,7 @@ router.post('/user', [
 });
 
 // 更新用户密码
-router.put('/user', [
+router.put('/users', [
   check('name')
     .isLength({ min: 5 })
     .withMessage('用户名长度至少为 5'),
@@ -92,7 +92,7 @@ router.put('/user', [
 });
 
 // 删除用户 (仅 admin 账号拥有权限)
-router.delete('/user', (req, res, next) => {
+router.delete('/users', (req, res, next) => {
   const users = req.body.users;
 
   if (!config.auth || req.user.name === 'admin') {

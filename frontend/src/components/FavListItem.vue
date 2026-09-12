@@ -222,7 +222,6 @@ export default {
       if (newRating) {
         const submitPayload = {
           'user_name': this.$store.state.User.name, // 用户名不会被后端使用
-          'work_id': this.metadata.id,
           'rating': newRating
         };
         this.submitRating(submitPayload);
@@ -233,7 +232,7 @@ export default {
       const params = {
         starOnly: true
       }
-      this.$axios.put('/api/review', payload, { params })
+      this.$axios.put(`/api/review/${this.metadata.id}`, payload, { params })
         .then((response) => {
           this.showSuccNotif(response.data.message)
         })
@@ -251,7 +250,6 @@ export default {
     setProgress (newProgress) {
       const submitPayload = {
         'user_name': this.$store.state.User.name, // 用户名不会被后端使用
-        'work_id': this.metadata.id,
         'progress': newProgress
       };
       this.submitProgress(submitPayload);
@@ -262,7 +260,7 @@ export default {
         starOnly: false,
         progressOnly: true
       }
-      this.$axios.put('/api/review', payload, {params})
+      this.$axios.put(`/api/review/${this.metadata.id}`, payload, {params})
         .then((response) => {
           this.showSuccNotif(response.data.message)
         })

@@ -698,7 +698,7 @@ export default {
         }
       }
 
-      fetch(apiUrl('/api/history'), {
+      fetch(apiUrl(`/api/history/${this.playWorkId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -716,11 +716,10 @@ export default {
       const seconds = this.currentTime
       const duration = file.duration
       const completed = duration > 0 && seconds >= 0.95 * duration
-      fetch(apiUrl('/api/track-progress'), {
+      fetch(apiUrl(`/api/track-progress/${this.playWorkId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          work_id: this.playWorkId,
           contentHash: file.contentHash,
           seconds: Math.round(seconds * 100) / 100,
           completed: completed
@@ -756,7 +755,7 @@ export default {
         return
       }
 
-      this.$axios.put('/api/history', data)
+      this.$axios.put(`/api/history/${this.playWorkId}`, data)
         .then((_) => {
           console.log("更新播放状态成功")
           this.latestUpdatedHistory = data;
@@ -772,8 +771,7 @@ export default {
       const seconds = this.currentTime
       const duration = file.duration
       const completed = duration > 0 && seconds >= 0.95 * duration
-      this.$axios.put('/api/track-progress', {
-        work_id: this.playWorkId,
+      this.$axios.put(`/api/track-progress/${this.playWorkId}`, {
         contentHash: file.contentHash,
         seconds: Math.round(seconds * 100) / 100,
         completed: completed

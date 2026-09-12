@@ -85,11 +85,6 @@ export default {
           path: '/admin/usermanage'
         },
         {
-          title: this.$t('dashboardlayout.backfill'),
-          icon: 'history',
-          path: '/admin/backfill'
-        },
-        {
           title: this.$t('dashboardlayout.generalSettings'),
           icon: 'tune',
           path: '/admin/settings'

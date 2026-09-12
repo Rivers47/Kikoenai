@@ -314,8 +314,7 @@ export default {
       if (!this.autoMarkListened) return
       if (this.workMarkedComplete) return
       this.workMarkedComplete = true
-      this.$axios.put('/api/review', {
-        work_id: this.playWorkId,
+      this.$axios.put(`/api/review/${this.playWorkId}`, {
         progress: 'listened'
       }, {
         params: { starOnly: false, progressOnly: true, autoMark: true }
@@ -341,8 +340,7 @@ export default {
       const seconds = this.plyr ? this.plyr.currentTime : 0
       const duration = this.plyr ? this.plyr.duration : 0
       const completed = duration > 0 && seconds >= 0.95 * duration
-      this.$axios.put('/api/track-progress', {
-        work_id: this.playWorkId,
+      this.$axios.put(`/api/track-progress/${this.playWorkId}`, {
         contentHash: file.contentHash,
         seconds: Math.round(seconds * 100) / 100,
         completed: completed
@@ -549,15 +547,12 @@ export default {
         }
 
         console.log('读入歌词');
-        // `lyrics` holds one entry per speaker file; the singular fields are
-        // the pre-multi-speaker shape, still sent by the backend so that a
-        // cached older bundle keeps working — read them the same way here.
-        const sources = check_response.data.lyrics && check_response.data.lyrics.length
-          ? check_response.data.lyrics
-          : [{
-              trackId: check_response.data.trackId || check_response.data.hash,
-              lyricExtension: check_response.data.lyricExtension,
-            }];
+        // One entry per speaker file.
+        const sources = check_response.data.lyrics || [];
+        if (!sources.length) {
+          this.resetToNoLyricStatus();
+          return;
+        }
 
         const fetched = await Promise.all(sources.map(async (source) => {
           const response = await this.$axios.get(`/api/media/stream/${source.trackId}`);
