@@ -28,12 +28,14 @@
  * a per-work tool, not a batch job. Loop it from a shell if you really want to.
  *
  * Usage:
- *   node scripts/extract-track-titles.js RJ01234567 --dry-run  # inspect only
+ *   node scripts/extract-track-titles.js RJ01234567 --dry-run  # inspect, then confirm
  *   node scripts/extract-track-titles.js 01234567              # same work, bare id
  *   node scripts/extract-track-titles.js d215444 --force       # overwrite existing
  */
 
 const path = require('path');
+const readline = require('readline/promises');
+const cheerio = require('cheerio');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 
@@ -48,7 +50,7 @@ const argv = yargs(hideBin(process.argv))
     type: 'string',
     description: "Work id: RJ01234567, 01234567, or Fanza d215444",
   }))
-  .option('dry-run', { type: 'boolean', description: 'Print, do not write' })
+  .option('dry-run', { type: 'boolean', description: 'Print, then ask before writing' })
   .option('force', { type: 'boolean', description: 'Overwrite titles this work already has' })
   .demandCommand(0)
   .strict()
@@ -102,6 +104,36 @@ const isUninformative = (fileName) => {
 };
 
 /**
+ * Plain text of scraped description markup, preserving the line structure the
+ * markup implies.
+ *
+ * This is the only place the flattening happens. `t_work.description` holds the
+ * seller's own markup (the work page renders it), but a model aligning titles to
+ * filenames wants prose, and `.text()` alone drops <br> and runs block elements
+ * together, turning a formatted blurb into one unreadable line.
+ *
+ * The <br> replacement is a sentinel, not a bare '\n': DLsite writes
+ * "<br />\n", so a literal newline usually follows the tag in the source, and
+ * turning the tag into a newline of its own would double every line break. The
+ * sentinel swallows that following source newline, leaving "<br /><br />" as
+ * the only way to get a blank line.
+ * @param {String} html
+ * @returns {String}
+ */
+function htmlToText(html) {
+  if (!html) return '';
+  const $ = cheerio.load(html, null, false);
+  $('br').replaceWith('\u0000');
+  $('p, div, li, tr, h1, h2, h3, h4, h5, h6').append('\u0000');
+  return $.root().text()
+    .replace(/\r/g, '')
+    .replace(/[ \t]*\u0000[ \t]*\n?/g, '\n')
+    .replace(/[ \t]*\n[ \t]*/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
  * Flatten a title to one display line.
  *
  * Sellers wrap titles across lines in the prose, and asking for the whole line
@@ -137,9 +169,8 @@ function structuredTitles(descriptionParts) {
 /**
  * Text a title must appear in to count as "copied, not invented".
  *
- * Must include the structured track titles as well as the prose: the scraper
- * strips ul.work_tracklist out of `description` so the titles are not
- * duplicated there, so prose alone would reject every structured work.
+ * Includes the structured track titles as well as the prose, so a work whose
+ * list DLsite published structurally is not rejected wholesale.
  */
 function buildHaystack(description, descriptionParts) {
   return [description || '', ...structuredTitles(descriptionParts)]
@@ -292,14 +323,21 @@ function validate(parsed, haystack, fileNames) {
       rejected.push([row.file, title, 'not verbatim in description']);
       continue;
     }
-    if (Object.values(accepted).includes(title)) {
-      rejected.push([row.file, title, 'duplicate title']);
-      continue;
-    }
     accepted[row.file] = title;
   }
 
   return { accepted, rejected };
+}
+
+// Without a terminal there is no one to answer, so a piped run stays a dry run.
+async function confirm(question) {
+  if (!process.stdin.isTTY) return false;
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return /^y(es)?$/i.test((await rl.question(question)).trim());
+  } finally {
+    rl.close();
+  }
 }
 
 async function run() {
@@ -322,7 +360,13 @@ async function run() {
   // Every failure below is loud and exits non-zero. The caller named this work
   // explicitly, so silently doing nothing would be the wrong answer.
   if (!work) throw new Error(`No work with id ${workId} in the database.`);
-  if (!work.description) {
+
+  // The column holds the seller's markup for anything scraped since the work
+  // page started rendering it. Plain text -- an older row, or the JSON fallback
+  // -- comes back out of htmlToText unchanged, so there is nothing to detect.
+  const description = htmlToText(work.description);
+
+  if (!description) {
     // Fanza is a dead end, not a "scrape it again" situation: scraper/fanza.js
     // extracts no description at all, so POST /api/refresh would change nothing.
     if (isFanzaId(workId)) {
@@ -356,7 +400,7 @@ async function run() {
   const parts = work.description_parts ? JSON.parse(work.description_parts) : [];
   const structured = structuredTitles(parts);
   const fileNames = audio.map(t => t.title);
-  const haystack = buildHaystack(work.description, parts);
+  const haystack = buildHaystack(description, parts);
 
   let accepted;
   let rejected = [];
@@ -370,7 +414,7 @@ async function run() {
     if (structured.length) {
       console.log(`  ${structured.length} structured titles vs ${audio.length} files, asking the model to align`);
     }
-    const parsed = await callModel(buildPrompt(work.description, structured), fileNames);
+    const parsed = await callModel(buildPrompt(description, structured), fileNames);
     ({ accepted, rejected } = validate(parsed, haystack, fileNames));
   }
 
@@ -382,8 +426,9 @@ async function run() {
     return;
   }
 
-  if (argv.dryRun) {
-    console.log(`  dry run, not written (${Object.keys(accepted).length} titles)`);
+  const count = Object.keys(accepted).length;
+  if (argv.dryRun && !(await confirm(`  write ${count} titles? [y/N] `))) {
+    console.log(`  dry run, not written (${count} titles)`);
     return;
   }
 

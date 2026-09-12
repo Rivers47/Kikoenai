@@ -1,8 +1,39 @@
 <template>
   <div>
-    <WorkDetails :metadata="metadata" @reset="requestData()" @resumeHistory="resumeMetadataPlayHistory" />
+    <WorkDetails :metadata="metadata" :images="extras.sampleImages" @reset="requestData()" @resumeHistory="resumeMetadataPlayHistory" />
     <!-- <WorkQueue :queue="tracks" :editable="false" /> -->
-    <WorkTree ref="workTree" :tree="tree" :metadata="metadata" :trackProgress="trackProgress" :editable="false" />
+
+    <!-- Tabs only appear once there is a second thing to show. A work with no
+         scraped description keeps the bare file tree. -->
+    <q-tabs
+      v-if="hasDescription"
+      v-model="tab"
+      align="left"
+      dense
+      narrow-indicator
+      class="q-mx-md text-primary"
+    >
+      <q-tab name="files" :label="$t('work.tabFiles')" />
+      <q-tab name="description" :label="$t('work.tabDescription')" />
+    </q-tabs>
+
+    <!-- keep-alive so the tree keeps whichever folder the user had opened,
+         along with its scroll position, across a tab switch. -->
+    <q-tab-panels v-model="tab" keep-alive animated class="bg-transparent">
+      <q-tab-panel name="files" class="q-pa-none">
+        <WorkTree ref="workTree" :tree="tree" :metadata="metadata" :trackProgress="trackProgress" :editable="false" />
+      </q-tab-panel>
+
+      <q-tab-panel name="description" class="q-pa-md">
+        <WorkDescription
+          :workid="metadata.id"
+          :html="extras.descriptionHtml"
+          :description="extras.description"
+          :parts="extras.descriptionParts"
+          :images="extras.sampleImages"
+        />
+      </q-tab-panel>
+    </q-tab-panels>
   </div>
 </template>
 
@@ -10,6 +41,7 @@
 import WorkDetails from 'components/WorkDetails'
 // import WorkQueue from 'components/WorkQueue'
 import WorkTree from 'components/WorkTree'
+import WorkDescription from 'components/WorkDescription'
 import NotifyMixin from '../mixins/Notification.js'
 
 export default {
@@ -20,7 +52,8 @@ export default {
   components: {
     WorkDetails,
     // WorkQueue,
-    WorkTree
+    WorkTree,
+    WorkDescription
   },
 
   data () {
@@ -32,6 +65,16 @@ export default {
       },
       tree: [],
       trackProgress: {},
+      extras: { description: '', descriptionHtml: '', descriptionParts: [], sampleImages: [] },
+      tab: 'files',
+    }
+  },
+
+  computed: {
+    hasDescription () {
+      return Boolean(this.extras.descriptionHtml)
+        || Boolean(this.extras.description)
+        || this.extras.descriptionParts.length > 0
     }
   },
 
@@ -39,6 +82,9 @@ export default {
     '$route.params.id' (id) {
       this.workid = id;
       this.metadata.state = null;
+      this.extras = { description: '', descriptionHtml: '', descriptionParts: [], sampleImages: [] };
+      // The next work may have no description at all, and the tab bar goes with it.
+      this.tab = 'files';
       this.requestData();
     },
     
@@ -86,9 +132,25 @@ export default {
       }
     },
 
+    async requestExtras() {
+      try {
+        const response = await this.$axios.get(`/api/work/${this.workid}/extras`);
+        this.extras = response.data;
+      } catch (error) {
+        // Non-fatal: the description is an extra, and the page is perfectly
+        // usable as the file tree it has always been.
+        if (error.response) {
+          this.showErrNotif(error.response.data.error || `${error.response.status} ${error.response.statusText}`)
+        } else {
+          this.showErrNotif(error.message || error)
+        }
+      }
+    },
+
     requestData () {
       this.requestMetaData();
       this.requestTracks();
+      this.requestExtras();
     },
 
     resumeMetadataPlayHistory() {

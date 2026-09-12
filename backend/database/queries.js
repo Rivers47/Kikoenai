@@ -3,6 +3,7 @@ const { nameToUUID } = require('../scraper/utils');
 const { canonicalizeTagName } = require('../scraper/tag-aliases');
 const { canonicalizeVaName } = require('../scraper/va-aliases');
 const { parseSearchQuery, RELATION_FIELDS } = require('./search-query');
+const { collectWorkImages } = require('../filesystem/utils');
 
 /**
  * Format ID: pad DLsite numeric ids to RJ form (6 or 8 digits).
@@ -13,6 +14,20 @@ function formatID(id) {
   const n = parseInt(id, 10);
   return (n >= 1000000) ? `0${n}`.slice(-8) : `000000${n}`.slice(-6);
 }
+
+/**
+ * Read one of the JSON-encoded t_work columns, tolerating null and garbage.
+ * @param {String|null} value
+ * @param {*} [fallback=[]]
+ */
+const parseJsonColumn = (value, fallback = []) => {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+};
 
 /**
  * Factory that binds every DB query function to a specific knex instance.
@@ -370,9 +385,8 @@ const makeQueries = (knex) => {
       });
     }
 
-    // Description and sample image list: overwritten wholesale, since a
-    // partial scrape is worth less than the previous full one only if it is
-    // empty — which is why an empty scrape is skipped here.
+    // Description and sample image list: the description is overwritten
+    // The image list is merged instead
     if (options.includeDescription || options.refreshAll) {
       const patch = {};
       if (work.description) patch.description = work.description;
@@ -380,7 +394,17 @@ const makeQueries = (knex) => {
         patch.description_parts = JSON.stringify(work.descriptionParts);
       }
       if (work.sampleImages && work.sampleImages.length) {
-        patch.sample_images = JSON.stringify(work.sampleImages);
+        // Rebuilt from the fresh scrape, but every `file` already on disk is
+        // carried over
+        const stored = await trx('t_work').select('sample_images').where('id', work.id).first();
+        const fileByUrl = {};
+        for (const image of parseJsonColumn(stored && stored.sample_images)) {
+          if (image && image.url && image.file) fileByUrl[image.url] = image.file;
+        }
+        patch.sample_images = JSON.stringify(collectWorkImages(work).map(image => ({
+          ...image,
+          file: fileByUrl[image.url] || null,
+        })));
       }
       if (Object.keys(patch).length) {
         await trx('t_work').where('id', work.id).update(patch);
@@ -1218,19 +1242,10 @@ const makeQueries = (knex) => {
 
     if (!row) return null;
 
-    const parse = (value, fallback) => {
-      if (!value) return fallback;
-      try {
-        return JSON.parse(value);
-      } catch {
-        return fallback;
-      }
-    };
-
     return {
       description: row.description || '',
-      descriptionParts: parse(row.description_parts, []),
-      sampleImages: parse(row.sample_images, []),
+      descriptionParts: parseJsonColumn(row.description_parts),
+      sampleImages: parseJsonColumn(row.sample_images),
     };
   }
 

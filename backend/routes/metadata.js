@@ -7,11 +7,12 @@ const { getTrackList, toTree, scrapeWorkHashes } = require('../filesystem/utils'
 const { config } = require('../config');
 const normalize = require('./utils/normalize');
 const { isValidRequest, workIdParam } = require('./utils/validate');
-const { formatID, scrapeWorkMemo, coverFileName } = require('../filesystem/utils');
+const { sanitizeDescriptionHtml, looksLikeHtml } = require('./utils/description-html');
+const { formatID, scrapeWorkMemo, coverFileName, workImageFileNamePattern } = require('../filesystem/utils');
 const { scrapeWorkMetadataFromDLsite } = require('../scraper/dlsite');
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
 const { isFanzaId } = require('../work-id');
-const { saveWorkImages, saveWorkReviews, skipWorkExtras } = require('../filesystem/workExtras');
+const { saveWorkImages, saveWorkReviews, skipWorkExtras, REFRESH_IMAGE_CONCURRENCY } = require('../filesystem/workExtras');
 
 // Covers come from DLsite/Fanza and effectively never change, so cache them
 // for a long time rather than paying a conditional request every time (a 304
@@ -21,6 +22,7 @@ const { saveWorkImages, saveWorkReviews, skipWorkExtras } = require('../filesyst
 // by the `private, no-cache` default in api.js.
 const COVER_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
 const COVER_FALLBACK_MAX_AGE = 5 * 60;   // 5 minutes
+const IMAGE_MAX_AGE = COVER_MAX_AGE;
 
 const PAGE_SIZE = config.pageSize || 12;
 const FIELDS = ['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series'];
@@ -72,6 +74,61 @@ router.get('/work/:id',
         res.send(work[0]);
       })
       .catch(err => next(err));
+  });
+
+// GET the scraped work-page extras: the description (as sanitized markup, and
+// as plain text for rows that predate it), its per-part structure (headings,
+// embedded images, track list) and the sample image list.
+router.get('/work/:id/extras',
+  workIdParam(),
+  async (req, res, next) => {
+    if(!isValidRequest(req, res)) return;
+
+    try {
+      const extras = await db.getWorkExtras(req.params.id);
+      if (!extras) {
+        res.status(404).send({error: `没有 id 为 "${req.params.id}" 的作品`});
+        return;
+      }
+      // The column holds the seller's markup as scraped, filtered on the way
+      // out (see utils/description-html.js). A row that predates that — or one
+      // from the JSON fallback — holds plain text, and goes out as `description`
+      // for the client's plain-text path; exactly one of the two is ever set.
+      const isHtml = looksLikeHtml(extras.description);
+      res.send({
+        ...extras,
+        description: isHtml ? '' : extras.description,
+        descriptionHtml: isHtml
+          ? sanitizeDescriptionHtml(extras.description, req.params.id, extras.sampleImages)
+          : '',
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+// GET one scraped sample/description image.
+router.get('/image/:id/:name',
+  workIdParam(),
+  (req, res, next) => {
+    if(!isValidRequest(req, res)) return;
+
+    const { id, name } = req.params;
+    if (!workImageFileNamePattern(id).test(name)) {
+      res.status(404).send({error: `没有名为 "${name}" 的作品图片`});
+      return;
+    }
+
+    res.setHeader('Cache-Control', `public, max-age=${IMAGE_MAX_AGE}`);
+    res.sendFile(path.join(config.imageFolderDir, name), (err) => {
+      if (!err) return;
+      // Never downloaded (config.skipWorkExtras defaults to true), or deleted
+      // since. The work page asks only for images the stored list says are on
+      // disk, so this is the mismatched case, and an error page would only be
+      // rendered as a broken image anyway.
+      if (res.headersSent) return next(err); // died mid-stream, nothing to answer with
+      res.status(404).end();
+    });
   });
 
 // GET track list in work folder
@@ -356,7 +413,7 @@ router.post('/refresh/:id',
       const [images, reviews] = skipWorkExtras()
         ? [0, 0]
         : await Promise.all([
-          saveWorkImages(work_id, metadata),
+          saveWorkImages(work_id, metadata, undefined, { concurrency: REFRESH_IMAGE_CONCURRENCY }),
           saveWorkReviews(work_id),
         ]);
 

@@ -9,6 +9,8 @@ export default {
   add: '新增',
   refresh: '重新整理',
   search: '搜尋',
+  previous: '上一個',
+  next: '下一個',
   back: '返回',
   retry: '重試',
   loading: '載入中…',

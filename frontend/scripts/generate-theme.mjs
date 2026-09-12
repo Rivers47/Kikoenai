@@ -124,6 +124,8 @@ const tokenRoles = [
   ['surface-container', 'surfaceContainer'],
   ['surface-container-high', 'surfaceContainerHigh'],
   ['surface-container-highest', 'surfaceContainerHighest'],
+  ['inverse-surface', 'inverseSurface'],
+  ['inverse-on-surface', 'inverseOnSurface'],
   ['outline', 'outline'],
   ['outline-variant', 'outlineVariant'],
   ['inverse-surface', 'inverseSurface'],
@@ -267,6 +269,7 @@ ${extendedContainerRoles
 // Surface container helpers
 .bg-surface-container { background: var(--surface-container) !important; }
 .bg-surface-container-highest { background: var(--surface-container-highest) !important; }
+.bg-inverse-surface { background: var(--inverse-surface) !important; }
 
 // Bare on-color text helpers (on-<role>); Quasar provides some, but not all M3 roles
 ${bareOnRoles
