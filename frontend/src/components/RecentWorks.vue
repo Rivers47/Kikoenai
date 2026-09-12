@@ -79,8 +79,6 @@ export default {
         const response = await this.$axios.get('/api/history', { params });
         this.works = this.works.concat(response.data.works);
         this.pagination = response.data.pagination;
-        this.$refs.scroll.refresh();
-        // console.log("vscroll = ", this.$refs.scroll);
       } catch(err) {
         console.warn('load recent work failed: ', err);
       }
