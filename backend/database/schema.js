@@ -30,7 +30,7 @@ const createSchema = () => knex.schema
 
     table.json('memo'); // 关于这个作品的各种信息记录,音频文件,音频文件时长,歌词映射
 
-    table.text('description'); // TEXT 类型 [作品内容, 纯文本]
+    table.text('description'); // TEXT 类型 [作品内容: HTML 抓取路径存原始标记，JSON 回退路径存纯文本]
     table.text('description_parts'); // JSON: the same block, per-part, incl. the track list
     table.text('sample_images'); // JSON: [{url, thumb, width, height, file}]
 

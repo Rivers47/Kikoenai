@@ -119,7 +119,7 @@ SQLite3 via Knex.js with the following tables:
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
-| `t_work` | Voice works (audio albums) | `id` (TEXT — see id note below), `title`, `dir`, `circle_id`, `nsfw`, `release`, `dl_count`, `price`, `rate_average_2dp`, `memo` (JSON), `description`, `description_parts` (JSON), `sample_images` (JSON) |
+| `t_work` | Voice works (audio albums) | `id` (TEXT — see id note below), `title`, `dir`, `circle_id`, `nsfw`, `release`, `dl_count`, `price`, `rate_average_2dp`, `memo` (JSON), `description` (**markup** as scraped; plain text on older rows and from the JSON fallback), `description_parts` (JSON), `sample_images` (JSON) |
 | `t_circle` | Circles (artist groups) | `id` (UUID), `name` |
 | `t_tag` | Tags | `id` (UUID), `name` |
 | `t_va` | Voice actors | `id` (UUID v5), `name` |
@@ -347,8 +347,8 @@ The DLsite scraper reads more than the `#work_outline` spec table. The descripti
 | Field | Source | Notes |
 |-------|--------|-------|
 | `authors[]` | `作者` row of `#work_outline` | The creator credit on works with no VA/illustrator/scenario breakdown. Rarely set. `{id: nameToUUID(name), name}`, same shape as `vas`/`scriptWriters`. |
-| `description` | `div[itemprop="description"]` | Plain text. `<br>` handling is a sentinel, not a bare `\n` — see `elementText`, DLsite writes `"<br />\n"` so a naive replace doubles every line break. |
-| `descriptionParts[]` | same block, per `.work_parts` | `{type, heading, text, images[], tracks[]}`. `type` comes from the `type_*` class: `text`, `image`, `tracklist`. |
+| `description` | `div[itemprop="description"]` | **The block's markup, as the seller wrote it**, stored unsanitized — the allowlist lives at the serving end (see below). The JSON fallback still writes plain text here (`intro_s` is all it has), as do rows scraped before this. |
+| `descriptionParts[]` | same block, per `.work_parts` | `{type, heading, images[], tracks[]}`. `type` comes from the `type_*` class: `text`, `image`, `tracklist`. The per-part `text` is gone — the markup carries it — but `images[]` still drives the downloader and `tracks[]` still feeds the track-title extractor. |
 | `descriptionParts[].tracks[]` | `.work_parts.type_tracklist` | `{title, time}`. **Only ~16% of works use this structured part** (measured over 40 random library works: 16% structured, 43% track list written as prose inside a `type_text` part, 40% no track list). The prose case is still captured — as `text` under a heading like `☆トラックリスト&プレイ内容` — but `tracks[]` is empty for it, and the numbering varies wildly (`Track1`, `①`, bare `1`, `◆01`). Parsing that is the LLM's job, not the scraper's. |
 | `descriptionParts[].type` | the `type_*` class | Seen in the wild: `text`, `image`, `multiimages`, `tracklist`, `list`. Unknown types still parse — the type is recorded and text/images extracted generically. |
 | `sampleImages[]` | `.product-slider-data div[data-src]` | `{url, thumb, width, height}`. The slides are rendered client-side by Vue, so the visible `<img>` tags are **not** in the HTML — only these empty data divs are. The first slide (`_img_main`) is dropped; it is the cover. |
@@ -360,6 +360,15 @@ The JSON fallback (`scrapeStaticWorkMetadataFromDLsiteJson`) fills the same fiel
 **Reviews** — `scrapeWorkReviewsFromDLsite(id, {order, limit, maxPages})`. Reviews are rendered client-side and are absent from the work page HTML; the endpoint the Vue component calls is `GET /{site}/api/review?product_id=RJ…&order=regist_d&limit=…&page=…&locale=ja_JP`. It paginates until a short page, de-duplicating by `member_review_id` (a "pickup" review repeats across pages). Each review carries `genres` — genres **the reviewer** picked, independent of the seller-chosen work genres.
 
 > A region-restricted work returns `{is_success: true, error_msg: ""}` with no `review_list` and serves a stripped work page (no description, no slider, no review section). That is indistinguishable from "no reviews" at the API level, so a scrape from a blocked IP silently yields empty extras rather than an error.
+
+**Markup in, text out.** The scraper stores what DLsite served and flattens nothing; the two consumers each take what they need:
+
+- **The work page** gets it through `sanitizeDescriptionHtml` (`routes/utils/description-html.js`), called by `GET /api/work/:id/extras`. Allowlisted tags and attributes only, `script`/`style`/`iframe`/form controls removed with their subtree, unknown tags *unwrapped* (their text is the blurb), `on*` and every unlisted attribute dropped, `javascript:`/`data:` links unwrapped to their label, external links marked `target=_blank rel="noopener noreferrer"`, and each `<img>` rewritten to `${config.basePath}/api/image/:id/:file` — **along with the `<a>` DLsite wraps around it**, so clicking the picture opens the local copy rather than leaving for img.dlsite.jp — or removed when the file was never downloaded (an `<a>` left holding nothing goes with it). Nothing on the page hotlinks DLsite. Matching the stored entry to the markup is scheme-insensitive (`imageKey`): DLsite writes `//img.dlsite.jp/…` while `absoluteAssetUrl` stored `https://img.dlsite.jp/…`, and an exact match finds nothing and silently drops every image. The wrapping `<a href>` is the second place the file is looked up, since `parseDescriptionParts` prefers it (the link is the full-size original, the `<img>` may be a resized copy). **Colours are stripped** (`color`, `background`, anything with `url()`), while layout declarations — `text-align`, `font-size`, `font-weight`, … — survive: sellers pick colours for DLsite's white page and this app has a dark theme. Covered by `test/description-html.js`.
+- **`scripts/extract-track-titles.js`** owns the flattening now (`htmlToText`, cheerio + the `<br>` sentinel that keeps DLsite's `"<br />\n"` from doubling every line break). It needs no detection: plain text passed through `htmlToText` comes back out unchanged.
+
+**Sanitizing on the way out, not at scrape time, is the load-bearing choice.** An allowlist always needs adjusting; doing it here fixes the whole library at once, while a scrape-time filter would leave every stored work carrying whatever the old rules let through until it was scraped again.
+
+**No migration and no second column.** The markup lands in `description`, replacing the flattened text, and a rescan or refresh upgrades a row in place. Until then old rows still hold text, so `looksLikeHtml` (a lone `/<[a-z][^>]*>/i`) decides which way a row goes out: markup rows are sanitized into `descriptionHtml` and text rows go out as `description` for the client's plain-text path, which keeps their line breaks and the images and track list the old scraper pulled out separately. Exactly one of the two is ever populated.
 
 **Storage** — `db.getWorkExtras(id)`, `db.setWorkSampleImages(id, list)`, `db.replaceWorkDlsiteReviews(id, reviews)`, `db.getWorkDlsiteReviews(id)`. Reviews are **replaced**, not merged: DLsite lets reviewers edit and delete, and the rows carry no local state.
 
@@ -471,7 +480,7 @@ The following endpoints are consumed by the `frontend/` package:
 | `/api/search` | GET | Filter search — `filter` is the advanced filter syntax (§2.3b), e.g. `va:"name$" -tag:NTR`. Was `keyword` |
 | ~~`/api/:fields/:id/works`~~ | — | **Removed.** Label filtering goes through `/api/search`
 | `/api/work/:id` | GET | Get work metadata + playback state |
-| `/api/work/:id/extras` | GET | Scraped work-page extras: `{description, descriptionParts, sampleImages}`. Kept off `/api/work/:id` because that row is assembled by `assembleWorks`, shared with every list endpoint, and a description dwarfs the rest of a work's metadata. 404 when the work is unknown; a work with nothing scraped returns empty values, not a 404 |
+| `/api/work/:id/extras` | GET | Scraped work-page extras: `{description, descriptionHtml, descriptionParts, sampleImages}`. The stored `description` column goes out as **one or the other**: markup is **sanitized here, per request** (`routes/utils/description-html.js`) and returned as `descriptionHtml` with `description: ''`; a plain-text row (older scrape, or the JSON fallback) is returned as `description` with `descriptionHtml: ''`. Kept off `/api/work/:id` because that row is assembled by `assembleWorks`, shared with every list endpoint, and a description dwarfs the rest of a work's metadata. 404 when the work is unknown; a work with nothing scraped returns empty values, not a 404 |
 | `/api/image/:id/:name` | GET | One scraped sample/description image from `config.imageFolderDir`. `name` must match `workImageFileNamePattern(id)` (`filesystem/utils.js`, shared with `deleteWorkImagesFromDisk`) — caller-supplied, so it is matched, never sanitized. 30-day `public` cache like covers. **404 with no placeholder when the file is absent.** The frontend only asks for images whose stored entry has a `file`, and **never falls back to the remote DLsite url** — an undownloaded image is simply not shown, rather than hotlinking img.dlsite.jp from every viewer's browser |
 | `/api/tags` | GET | List all tags |
 | `/api/circles` | GET | List all circles |
@@ -547,6 +556,7 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
   - `edit-metadata.js` — covers the `PUT /api/work/:id` flow and `db.editWorkMetadata` (uses shared `db-test.sqlite3` singleton)
   - `search-query.js` — advanced filter parser/serializer + `getWorksByFilter` behaviour (builds its own throwaway `db-search-test.sqlite3`)
   - `work-id.js` — id canonicalization (Fanza + DLsite books), `workno` spelling, cover/image file naming, `getFolderList` work-code detection, and migration `20260828000000` up/down
+  - `description-html.js` — `looksLikeHtml`, and the sanitizer allowlist: tag/attribute filtering, script removal, unknown-tag unwrapping, colour stripping, image rewriting (incl. `basePath`) and link handling
   - `work-images.js` — `collectWorkImages` ordering/dedup, the `deleteWorkImagesFromDisk` wipe **and** its `keep`-set prune (against a real temp folder), and what `workImageFileNamePattern` will and will not match
   - `benchmark.js` — DB query benchmark; Skips if `backend/sqlite/db.sqlite3` is missing/empty;
 - **Run:** `npm test` (sets `NODE_ENV=test`)

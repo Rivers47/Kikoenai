@@ -35,6 +35,7 @@
 
 const path = require('path');
 const readline = require('readline/promises');
+const cheerio = require('cheerio');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 
@@ -103,6 +104,36 @@ const isUninformative = (fileName) => {
 };
 
 /**
+ * Plain text of scraped description markup, preserving the line structure the
+ * markup implies.
+ *
+ * This is the only place the flattening happens. `t_work.description` holds the
+ * seller's own markup (the work page renders it), but a model aligning titles to
+ * filenames wants prose, and `.text()` alone drops <br> and runs block elements
+ * together, turning a formatted blurb into one unreadable line.
+ *
+ * The <br> replacement is a sentinel, not a bare '\n': DLsite writes
+ * "<br />\n", so a literal newline usually follows the tag in the source, and
+ * turning the tag into a newline of its own would double every line break. The
+ * sentinel swallows that following source newline, leaving "<br /><br />" as
+ * the only way to get a blank line.
+ * @param {String} html
+ * @returns {String}
+ */
+function htmlToText(html) {
+  if (!html) return '';
+  const $ = cheerio.load(html, null, false);
+  $('br').replaceWith('\u0000');
+  $('p, div, li, tr, h1, h2, h3, h4, h5, h6').append('\u0000');
+  return $.root().text()
+    .replace(/\r/g, '')
+    .replace(/[ \t]*\u0000[ \t]*\n?/g, '\n')
+    .replace(/[ \t]*\n[ \t]*/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
  * Flatten a title to one display line.
  *
  * Sellers wrap titles across lines in the prose, and asking for the whole line
@@ -138,9 +169,8 @@ function structuredTitles(descriptionParts) {
 /**
  * Text a title must appear in to count as "copied, not invented".
  *
- * Must include the structured track titles as well as the prose: the scraper
- * strips ul.work_tracklist out of `description` so the titles are not
- * duplicated there, so prose alone would reject every structured work.
+ * Includes the structured track titles as well as the prose, so a work whose
+ * list DLsite published structurally is not rejected wholesale.
  */
 function buildHaystack(description, descriptionParts) {
   return [description || '', ...structuredTitles(descriptionParts)]
@@ -330,7 +360,13 @@ async function run() {
   // Every failure below is loud and exits non-zero. The caller named this work
   // explicitly, so silently doing nothing would be the wrong answer.
   if (!work) throw new Error(`No work with id ${workId} in the database.`);
-  if (!work.description) {
+
+  // The column holds the seller's markup for anything scraped since the work
+  // page started rendering it. Plain text -- an older row, or the JSON fallback
+  // -- comes back out of htmlToText unchanged, so there is nothing to detect.
+  const description = htmlToText(work.description);
+
+  if (!description) {
     // Fanza is a dead end, not a "scrape it again" situation: scraper/fanza.js
     // extracts no description at all, so POST /api/refresh would change nothing.
     if (isFanzaId(workId)) {
@@ -364,7 +400,7 @@ async function run() {
   const parts = work.description_parts ? JSON.parse(work.description_parts) : [];
   const structured = structuredTitles(parts);
   const fileNames = audio.map(t => t.title);
-  const haystack = buildHaystack(work.description, parts);
+  const haystack = buildHaystack(description, parts);
 
   let accepted;
   let rejected = [];
@@ -378,7 +414,7 @@ async function run() {
     if (structured.length) {
       console.log(`  ${structured.length} structured titles vs ${audio.length} files, asking the model to align`);
     }
-    const parsed = await callModel(buildPrompt(work.description, structured), fileNames);
+    const parsed = await callModel(buildPrompt(description, structured), fileNames);
     ({ accepted, rejected } = validate(parsed, haystack, fileNames));
   }
 

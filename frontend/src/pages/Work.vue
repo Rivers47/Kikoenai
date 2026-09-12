@@ -27,6 +27,7 @@
       <q-tab-panel name="description" class="q-pa-md">
         <WorkDescription
           :workid="metadata.id"
+          :html="extras.descriptionHtml"
           :description="extras.description"
           :parts="extras.descriptionParts"
           :images="extras.sampleImages"
@@ -64,13 +65,15 @@ export default {
       },
       tree: [],
       trackProgress: {},
-      extras: { description: '', descriptionParts: [], sampleImages: [] },
+      extras: { description: '', descriptionHtml: '', descriptionParts: [], sampleImages: [] },
     }
   },
 
   computed: {
     hasDescription () {
-      return Boolean(this.extras.description) || this.extras.descriptionParts.length > 0
+      return Boolean(this.extras.descriptionHtml)
+        || Boolean(this.extras.description)
+        || this.extras.descriptionParts.length > 0
     },
 
     // Which tab is open lives in the url, like the tree's own folder and image
@@ -99,7 +102,7 @@ export default {
     '$route.params.id' (id) {
       this.workid = id;
       this.metadata.state = null;
-      this.extras = { description: '', descriptionParts: [], sampleImages: [] };
+      this.extras = { description: '', descriptionHtml: '', descriptionParts: [], sampleImages: [] };
       this.requestData();
     },
     

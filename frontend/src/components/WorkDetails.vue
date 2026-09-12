@@ -7,7 +7,7 @@
         style="border-radius: 8px; overflow: hidden;"
       />
 
-    <div class="col-md-6 col-12 q-pa-sm">
+    <div class="col-md-6 col-12 q-pa-md">
       <div class="q-px-sm q-py-none">
         <!-- 标题 -->
         <div class="text-h6 text-weight-regular">

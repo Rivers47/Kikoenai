@@ -28,31 +28,6 @@ const absoluteAssetUrl = (u) => {
 };
 
 /**
- * Plain text of an element, preserving the line structure the markup implies.
- * Cheerio's .text() drops <br> and runs block elements together, which turns a
- * seller's formatted blurb into one unreadable line.
- * @param {Function} $ Cheerio instance.
- * @param {Object} el Element to render.
- * @returns {String}
- */
-const elementText = ($, el) => {
-  const $el = $(el).clone();
-  // A sentinel, not a bare '\n': DLsite writes "<br />\n" so a literal newline
-  // usually follows the tag in the source, and turning the <br> into a newline
-  // of its own would double every line break. The sentinel swallows that one
-  // following source newline, leaving "<br /><br />" as the only way to get a
-  // blank line.
-  $el.find('br').replaceWith('\u0000');
-  $el.find('p, div, li, tr, h1, h2, h3, h4, h5, h6').append('\u0000');
-  return $el.text()
-    .replace(/\r/g, '')
-    .replace(/[ \t]*\u0000[ \t]*\n?/g, '\n')
-    .replace(/[ \t]*\n[ \t]*/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-};
-
-/**
  * Parses the 作品内容 block into structured parts.
  *
  * The block is a sequence of `.work_parts` sections, each tagged by a
@@ -93,15 +68,9 @@ const parseDescriptionParts = ($) => {
       if (title) tracks.push({ title, time });
     });
 
-    // The tracklist is returned structurally; leaving it in the prose too
-    // would duplicate every title.
-    const $text = $area.clone();
-    $text.find('ul.work_tracklist').remove();
-
     parts.push({
       type,
       heading: heading || null,
-      text: elementText($, $text),
       images,
       tracks,
     });
@@ -111,15 +80,18 @@ const parseDescriptionParts = ($) => {
 };
 
 /**
- * Flattens description parts into the plain prose blob.
- * @param {Array<Object>} parts Output of parseDescriptionParts.
- * @returns {String}
+ * The 作品内容 block's own markup.
+ *
+ * Returned unsanitized on purpose: this is the scrape, and the allowlist lives
+ * at the serving end (routes/utils/description-html.js) so that tightening it
+ * takes effect for the whole library instead of needing every work re-scraped.
+ * @param {Function} $ Cheerio instance.
+ * @returns {String} Inner HTML of the description block, '' when it has none.
  */
-const descriptionToText = parts => parts
-  .map(part => [part.heading, part.text].filter(Boolean).join('\n'))
-  .filter(Boolean)
-  .join('\n\n')
-  .trim();
+const descriptionHtml = ($) => {
+  const html = $('div[itemprop="description"]').html();
+  return html ? html.trim() : '';
+};
 
 /**
  * Parses the work's sample images from the product slider.
@@ -285,7 +257,14 @@ const scrapeStaticWorkMetadataFromDLsite = (id) => new Promise((resolve, reject)
 
       // 作品内容 (description) and the sample images from the product slider
       work.descriptionParts = parseDescriptionParts($);
-      work.description = descriptionToText(work.descriptionParts);
+      // The column holds the seller's markup now, not a flattened copy of it.
+      // Flattening here is what used to cost the formatting and the position of
+      // every inline image; the one consumer that wants text
+      // (scripts/extract-track-titles.js) flattens it itself, and the work page
+      // renders it through the sanitizer in routes/utils/description-html.js.
+      // Rows scraped before this hold plain text and stay that way until the
+      // work is scanned or refreshed again.
+      work.description = descriptionHtml($);
       work.sampleImages = parseSampleImages($);
 
       if (work.tags.length === 0 && work.vas.length === 0) {

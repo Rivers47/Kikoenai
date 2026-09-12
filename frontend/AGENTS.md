@@ -80,7 +80,7 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 │   │   ├── WorkDetails.vue               # Work detail panel (metadata, review, rating; opens EditMetadata for admins)
 │   │   ├── EditMetadata.vue             # Admin-only metadata edit dialog (PUT /api/work/:id)
 │   │   ├── WorkTree.vue                  # Track tree view for a work
-│   │   ├── WorkDescription.vue           # Scraped DLsite description (Description tab of Work.vue)
+│   │   ├── WorkDescription.vue           # Scraped DLsite description, sanitized markup via v-html (Description tab of Work.vue)
 │   │   ├── WorkGallery.vue               # Work-page cover carousel: cover + scraped images
 │   │   ├── Cover.vue                     # Cover image + id/release/tag chips (cards/lists/player)
 │   │   ├── RecentWorks.vue               # Recently played works section
@@ -517,7 +517,7 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 | `/api/auth/logout` | POST | `MainLayout.vue` | Destroy the server-side session and clear the cookie |
 | `/api/works` | GET | `Works.vue` | List/search works (paginated, sorted, filtered) |
 | `/api/work/:id` | GET | `Work.vue` | Get work metadata + playback state |
-| `/api/work/:id/extras` | GET | `Work.vue` | `{description, descriptionParts, sampleImages}` — feeds the Description tab and the cover gallery. Failure is non-fatal: the page is still the file tree it always was |
+| `/api/work/:id/extras` | GET | `Work.vue` | `{description, descriptionHtml, descriptionParts, sampleImages}` — feeds the Description tab and the cover gallery. `descriptionHtml` is the seller's own markup, **sanitized by the backend per request**, and is what `WorkDescription.vue` renders with `v-html`; `description`/`descriptionParts[].text` are the plain-text path for rows scraped before the markup was kept (the backend decides which of the two is populated, so the component just checks `html`). A rescan or refresh upgrades a row from one to the other. Failure is non-fatal: the page is still the file tree it always was |
 | `/api/image/:id/:name` | GET | `WorkGallery.vue`, `WorkDescription.vue` (via `workImageUrl()` in `src/utils.js`) | One scraped image. **Local copies only:** `workImageUrl` returns `''` for an entry with no `file` (nothing was downloaded — backend `config.skipWorkExtras` defaults to `true`) and callers drop the empty ones, so an undownloaded image is left out rather than hotlinked from img.dlsite.jp. Run `updater.js --images`, or turn `skipWorkExtras` off, to get them |
 | `/api/tags` | GET | `List.vue` | List all tags |
 | `/api/circles` | GET | `List.vue` | List all circles |

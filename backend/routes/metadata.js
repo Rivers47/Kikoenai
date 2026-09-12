@@ -7,6 +7,7 @@ const { getTrackList, toTree, scrapeWorkHashes } = require('../filesystem/utils'
 const { config } = require('../config');
 const normalize = require('./utils/normalize');
 const { isValidRequest, workIdParam } = require('./utils/validate');
+const { sanitizeDescriptionHtml, looksLikeHtml } = require('./utils/description-html');
 const { formatID, scrapeWorkMemo, coverFileName, workImageFileNamePattern } = require('../filesystem/utils');
 const { scrapeWorkMetadataFromDLsite } = require('../scraper/dlsite');
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
@@ -75,8 +76,9 @@ router.get('/work/:id',
       .catch(err => next(err));
   });
 
-// GET the scraped work-page extras: description, its per-part structure
-// (headings, embedded images, track list) and the sample image list.
+// GET the scraped work-page extras: the description (as sanitized markup, and
+// as plain text for rows that predate it), its per-part structure (headings,
+// embedded images, track list) and the sample image list.
 router.get('/work/:id/extras',
   workIdParam(),
   async (req, res, next) => {
@@ -88,7 +90,18 @@ router.get('/work/:id/extras',
         res.status(404).send({error: `没有 id 为 "${req.params.id}" 的作品`});
         return;
       }
-      res.send(extras);
+      // The column holds the seller's markup as scraped, filtered on the way
+      // out (see utils/description-html.js). A row that predates that — or one
+      // from the JSON fallback — holds plain text, and goes out as `description`
+      // for the client's plain-text path; exactly one of the two is ever set.
+      const isHtml = looksLikeHtml(extras.description);
+      res.send({
+        ...extras,
+        description: isHtml ? '' : extras.description,
+        descriptionHtml: isHtml
+          ? sanitizeDescriptionHtml(extras.description, req.params.id, extras.sampleImages)
+          : '',
+      });
     } catch (err) {
       next(err);
     }
