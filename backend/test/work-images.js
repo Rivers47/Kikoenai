@@ -11,6 +11,7 @@ const { join } = require('path');
 
 const { config } = require('../config');
 const { collectWorkImages, deleteWorkImagesFromDisk, workImageFileNamePattern } = require('../filesystem/utils');
+const { splitDownloadTargets } = require('../filesystem/workExtras');
 
 describe('scraped work images', function () {
   describe('collectWorkImages', function () {
@@ -26,6 +27,50 @@ describe('scraped work images', function () {
       expect(images.map(i => i.url)).to.eql(['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg']);
       expect(images.map(i => i.kind)).to.eql(['smp', 'smp', 'part', 'part']);
       expect(images[0].thumb).to.equal('a_t.jpg');
+    });
+  });
+
+  describe('splitDownloadTargets', function () {
+    const target = (url, file) => ({ url, file });
+
+    it('reuses an image the last run put in the same file', function () {
+      const targets = [target('a.jpg', 'RJ1_img_smp1.jpg'), target('b.jpg', 'RJ1_img_smp2.jpg')];
+      const previous = [target('a.jpg', 'RJ1_img_smp1.jpg'), target('b.jpg', 'RJ1_img_smp2.jpg')];
+      const { reuse, fetch } = splitDownloadTargets(targets, previous, new Set(['RJ1_img_smp1.jpg', 'RJ1_img_smp2.jpg']));
+
+      expect(reuse.map(t => t.url)).to.eql(['a.jpg', 'b.jpg']);
+      expect(fetch).to.be.empty;
+    });
+
+    it('refetches when the file is gone from disk', function () {
+      const targets = [target('a.jpg', 'RJ1_img_smp1.jpg')];
+      const { reuse, fetch } = splitDownloadTargets(targets, targets, new Set());
+
+      expect(reuse).to.be.empty;
+      expect(fetch.map(t => t.url)).to.eql(['a.jpg']);
+    });
+
+    it('refetches when the name now belongs to a different image', function () {
+      // The description lost its first image, so every later one shifts up a
+      // number: part2's bytes are on disk under part1's name.
+      const targets = [target('b.jpg', 'RJ1_img_part1.jpg')];
+      const previous = [target('a.jpg', 'RJ1_img_part1.jpg'), target('b.jpg', 'RJ1_img_part2.jpg')];
+      const { reuse, fetch } = splitDownloadTargets(targets, previous, new Set(['RJ1_img_part1.jpg', 'RJ1_img_part2.jpg']));
+
+      expect(reuse).to.be.empty;
+      expect(fetch.map(t => t.url)).to.eql(['b.jpg']);
+    });
+
+    it('fetches everything when there is no previous list', function () {
+      const targets = [target('a.jpg', 'RJ1_img_smp1.jpg')];
+      expect(splitDownloadTargets(targets, [], new Set(['RJ1_img_smp1.jpg'])).fetch).to.have.length(1);
+      expect(splitDownloadTargets(targets, undefined, new Set()).fetch).to.have.length(1);
+    });
+
+    it('ignores a previous entry whose download had failed', function () {
+      const targets = [target('a.jpg', 'RJ1_img_smp1.jpg')];
+      const previous = [{ url: 'a.jpg', file: null }];
+      expect(splitDownloadTargets(targets, previous, new Set(['RJ1_img_smp1.jpg'])).fetch).to.have.length(1);
     });
   });
 

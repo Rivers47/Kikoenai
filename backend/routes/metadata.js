@@ -12,7 +12,7 @@ const { formatID, scrapeWorkMemo, coverFileName, workImageFileNamePattern } = re
 const { scrapeWorkMetadataFromDLsite } = require('../scraper/dlsite');
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
 const { isFanzaId } = require('../work-id');
-const { saveWorkImages, saveWorkReviews, skipWorkExtras } = require('../filesystem/workExtras');
+const { saveWorkImages, saveWorkReviews, skipWorkExtras, REFRESH_IMAGE_CONCURRENCY } = require('../filesystem/workExtras');
 
 // Covers come from DLsite/Fanza and effectively never change, so cache them
 // for a long time rather than paying a conditional request every time (a 304
@@ -413,7 +413,7 @@ router.post('/refresh/:id',
       const [images, reviews] = skipWorkExtras()
         ? [0, 0]
         : await Promise.all([
-          saveWorkImages(work_id, metadata),
+          saveWorkImages(work_id, metadata, undefined, { concurrency: REFRESH_IMAGE_CONCURRENCY }),
           saveWorkReviews(work_id),
         ]);
 
