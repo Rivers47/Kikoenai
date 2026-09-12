@@ -14,7 +14,14 @@
         :name="index"
         class="q-pa-none"
       >
-        <q-img :src="src" fit="contain" height="100%" transition="fade" />
+        <q-img
+          :src="src"
+          fit="contain"
+          height="100%"
+          transition="fade"
+          class="cursor-pointer"
+          @click="viewing = true"
+        />
       </q-carousel-slide>
 
       <!-- The built-in `arrows` are bare icons in a single colour, which
@@ -49,22 +56,34 @@
           </q-carousel-control>
 
           <q-carousel-control position="bottom-right" :offset="[8, 8]">
-            <q-chip dense square color="dark" text-color="white" class="shadow-3">
+            <q-chip dense square color="surface-container" text-color="on-surface" class="shadow-3">
               {{ slide + 1 }}/{{ slides.length }}
             </q-chip>
           </q-carousel-control>
         </template>
       </template>
     </q-carousel>
+
+    <ImageViewer
+      v-model="viewing"
+      :images="viewerImages"
+      :index="slide"
+      @update:index="slide = $event"
+    />
   </div>
 </template>
 
 <script>
 import { apiUrl } from 'src/base-path'
-import { workImageUrl } from 'src/utils'
+import { workImageUrl, workno } from 'src/utils'
+import ImageViewer from './ImageViewer'
 
 export default {
   name: 'WorkGallery',
+
+  components: {
+    ImageViewer,
+  },
 
   props: {
     workid: {
@@ -85,14 +104,26 @@ export default {
 
   data() {
     return {
-      slide: 0
+      slide: 0,
+      viewing: false,
     }
   },
 
   computed: {
+    // Cover first, then every scraped image that was downloaded. One list, so
+    // the carousel and the viewer cannot drift apart: an image with no local
+    // file drops out of both at once.
+    viewerImages() {
+      const cover = { name: workno(this.workid), url: this.workid ? apiUrl(`/api/cover/${this.workid}`) : '' }
+      const scraped = this.images.map(image => ({
+        name: image.file || '',
+        url: workImageUrl(this.workid, image),
+      }))
+      return [cover, ...scraped].filter(image => image.url)
+    },
+
     slides() {
-      const cover = this.workid ? apiUrl(`/api/cover/${this.workid}`) : ''
-      return [cover, ...this.images.map(image => workImageUrl(this.workid, image))].filter(Boolean)
+      return this.viewerImages.map(image => image.url)
     }
   },
 
@@ -108,6 +139,7 @@ export default {
   watch: {
     workid() {
       this.slide = 0
+      this.viewing = false
     },
 
     // A work whose images arrive after the cover has already rendered must not
