@@ -66,6 +66,7 @@ export default {
       tree: [],
       trackProgress: {},
       extras: { description: '', descriptionHtml: '', descriptionParts: [], sampleImages: [] },
+      tab: 'files',
     }
   },
 
@@ -74,27 +75,6 @@ export default {
       return Boolean(this.extras.descriptionHtml)
         || Boolean(this.extras.description)
         || this.extras.descriptionParts.length > 0
-    },
-
-    // Which tab is open lives in the url, like the tree's own folder and image
-    // state (?path=, ?img=), so a reload or a shared link comes back to it.
-    tab: {
-      get () {
-        return (this.hasDescription && this.$route.query.tab === 'description') ? 'description' : 'files'
-      },
-
-      set (value) {
-        const query = { ...this.$route.query }
-        if (value === 'description') {
-          query.tab = value
-        } else {
-          delete query.tab
-        }
-        if (query.tab === this.$route.query.tab) return
-        // replace, not push: flipping tabs should not have to be walked back
-        // through the history one tab at a time.
-        this.$router.replace({ query, hash: this.$route.hash })
-      }
     }
   },
 
@@ -103,6 +83,8 @@ export default {
       this.workid = id;
       this.metadata.state = null;
       this.extras = { description: '', descriptionHtml: '', descriptionParts: [], sampleImages: [] };
+      // The next work may have no description at all, and the tab bar goes with it.
+      this.tab = 'files';
       this.requestData();
     },
     
