@@ -15,6 +15,7 @@
 
 import { apiUrl, stripBasePath } from '../base-path'
 import { run, OUTBOX_STORE as STORE } from './idb'
+import { activeRegistration } from './service-worker'
 
 export const SYNC_TAG = 'kikoenai-outbox'
 
@@ -58,7 +59,11 @@ export async function entries () {
 export async function requestSync () {
   if (!canSync()) return
   try {
-    const registration = await navigator.serviceWorker.ready
+    // Not serviceWorker.ready: it never settles without an active worker, and
+    // sendOrQueue awaits this on its failure path -- so a missing registration
+    // hung the write instead of letting it fail.
+    const registration = await activeRegistration()
+    if (!registration || !('sync' in registration)) return
     await registration.sync.register(SYNC_TAG)
   } catch (err) {
     // Never let scheduling failure surface: the row is already durable and

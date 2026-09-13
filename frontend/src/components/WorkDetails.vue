@@ -276,7 +276,8 @@ import LabelDropdown from './LabelDropdown'
 import NotifyMixin from '../mixins/Notification.js'
 import { mapState, mapGetters } from 'vuex'
 import { isFanzaId, fanzaCid, dlsiteWorkUrl, labelRoute, workno } from 'src/utils'
-import { uncacheFile, buildWorkDownloadPlan, startWorkDownload, bgFetchIdFor } from '../utils/downloads'
+import { uncacheFile, buildWorkDownloadPlan, startWorkDownload, bgFetchIdFor, canBackgroundFetch } from '../utils/downloads'
+import { activeRegistration } from '../utils/service-worker'
 
 export default {
   name: 'WorkDetails',
@@ -318,6 +319,9 @@ export default {
     return {
       refreshMetadataLoading: false,
       downloadOfflineLoading: false,
+      // { done, total } while a foreground download runs. Null on the background
+      // path, where the browser's own notification carries the progress.
+      downloadProgress: null,
       userMarked: false,
       rating: 0,
       progress: '',
@@ -397,6 +401,11 @@ export default {
     // Three states, not two: a Background Fetch keeps running after this page
     // is closed, so "downloading" has to be visible on return.
     offlineDownloadLabel () {
+      // A foreground download is watched rather than backgrounded, so its
+      // progress goes on the button -- there is no OS notification for it.
+      if (this.downloadProgress) {
+        return this.$t('workdetails.downloadOfflineProgress', this.downloadProgress);
+      }
       if (this.isWorkDownloading(this.metadata.id)) return this.$t('workdetails.downloadOfflineInProgress');
       if (this.isWorkDownloaded(this.metadata.id)) return this.$t('workdetails.removeOfflineDownload');
       return this.$t('workdetails.downloadOffline');
@@ -580,9 +589,13 @@ export default {
         // Cancel first if a fetch is still running, otherwise the browser
         // keeps downloading a work the user just removed.
         if (this.isWorkDownloading(workId)) {
-          const registration = await navigator.serviceWorker.ready;
-          const running = await registration.backgroundFetch.get(bgFetchIdFor(workId));
-          if (running) await running.abort();
+          // Only a background fetch can be running to abort; a foreground one
+          // owns the page, so there is no tab left to press this button in.
+          const registration = await activeRegistration();
+          if (registration && 'backgroundFetch' in registration) {
+            const running = await registration.backgroundFetch.get(bgFetchIdFor(workId));
+            if (running) await running.abort();
+          }
         }
 
         const filesToRemove = this.$store.state.Downloads.downloadedFiles.filter(f => f.workId === workId);
@@ -594,7 +607,14 @@ export default {
       }
 
       this.downloadOfflineLoading = true;
+      this.downloadProgress = null;
       try {
+        // Without Background Fetch the download lives in this page, so leaving it
+        // abandons the download. Say so before starting rather than letting the
+        // user discover it by navigating away.
+        if (!(await canBackgroundFetch())) {
+          this.showSuccNotif(this.$t('workdetails.downloadOfflineForeground'));
+        }
         const tracksResponse = await this.$axios.get(`/api/tracks/${workId}`);
         const tree = tracksResponse.data.tree || tracksResponse.data;
         const rows = buildWorkDownloadPlan(workId, tree);
@@ -614,25 +634,38 @@ export default {
           });
         }
 
+        let result;
         try {
-          await startWorkDownload({
+          result = await startWorkDownload({
             workId,
             workTitle: this.metadata.title,
             rows,
             title: this.$t('workdetails.downloadOfflineNotificationTitle', { title: this.metadata.title }),
+            // Only fires on the foreground path; the background one reports
+            // progress through the browser's own notification instead.
+            onProgress: ({ done, total }) => { this.downloadProgress = { done, total }; },
           });
         } catch (err) {
-          // Registration failed, so nothing will ever promote these rows.
+          // Nothing will promote these rows -- either the fetch never started or
+          // the foreground run failed and rolled its own bytes back.
           this.$store.commit('Downloads/REMOVE_DOWNLOADED_FILES', rows.map(r => r.url));
           throw err;
         }
 
-        this.showSuccNotif(this.$t('workdetails.downloadOfflineStarted'));
+        if (result.mode === 'foreground') {
+          // Already finished by the time we get here, and no service worker will
+          // post a completion message -- so promote the rows directly.
+          this.$store.commit('Downloads/PROMOTE_DOWNLOADED_FILES', result.stored);
+          this.showSuccNotif(this.$t('workdetails.downloadOfflineComplete', { title: this.metadata.title }));
+        } else {
+          this.showSuccNotif(this.$t('workdetails.downloadOfflineStarted'));
+        }
       } catch(err) {
         console.error(err);
         this.showErrNotif(err.message || err);
       } finally {
         this.downloadOfflineLoading = false;
+        this.downloadProgress = null;
       }
     },
   }

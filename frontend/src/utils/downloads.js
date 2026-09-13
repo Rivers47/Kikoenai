@@ -9,8 +9,10 @@
 //                   dies if the tab closes, which is acceptable for one track.
 //   - whole-work -> startWorkDownload(), Background Fetch. Survives tab close,
 //                   resumes across network drops, completes in the service
-//                   worker. Chromium only -- see assertBackgroundFetchSupport.
+//                   worker. Chromium only -- canBackgroundFetch() picks the
+//                   foreground path everywhere else.
 import { apiUrl, appUrl } from '../base-path'
+import { activeRegistration } from './service-worker'
 
 const CACHE_NAME = 'offline-tracks'
 
@@ -85,13 +87,17 @@ export const BG_FETCH_ID_PREFIX = 'kikoenai-work-'
 
 export const bgFetchIdFor = (workId) => `${BG_FETCH_ID_PREFIX}${workId}`
 
-// No capability *detection* on purpose -- this branch targets Chromium and
-// fails loudly on engines without the API, so a missing capability shows up as
-// a named error rather than as silently different behaviour.
-export function assertBackgroundFetchSupport () {
-  if (!('BackgroundFetchManager' in self)) {
-    throw new Error('[kikoenai] missing required API: BackgroundFetch')
-  }
+/**
+ * Whether a whole-work download can be handed to the browser.
+ *
+ * Two conditions, and the second is the one that used to be missed: the API can
+ * exist while no worker is there to own the fetch. Chromium-only either way --
+ * everywhere else this is false and the foreground path runs instead.
+ */
+export async function canBackgroundFetch () {
+  if (!('BackgroundFetchManager' in self)) return false
+  const registration = await activeRegistration()
+  return !!registration && 'backgroundFetch' in registration
 }
 
 // Every file a work needs to be fully usable offline: audio tracks, lyric and
@@ -132,16 +138,63 @@ export function buildWorkDownloadPlan (workId, tree) {
   return rows
 }
 
-export async function startWorkDownload ({ workId, workTitle, rows, title }) {
-  assertBackgroundFetchSupport()
+/**
+ * Fetch a work's files in the page, for engines without Background Fetch.
+ *
+ * The trade against the background path is the tab: this runs in the page, so
+ * navigating away or closing it abandons the download. The caller tells the user
+ * so. `reconcileDownloads` cleans up the rows afterwards either way.
+ *
+ * Serial rather than parallel, deliberately: progress is what the user watches
+ * instead of an OS notification, and N-at-a-time makes "12 of 43" meaningless.
+ *
+ * All-or-nothing on failure, matching Background Fetch's own semantics (any
+ * non-2xx record discards the batch). That keeps `isWorkDownloaded` honest --
+ * it is keyed on the metadata rows being promoted, so a half-cached work must
+ * not look complete. See the note in frontend/AGENTS.md §3.
+ */
+export async function downloadWorkInForeground ({ rows, onProgress }) {
+  const stored = []
+  try {
+    for (const [index, row] of rows.entries()) {
+      const bytes = await cacheFile(row.url)
+      stored.push({ url: row.url, bytes })
+      onProgress?.({ done: index + 1, total: rows.length })
+    }
+  } catch (err) {
+    // Undo the partial download rather than leave bytes nothing references.
+    for (const done of stored) {
+      try {
+        await uncacheFile(done.url)
+      } catch {
+        // Already gone, or the cache is unavailable; nothing useful to do.
+      }
+    }
+    throw err
+  }
+  return { mode: 'foreground', stored }
+}
 
-  const registration = await navigator.serviceWorker.ready
+/**
+ * Start a whole-work download by whichever route this browser supports.
+ *
+ * `mode` tells the caller which happened, because the two differ in ways the UI
+ * has to reflect: 'background' finishes in the service worker and promotes its
+ * rows by message, possibly with no tab open, while 'foreground' has already
+ * finished by the time this resolves and hands back its `stored` list directly.
+ */
+export async function startWorkDownload ({ workId, workTitle, rows, title, onProgress }) {
+  if (!(await canBackgroundFetch())) {
+    return downloadWorkInForeground({ rows, onProgress })
+  }
+
+  const registration = await activeRegistration()
   const existing = await registration.backgroundFetch.get(bgFetchIdFor(workId))
   if (existing) {
     throw new Error(`[kikoenai] a download for ${workId} is already running`)
   }
 
-  return registration.backgroundFetch.fetch(
+  await registration.backgroundFetch.fetch(
     bgFetchIdFor(workId),
     rows.map(row => row.url),
     {
@@ -149,6 +202,7 @@ export async function startWorkDownload ({ workId, workTitle, rows, title }) {
       icons: [{ src: appUrl('/icons/icon-192x192.png'), sizes: '192x192', type: 'image/png' }],
     }
   )
+  return { mode: 'background' }
 }
 
 export async function reconcileDownloads (downloadedFiles) {
@@ -157,8 +211,15 @@ export async function reconcileDownloads (downloadedFiles) {
 
   // A fetch still in flight has legitimately not written its files yet --
   // dropping those rows would delete a download in progress.
-  const registration = await navigator.serviceWorker.ready
-  const activeIds = await registration.backgroundFetch.getIds()
+  //
+  // Not serviceWorker.ready: with no active worker that never settles, and this
+  // runs on boot, so reconcile would silently never happen. No worker also means
+  // no Background Fetch can be running, so an empty set is the right answer --
+  // which is exactly the case on engines using the foreground path.
+  const registration = await activeRegistration()
+  const activeIds = registration && 'backgroundFetch' in registration
+    ? await registration.backgroundFetch.getIds()
+    : []
   const activeWorkIds = new Set(
     activeIds
       .filter(id => id.startsWith(BG_FETCH_ID_PREFIX))

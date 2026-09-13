@@ -30,4 +30,7 @@ export default {
   editMetadata: '编辑元数据',
   refreshMetadata: '刷新元数据',
   refreshMetadataSuccess: '元数据刷新成功',
+  downloadOfflineForeground: '此浏览器在页面内下载，完成前请保持此标签页打开',
+  downloadOfflineProgress: '正在下载 {done} / {total}…',
+  downloadOfflineComplete: '{title} 已可离线使用',
 }

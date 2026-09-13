@@ -30,4 +30,7 @@ export default {
   editMetadata: 'Edit metadata',
   refreshMetadata: 'Refresh metadata',
   refreshMetadataSuccess: 'Metadata refreshed successfully',
+  downloadOfflineForeground: 'This browser downloads in the page — keep this tab open until it finishes',
+  downloadOfflineProgress: 'Downloading {done} / {total}…',
+  downloadOfflineComplete: '{title} is ready for offline use',
 }

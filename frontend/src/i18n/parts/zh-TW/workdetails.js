@@ -24,4 +24,7 @@ export default {
   editMetadata: '編輯中繼資料',
   refreshMetadata: '重新整理中繼資料',
   refreshMetadataSuccess: '中繼資料重新整理成功',
+  downloadOfflineForeground: '此瀏覽器在頁面內下載，完成前請保持此分頁開啟',
+  downloadOfflineProgress: '正在下載 {done} / {total}…',
+  downloadOfflineComplete: '{title} 已可離線使用',
 }

@@ -30,4 +30,7 @@ export default {
   editMetadata: 'メタデータを編集',
   refreshMetadata: 'メタデータを更新',
   refreshMetadataSuccess: 'メタデータを更新しました',
+  downloadOfflineForeground: 'このブラウザーはページ内でダウンロードします。完了するまでこのタブを閉じないでください',
+  downloadOfflineProgress: 'ダウンロード中 {done} / {total}…',
+  downloadOfflineComplete: '{title} をオフラインで利用できます',
 }
