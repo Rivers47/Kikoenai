@@ -1,6 +1,6 @@
 <template>
   <div>
-    <WorkDetails :metadata="metadata" :images="extras.sampleImages" @reset="requestData()" @resumeHistory="resumeMetadataPlayHistory" />
+    <WorkDetails :metadata="metadata" :images="extras.sampleImages" :resumeSeconds="resumeSeconds" @reset="requestData()" @resumeHistory="resumeMetadataPlayHistory" />
     <!-- <WorkQueue :queue="tracks" :editable="false" /> -->
 
     <!-- Tabs only appear once there is a second thing to show. A work with no
@@ -43,7 +43,8 @@ import WorkDetails from 'components/WorkDetails'
 import WorkTree from 'components/WorkTree'
 import WorkDescription from 'components/WorkDescription'
 import NotifyMixin from '../mixins/Notification.js'
-import { pendingProgress } from '../utils/outbox'
+import { sendOrQueue } from '../utils/outbox'
+import { positionsForWork, mergePositions, resumeSecondsFor } from '../utils/positions'
 
 export default {
   name: 'Work',
@@ -66,6 +67,10 @@ export default {
       },
       tree: [],
       trackProgress: {},
+      // The parked track's position, reconciled against the local store. The
+      // info panel and the resume button both read this, so neither can show a
+      // number the file tree disagrees with.
+      resumeSeconds: null,
       extras: { description: '', descriptionHtml: '', descriptionParts: [], sampleImages: [] },
       tab: 'files',
     }
@@ -104,6 +109,7 @@ export default {
         this.metadata = response.data
         // Do not auto-resume playback history on page load; the user must
         // explicitly click the "Resume History" button (see WorkDetails.vue).
+        await this.resolveResumeSeconds();
       } catch (error ) {
         if (error.response) {
           // 请求已发出，但服务器响应的状态码不在 2xx 范围内
@@ -131,13 +137,50 @@ export default {
         }
       }
 
-      // Undelivered local progress wins over both the server's answer and the
-      // cached snapshot behind it -- it is by definition newer. Runs even when
-      // the request above failed, which is the offline case it exists for.
-      this.trackProgress = {
-        ...this.trackProgress,
-        ...await pendingProgress(this.workid)
-      };
+      // Reconcile against this device's own record, newest observation wins --
+      // the same rule the server applies on write. Runs even when the request
+      // above failed, which is the offline case it exists for.
+      try {
+        const { merged, localNewer } = mergePositions(
+          this.trackProgress,
+          await positionsForWork(this.workid)
+        );
+        this.trackProgress = merged;
+        this.pushLocallyNewerPositions(localNewer, merged);
+      } catch (err) {
+        // A failed local read must not cost us the server's answer.
+        console.error('local position read failed:', err);
+      }
+    },
+
+    // Let the server catch up on anything this device knows better. Closes the
+    // gap the throttled push opens: a position observed between pushes and then
+    // lost to a hard kill would otherwise never leave the device.
+    pushLocallyNewerPositions (trackIds, progress) {
+      for (const trackId of trackIds) {
+        const row = progress[trackId];
+        if (!row) continue;
+        sendOrQueue(this.$axios, {
+          method: 'PUT',
+          url: `/api/track-progress/${trackId}`,
+          body: {
+            seconds: row.seconds,
+            completed: !!row.completed,
+            observedAt: row.observedAt
+          }
+        });
+      }
+    },
+
+    // Same rule the file tree uses, applied to the parked track. Runs off the
+    // metadata request rather than the tracks request so the panel and the
+    // resume button have a number before the directory listing resolves.
+    async resolveResumeSeconds() {
+      try {
+        this.resumeSeconds = await resumeSecondsFor(this.workid, this.metadata.state);
+      } catch (err) {
+        console.error('resume reconciliation failed:', err);
+      }
     },
 
     async requestExtras() {
@@ -162,12 +205,11 @@ export default {
     },
 
     resumeMetadataPlayHistory() {
-      // Position comes from state.seconds, which GET /api/work/:id resolved
-      // from t_track_progress -- the same value the "played to" line shows.
-      // Not this.trackProgress: it only arrives with GET /api/tracks/:id, which
-      // lists the work directory and so resolves after the metadata request
-      // that renders this button, so the lookup missed and resumed at 0.
-      // -1 is the "nothing to resume" sentinel for rows with no position yet.
+      // this.resumeSeconds is the reconciled value -- the server's state.seconds
+      // weighed against this device's own record (resumeSecondsFor), which is
+      // the same rule the file tree and the "played to" line use. Falls back to
+      // the raw server value only until that resolves; -1 is the "nothing to
+      // resume" sentinel.
 
       // 以最小化形式打开播放器
       this.$store.commit('AudioPlayer/TOGGLE_HIDE')
@@ -177,7 +219,7 @@ export default {
         queue: this.metadata.state.queue,
         index: this.metadata.state.index,
         resetPlaying: false,
-        resumeHistorySeconds: this.metadata.state.seconds ?? -1,
+        resumeHistorySeconds: this.resumeSeconds ?? this.metadata.state.seconds ?? -1,
         workLastTrackId: this.metadata.state.queue.length ? this.metadata.state.queue[this.metadata.state.queue.length - 1].trackId : ''
       })
     }

@@ -31,7 +31,7 @@
 const path = require('path');
 const db = require(path.join(__dirname, '..', 'database', 'db'));
 const { config } = require(path.join(__dirname, '..', 'config'));
-const { getTrackList } = require(path.join(__dirname, '..', 'filesystem', 'utils'));
+const { listWorkTracks } = require(path.join(__dirname, '..', 'filesystem', 'workFiles'));
 
 /**
  * Run the backfill. Collects log lines instead of writing to stdout so the
@@ -103,7 +103,7 @@ async function runBackfill({ dryRun = false, log = (m) => console.log(m), dbApi 
     // ones keep it in t_track_progress, keyed by the track's relPath.
     // null means "unknown" — both phases fall back rather than skipping the row.
     const parkedRelPath = currentTrack
-      ? await resolveRelPath(workId, currentTrack.trackId || currentTrack.hash, workDirMap.get(workId))
+      ? await resolveRelPath(workId, currentTrack.trackId || currentTrack.hash, workDirMap.get(workId), dbApi)
       : null;
     const trackProgress = parkedRelPath
       ? byTrack.get(`${username}\u0000${workId}\u0000${parkedRelPath}`)
@@ -227,12 +227,12 @@ module.exports = { runBackfill };
  * t_track_progress.
  *
  * A current handle is `${workId}/${relPath}` and needs no lookup. A legacy one
- * is `${workId}/${index}`, and the index is resolved through getTrackList so it
+ * is `${workId}/${index}`, and the index is resolved through listWorkTracks so it
  * maps to the exact same file the runtime would pick — the sort that assigned
  * the index is the source of truth, and reimplementing it risks drift.
  * Returns the relPath, or null.
  */
-async function resolveRelPath(workId, trackId, workDir) {
+async function resolveRelPath(workId, trackId, workDir, dbApi) {
   if (!trackId) return null;
   const slash = trackId.indexOf('/');
   if (slash === -1) return null;
@@ -245,8 +245,8 @@ async function resolveRelPath(workId, trackId, workDir) {
 
   const index = parseInt(tail, 10);
   if (isNaN(index) || index < 0) return null;
-  // An empty memo is fine: only the sorted paths are needed, and no ffprobe runs.
-  const tracks = await getTrackList(workId, workDir, {});
+  // From t_work_file; only the sorted paths are needed here.
+  const tracks = await listWorkTracks(workId, workDir, { dbApi });
   if (index >= tracks.length) return null;
   return tracks[index].shortFilePath;
 }

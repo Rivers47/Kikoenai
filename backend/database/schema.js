@@ -1,6 +1,6 @@
 const { knex } = require('./db');
 
-const dbVersion = '20260912000000';
+const dbVersion = '20260913000000';
 
 // 数据库结构
 const createSchema = () => knex.schema
@@ -33,6 +33,9 @@ const createSchema = () => knex.schema
     table.text('description'); // TEXT 类型 [作品内容: HTML 抓取路径存原始标记，JSON 回退路径存纯文本]
     table.text('description_parts'); // JSON: the same block, per-part, incl. the track list
     table.text('sample_images'); // JSON: [{url, thumb, width, height, file}]
+    // When this work's files were last listed into t_work_file. NULL means
+    // never, which is what makes the first read index it (see filesystem/workFiles.js).
+    table.datetime('files_indexed_at');
 
     table.primary('id');
     table.foreign('circle_id').references('id').inTable('t_circle'); // FOREIGN KEY 外键
@@ -155,6 +158,20 @@ const createSchema = () => knex.schema
     table.foreign('user_name').references('name').inTable('t_user').onDelete('CASCADE');
     table.foreign('work_id').references('id').inTable('t_work').onDelete('CASCADE');
     table.primary(['user_name', 'work_id', 'track_key']);
+  })
+  .createTable('t_work_file', (table) => {
+    // The work's file listing, so a request never walks the filesystem. Written
+    // by the scan paths; read by everything else. See filesystem/workFiles.js.
+    table.string('work_id').notNullable();
+    // Work-relative path, forward slashes on every platform -- the same spelling
+    // t_track_progress.track_key uses, and the tail of a trackId.
+    table.string('rel_path').notNullable();
+    table.float('duration'); // ffprobe, scan-time only: too slow for a request
+    table.integer('mtime');  // ms; decides whether duration needs re-probing
+    table.string('track_title'); // display name from scripts/extract-track-titles.js
+
+    table.foreign('work_id').references('id').inTable('t_work').onDelete('CASCADE');
+    table.primary(['work_id', 'rel_path']);
   })
   .createTable('t_dlsite_review', (table) => {
     // DLsite's own member_review_id. Distinct from t_review, which holds

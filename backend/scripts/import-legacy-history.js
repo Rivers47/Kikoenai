@@ -51,7 +51,8 @@ const path = require('path');
 const Knex = require('knex');
 const db = require(path.join(__dirname, '..', 'database', 'db'));
 const { config } = require(path.join(__dirname, '..', 'config'));
-const { getTrackList, formatID } = require(path.join(__dirname, '..', 'filesystem', 'utils'));
+const { formatID } = require(path.join(__dirname, '..', 'filesystem', 'utils'));
+const { listWorkTracks } = require(path.join(__dirname, '..', 'filesystem', 'workFiles'));
 
 // Same threshold the player uses to call a track finished.
 const COMPLETE_RATIO = 0.95;
@@ -202,7 +203,7 @@ async function runImport({
 
       let tracks;
       try {
-        tracks = (await getTrackList(workId, workDir, memo))
+        tracks = (await listWorkTracks(workId, workDir, { dbApi }))
           .filter(t => !NON_AUDIO_EXT.has(t.ext));
       } catch (err) {
         summary.worksFailed++;

@@ -1,7 +1,7 @@
 const path = require('path');
 const { config } = require('../../config');
 const db = require('../../database/db');
-const { getTrackList } = require('../../filesystem/utils');
+const { listWorkTracks } = require('../../filesystem/workFiles');
 
 /**
  * Legacy positional-index handle.
@@ -30,7 +30,7 @@ const legacyIndex = (segments) => (
 const resolveTrack = async (req, res) => {
   const workId = req.params.id;
   const work = await db.knex('t_work')
-    .select('root_folder', 'dir', 'memo')
+    .select('root_folder', 'dir', 'files_indexed_at')
     .where('id', '=', workId)
     .first();
   if (!work) {
@@ -45,9 +45,11 @@ const resolveTrack = async (req, res) => {
   }
 
   const workDir = path.join(rootFolder.path, work.dir);
-  // A work scanned before memo existed has a NULL column; getTrackList reads
-  // keys off it, so it must be an object rather than null.
-  const tracks = await getTrackList(workId, workDir, JSON.parse(work.memo || '{}'));
+  // From t_work_file, not the filesystem. This function serves every media
+  // request -- stream, download, check-lrc, track-progress -- so it used to cost
+  // one directory walk per request. files_indexed_at is passed through so the
+  // listing does not need a second query to discover it has already been built.
+  const tracks = await listWorkTracks(workId, workDir, { indexedAt: work.files_indexed_at });
 
   // Express 5 hands a `*path` back as an array of already-decoded segments.
   const segments = [].concat(req.params.path || []);

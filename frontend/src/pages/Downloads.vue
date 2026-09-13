@@ -150,7 +150,7 @@ import { mapGetters, mapState } from 'vuex'
 import WorkCard from 'components/WorkCard'
 import WorkListItem from 'components/WorkListItem'
 import { uncacheFile } from '../utils/downloads'
-import { pendingProgress } from '../utils/outbox'
+import { positionsForWork } from '../utils/positions'
 
 // Own LocalStorage keys -- deliberately NOT the Works page's `listMode` /
 // `sortCategoryOption`, so the two pages keep independent view preferences.
@@ -367,7 +367,7 @@ export default {
         duration: file.duration,
       }))
 
-      const progress = await pendingProgress(work.workId)
+      const progress = await positionsForWork(work.workId)
       const resume = queue[index] && progress[queue[index].trackId]
 
       this.$store.commit('AudioPlayer/SET_QUEUE', {

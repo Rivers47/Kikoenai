@@ -3,12 +3,13 @@ const express = require('express');
 const router = express.Router();
 const { param, query, body } = require('express-validator');
 const db = require('../database/db');
-const { getTrackList, toTree } = require('../filesystem/utils');
+const { toTree } = require('../filesystem/utils');
+const { listWorkTracks, rescanWorkFiles } = require('../filesystem/workFiles');
 const { config } = require('../config');
 const normalize = require('./utils/normalize');
 const { isValidRequest, workIdParam } = require('./utils/validate');
 const { sanitizeDescriptionHtml, looksLikeHtml } = require('./utils/description-html');
-const { formatID, scrapeWorkMemo, coverFileName, workImageFileNamePattern } = require('../filesystem/utils');
+const { formatID, coverFileName, workImageFileNamePattern } = require('../filesystem/utils');
 const { scrapeWorkMetadataFromDLsite } = require('../scraper/dlsite');
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
 const { isFanzaId } = require('../work-id');
@@ -143,7 +144,7 @@ router.get('/tracks/:id',
 
     try {
       const work = await db.knex('t_work')
-        .select('title', 'root_folder', 'dir', 'memo')
+        .select('title', 'root_folder', 'dir', 'files_indexed_at')
         .where('id', '=', work_id)
         .first();
 
@@ -155,7 +156,9 @@ router.get('/tracks/:id',
       if (rootFolder) {
         try {
           const workDir = path.join(rootFolder.path, work.dir);
-          const tracks = await getTrackList(work_id, workDir, JSON.parse(work.memo || '{}'));
+          // From t_work_file. A work that has never been indexed is walked once
+          // here and never again -- which is what every request used to do.
+          const tracks = await listWorkTracks(work_id, workDir, { indexedAt: work.files_indexed_at });
           const tree = toTree(tracks, work.title, work.dir, rootFolder);
           // Bundle per-track progress for the requesting user
           const username = config.auth ? req.user.name : 'admin';
@@ -370,7 +373,9 @@ router.post('/scan/:id',
         res.status(500).send({error: "扫描作品文件失败，没有找到rootFolder: " + work.root_folder});
         return;
       }
-      const memo = await scrapeWorkMemo(work_id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo));
+      // Refreshes the durations *and* the t_work_file listing -- this is the
+      // button that maintains what used to be rebuilt on every request.
+      const memo = await rescanWorkFiles(work_id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo || '{}'));
       await db.setWorkMemo(work_id, memo);
       res.send({ memo });
     } catch (err) {

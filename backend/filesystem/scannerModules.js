@@ -13,6 +13,7 @@ const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, scrapeWor
   deleteWorkImagesFromDisk } = require('./utils');
 const workExtras = require('./workExtras');
 const scanLog = require('./scanLog');
+const { indexWorkFilesFromMemo, rescanWorkFiles } = require('./workFiles');
 const { md5 } = require('../auth/utils');
 const { nameToUUID } = require('../scraper/utils');
 
@@ -599,6 +600,10 @@ async function processFolder(folder) {
     }
 
     await db.setWorkMemo(workId, memo);
+    // Must come after getMetadata: t_work_file has an FK to t_work, and the work
+    // row does not exist until the metadata insert above. The durations probed
+    // before that are carried onto the rows here.
+    await indexWorkFilesFromMemo(workId, folder.absolutePath, memo);
     
     // 不要在乎图片是否下载成功，dlsite上一些老作品已经没有图片了，会下载失败
     // 只要元数据插入成功就行
@@ -976,8 +981,9 @@ async function scanWorkFile(work, index, total) {
     if (!rootFolder) return "skipped";
     const absoluteWorkDir = path.join(rootFolder.path, work.dir);
 
-    // work memo, for instance, memorize all audio durations
-    let memo = await scrapeWorkMemo(
+    // Durations *and* the t_work_file listing: this pass is what a user runs to
+    // pick up files added or removed on disk, so both have to move together.
+    let memo = await rescanWorkFiles(
       work.id,
       absoluteWorkDir,
       typeof(work.memo) === 'string' 

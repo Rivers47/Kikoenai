@@ -7,6 +7,7 @@ const { expect } = require('chai');
 const knexLib = require('knex');
 const { makeQueries } = require('../database/queries');
 const { runBackfill } = require('../scripts/backfill-progress');
+const { addWorkFileSchema } = require('./helpers/schema');
 
 // History rows written since the play-history / track-progress split carry no
 // state.seconds at all — the position lives in t_track_progress. The backfill
@@ -34,6 +35,7 @@ describe('backfill reads the position from t_track_progress', () => {
       t.float('seconds'); t.boolean('completed'); t.timestamp('updated_at');
       t.unique(['user_name', 'work_id', 'track_key']);
     });
+    await addWorkFileSchema(knex);
     await knex('t_work').insert([
       { id: '000001', root_folder: 'root', dir: 'w1' },
       { id: '000002', root_folder: 'root', dir: 'w2' },

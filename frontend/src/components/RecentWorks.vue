@@ -44,6 +44,7 @@
 <script>
 
 import Cover from './Cover.vue';
+import { resumeSecondsFor } from '../utils/positions';
 
 export default {
   name: 'RecentWorks',
@@ -110,17 +111,20 @@ export default {
       return lastPlayItem.title;
     },
 
-    resumeThisHistory(work) {
+    // Reconciled against this device's own record, the same rule the work page
+    // uses -- resuming from here and resuming from there must land in the same
+    // place, and reading work.state.seconds alone did not guarantee that.
+    async resumeThisHistory(work) {
+      const seconds = await resumeSecondsFor(work.id, work.state)
       this.$store.commit('AudioPlayer/SET_QUEUE', {
         workId: work.id,
         vas: work.vas,
         queue: work.state.queue,
         index: work.state.index,
         resetPlaying: false,
-        resumeHistorySeconds: work.state.seconds,
+        resumeHistorySeconds: seconds,
         workLastTrackId: work.state.queue.length ? work.state.queue[work.state.queue.length - 1].trackId : ''
       })
-      console.log(`resume seconds = ${work.state.seconds}`)
     }
 
   },

@@ -16,6 +16,8 @@ const knexLib = require('knex');
 const { getTrackList, toTree } = require('../filesystem/utils');
 const { legacyIndex } = require('../routes/utils/track');
 const migration = require('../database/migrations/20260912000000_relpath_track_keys');
+const { addWorkFileSchema } = require('./helpers/schema');
+const { makeQueries } = require('../database/queries');
 
 describe('track identity: relPath', function () {
   let dir;
@@ -227,6 +229,7 @@ describe('rekey-track-progress (opt-in recovery)', function () {
       t.float('seconds'); t.boolean('completed'); t.timestamp('updated_at');
       t.primary(['user_name', 'work_id', 'track_key']);
     });
+    await addWorkFileSchema(knex);
     await knex('t_work').insert({ id: '000001', root_folder: 'root', dir: 'w1' });
   });
 
@@ -242,7 +245,7 @@ describe('rekey-track-progress (opt-in recovery)', function () {
   it('recovers a stranded row by hashing the file it names', async function () {
     await seed(hashOf('aaaa'), 77);
 
-    const summary = await run({ log: () => {}, dbApi: { knex } });
+    const summary = await run({ log: () => {}, dbApi: { knex, ...makeQueries(knex) } });
     expect(summary.recovered).to.equal(1);
 
     const row = await knex('t_track_progress').first();
@@ -253,7 +256,7 @@ describe('rekey-track-progress (opt-in recovery)', function () {
   it('leaves a row alone when no file matches its hash', async function () {
     await seed('deadbeef');
 
-    const summary = await run({ log: () => {}, dbApi: { knex } });
+    const summary = await run({ log: () => {}, dbApi: { knex, ...makeQueries(knex) } });
     expect(summary.unresolved).to.equal(1);
     expect((await knex('t_track_progress').first()).track_key).to.equal('deadbeef');
   });
@@ -261,7 +264,7 @@ describe('rekey-track-progress (opt-in recovery)', function () {
   it('writes nothing on a dry run', async function () {
     await seed(hashOf('aaaa'));
 
-    const summary = await run({ dryRun: true, log: () => {}, dbApi: { knex } });
+    const summary = await run({ dryRun: true, log: () => {}, dbApi: { knex, ...makeQueries(knex) } });
     expect(summary.recovered).to.equal(1);
     expect((await knex('t_track_progress').first()).track_key).to.equal(hashOf('aaaa'));
   });
@@ -269,7 +272,7 @@ describe('rekey-track-progress (opt-in recovery)', function () {
   it('discards the leftovers on --purge', async function () {
     await seed('deadbeef');
 
-    const summary = await run({ purge: true, log: () => {}, dbApi: { knex } });
+    const summary = await run({ purge: true, log: () => {}, dbApi: { knex, ...makeQueries(knex) } });
     expect(summary.purged).to.equal(1);
     expect(await knex('t_track_progress').first()).to.equal(undefined);
   });
@@ -277,7 +280,7 @@ describe('rekey-track-progress (opt-in recovery)', function () {
   it('does nothing when every key is already a relPath', async function () {
     await seed('01 intro.mp3');
 
-    const summary = await run({ log: () => {}, dbApi: { knex } });
+    const summary = await run({ log: () => {}, dbApi: { knex, ...makeQueries(knex) } });
     expect(summary).to.deep.equal({ stale: 0, recovered: 0, purged: 0, unresolved: 0 });
   });
 });

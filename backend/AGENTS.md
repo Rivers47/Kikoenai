@@ -137,6 +137,7 @@ SQLite3 via Knex.js with the following tables:
 | `t_user` | Users | `name` (PK), `password`, `group` |
 | `t_review` | Reviews & progress | `user_name`, `work_id`, `rating`, `review_text`, `progress` |
 | `t_play_history` | Playback state | `user_name`, `work_id`, `state` (JSON) |
+| `t_work_file` | A work's file listing, so a request never walks the filesystem (§2.9-0) | `work_id`, `rel_path` (PK), `duration`, `mtime`, `track_title` |
 | `t_dlsite_review` | Scraped DLsite user reviews | `id` (DLsite `member_review_id`), `work_id`, `rate`, `review_title`, `review_text`, `genres` (JSON) |
 
 **Work id / label id note (since migration `20260802000000`):** `t_work.id` and all `work_id` foreign keys are **TEXT**. A DLsite doujin work id is stored already RJ-padded (`'123456'` 6-digit, or `'01134567'` 8-digit — matching `formatID`), so the work URL `/work/123456` shows the original RJ id directly; a DLsite **books** work id keeps its prefix, `'BJ635795'`; a Fanza (DMM doujin) work id is the content-id **without its underscore**, `'d215444'` (migration `20260828000000`; DMM writes it `d_215444`). The prefix distinguishes the source — there is no separate source column. **`RJ` is stripped because it is implicit; `BJ` is not, and dropping it would collide `BJ635795` with `RJ635795`.** `work-id.js` owns the helpers: `isFanzaId`, `isBooksId`, `canonicalizeWorkId` (`d_215444` → `d215444`, `bj…` → `BJ…`), `fanzaCid` (back to DMM's form), and `workno` (the prefixed spelling each store uses in URLs and asset file names — the single source for `RJ…`/`BJ…`/`d_…`). **All** label ids (circle/tag/va/illustrator/script_writer/series/author) are name-based UUIDs (TEXT PK) resolved by `resolveLabel` in `queries.js`; DLsite RG/genre/SRI ids scraped from the storefront are no longer used as DB ids, and a label shared across DLsite + Fanza merges into one row.
@@ -290,6 +291,7 @@ All routes mounted under `/api`:
 
 ### 2.8 Media Streaming (`routes/media.js`)
 
+- **Resolution is a database lookup, not a directory walk** — `resolveTrack` reads `t_work_file` (§2.9-0). It is on every media request, so this was the single largest filesystem cost in the app.
 - Audio files are streamed using `fs.createReadStream` with range request support (206 Partial Content for seeking).
 - Cover images served from `covers/` directory.
 - File listing traverses the work directory and returns track info (name, duration, format).
@@ -323,6 +325,32 @@ Covered by `test/lyric-discovery.js`. To diagnose a real folder — which files
 match, which are orphaned and why, and whether each one parses — run
 `npm run check:lyrics -- <folder>` from the repo root.
 
+### 2.9-0 The file listing lives in the database (`t_work_file`)
+
+A work's file list used to be rebuilt by walking the folder **on every request**. `getTrackList` walks, and `resolveTrack` (`routes/utils/track.js`) calls it — so every stream, download, `check-lrc` and track-progress write cost a directory walk, not just the work page. On a network mount that is latency × file count, on works that run to hundreds of files.
+
+It now comes from `t_work_file`, keyed `(work_id, rel_path)`. Measured on a 43-file work: first read 1 walk, every read after it **0**, and five media requests **0** where it used to be one each.
+
+**`filesystem/workFiles.js` is the only way in.** It returns exactly the shape `getTrackList` returns, so nothing below it changed:
+
+| function | for |
+|---|---|
+| `listWorkTracks(workId, workDir, {indexedAt, memo, dbApi})` | the read path — routes and scripts |
+| `indexWorkFilesFromMemo` | `scanWork`, which probes durations *before* the metadata insert creates the `t_work` row that `t_work_file` has an FK to |
+| `rescanWorkFiles` | `scanWorkFile` and `POST /api/scan/:id` — probe **and** relist in one step, so a scan cannot refresh one and forget the other |
+
+Every entry point takes an optional `dbApi` (defaulting to the live database), the same convention `scripts/backfill-progress.js` uses, so tests inject an in-memory knex.
+
+- **`getTrackList` is still the filesystem walker** — it is just no longer on the request path. Only the scan paths and the one-off indexing call it.
+- **Ordering must not drift.** The rows carry `rel_path` only; `title`/`subtitle`/`ext` derive from it, and the list is sorted with the *same* `natural-orderby` comparator `getTrackList` uses. It decides the order of every file tree in the UI, so `test/work-file-listing.js` asserts the two produce an identical sequence. Change one comparator, change both.
+- **`files_indexed_at` on `t_work`, not a row count.** NULL means never indexed, so the first read walks once and persists — exactly what every read did before — and a genuinely empty work is not re-walked forever.
+- **Indexing goes through the memo, never a bare walk.** Durations cost an ffprobe each and track titles cost a model call; both already sit in `memo` keyed by relPath, and a bare walk would write NULLs over them and force a full re-probe.
+- **Row writes are one transaction** (`replaceWorkFiles`): delete, insert chunked at 100 rows (SQLite's bound-parameter cap), stamp `files_indexed_at`. A half-written listing would otherwise read as complete.
+
+> **A file deleted on disk stays listed until the next scan, and playing it 404s.** Previously it silently vanished from the tree. This is the deliberate trade for not touching the filesystem on reads — the "scan file changes" button is the fix. A work whose folder is *unmounted* now lists its tracks and 404s on play, where before the tree was empty.
+
+Migration `20260913000000` seeds the table from `memo` — pure data movement, **no filesystem access** — and leaves `files_indexed_at` NULL so each work completes its own listing on first read. Memo covers audio only (`scrapeWorkMemo` filters to `supportedMediaExtList`), which is why the completion walk is needed for lyrics, images and PDFs. Measured on a real library: 30,476 rows across 1,804 works in 4s, every duration preserved.
+
 ### 2.9a Writing `t_work.memo`
 
 `setWorkMemo` replaces the **whole** JSON column, so anything that builds a memo must spread the old one first. The keys are written by different producers and none of them knows about the others: `duration`/`mtime`/`isContainLyric` by `scrapeWorkMemo` (scan and `POST /api/scan/:id`), `trackTitles` by `scripts/extract-track-titles.js`. `scrapeWorkMemo` used to start from a bare `{ duration, isContainLyric, mtime }`, so every rescan silently wiped the extracted track titles.
@@ -351,6 +379,10 @@ Works whose audio files are named `01.mp3` / `#2.wav` show only the filename. `t
 Every precondition failure is loud and exits non-zero — unknown id, no scraped description, no audio on disk, unconfigured root folder, or titles already present without `--force`. The caller named the work explicitly, so silently doing nothing would be the wrong answer; the uninformative-filename check is advisory only, printed but never a skip. `--dry-run` prints the result, then asks `write N titles? [y/N]` so an expensive model call need not be repeated to apply it; without a TTY it never writes.
 
 ### 2.9c Per-track position: newest observation wins
+
+**One accessor, two projections.** `trackProgressFor(username, {workId | relPaths})` owns the query, the columns and the row shape; `getTrackProgress` (map for one work, for `GET /api/tracks/:id`) and `applyTrackProgressSeconds` (the parked track per history row, for `GET /api/history` and `/api/work/:id`) are projections over it. They had already drifted — the first selected `updated_at`, the second did not — so the work page's file tree and its info panel disagreed about the same position, and the same resume behaved differently depending on which page you started from. `test/progress-projections.js` asserts they cannot disagree again. The two *endpoints* still return different shapes on purpose: a list view must not pull a whole file tree per row just to read one number.
+
+`applyTrackProgressSeconds` exposes `state.secondsObservedAt` beside `state.seconds`, which is what lets a client tell whether its own local copy is newer.
 
 `t_track_progress` is keyed `(user_name, work_id, track_key)` where `track_key` is the relPath (§2.9a), and `upsertTrackProgress` applies a write only when it is at least as new as the row it would replace:
 
@@ -704,6 +736,8 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
   - `work-id.js` — id canonicalization (Fanza + DLsite books), `workno` spelling, cover/image file naming, `getFolderList` work-code detection, and migration `20260828000000` up/down
   - `description-html.js` — `looksLikeHtml`, and the sanitizer allowlist: tag/attribute filtering, script removal, unknown-tag unwrapping, colour stripping, image rewriting (incl. `basePath`) and link handling
   - `work-images.js` — `collectWorkImages` ordering/dedup, the `deleteWorkImagesFromDisk` wipe **and** its `keep`-set prune (against a real temp folder), and what `workImageFileNamePattern` will and will not match
+  - `work-file-listing.js` — `t_work_file`: ordering identical to the filesystem walk (the assertion that matters), all tracked file types present, indexed-once-then-no-walk (proved by deleting the folder and reading again), durations/track titles carried from memo and preserved across a re-index
+  - `progress-projections.js` — `getTrackProgress` and `applyTrackProgressSeconds` report the same `seconds` and `observedAt` for the same track; the test that would have caught the `updated_at` drift
   - `track-identity.js` — relPath as the one file identity: `trackId` construction, non-ASCII and subdirectory paths, forward-slash normalization, `relPath` on every node type, the legacy positional-index branch, migration `20260912000000`, and `scripts/rekey-track-progress.js` (the only place CRC32 survives)
   - `work-memo.js` — `scrapeWorkMemo` mtime/duration caching, `trackTitles` preservation across a rescan, and that its keys match `getTrackList`'s
   - `history-seconds.js` — `applyTrackProgressSeconds` overriding stale history positions, and the compound `(work_id, track_key)` lookup that keeps two works with an identically named file apart

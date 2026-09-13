@@ -41,7 +41,8 @@ const { hideBin } = require('yargs/helpers');
 
 const db = require('../database/db');
 const { config } = require('../config');
-const { getTrackList, formatID } = require('../filesystem/utils');
+const { formatID } = require('../filesystem/utils');
+const { listWorkTracks } = require('../filesystem/workFiles');
 const { isFanzaId, canonicalizeWorkId } = require('../work-id');
 
 const argv = yargs(hideBin(process.argv))
@@ -384,8 +385,8 @@ async function run() {
   const rootFolder = config.rootFolders.find(rf => rf.name === work.root_folder);
   if (!rootFolder) throw new Error(`Root folder "${work.root_folder}" is not configured.`);
 
-  // Third arg is the memo: getTrackList reads duration/contentHash/trackTitles off it.
-  const tracks = await getTrackList(work.id, path.join(rootFolder.path, work.dir), memo);
+  // From t_work_file, which already carries duration and any track titles.
+  const tracks = await listWorkTracks(work.id, path.join(rootFolder.path, work.dir));
   const audio = tracks.filter(t => AUDIO_EXT.includes(t.ext));
   if (!audio.length) throw new Error(`Work ${workId} has no audio files on disk.`);
 

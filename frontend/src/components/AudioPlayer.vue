@@ -305,6 +305,12 @@ import SleepMode from 'components/SleepMode'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import { formatSeconds } from '../utils'
 import { sendOrQueue, requestSync } from '../utils/outbox'
+import { savePosition } from '../utils/positions'
+
+// How stale the server's copy of a position may get during continuous playback.
+// The local store is written every tick regardless, so this only bounds how out
+// of date *another* device's view can be -- it is not a loss window.
+const SERVER_PUSH_MS = 60 * 1000
 import { debounce } from 'quasar'
 import { apiUrl } from 'src/base-path'
 
@@ -337,17 +343,22 @@ export default {
   },
 
   mounted () {
-    // Backstop for uninterrupted playback: every other trigger for
-    // onUpdatePlayingStatus is a state change (track/pause/seek/queue), and
-    // during continuous listening none of them fire. This bounds how much
-    // position is lost if the app dies without a visibilitychange.
+    // Backstop for uninterrupted playback: every other trigger is a state
+    // change (track/pause/seek/queue), and during continuous listening none of
+    // them fire. This bounds how much position is lost if the app dies without
+    // a visibilitychange.
+    //
+    // Deliberately NOT onUpdatePlayingStatus: that path is for state changes
+    // and forces a server push. This is the only caller that may be throttled,
+    // so it has to stay separate -- sharing the funnel is what made a pause
+    // silently skip the server and resume at 0.
     this.historyCheckIntervalId = setInterval(() => {
       // Only while this tab is actually playing. A paused tab still holds the
       // queue of whatever it last played, and ticking here made it re-post
       // that frozen position every 10s -- overwriting the progress another
       // tab (or a later session) had since written for the same work.
       if (!this.playing) return
-      this.onUpdatePlayingStatus()
+      this._tickTrackProgress()
     }, 10 * 1000) // 每隔一段时间更新一次播放记录
 
     // 监听页面可见性变化，在页面隐藏时（锁屏/切后台）立即刷新播放进度到服务器
@@ -725,7 +736,7 @@ export default {
         })
       }
 
-      this._reportTrackProgressOnUpdate()
+      this._reportTrackProgressOnUpdate({ force: true })
       requestSync()
     },
 
@@ -748,7 +759,12 @@ export default {
         }
       }
 
-      this._reportTrackProgressOnUpdate()
+      // A state change -- pause, track change, seek, queue edit. The user just
+      // did something, so the server hears about it now rather than waiting out
+      // the throttle: the resume paths (RecentWorks, FavListItem, WorkDetails)
+      // read state.seconds, which the server resolves from t_track_progress, so
+      // a throttled pause left them resuming at 0.
+      this._reportTrackProgressOnUpdate({ force: true })
 
       // 检查最近一次的历史更新记录，如果两次数据不变，则无需更新记录
       if (this.isSameTwoHistory(this.latestUpdatedHistory, data)) {
@@ -770,33 +786,75 @@ export default {
         })
     },
 
-    // Guard against re-posting a position this tab has already reported: a
-    // repeat write carries no new information but does clobber whatever the
-    // work's progress has become in the meantime. Returns false when the
-    // report should be skipped.
+    // Guard against re-posting a position this tab has already reported for
+    // *that track*: a repeat write carries no new information but does clobber
+    // whatever the track's progress has become in the meantime. Returns false
+    // when the report should be skipped.
+    //
+    // Keyed per track, not a single slot. A queue cycles through trackIds, so
+    // one slot let `A/100 -> B/0 -> A/100` through, and that second A write
+    // carried a fresh observedAt over an unchanged position -- which, now that
+    // the server orders by observedAt (backend/AGENTS.md §2.9c), beats a newer
+    // position written from another device. A Map rather than an object: a
+    // trackId is an arbitrary file path.
     _markTrackProgressReported (trackId, seconds) {
-      const key = `${trackId}/${seconds}`
-      if (key === this._lastReportedProgress) return false
-      this._lastReportedProgress = key
+      if (this._lastReportedProgress.get(trackId) === seconds) return false
+      this._lastReportedProgress.set(trackId, seconds)
       return true
     },
 
-    _reportTrackProgressOnUpdate () {
+    // The periodic backstop. Records locally every tick and lets the server
+    // throttle decide whether to push, which is the whole point of the split:
+    // continuous playback is the only case allowed to be lazy about the server.
+    _tickTrackProgress () {
+      this._reportTrackProgressOnUpdate()
+    },
+
+    // The local write is unconditional; the server push is throttled. Position
+    // is durable on this device the moment it is observed, so the server only
+    // has to be fresh enough for *another* device to read -- see
+    // SERVER_PUSH_MS. `force` is for the moments where waiting is wrong: a
+    // pause, a track change, a seek, or the page going away.
+    _reportTrackProgressOnUpdate ({ force = false } = {}) {
       const file = this.queueCopy[this.queueIndex]
       if (!file || !file.trackId || this.playWorkId === 0) return
       const seconds = this.currentTime
       const duration = file.duration
       const completed = duration > 0 && seconds >= 0.95 * duration
       if (!this._markTrackProgressReported(file.trackId, seconds)) return
+      const observedAt = Date.now()
+
+      savePosition({
+        trackId: file.trackId,
+        workId: this.playWorkId,
+        seconds: Math.round(seconds * 100) / 100,
+        completed,
+        observedAt,
+      }).catch((err) => console.error('local position write failed:', err))
+
+      if (!this._shouldPushProgress(file.trackId, observedAt, force)) return
       sendOrQueue(this.$axios, {
         method: 'PUT',
         url: `/api/track-progress/${file.trackId}`,
         body: {
           seconds: Math.round(seconds * 100) / 100,
           completed: completed,
-          observedAt: Date.now()
+          observedAt
         }
       })
+    },
+
+    // True when the server is due an update for this track. Tracked per track so
+    // switching tracks always pushes rather than inheriting the previous one's
+    // throttle window.
+    _shouldPushProgress (trackId, now, force) {
+      const due = force
+        || trackId !== this._lastPushedTrackId
+        || now - this._lastServerPush >= SERVER_PUSH_MS
+      if (!due) return false
+      this._lastPushedTrackId = trackId
+      this._lastServerPush = now
+      return true
     },
 
     gotoFullScreenPlayer() {
@@ -848,6 +906,12 @@ export default {
   created() {
     // 历史更新函数防抖动
     this.onUpdatePlayingStatus = debounce(this.onUpdatePlayingStatus, 500);
+
+    // Non-reactive: written on every progress report and never rendered.
+    // trackId -> last reported seconds, and the server-push throttle window.
+    this._lastReportedProgress = new Map();
+    this._lastServerPush = 0;
+    this._lastPushedTrackId = '';
   }
 }
 </script>

@@ -65,6 +65,39 @@ const makeQueries = (knex) => {
    *   The work id is read from `work_id`, falling back to `id` — getPlayHistory
    *   selects t_work.id, assembleWorks passes raw t_play_history rows.
    */
+  /**
+   * The one query over t_track_progress. Both shapes below project from this,
+   * so neither can gain or lose a column without the other -- which is exactly
+   * how they drifted before: getTrackProgress selected updated_at and
+   * applyTrackProgressSeconds did not, so the work page's file tree and the
+   * info panel disagreed about the same position.
+   * Selects either one work's rows (`workId`) or specific tracks across works
+   * (`relPaths`) -- one query either way. The column list and the row shape are
+   * the shared part; that is what cannot drift.
+   * @param {String} username
+   * @param {{workId?: String, relPaths?: Array<String>}} selector
+   * @returns {Promise<Map>} `${workId}\u0000${relPath}` -> {seconds, completed, observedAt}
+   */
+  const trackProgressFor = async (username, { workId, relPaths } = {}) => {
+    const byKey = new Map();
+    if (relPaths && !relPaths.length) return byKey;
+
+    let query = knex('t_track_progress')
+      .select('work_id', 'track_key', 'seconds', 'completed', 'updated_at')
+      .where('user_name', username);
+    if (workId !== undefined) query = query.andWhere('work_id', String(workId));
+    if (relPaths) query = query.whereIn('track_key', relPaths);
+
+    for (const row of await query) {
+      byKey.set(`${row.work_id}\u0000${row.track_key}`, {
+        seconds: row.seconds,
+        completed: !!row.completed,
+        observedAt: row.updated_at,
+      });
+    }
+    return byKey;
+  };
+
   const applyTrackProgressSeconds = async (username, rows) => {
     const progressKey = (workId, trackKey) => `${workId}\u0000${trackKey}`;
     const parsed = [];
@@ -87,15 +120,16 @@ const makeQueries = (knex) => {
     }
     if (!parsed.length) return;
 
-    const progress = await knex('t_track_progress')
-      .select('work_id', 'track_key', 'seconds')
-      .where('user_name', username)
-      .whereIn('track_key', parsed.map(p => p.relPath));
-    const byKey = new Map(progress.map(p => [progressKey(p.work_id, p.track_key), p.seconds]));
+    const byKey = await trackProgressFor(username, { relPaths: parsed.map((p) => p.relPath) });
 
     for (const p of parsed) {
-      if (!byKey.has(p.key)) continue;
-      p.state.seconds = byKey.get(p.key);
+      const hit = byKey.get(p.key);
+      if (!hit) continue;
+      p.state.seconds = hit.seconds;
+      // The client needs this to tell whether its own local row is newer. Without
+      // it the resume paths could not reconcile and had to trust the server
+      // blindly -- which is what made a throttled push resume at 0.
+      p.state.secondsObservedAt = hit.observedAt;
       p.row.state = JSON.stringify(p.state);
     }
   };
@@ -1323,6 +1357,29 @@ const makeQueries = (knex) => {
     });
   }
 
+  // t_work_file: a work's file listing, so a request never walks the filesystem.
+  // Written only by the scan paths (see filesystem/workFiles.js).
+  const getWorkFiles = async (work_id) => knex('t_work_file')
+    .select('rel_path', 'duration', 'mtime', 'track_title')
+    .where('work_id', String(work_id));
+
+  /**
+   * Replace a work's file rows and stamp files_indexed_at, in one transaction:
+   * a half-written listing would be read as complete, and the stamp is what
+   * stops every later request re-walking the folder.
+   */
+  const replaceWorkFiles = async (work_id, rows) => {
+    await knex.transaction(async (trx) => {
+      await trx('t_work_file').where('work_id', String(work_id)).del();
+      // Chunked: SQLite caps bound parameters per statement, and a 472-file
+      // work times five columns gets close enough to matter.
+      for (let i = 0; i < rows.length; i += 100) {
+        await trx('t_work_file').insert(rows.slice(i, i + 100));
+      }
+      await trx('t_work').where('id', String(work_id)).update({ files_indexed_at: knex.fn.now() });
+    });
+  };
+
   // t_track_progress queries (Phase 2)
   // Keyed by trackId (`workId/relPath`), not by the bare track_key: that is the
   // one handle the frontend carries on a queue item and in every media URL, so
@@ -1332,17 +1389,11 @@ const makeQueries = (knex) => {
   // two is newer. It is the same UTC text every other timestamp column uses, so
   // the existing strftime(..., 'localtime') display path applies unchanged.
   const getTrackProgress = async (username, work_id) => {
-    const rows = await knex('t_track_progress')
-      .select('track_key', 'seconds', 'completed', 'updated_at')
-      .where('user_name', username)
-      .andWhere('work_id', work_id);
+    const byKey = await trackProgressFor(username, { workId: work_id });
     const map = {};
-    for (const row of rows) {
-      map[`${work_id}/${row.track_key}`] = {
-        seconds: row.seconds,
-        completed: !!row.completed,
-        observedAt: row.updated_at,
-      };
+    for (const [key, hit] of byKey) {
+      // key is `${workId}\u0000${relPath}`; the client wants it keyed by trackId.
+      map[key.replace('\u0000', '/')] = hit;
     }
     return map;
   };
@@ -1395,6 +1446,10 @@ const makeQueries = (knex) => {
     getWorkExtras, setWorkSampleImages,
     replaceWorkDlsiteReviews, getWorkDlsiteReviews,
     getTrackProgress, upsertTrackProgress,
+    // Exported for the projection-agreement test: it and getTrackProgress are
+    // two shapes over trackProgressFor and must never disagree.
+    applyTrackProgressSeconds,
+    getWorkFiles, replaceWorkFiles,
   };
 };
 

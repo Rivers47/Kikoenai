@@ -3,17 +3,18 @@
  *
  * A write is captured whenever it cannot be shown to have reached the server:
  * genuinely offline, but just as often online with the phone locked and the
- * radio throttled or the process frozen mid-request. 
+ * radio throttled or the process frozen mid-request.
  * Delivery is the service worker's `sync` event, which survives the page being
  * frozen or closed. This module is imported by both sides: the page enqueues,
  * the worker drains.
+ *
+ * It is a *delivery* queue only. Reading a position back is utils/positions.js:
+ * a row here exists only until it is delivered, so it could never answer "where
+ * was I" -- which is why pendingProgress() was removed rather than kept.
  */
 
 import { apiUrl, stripBasePath } from '../base-path'
-
-const DB_NAME = 'kikoenai'
-const DB_VERSION = 1
-const STORE = 'outbox'
+import { run, OUTBOX_STORE as STORE } from './idb'
 
 export const SYNC_TAG = 'kikoenai-outbox'
 
@@ -23,52 +24,19 @@ const QUEUEABLE = [
   /^\/api\/review/,
 ]
 
-const PROGRESS_URL = '/api/track-progress'
-
 const endpointPath = (url) => stripBasePath(String(url))
 
 export const isQueueable = (url) => QUEUEABLE.some((re) => re.test(endpointPath(url)))
 
 export const canSync = () => 'SyncManager' in self
 
-let dbPromise = null
-
-function openDb () {
-  if (!dbPromise) {
-    dbPromise = new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, DB_VERSION)
-      req.onupgradeneeded = () => {
-        if (!req.result.objectStoreNames.contains(STORE)) {
-          req.result.createObjectStore(STORE, { keyPath: 'key' })
-        }
-      }
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => reject(req.error)
-    })
-  }
-  return dbPromise
-}
-
-async function run (mode, fn) {
-  const db = await openDb()
-  const request = fn(db.transaction(STORE, mode).objectStore(STORE))
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
-  })
-}
-
-// The URL identifies the target completely -- a track-progress write carries
-// its trackId (`workId/relPath`) in the path, and a history write its work id --
-// so method+url is the whole dedup key. It used to append work_id/contentHash
-// from the body, which those routes no longer accept.
 export function outboxKey ({ method, url, body }) {
   return `${method}:${endpointPath(url)}`
 }
 
 export async function enqueue ({ method, url, body }) {
   const key = outboxKey({ method, url, body })
-  await run('readwrite', (s) => s.put({
+  await run(STORE, 'readwrite', (s) => s.put({
     key,
     method,
     url,
@@ -79,11 +47,11 @@ export async function enqueue ({ method, url, body }) {
 }
 
 export async function dequeue (key) {
-  await run('readwrite', (s) => s.delete(key))
+  await run(STORE, 'readwrite', (s) => s.delete(key))
 }
 
 export async function entries () {
-  const rows = await run('readonly', (s) => s.getAll())
+  const rows = await run(STORE, 'readonly', (s) => s.getAll())
   return rows.sort((a, b) => a.createdAt - b.createdAt)
 }
 
@@ -122,25 +90,6 @@ export async function sendOrQueue (http, { method, url, body }) {
     console.error('deferred to outbox:', url, err.message || err)
     await requestSync()
   }
-}
-
-export async function pendingProgress (workId) {
-  const out = {}
-  // Nothing is enqueued without Background Sync, so this is normally already
-  // empty -- the guard also drops rows left by a build that predates it, which
-  // would otherwise mask the server's progress permanently.
-  if (!canSync()) return out
-  for (const entry of await entries()) {
-    const path = endpointPath(entry.url)
-    if (!path.startsWith(`${PROGRESS_URL}/${workId}/`)) continue
-    let body
-    try { body = JSON.parse(entry.body) } catch { continue }
-    // The tail of the path is the trackId, which is exactly how
-    // GET /api/tracks/:id keys the trackProgress map this is spread over.
-    const trackId = decodeURI(path.slice(PROGRESS_URL.length + 1))
-    out[trackId] = { seconds: body.seconds, completed: body.completed }
-  }
-  return out
 }
 
 export async function drain () {

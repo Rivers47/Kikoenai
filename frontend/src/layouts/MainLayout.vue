@@ -297,12 +297,28 @@ export default {
     // manifest is reconciled against Cache Storage (the source of truth for
     // what is actually downloaded), and a listener keeps an open tab in sync
     // with fetches that finish while it is running.
+    // Without this the origin's storage is *best-effort*: the browser may evict
+    // it under disk pressure, not only when the user clears site data. Playback
+    // positions live in IndexedDB now (utils/positions.js), so eviction would
+    // silently lose them. Chromium generally grants this outright for an
+    // installed PWA; Firefox prompts. Advisory only -- nothing depends on it.
+    async requestPersistentStorage () {
+      if (!navigator.storage || !navigator.storage.persist) return;
+      try {
+        const granted = await navigator.storage.persist();
+        if (!granted) console.warn('[kikoenai] persistent storage not granted; local positions may be evicted');
+      } catch (err) {
+        console.error('persistent storage request failed:', err);
+      }
+    },
+
     initOfflineDownloads () {
       if (!('serviceWorker' in navigator)) return;
 
       // Rows survive a process that was killed outright, with no chance to
       // register a sync of its own. Boot is where those get picked up.
       requestSync();
+      this.requestPersistentStorage();
 
       this.unsubscribeDownloadMessages = onDownloadMessage({
         onSuccess: (workId, stored) => {

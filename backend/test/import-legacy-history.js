@@ -11,6 +11,7 @@ const knexLib = require('knex');
 const { makeQueries } = require('../database/queries');
 const { config } = require('../config');
 const { runImport } = require('../scripts/import-legacy-history');
+const { addWorkFileSchema } = require('./helpers/schema');
 
 /**
  * The importer reads the current track list off disk (getTrackList), so these
@@ -50,6 +51,7 @@ describe('import-legacy-history', () => {
       t.float('seconds'); t.boolean('completed'); t.timestamp('updated_at');
       t.primary(['user_name', 'work_id', 'track_key']);
     });
+    await addWorkFileSchema(knex);
     dbApi = { knex, ...makeQueries(knex) };
 
     // The legacy database, in the kikoeru-project shape.

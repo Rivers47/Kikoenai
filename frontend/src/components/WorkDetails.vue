@@ -303,6 +303,14 @@ export default {
       type: Array,
       required: false,
       default() { return [] }
+    },
+
+    // The parked track's position, already reconciled against the local store by
+    // Work.vue. null until that resolves; the fallback below covers the gap.
+    resumeSeconds: {
+      type: Number,
+      required: false,
+      default: null
     }
   },
 
@@ -361,8 +369,11 @@ export default {
       return track ? (track.title || '—') : '—'
     },
 
+    // Reconciled against the local store by the parent, so this reads the same
+    // number the file tree shows. Reading metadata.state.seconds directly is
+    // what made the panel and the tree disagree.
     historySeconds() {
-      return this.metadata.state?.seconds ?? 0
+      return this.resumeSeconds ?? this.metadata.state?.seconds ?? 0
     },
 
     isAdmin() {

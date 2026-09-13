@@ -31,6 +31,7 @@ import { formatSeconds } from '../utils'
 import { MAX_LYRIC_STREAMS } from 'src/utils/lyrics'
 import { convert_srt_vtt_to_lrc_streams, mergeLyricStreams } from 'src/utils/subtitles'
 import { sendOrQueue } from '../utils/outbox'
+import { savePosition } from '../utils/positions'
 import { debounce } from 'quasar';
 import Plyr from 'plyr'
 import { apiUrl } from 'src/base-path'
@@ -351,19 +352,33 @@ export default {
 
     // Fire-and-forget per-track progress report (Phase 2).
     // Reports the current track's position via its trackId.
+    //
+    // Unthrottled, unlike AudioPlayer's reporter: the only caller is onEnded,
+    // where the track just finished and `completed` flipping is exactly what
+    // another device needs to see promptly.
     _reportTrackProgress () {
       const file = this.currentPlayingFile
       if (!file || !file.trackId || this.playWorkId === 0) return
       const seconds = this.plyr ? this.plyr.currentTime : 0
       const duration = this.plyr ? this.plyr.duration : 0
       const completed = duration > 0 && seconds >= 0.95 * duration
+      const observedAt = Date.now()
+
+      savePosition({
+        trackId: file.trackId,
+        workId: this.playWorkId,
+        seconds: Math.round(seconds * 100) / 100,
+        completed,
+        observedAt,
+      }).catch((err) => console.error('local position write failed:', err))
+
       sendOrQueue(this.$axios, {
         method: 'PUT',
         url: `/api/track-progress/${file.trackId}`,
         body: {
           seconds: Math.round(seconds * 100) / 100,
           completed: completed,
-          observedAt: Date.now()
+          observedAt
         }
       })
     },
