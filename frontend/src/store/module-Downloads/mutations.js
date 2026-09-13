@@ -1,5 +1,6 @@
 import { LocalStorage } from 'quasar'
 import { DOWNLOADED_FILES_KEY } from './state'
+import { cacheKeyFor } from '../../utils/downloads'
 
 const mutations = {
   // file: { url, workId, trackId, type, title, workTitle, bytes, downloadedAt }
@@ -18,8 +19,12 @@ const mutations = {
   // aborted Background Fetch, or a reconcile pass finding files that never
   // landed). One LocalStorage write instead of one per file.
   REMOVE_DOWNLOADED_FILES (state, urls) {
-    const removing = new Set(urls)
-    state.downloadedFiles = state.downloadedFiles.filter(f => !removing.has(f.url))
+    // Normalized like PROMOTE below. Every caller passes the raw manifest form
+    // today, so this is not currently load-bearing -- but a removal that silently
+    // matches nothing leaves an orphan row claiming a file is downloaded, and the
+    // two mutations disagreeing about URL spelling is exactly how that happens.
+    const removing = new Set(urls.map(cacheKeyFor))
+    state.downloadedFiles = state.downloadedFiles.filter(f => !removing.has(cacheKeyFor(f.url)))
     LocalStorage.set(DOWNLOADED_FILES_KEY, state.downloadedFiles)
   },
 
@@ -27,9 +32,13 @@ const mutations = {
   // Storage. `promoted` is [{ url, bytes }] -- from the service worker's
   // completion message, or from reconcileDownloads on boot.
   PROMOTE_DOWNLOADED_FILES (state, promoted) {
-    const byUrl = new Map(promoted.map(p => [p.url, p]))
+    // Matched through cacheKeyFor, not on raw strings: the worker reports a
+    // percent-encoded pathname while the manifest holds the raw one, and since
+    // trackIds became `workId/relPath` those differ for any track with a space
+    // or a non-ASCII character -- i.e. almost all of them.
+    const byUrl = new Map(promoted.map(p => [cacheKeyFor(p.url), p]))
     state.downloadedFiles = state.downloadedFiles.map(f => {
-      const hit = byUrl.get(f.url)
+      const hit = byUrl.get(cacheKeyFor(f.url))
       if (!hit) return f
       const promoted = {
         ...f,

@@ -14,6 +14,29 @@ import { apiUrl, appUrl } from '../base-path'
 
 const CACHE_NAME = 'offline-tracks'
 
+/**
+ * One spelling for a cached URL, so two producers cannot disagree about it.
+ *
+ * The manifest stores what apiUrl() produced -- a raw path, which since trackIds
+ * became `workId/relPath` contains spaces and unicode. The service worker reports
+ * `new URL(record.request.url).pathname`, which is percent-**encoded**. Comparing
+ * those as strings silently matched nothing, so a finished whole-work download
+ * never promoted its rows and the button stayed on "downloading" until a reload
+ * (reconcileDownloads happened to work, because cache.match normalizes URLs).
+ *
+ * Decode rather than encode: the manifest key is local state, not a wire format,
+ * and the raw form is what every other caller already builds. A filename holding
+ * a literal `%` makes decodeURI throw, so fall back to the input.
+ */
+export function cacheKeyFor (url) {
+  const raw = String(url || '')
+  try {
+    return decodeURI(raw)
+  } catch {
+    return raw
+  }
+}
+
 export async function cacheFile (url) {
   const response = await fetch(url)
   if (!response.ok) {
