@@ -58,9 +58,12 @@ async function run (mode, fn) {
   })
 }
 
+// The URL identifies the target completely -- a track-progress write carries
+// its trackId (`workId/relPath`) in the path, and a history write its work id --
+// so method+url is the whole dedup key. It used to append work_id/contentHash
+// from the body, which those routes no longer accept.
 export function outboxKey ({ method, url, body }) {
-  const b = body || {}
-  return `${method}:${url}:${b.work_id ?? ''}:${b.contentHash ?? ''}`
+  return `${method}:${endpointPath(url)}`
 }
 
 export async function enqueue ({ method, url, body }) {
@@ -128,11 +131,14 @@ export async function pendingProgress (workId) {
   // would otherwise mask the server's progress permanently.
   if (!canSync()) return out
   for (const entry of await entries()) {
-    if (!endpointPath(entry.url).startsWith(PROGRESS_URL)) continue
+    const path = endpointPath(entry.url)
+    if (!path.startsWith(`${PROGRESS_URL}/${workId}/`)) continue
     let body
     try { body = JSON.parse(entry.body) } catch { continue }
-    if (String(body.work_id) !== String(workId) || !body.contentHash) continue
-    out[body.contentHash] = { seconds: body.seconds, completed: body.completed }
+    // The tail of the path is the trackId, which is exactly how
+    // GET /api/tracks/:id keys the trackProgress map this is spread over.
+    const trackId = decodeURI(path.slice(PROGRESS_URL.length + 1))
+    out[trackId] = { seconds: body.seconds, completed: body.completed }
   }
   return out
 }

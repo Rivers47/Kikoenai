@@ -43,12 +43,12 @@ export function collectDownloadableFiles (tree) {
         walk(node.children)
       } else if (node.type === 'audio' || node.type === 'text') {
         files.push({
-          trackId: node.trackId || node.hash,
+          trackId: node.trackId,
           title: node.title,
           type: node.type === 'audio' ? 'audio' : 'lyric',
-          // Carried so a queue built from the manifest can report progress and
-          // show a track length -- offline there is no tree to read them from.
-          contentHash: node.contentHash,
+          // Carried so a queue built from the manifest can show a track length
+          // -- offline there is no tree to read it from. trackId doubles as the
+          // progress key, so nothing else is needed to report position.
           duration: node.duration,
         })
       }
@@ -81,7 +81,6 @@ export function buildWorkDownloadPlan (workId, tree) {
     trackId: file.trackId,
     type: file.type,
     title: file.title,
-    contentHash: file.contentHash,
     duration: file.duration,
   }))
 

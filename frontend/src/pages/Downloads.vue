@@ -357,20 +357,18 @@ export default {
       if (work.tracks.length === 0) return
 
       const metadata = this.metadataByWorkId[work.workId]
-      // contentHash and duration come from the manifest: without them the
-      // player reports no progress and shows no track length, and offline
-      // there is no tree to recover them from. Manifests written before they
-      // were recorded simply lack them, as they did before.
+      // duration comes from the manifest: without it the player shows no track
+      // length, and offline there is no tree to recover it from. trackId is
+      // both the media URL and the progress key, so nothing else is needed.
       const queue = work.tracks.map(file => ({
         trackId: file.trackId,
         title: file.title,
         workTitle: work.workTitle,
-        contentHash: file.contentHash,
         duration: file.duration,
       }))
 
       const progress = await pendingProgress(work.workId)
-      const resume = queue[index] && progress[queue[index].contentHash]
+      const resume = queue[index] && progress[queue[index].trackId]
 
       this.$store.commit('AudioPlayer/SET_QUEUE', {
         workId: work.workId,

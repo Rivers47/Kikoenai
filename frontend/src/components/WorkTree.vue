@@ -89,7 +89,7 @@
               </q-item>
 
               <q-item clickable @click="toggleOfflineDownload(item)" v-if="item.type === 'audio' && enableTranscoding">
-                <q-item-section>{{ isDownloaded(item.trackId || item.hash) ? $t('worktree.removeOfflineDownload') : $t('worktree.downloadOffline') }}</q-item-section>
+                <q-item-section>{{ isDownloaded(item.trackId) ? $t('worktree.removeOfflineDownload') : $t('worktree.downloadOffline') }}</q-item-section>
               </q-item>
 
             </q-list>
@@ -340,7 +340,7 @@ export default {
     },
 
     async toggleOfflineDownload (item) {
-      const trackId = item.trackId || item.hash;
+      const trackId = item.trackId;
       const url = `/api/media/offline/${trackId}`;
 
       if (this.isDownloaded(trackId)) {
