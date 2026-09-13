@@ -62,7 +62,7 @@ const mutations = {
       let coverUrl = LocalStorage.getItem(localStorageName)
       if (!coverUrl) {
         const file = getters.currentPlayingFile(state)
-        const trackId = file.trackId || file.hash
+        const trackId = file.trackId
         coverUrl = apiUrl(`/api/cover/${trackId.split('/')[0]}`)
       }
       state.visualPlayerCoverUrl = coverUrl

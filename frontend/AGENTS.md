@@ -144,7 +144,7 @@ Main layout routes:
 | `/works` | — | redirect→`/` | Legacy path, redirects to `/` preserving query. Deliberate: the reverse direction caused a `replaceState` loop that broke back navigation |
 | `/work/:id` | — | Work | Work detail + track list. The browsed folder is in the query: `?path=foo/bar` (slash-joined folder names — a slash cannot occur in a folder name, so nothing needs escaping) plus the `#work-tree` anchor, and an open image preview adds `&img=<filename>`, so walking into a folder or opening an image is a history entry and Back goes up one level / closes the preview instead of leaving the work. Paging through images `replace`s rather than pushes, so a folder of 200 images does not need 200 Backs. `Work.vue` therefore watches `$route.params.id`, not `$route` — a query change must not refetch |
 | `/fullScreenPlayer/:id?` | — | FullScreenPlayer | Full-screen player mode |
-| `/text/:trackId(.*)` | — | TextViewer | In-app viewer for `.txt`/`.lrc`/`.srt`/`.ass`/`.vtt`. The param spans a slash because `trackId` is `${workId}/${index}`. Never link to `/api/media/stream/...` directly — a real navigation kills the SPA document (playback stops) and in an installed PWA back exits the app |
+| `/text/:trackId(.*)` | — | TextViewer | In-app viewer for `.txt`/`.lrc`/`.srt`/`.ass`/`.vtt`. The param spans slashes because `trackId` is `${workId}/${relPath}`, and a relPath may itself contain subdirectories. Never link to `/api/media/stream/...` directly — a real navigation kills the SPA document (playback stops) and in an installed PWA back exits the app |
 | `/circles` | — | List | Browse by circle (artist group) |
 | `/tags` | — | List | Browse by tag |
 | `/vas` | — | List | Browse by voice actor |
@@ -542,9 +542,23 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 | `/api/illustrators` | GET | `EditMetadata.vue` | List illustrators (autocomplete) |
 | `/api/script_writers` | GET | `EditMetadata.vue` | List script writers (autocomplete) |
 | `/api/series` | GET | `EditMetadata.vue` | List series (autocomplete). Was the irregular `/api/seriess` |
-| `/api/track-progress/:id` | PUT | `AudioElement.vue`, `AudioPlayer.vue` | Report per-track playback position. Body `{contentHash, seconds, completed}`. Fire-and-forget write |
+| `/api/track-progress/:trackId` | PUT | `AudioElement.vue`, `AudioPlayer.vue` | Report per-track playback position. Body `{seconds, completed}` — the track is addressed by the same handle as a media URL, so callers post to `/api/track-progress/${file.trackId}`. Fire-and-forget write |
 
-> **Tracks response:** `GET /api/tracks/:id` returns `{ tree, trackProgress }` (breaking shape change; `Work.vue` handles both via `response.data.tree || response.data`). Audio nodes arrive with `contentHash` already populated — the backend hashes before building the tree — so progress badges paint on first render and any queue committed from the tree carries its hashes. The first open of a work is slower for it (the backend streams the audio once, then caches by mtime). `trackProgress` is a `{contentHash: {seconds, completed}}` map. **Do not reintroduce a second request for hashes:** a queue committed before hashes arrive is serialized into `t_play_history` by `toQueueItem`, and the resume-from-history paths (`RecentWorks.vue`, `FavListItem.vue`) never fetch the tree, so such a row can never recover its hashes — `scripts/backfill-progress.js` (CLI; the route was removed at the 1.0 freeze) is the only repair.
+> **Tracks response:** `GET /api/tracks/:id` returns `{ tree, trackProgress }`.
+> **`trackId` is the only handle you need.** It is `${workId}/${relPath}`, so it
+> identifies the file, builds every media URL, and keys `trackProgress` — which
+> arrives as a `{trackId: {seconds, completed}}` map, so a badge is a direct
+> lookup with no second field. Every node carries `relPath` too (text, image and
+> pdf included), but the queue does not need it: `toQueueItem` stores `trackId`
+> alone, and `trackId.split('/')[0]` recovers the work id for cover URLs.
+>
+> **History note.** `contentHash` is gone — the whole CRC32 scheme was removed
+> (see `backend/AGENTS.md` §2.9a). Two superseded designs are worth not
+> repeating: a second request for hashes (`GET /api/work/:id/memo`) let a queue
+> be persisted before they arrived, permanently silencing progress for that row
+> since the resume paths (`RecentWorks.vue`, `FavListItem.vue`) never refetch the
+> tree; and hashing inline here instead made the first open of a work read every
+> audio byte. Both came from using content as identity.
 
 > **Note:** Library scanning is **not** a REST endpoint. `Scanner.vue` triggers scans over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN` / `KILL_SCAN_PROCESS`) and listens for the `SCAN_*` events.
 

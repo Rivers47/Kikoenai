@@ -5,34 +5,33 @@
  * they finished the last track of the folder they played.
  *
  * Phase 2: seed t_track_progress for the last-played track of each
- * work-with-history, taking the queue item's CRC32 content hash or, on legacy
- * rows that lack one, computing it from the file on disk.
+ * work-with-history, keyed by the work-relative path its queue item resolves to.
  *
  * Rule per (user_name, work_id) in t_play_history:
  *   - Parse state → {queue, index} (+ seconds on legacy rows).
  *   - Resolve the position of the parked track: state.seconds if the row still
- *     carries one, otherwise t_track_progress for that (user, work, contentHash).
+ *     carries one, otherwise t_track_progress for that (user, work, relPath).
  *     History rows written since the play-history / track-progress split hold no
  *     seconds at all — requiring one here made the whole script a no-op on them.
  *   - Phase 1: skip if t_review.progress is already terminal; if state.index
  *     === state.queue.length - 1 AND the track is finished (its progress row is
  *     flagged completed, or seconds >= 0.95 * lastTrack.duration)
  *     → set progress='listened'.
- *   - Phase 2: seed t_track_progress for legacy rows only — take the queue
- *     item's contentHash when it has one, else resolve its trackId to a file
- *     path and CRC32 it, then upsert with completed = seconds >= 0.95 * duration.
+ *   - Phase 2: seed t_track_progress for legacy rows only — resolve the queue
+ *     item's trackId to a relPath, then upsert with
+ *     completed = seconds >= 0.95 * duration. Reads no files.
  *
  * Usage:
  *   node ./scripts/backfill-progress.js          # real run
  *   node ./scripts/backfill-progress.js --dry-run # preview only
  *
- * Also exported as runBackfill({ dryRun }) for the /api/backfill admin endpoint.
+ * Also exported as runBackfill({ dryRun }).
  */
 
 const path = require('path');
 const db = require(path.join(__dirname, '..', 'database', 'db'));
 const { config } = require(path.join(__dirname, '..', 'config'));
-const { getTrackList, getContentHash } = require(path.join(__dirname, '..', 'filesystem', 'utils'));
+const { getTrackList } = require(path.join(__dirname, '..', 'filesystem', 'utils'));
 
 /**
  * Run the backfill. Collects log lines instead of writing to stdout so the
@@ -60,9 +59,8 @@ async function runBackfill({ dryRun = false, log = (m) => console.log(m), dbApi 
   // "where is this user parked in this track", which is the only place a
   // position lives for history rows written after the play-history /
   // track-progress split. existingProgress answers "is this work seeded":
-  // Phase 2's expensive step is getContentHash (reads + CRC32s the whole file);
-  // once a work is seeded, the live player keeps its progress current, so
-  // re-hashing on every backfill run is pure waste. Skip those here.
+  // once a work is seeded the live player keeps its progress current, so
+  // redoing it on every backfill run is pure waste. Skip those here.
   const progressRows = await dbApi.knex('t_track_progress')
     .select('user_name', 'work_id', 'track_key', 'seconds', 'completed');
   const byTrack = new Map();
@@ -102,10 +100,13 @@ async function runBackfill({ dryRun = false, log = (m) => console.log(m), dbApi 
     const currentTrack = queue[index];
 
     // Position of the parked track. Legacy rows carry state.seconds; current
-    // ones keep it in t_track_progress, keyed by the queue item's contentHash.
+    // ones keep it in t_track_progress, keyed by the track's relPath.
     // null means "unknown" — both phases fall back rather than skipping the row.
-    const trackProgress = currentTrack && currentTrack.contentHash
-      ? byTrack.get(`${username}\u0000${workId}\u0000${currentTrack.contentHash}`)
+    const parkedRelPath = currentTrack
+      ? await resolveRelPath(workId, currentTrack.trackId || currentTrack.hash, workDirMap.get(workId))
+      : null;
+    const trackProgress = parkedRelPath
+      ? byTrack.get(`${username}\u0000${workId}\u0000${parkedRelPath}`)
       : undefined;
     let seconds = null;
     if (typeof parsed.seconds === 'number') {
@@ -156,11 +157,10 @@ async function runBackfill({ dryRun = false, log = (m) => console.log(m), dbApi 
     }
 
     // --- Phase 2: seed t_track_progress for the last-played track ---
-    if (!currentTrack || !(currentTrack.contentHash || currentTrack.trackId || currentTrack.hash)) {
+    if (!currentTrack || !(currentTrack.trackId || currentTrack.hash)) {
       continue;
     }
-    // Skip works already seeded — see existingProgress comment above. This
-    // is the guard that keeps re-runs from re-hashing every audio file.
+    // Skip works already seeded — see existingProgress comment above.
     if (existingProgress.has(`${username}\u0000${workId}`)) {
       summary.skippedAlreadySeeded++;
       continue;
@@ -172,49 +172,26 @@ async function runBackfill({ dryRun = false, log = (m) => console.log(m), dbApi 
       continue;
     }
 
-    // The queue item usually carries the very hash the read path looks up
-    // (t_track_progress.track_key). Trust it: no file read, and no risk of
-    // seeding a key that resolveTrackFile derived from a different file.
-    let contentHash = currentTrack.contentHash;
-    let trackTitle = currentTrack.title;
-    if (!contentHash) {
-      const workDir = workDirMap.get(workId);
-      if (!workDir) {
-        summary.skippedNoDir++;
-        continue;
+    // track_key is the work-relative path, which the queue item's own trackId
+    // already carries — a legacy `workId/index` handle is resolved through the
+    // same sorted file list the runtime uses. No file is ever read.
+    if (!parkedRelPath) {
+      summary.p2SkippedNoFile++;
+      if (dryRun) {
+        log(`  [P2-DRY] ${username} / work ${workId} — could not resolve trackId ${currentTrack.trackId || currentTrack.hash}, skipping`);
       }
-
-      let resolved;
-      try {
-        resolved = await resolveTrackFile(workId, currentTrack.trackId || currentTrack.hash, workDir);
-      } catch {
-        // File may not exist on disk
-      }
-      if (!resolved) {
-        summary.p2SkippedNoFile++;
-        if (dryRun) {
-          log(`  [P2-DRY] ${username} / work ${workId} — file not found for trackId ${currentTrack.trackId || currentTrack.hash}, skipping`);
-        }
-        continue;
-      }
-
-      try {
-        contentHash = await getContentHash(resolved.fullPath);
-      } catch (err) {
-        log(`  [P2-ERR] ${username} / work ${workId} — hash computation failed: ${err.message}`);
-        continue;
-      }
-      trackTitle = resolved.title;
+      continue;
     }
+    const trackTitle = currentTrack.title || parkedRelPath;
 
     const duration = currentTrack.duration || 0;
     const completed = duration > 0 && seconds >= 0.95 * duration;
 
     if (dryRun) {
-      log(`  [P2-DRY] ${username} / work ${workId} — track "${trackTitle}" hash=${contentHash} completed=${completed} seconds=${Math.round(seconds)}`);
+      log(`  [P2-DRY] ${username} / work ${workId} — track "${trackTitle}" relPath=${parkedRelPath} completed=${completed} seconds=${Math.round(seconds)}`);
     } else {
       try {
-        await dbApi.upsertTrackProgress(username, workId, contentHash, seconds, completed);
+        await dbApi.upsertTrackProgress(username, workId, parkedRelPath, seconds, completed);
         log(`  [P2-OK]  ${username} / work ${workId} — seeded track_progress (${completed ? 'completed' : 'partial'}, ${Math.round(seconds)}s)`);
       } catch (err) {
         log(`  [P2-ERR] ${username} / work ${workId} — upsert failed: ${err.message}`);
@@ -246,28 +223,32 @@ async function runBackfill({ dryRun = false, log = (m) => console.log(m), dbApi 
 module.exports = { runBackfill };
 
 /**
- * Given a work id and track hash (format "${workId}/${index}"), resolve the
- * file path by listing and sorting the work's audio files the same way
- * Reuses getTrackList so the index maps to the exact same file the runtime
- * would — the sort that assigns hash=index is the source of truth, and
- * reimplementing it (e.g. with localeCompare) risks drift on edge cases.
- * Returns { fullPath, title } or null.
+ * Resolve a stored track handle to the work-relative path that keys
+ * t_track_progress.
+ *
+ * A current handle is `${workId}/${relPath}` and needs no lookup. A legacy one
+ * is `${workId}/${index}`, and the index is resolved through getTrackList so it
+ * maps to the exact same file the runtime would pick — the sort that assigned
+ * the index is the source of truth, and reimplementing it risks drift.
+ * Returns the relPath, or null.
  */
-async function resolveTrackFile(workId, trackId, workDir) {
-  const idx = trackId.indexOf('/');
-  if (idx === -1) return null;
-  const index = parseInt(trackId.slice(idx + 1), 10);
-  if (isNaN(index) || index < 0) return null;
+async function resolveRelPath(workId, trackId, workDir) {
+  if (!trackId) return null;
+  const slash = trackId.indexOf('/');
+  if (slash === -1) return null;
+  const tail = trackId.slice(slash + 1);
 
-  // getTrackList with an empty memo returns the sorted list with hash/title/
-  // subtitle (durations/contentHash are memo-derived and absent, which is fine
-  // here — we only need the path). No ffprobe I/O is triggered.
+  // Anything but a bare index is already the path (a tracked file always has an
+  // extension, so a pure-digit single segment cannot be one).
+  if (!/^\d+$/.test(tail)) return tail;
+  if (!workDir) return null;
+
+  const index = parseInt(tail, 10);
+  if (isNaN(index) || index < 0) return null;
+  // An empty memo is fine: only the sorted paths are needed, and no ffprobe runs.
   const tracks = await getTrackList(workId, workDir, {});
   if (index >= tracks.length) return null;
-  const track = tracks[index];
-  // Reconstruct the absolute path the same way routes/media.js does.
-  const fullPath = path.join(workDir, track.subtitle || '', track.title);
-  return { fullPath, title: track.title };
+  return tracks[index].shortFilePath;
 }
 
 // CLI entry: node ./scripts/backfill-progress.js [--dry-run]

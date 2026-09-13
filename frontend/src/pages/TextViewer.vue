@@ -74,7 +74,7 @@ export default {
 
     goBack () {
       // Deep-linked into this page (no in-app entry behind it): go to the work
-      // page instead of out of the app. trackId is `${workId}/${index}`.
+      // page instead of out of the app. trackId is `${workId}/${relPath}`.
       if (window.history.state && window.history.state.back) {
         this.$router.back();
       } else if (this.trackId.includes('/')) {

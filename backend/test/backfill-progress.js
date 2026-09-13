@@ -14,7 +14,8 @@ const { runBackfill } = require('../scripts/backfill-progress');
 describe('backfill reads the position from t_track_progress', () => {
   let knex, dbApi;
 
-  const track = (contentHash, title, duration) => ({ trackId: 'x', contentHash, title, duration });
+  // trackId is `${workId}/${relPath}`, and the relPath half is the track_key.
+  const track = (workId, relPath, duration) => ({ trackId: `${workId}/${relPath}`, title: relPath, duration });
 
   beforeEach(async () => {
     knex = knexLib({ client: 'sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
@@ -47,10 +48,10 @@ describe('backfill reads the position from t_track_progress', () => {
   it('marks listened from the progress row of a seconds-less history row', async () => {
     await knex('t_play_history').insert({
       user_name: 'admin', work_id: '000001',
-      state: JSON.stringify({ queue: [track('aaaaaaaa', '01.mp3', 600)], index: 0 }),
+      state: JSON.stringify({ queue: [track('000001', '01.mp3', 600)], index: 0 }),
     });
     await knex('t_track_progress').insert({
-      user_name: 'admin', work_id: '000001', track_key: 'aaaaaaaa', seconds: 590, completed: 1,
+      user_name: 'admin', work_id: '000001', track_key: '01.mp3', seconds: 590, completed: 1,
     });
 
     const summary = await run();
@@ -62,10 +63,10 @@ describe('backfill reads the position from t_track_progress', () => {
   it('leaves a part-played work alone', async () => {
     await knex('t_play_history').insert({
       user_name: 'admin', work_id: '000001',
-      state: JSON.stringify({ queue: [track('aaaaaaaa', '01.mp3', 600)], index: 0 }),
+      state: JSON.stringify({ queue: [track('000001', '01.mp3', 600)], index: 0 }),
     });
     await knex('t_track_progress').insert({
-      user_name: 'admin', work_id: '000001', track_key: 'aaaaaaaa', seconds: 120, completed: 0,
+      user_name: 'admin', work_id: '000001', track_key: '01.mp3', seconds: 120, completed: 0,
     });
 
     const summary = await run();
@@ -76,15 +77,15 @@ describe('backfill reads the position from t_track_progress', () => {
   it('still marks listened from a legacy row that carries its own seconds', async () => {
     await knex('t_play_history').insert({
       user_name: 'admin', work_id: '000002',
-      state: JSON.stringify({ queue: [track('bbbbbbbb', '01.mp3', 600)], index: 0, seconds: 599 }),
+      state: JSON.stringify({ queue: [track('000002', '01.mp3', 600)], index: 0, seconds: 599 }),
     });
 
     const summary = await run();
     expect(summary.marked).to.equal(1);
     // ...and seeds the progress row the read path looks up, keyed by the
-    // queue item's own contentHash — no file read needed.
+    // relPath the queue item's trackId already carries — no file read needed.
     const progress = await knex('t_track_progress').where({ work_id: '000002' }).first();
-    expect(progress.track_key).to.equal('bbbbbbbb');
+    expect(progress.track_key).to.equal('01.mp3');
     expect(progress.seconds).to.equal(599);
     expect(progress.completed).to.equal(1);
   });
@@ -92,7 +93,7 @@ describe('backfill reads the position from t_track_progress', () => {
   it('does not seed when there is no position to seed from', async () => {
     await knex('t_play_history').insert({
       user_name: 'admin', work_id: '000001',
-      state: JSON.stringify({ queue: [track('aaaaaaaa', '01.mp3', 600)], index: 0 }),
+      state: JSON.stringify({ queue: [track('000001', '01.mp3', 600)], index: 0 }),
     });
 
     const summary = await run();
@@ -104,7 +105,7 @@ describe('backfill reads the position from t_track_progress', () => {
   it('writes nothing on a dry run', async () => {
     await knex('t_play_history').insert({
       user_name: 'admin', work_id: '000002',
-      state: JSON.stringify({ queue: [track('bbbbbbbb', '01.mp3', 600)], index: 0, seconds: 599 }),
+      state: JSON.stringify({ queue: [track('000002', '01.mp3', 600)], index: 0, seconds: 599 }),
     });
 
     const summary = await run(true);

@@ -1,6 +1,6 @@
 const { knex } = require('./db');
 
-const dbVersion = '20260831000000';
+const dbVersion = '20260912000000';
 
 // 数据库结构
 const createSchema = () => knex.schema
@@ -147,7 +147,7 @@ const createSchema = () => knex.schema
   .createTable('t_track_progress', (table) => {
     table.string('user_name').notNullable();
     table.string('work_id').notNullable();
-    table.string('track_key').notNullable(); // SHA-256 hex
+    table.string('track_key').notNullable(); // work-relative path (see migration 20260912000000)
     table.float('seconds').notNullable().defaultTo(0);
     table.boolean('completed').notNullable().defaultTo(false);
     table.timestamps(true, true);

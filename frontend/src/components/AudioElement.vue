@@ -70,8 +70,8 @@ export default {
     source () {
       if (this.currentPlayingFile.mediaStreamUrl) {
         return `${this.currentPlayingFile.mediaStreamUrl}`
-      } else if (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) {
-        return apiUrl(`/api/media/stream/${this.currentPlayingFile.trackId || this.currentPlayingFile.hash}`)
+      } else if (this.currentPlayingFile.trackId) {
+        return apiUrl(`/api/media/stream/${this.currentPlayingFile.trackId}`)
       } else {
         return ""
       }
@@ -226,7 +226,7 @@ export default {
       // No _reportTrackProgress() here: PAUSE() flips AudioPlayer's `playing`
       // state, whose watcher runs onUpdatePlayingStatus, which already reports
       // this track's progress. Calling it here too produced two PUTs per pause
-      // with the same contentHash ~500ms apart (the watcher path is debounced).
+      // for the same track ~500ms apart (the watcher path is debounced).
       // onEnded still reports directly -- there it is not redundant, since it
       // must run before the queue advances to capture the finishing track.
       this.PAUSE()
@@ -310,7 +310,7 @@ export default {
     maybeMarkWorkComplete () {
       if (this.playWorkId === 0) return
       if (!this.workLastTrackId) return
-      if (!this.currentPlayingFile || (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) !== this.workLastTrackId) return
+      if (!this.currentPlayingFile || this.currentPlayingFile.trackId !== this.workLastTrackId) return
       if (!this.autoMarkListened) return
       if (this.workMarkedComplete) return
       this.workMarkedComplete = true
@@ -333,15 +333,14 @@ export default {
     },
 
     // Fire-and-forget per-track progress report (Phase 2).
-    // Reports the current track's position via contentHash.
+    // Reports the current track's position via its trackId.
     _reportTrackProgress () {
       const file = this.currentPlayingFile
-      if (!file || !file.contentHash || this.playWorkId === 0) return
+      if (!file || !file.trackId || this.playWorkId === 0) return
       const seconds = this.plyr ? this.plyr.currentTime : 0
       const duration = this.plyr ? this.plyr.duration : 0
       const completed = duration > 0 && seconds >= 0.95 * duration
-      this.$axios.put(`/api/track-progress/${this.playWorkId}`, {
-        contentHash: file.contentHash,
+      this.$axios.put(`/api/track-progress/${file.trackId}`, {
         seconds: Math.round(seconds * 100) / 100,
         completed: completed
       }).catch((err) => {
@@ -532,7 +531,7 @@ export default {
     },
 
     async loadLrcFile () {
-      const trackId = (this.queue[this.queueIndex].trackId || this.queue[this.queueIndex].hash);
+      const trackId = this.queue[this.queueIndex].trackId;
       const url = `/api/media/check-lrc/${trackId}`;
       const loadId = ++this._lrcLoadId;
 

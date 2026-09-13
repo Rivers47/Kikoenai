@@ -9,7 +9,7 @@ const { isFanzaId, isBooksId, fanzaCid, workno } = require('../work-id');
 const { scrapeWorkMetadataFromAsmrOne } = require('../scraper/asmrOne');
 const db = require('../database/db');
 const { createSchema } = require('../database/schema');
-const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, scrapeWorkMemo, scrapeWorkHashes, coverFileName, formatID,
+const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, scrapeWorkMemo, coverFileName, formatID,
   deleteWorkImagesFromDisk } = require('./utils');
 const workExtras = require('./workExtras');
 const { md5 } = require('../auth/utils');
@@ -562,15 +562,6 @@ async function processFolder(folder) {
       { /* 首次添加的作品肯定没有memo，这里设置一个空object作为初始memo */}
     );
 
-    // Warm the content hashes here so opening the work later is instant.
-    // GET /api/tracks/:id computes any that are missing before it can answer,
-    // and that reads every audio file. Doing it in the scanner moves the cost
-    // into a background child process, where slowness is expected.
-    // Must run after scrapeWorkMemo, not before: that call rewrites mtimes and
-    // drops the hashes of changed files, which would discard fresh hashes.
-    LOG.task.info(workId, `计算音频文件哈希`);
-    ({ memo } = await scrapeWorkHashes(workId, folder.absolutePath, memo));
-    
     const result = await getMetadata(workId, folder.rootFolderName, folder.relativePath); // 获取元数据
 
     // 如果获取元数据失败，跳过封面图片下载
@@ -961,11 +952,6 @@ async function scanWorkFile(work, index, total) {
       ? JSON.parse(work.memo)
       : { /* fallback empty object as memo */ }
     );
-    // Warm the content hashes too, so GET /api/tracks/:id never has to. Runs
-    // after scrapeWorkMemo because that call invalidates hashes by mtime.
-    // The first run over an existing library reads every audio file, because
-    // no work has a cached hash yet. Later runs only read changed files.
-    ({ memo } = await scrapeWorkHashes(work.id, absoluteWorkDir, memo));
     // console.log('work: ', absoluteWorkDir);
     // console.log('memo: ', memo);
     await db.setWorkMemo(work.id, memo);

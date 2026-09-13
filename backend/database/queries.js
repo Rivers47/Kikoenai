@@ -50,16 +50,16 @@ const makeQueries = (knex) => {
 
   /**
    * Overwrite each history row's state.seconds from t_track_progress, keyed by
-   * the work and the contentHash of the track the queue is parked on. PUT
+   * the work and the relPath of the track the queue is parked on. PUT
    * /api/history only fires on play/pause/track-change, so the position it
    * carries goes stale between writes; t_track_progress is the one updated on
-   * an interval. Rows written before this change (no contentHash on the queue
-   * item, or no progress row yet) keep their stored seconds.
+   * an interval. Rows whose queue item predates relPath handles (no resolvable
+   * trackId, or no progress row yet) keep their stored seconds.
    *
-   * The lookup is keyed by (work_id, track_key), not track_key alone:
-   * track_key is a CRC32 of the file's content, so two works that ship a
-   * byte-identical file (reused SE/BGM/trial tracks are common) share one key,
-   * and a single-column match let one work's position overwrite the other's.
+   * The lookup is keyed by (work_id, track_key), not track_key alone: a relPath
+   * is only unique inside one work, and plenty of works ship an identically
+   * named file (`01.mp3`, `SE/track01.wav`), so a single-column match let one
+   * work's position overwrite another's.
    * @param {String} username
    * @param {Array<Object>} rows - Rows carrying a JSON `state` string; mutated in place.
    *   The work id is read from `work_id`, falling back to `id` — getPlayHistory
@@ -78,15 +78,19 @@ const makeQueries = (knex) => {
       } catch {
         continue;
       }
-      const hash = state.queue && state.queue[state.index] && state.queue[state.index].contentHash;
-      if (hash) parsed.push({ row, state, hash, key: progressKey(workId, hash) });
+      const trackId = state.queue && state.queue[state.index] && state.queue[state.index].trackId;
+      // A trackId is `workId/relPath`; track_key holds the relPath alone.
+      const relPath = trackId && trackId.startsWith(`${workId}/`)
+        ? trackId.slice(String(workId).length + 1)
+        : null;
+      if (relPath) parsed.push({ row, state, relPath, key: progressKey(workId, relPath) });
     }
     if (!parsed.length) return;
 
     const progress = await knex('t_track_progress')
       .select('work_id', 'track_key', 'seconds')
       .where('user_name', username)
-      .whereIn('track_key', parsed.map(p => p.hash));
+      .whereIn('track_key', parsed.map(p => p.relPath));
     const byKey = new Map(progress.map(p => [progressKey(p.work_id, p.track_key), p.seconds]));
 
     for (const p of parsed) {
@@ -1320,6 +1324,9 @@ const makeQueries = (knex) => {
   }
 
   // t_track_progress queries (Phase 2)
+  // Keyed by trackId (`workId/relPath`), not by the bare track_key: that is the
+  // one handle the frontend carries on a queue item and in every media URL, so
+  // the client needs no second field to look progress up by.
   const getTrackProgress = async (username, work_id) => {
     const rows = await knex('t_track_progress')
       .select('track_key', 'seconds', 'completed')
@@ -1327,7 +1334,7 @@ const makeQueries = (knex) => {
       .andWhere('work_id', work_id);
     const map = {};
     for (const row of rows) {
-      map[row.track_key] = { seconds: row.seconds, completed: !!row.completed };
+      map[`${work_id}/${row.track_key}`] = { seconds: row.seconds, completed: !!row.completed };
     }
     return map;
   };

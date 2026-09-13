@@ -32,8 +32,8 @@
           clickable
           v-ripple
           v-for="item in fatherFolder"
-          :key="item.trackId || item.hash"
-          :active="item.type === 'audio' && (currentPlayingFile.trackId || currentPlayingFile.hash) === item.trackId"
+          :key="item.trackId"
+          :active="item.type === 'audio' && currentPlayingFile.trackId === item.trackId"
           active-class="text-on-primary bg-primary"
           @click="onClickItem(item)"
           class="non-selectable"
@@ -43,7 +43,7 @@
             <q-icon size="34px" v-else-if="item.type === 'text'" color="info" name="description" />
             <q-icon size="34px" v-else-if="item.type === 'image'" color="accent" name="photo" />
             <q-icon size="34px" v-else-if="item.type === 'other'" color="info" name="description" />
-            <q-btn v-else round dense color="primary" :icon="playIcon(item.trackId || item.hash)" @click="onClickPlayButton(item.trackId || item.hash)" />
+            <q-btn v-else round dense color="primary" :icon="playIcon(item.trackId)" @click="onClickPlayButton(item.trackId)" />
 
           </q-item-section>
 
@@ -221,14 +221,14 @@ export default {
 
     // 该曲目已保存的播放进度（秒），无记录返回 0（Phase 2）
     savedPosition (item) {
-      if (!item || !item.contentHash) return 0
-      const rec = this.trackProgress[item.contentHash]
+      if (!item || !item.trackId) return 0
+      const rec = this.trackProgress[item.trackId]
       return rec && typeof rec.seconds === 'number' ? rec.seconds : 0
     },
 
     playIcon (trackId) {
       const id = trackId || ''
-      return this.playing && (this.currentPlayingFile.trackId || this.currentPlayingFile.hash) === id ? "pause" : "play_arrow"            
+      return this.playing && this.currentPlayingFile.trackId === id ? "pause" : "play_arrow"            
     },
 
     initPath () {
@@ -278,34 +278,34 @@ export default {
         this.openTextPage(item);
       } else if (item.type === 'other') {
         this.download(item);
-      } else if ((this.currentPlayingFile.trackId || this.currentPlayingFile.hash) !== item.trackId) {
-        const resumeSeconds = this.trackProgress[item.contentHash];
+      } else if (this.currentPlayingFile.trackId !== item.trackId) {
+        const resumeSeconds = this.trackProgress[item.trackId];
         this.$store.commit('AudioPlayer/SET_QUEUE', {
           workId: this.metadata.id,
           vas: this.metadata.vas,
           queue: this.queue.concat(),
-          index: this.queue.findIndex(file => (file.trackId || file.hash) === item.trackId),
+          index: this.queue.findIndex(file => file.trackId === item.trackId),
           resetPlaying: true,
           resumeHistorySeconds: resumeSeconds ? resumeSeconds.seconds : -1,
-          workLastTrackId: this.queue.length ? (this.queue[this.queue.length - 1].trackId || this.queue[this.queue.length - 1].hash) : ''
+          workLastTrackId: this.queue.length ? this.queue[this.queue.length - 1].trackId : ''
         })
       }
     },
 
     onClickPlayButton (trackId) {
-      if ((this.currentPlayingFile.trackId || this.currentPlayingFile.hash) === trackId) {
+      if (this.currentPlayingFile.trackId === trackId) {
         this.$store.commit('AudioPlayer/TOGGLE_PLAYING')
       } else {
-        const item = this.fatherFolder.find(i => (i.trackId || i.hash) === trackId);
-        const resumeSeconds = item && item.contentHash ? this.trackProgress[item.contentHash] : null;
+        const item = this.fatherFolder.find(i => i.trackId === trackId);
+        const resumeSeconds = item && item.trackId ? this.trackProgress[item.trackId] : null;
         this.$store.commit('AudioPlayer/SET_QUEUE', {
           workId: this.metadata.id,
           vas: this.metadata.vas,
           queue: this.queue.concat(),
-          index: this.queue.findIndex(file => (file.trackId || file.hash) === trackId),
+          index: this.queue.findIndex(file => file.trackId === trackId),
           resetPlaying: true,
           resumeHistorySeconds: resumeSeconds ? resumeSeconds.seconds : -1,
-          workLastTrackId: this.queue.length ? (this.queue[this.queue.length - 1].trackId || this.queue[this.queue.length - 1].hash) : ''
+          workLastTrackId: this.queue.length ? this.queue[this.queue.length - 1].trackId : ''
         })
       }
     },
@@ -320,7 +320,7 @@ export default {
 
     download (file) {
       // Fallback to old API for an old backend
-      const url = file.mediaDownloadUrl ? `${file.mediaDownloadUrl}` : apiUrl(`/api/media/download/${file.trackId || file.hash}`);
+      const url = file.mediaDownloadUrl ? `${file.mediaDownloadUrl}` : apiUrl(`/api/media/download/${file.trackId}`);
       const link = document.createElement('a');
       link.href = url;
       link.target="_blank";
@@ -329,7 +329,7 @@ export default {
 
     setVisualPlayerCover (imgFile) {
       if (!imgFile) return;
-      const urlWithoutToken = imgFile.mediaDownloadUrl ? `${imgFile.mediaDownloadUrl}` : apiUrl(`/api/media/download/${imgFile.trackId || imgFile.hash}`);
+      const urlWithoutToken = imgFile.mediaDownloadUrl ? `${imgFile.mediaDownloadUrl}` : apiUrl(`/api/media/download/${imgFile.trackId}`);
       this.$store.commit('AudioPlayer/SET_VISUAL_PLAYER_COVER_URL', urlWithoutToken);
       this.$q.notify({
         message: this.$t('worktree.coverSetSuccess'),
@@ -351,14 +351,14 @@ export default {
     // Android's back button closes the app.
     openTextPage (file) {
       this.$router.push({
-        path: `/text/${file.trackId || file.hash}`,
+        path: `/text/${file.trackId}`,
         query: { title: file.title }
       });
     },
 
     originalImgSrc (file) {
       // Fallback to old API for an old backend
-      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}` : apiUrl(`/api/media/stream/${file.trackId || file.hash}`);
+      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}` : apiUrl(`/api/media/stream/${file.trackId}`);
       return url
     },
 

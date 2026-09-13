@@ -1,5 +1,4 @@
 const fs = require('fs');
-const zlib = require('zlib');
 const path = require('path');
 // Replacement for recursive-readdir: returns all files recursively as absolute paths
 // Uses sync glob since the walked directories are bounded and the result is needed immediately.
@@ -41,88 +40,7 @@ async function getAudioFileDuration(filePath) {
 }
 const getAudioFileDurationLimited = (filePath) => limitP.call(getAudioFileDuration, filePath);
 
-/**
- * Compute CRC32 hex digest of a file's contents, streamed chunk-by-chunk
- * (zlib.crc32 takes a running CRC so this mirrors the old SHA-256 streaming).
- * ponytail: CRC32 (2^32) is not collision-resistant globally, but it doesn't
- * need to be — t_track_progress PK is (user, work, track_key) so uniqueness
- * only needs to hold within one work (~tens of tracks, birthday ~3e-7).
- * Benchmark on the self-hosted matrix (NFS+fast CPU warm): crc32 ~1.6s,
- * xxh3 ~1.9s, sha256 ~4.5s, blake2s256 ~9s over 7.5GB — crc32 wins, ships with
- * Node (no dep, no WASM to allow/disallow on locked-down embedded runtimes).
- * @param {String} filePath Absolute path to the file.
- * @returns {Promise<String>} 8-char CRC32 hex string.
- */
-const getContentHash = (filePath) => {
-  return new Promise((resolve, reject) => {
-    let crc = 0;
-    const stream = fs.createReadStream(filePath);
-    stream.on('data', (chunk) => { crc = zlib.crc32(chunk, crc); });
-    stream.on('end', () => resolve((crc >>> 0).toString(16).padStart(8, '0')));
-    stream.on('error', (err) => reject(err));
-  });
-};
-// Bound concurrency the same way getAudioFileDurationLimited does, so a work
-// with many tracks doesn't spike disk I/O by hashing everything at once.
-const getContentHashLimited = (filePath) => limitP.call(getContentHash, filePath);
 
-/**
- * Lazily compute CRC32 content hashes for a work's audio files at tree-build time.
- * Reuses memo.hash[relPath] when the file's mtime is unchanged; computes
- * and caches otherwise. Never called at scan time — hashing only happens on
- * first tree-build after the feature ships, or on genuine file modification.
- * @param {String} work_id
- * @param {String} dir Work directory (absolute path).
- * @param {Object} oldMemo Existing memo ({ duration, mtime, contentHash }).
- * @returns {Promise<{memo: Object, changed: Boolean, files: Array}>}
- */
-async function scrapeWorkHashes(work_id, dir, oldMemo) {
-  const files = await recursiveReaddir(dir);
-  // oldMemo may be null for works never scraped (t_work.memo NULL). Be
-  // null-safe like getTrackList's readMemo.duration || {} pattern, otherwise
-  // a single unscanned work throws and 500s the whole tree endpoint.
-  const safeMemo = oldMemo || {};
-  // Read-side compat: new memos store contentHash, old memos may have hash.
-  const oldMemoHash = safeMemo.contentHash || safeMemo.hash || {};
-  const oldMemoMtime = safeMemo.mtime || {};
-  const memo = { ...safeMemo, contentHash: { ...oldMemoHash }, mtime: { ...oldMemoMtime } };
-  // Remove the old `hash` key if present (migrate to contentHash in-memory;
-  // the next setWorkMemo will persist the new key).
-  if (memo.hash) delete memo.hash;
-  let changed = false;
-
-  const audioFiles = files.filter((file) => {
-    const ext = path.extname(file).toLowerCase();
-    return supportedMediaExtList.includes(ext);
-  });
-
-  await Promise.all(audioFiles.map(async (file) => {
-    const shortPath = file.replace(path.join(dir, '/'), '');
-    // Skip files we cannot read. This runs inside GET /api/tracks/:id, so a
-    // throw here would fail the whole file list. The node just gets no hash.
-    try {
-      // Async stat (not statSync): on a network mount each stat is a network
-      // round-trip, and a sync stat blocks the event loop per file — serializing
-      // N RTTs and stalling the parallel hash reads. Promise.all lets them overlap.
-      const fstat = await fs.promises.stat(file);
-      const newMTime = Math.round(fstat.mtime.getTime());
-      const oldMTime = oldMemoMtime[shortPath];
-      if (oldMemoHash[shortPath] !== undefined && oldMTime === newMTime) {
-        return; // cached and unchanged — reuse
-      }
-      const hash = await getContentHashLimited(file);
-      memo.contentHash[shortPath] = hash;
-      memo.mtime[shortPath] = newMTime;
-      changed = true;
-    } catch (err) {
-      console.error(`work[${work_id}] hash failed, file = ${file}`, err);
-    }
-  }));
-
-  // Return the walked file list so the caller can hand it to getTrackList and
-  // avoid a second recursiveReaddir of the same directory.
-  return { memo, changed, files };
-}
 
 // 从文件系统，抓取单个作品本地文件的杂项信息：
 //  * 音频文件对应的时长
@@ -145,12 +63,9 @@ async function scrapeWorkMemo(work_id, dir, oldMemo) {
   // Callers pass the object below to db.setWorkMemo(), which replaces the whole
   // t_work.memo JSON column. So copy oldMemo into it: an object literal holding
   // only the keys this function fills in would drop the ones other code writes,
-  // contentHash and trackTitles, on every rescan. duration and mtime are
-  // rebuilt further down, so they start empty.
+  // trackTitles, on every rescan. duration and mtime are rebuilt further down,
+  // so they start empty.
   const memo = { ...(oldMemo || {}), duration: {}, isContainLyric: false, mtime: {} };
-  // The spread above is shallow, so memo.contentHash is still oldMemo's object.
-  // Copy it, because the loop below deletes stale entries from it.
-  if (memo.contentHash) memo.contentHash = { ...memo.contentHash };
   await Promise.all(files
     .filter((file) => {
       const ext = path.extname(file).toLowerCase();
@@ -161,7 +76,9 @@ async function scrapeWorkMemo(work_id, dir, oldMemo) {
     }) // filter
     .map((file) => ({
         fullPath: file,
-        shortPath: file.replace(path.join(dir, '/'), '')
+        // Same forward-slash normalization as getTrackList: these keys are the
+        // file's identity and must match the ones the track list looks up.
+        shortPath: file.replace(path.join(dir, '/'), '').split(path.sep).join('/')
       })
     ) // map
     .map(async (fileDict) => {
@@ -176,15 +93,6 @@ async function scrapeWorkMemo(work_id, dir, oldMemo) {
       ) { // 更新duration和mtime
         console.log(`work[${work_id}] update data on file: ${fileDict.fullPath}, fstate.mtime: ${fstat.mtime.getTime()}, `);
         memo.mtime[fileDict.shortPath] = newMTime;
-        // The file changed, so its old contentHash is stale. Drop it, or the
-        // mtime written on the line above would make scrapeWorkHashes treat
-        // that stale hash as valid. Test the mtime again here instead of
-        // relying on the enclosing if: that condition also passes when only
-        // the duration is missing, which says nothing about the contents.
-        // A file with no old mtime is new and has no hash to drop.
-        if (oldMTime !== undefined && oldMTime !== newMTime && memo.contentHash) {
-          delete memo.contentHash[fileDict.shortPath];
-        }
         const duration = await getAudioFileDurationLimited(fileDict.fullPath);
         if (! isNaN(duration) && typeof(duration) === 'number') {
           memo.duration[fileDict.shortPath] = duration;
@@ -207,7 +115,7 @@ async function scrapeWorkMemo(work_id, dir, oldMemo) {
  */
 const getTrackList = async function (id, dir, readMemo, files) {
   try {
-    // Reuse a caller-provided file list (e.g. from scrapeWorkHashes) to avoid
+    // Reuse a caller-provided file list to avoid
     // walking the same directory twice during a single tree-build.
     const walkedFiles = files || (await recursiveReaddir(dir));
     // Filter out any files not matching these extensions
@@ -225,7 +133,10 @@ const getTrackList = async function (id, dir, readMemo, files) {
 
     // Sort by folder and title
     const sortedFiles = orderBy(filteredFiles.map((file) => {
-      const shortFilePath = file.replace(path.join(dir, '/'), '');
+      // Forward slashes regardless of platform: this is the file's identity and
+      // it travels in URLs and in t_track_progress.track_key, so a Windows
+      // server must not key the same file differently from a Linux one.
+      const shortFilePath = file.replace(path.join(dir, '/'), '').split(path.sep).join('/');
       const dirName = path.dirname(shortFilePath);
 
       return {
@@ -237,12 +148,14 @@ const getTrackList = async function (id, dir, readMemo, files) {
       };
     }), [v => v.subtitle, v => v.title, v => v.ext]);
 
-    // Add trackId (file handle) to each file
+    // Add trackId (file handle) to each file. It is the work id plus the
+    // work-relative path, which is what every media URL carries: one value
+    // identifies the file, addresses it, and keys its progress row.
     const sortedHashedFiles = sortedFiles.map(
-      (file, index) => ({
+      (file) => ({
         title: file.title,
         subtitle: file.subtitle,
-        trackId: `${id}/${index}`,
+        trackId: `${id}/${file.shortFilePath}`,
         ext: file.ext,
         fullPath: file.fullPath, // 给后面获取音频时长提供文件的全路径
         shortFilePath: file.shortFilePath,
@@ -250,29 +163,22 @@ const getTrackList = async function (id, dir, readMemo, files) {
     );
 
     const durationMemo = readMemo.duration || { /* fallback */ };
-    const hashMemo = readMemo.contentHash || readMemo.hash || {};
     // Human-readable track names, keyed by relPath like the two memos above.
     // Populated out-of-band (see backend/scripts/extract-track-titles.js) for
     // works whose files are named "01.mp3", "#2.wav" and the like. Kept in a
     // field of its own rather than overwriting `title`: `title` is the real
     // filename and toTree builds the stream/download URLs from it.
     const trackTitleMemo = readMemo.trackTitles || {};
-    // add duration, contentHash and track title for each audio
+    // add duration and track title for each audio
     const filesAddAudioDuration = await Promise.all(sortedHashedFiles.map(async (file) => {
       if (supportedMediaExtList.includes(file.ext)) {
         if (undefined !== durationMemo[file.shortFilePath]) {
           file.duration = durationMemo[file.shortFilePath];
         }
-        if (undefined !== hashMemo[file.shortFilePath]) {
-          file.contentHash = hashMemo[file.shortFilePath];
-        }
         if (trackTitleMemo[file.shortFilePath]) {
           file.trackTitle = trackTitleMemo[file.shortFilePath];
         }
       }
-      // relPath (shortFilePath) is kept on the track so toTree can expose it
-      // on audio nodes — the frontend uses it as the stable key to merge
-      // late-arriving contentHash values from the /api/work/:id/memo endpoint.
       delete file.fullPath;
 
       return file;
@@ -349,6 +255,7 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
       fatherFolder.push({
         type: 'text',
         trackId: track.trackId,
+        relPath: track.shortFilePath,
         title: track.title,
         workTitle,
         mediaStreamUrl: textStreamBaseUrl,
@@ -358,6 +265,7 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
       fatherFolder.push({
         type: 'image',
         trackId: track.trackId,
+        relPath: track.shortFilePath,
         title: track.title,
         workTitle,
         mediaStreamUrl,
@@ -367,6 +275,7 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
       fatherFolder.push({
         type: 'other',
         trackId: track.trackId,
+        relPath: track.shortFilePath,
         title: track.title,
         workTitle,
         mediaStreamUrl,
@@ -376,7 +285,6 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
       fatherFolder.push({
         type: 'audio',
         trackId: track.trackId,
-        contentHash: track.contentHash,
         relPath: track.shortFilePath,
         title: track.title,
         trackTitle: track.trackTitle, // display name, falls back to title in the UI
@@ -634,6 +542,4 @@ module.exports = {
   formatID,
   coverFileName,
   scrapeWorkMemo,
-  getContentHash,
-  scrapeWorkHashes,
 };

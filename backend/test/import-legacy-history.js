@@ -14,9 +14,8 @@ const { runImport } = require('../scripts/import-legacy-history');
 
 /**
  * The importer reads the current track list off disk (getTrackList), so these
- * tests lay down a real work folder. Where a test seeds memo.contentHash the
- * bytes are irrelevant; where it does not, the importer CRC32s the file it
- * finds, so the one byte written here is the hash's actual input.
+ * tests lay down a real work folder. The file contents are irrelevant: a track
+ * is keyed by its work-relative path, and no file is ever read.
  */
 describe('import-legacy-history', () => {
   let knex, dbApi, tmpRoot, oldDbPath, oldKnex, savedRootFolders;
@@ -87,7 +86,6 @@ describe('import-legacy-history', () => {
       writeTrack('02 main.webm');
       await insertWork({
         duration: { '01 intro.webm': 60.2, '02 main.webm': 600.4 },
-        contentHash: { '01 intro.webm': 'aaaaaaaa', '02 main.webm': 'bbbbbbbb' },
       });
       await oldKnex('t_history').insert([
         { user_name: 'admin', work_id: '1', file_index: '0', file_name: '01 intro.flac', play_time: 59, total_time: 60, created_at: '2023-02-09 06:04:46', updated_at: '2023-02-09 06:04:46' },
@@ -102,7 +100,7 @@ describe('import-legacy-history', () => {
 
       const rows = await knex('t_track_progress').orderBy('track_key');
       expect(rows.map(r => [r.track_key, r.seconds, !!r.completed]))
-        .to.deep.equal([['aaaaaaaa', 59, true], ['bbbbbbbb', 120, false]]);
+        .to.deep.equal([['01 intro.webm', 59, true], ['02 main.webm', 120, false]]);
     });
 
     it('rebuilds a play-history entry anchored on the last track played', async () => {
@@ -113,7 +111,7 @@ describe('import-legacy-history', () => {
       expect(state.index).to.equal(1);
       expect(state.seconds).to.equal(120);
       expect(state.queue[1]).to.deep.equal({
-        trackId: '000001/1', contentHash: 'bbbbbbbb', title: '02 main.webm',
+        trackId: '000001/02 main.webm', title: '02 main.webm',
         duration: 600.4, workTitle: 'Work One',
       });
       // The history list orders by updated_at; a 2023 session must not sort as today.
@@ -138,10 +136,10 @@ describe('import-legacy-history', () => {
 
     it('leaves a position the user has set since alone', async () => {
       await knex('t_track_progress').insert({
-        user_name: 'admin', work_id: '000001', track_key: 'bbbbbbbb', seconds: 500, completed: 0,
+        user_name: 'admin', work_id: '000001', track_key: '02 main.webm', seconds: 500, completed: 0,
       });
       await run();
-      const row = await knex('t_track_progress').where({ track_key: 'bbbbbbbb' }).first();
+      const row = await knex('t_track_progress').where({ track_key: '02 main.webm' }).first();
       expect(row.seconds).to.equal(500);
     });
   });
@@ -151,7 +149,6 @@ describe('import-legacy-history', () => {
     writeTrack('noSE/01 track.webm');
     await insertWork({
       duration: { 'SE/01 track.webm': 300, 'noSE/01 track.webm': 300 },
-      contentHash: { 'SE/01 track.webm': 'aaaaaaaa', 'noSE/01 track.webm': 'bbbbbbbb' },
     });
     await oldKnex('t_history').insert({
       user_name: 'admin', work_id: '1', file_index: '0', file_name: '01 track.flac',
@@ -160,7 +157,7 @@ describe('import-legacy-history', () => {
 
     await run();
     const rows = await knex('t_track_progress').orderBy('track_key');
-    expect(rows.map(r => r.track_key)).to.deep.equal(['aaaaaaaa', 'bbbbbbbb']);
+    expect(rows.map(r => r.track_key)).to.deep.equal(['SE/01 track.webm', 'noSE/01 track.webm']);
     // The queue is folder-scoped, so it holds only the anchor's own folder.
     const state = JSON.parse((await knex('t_play_history').first()).state);
     expect(state.queue).to.have.length(1);
@@ -171,7 +168,6 @@ describe('import-legacy-history', () => {
     writeTrack('noSE/01 track.webm');
     await insertWork({
       duration: { 'SE/01 track.webm': 300, 'noSE/01 track.webm': 420 },
-      contentHash: { 'SE/01 track.webm': 'aaaaaaaa', 'noSE/01 track.webm': 'bbbbbbbb' },
     });
     await oldKnex('t_history').insert({
       user_name: 'admin', work_id: '1', file_index: '0', file_name: '01 track.flac',
@@ -180,7 +176,7 @@ describe('import-legacy-history', () => {
 
     await run();
     const rows = await knex('t_track_progress');
-    expect(rows.map(r => r.track_key)).to.deep.equal(['bbbbbbbb']);
+    expect(rows.map(r => r.track_key)).to.deep.equal(['noSE/01 track.webm']);
   });
 
   it('falls back to a unique duration match for a renamed file', async () => {
@@ -188,7 +184,6 @@ describe('import-legacy-history', () => {
     writeTrack('Track02 something else.webm');
     await insertWork({
       duration: { 'Track01 the real name.webm': 913.7, 'Track02 something else.webm': 342.8 },
-      contentHash: { 'Track01 the real name.webm': 'aaaaaaaa', 'Track02 something else.webm': 'bbbbbbbb' },
     });
     await oldKnex('t_history').insert({
       user_name: 'admin', work_id: '1', file_index: '0', file_name: 'Track01.flac',
@@ -197,13 +192,13 @@ describe('import-legacy-history', () => {
 
     const summary = await run();
     expect(summary.matchedRows).to.equal(1);
-    expect((await knex('t_track_progress').first()).track_key).to.equal('aaaaaaaa');
+    expect((await knex('t_track_progress').first()).track_key).to.equal('Track01 the real name.webm');
   });
 
-  // A library that has not been rescanned has no memo.contentHash at all, which
-  // is the normal state for someone importing years-old history. Requiring the
-  // scan first would make the import a no-op on nearly every work.
-  it('computes the hash from disk when the memo has none', async () => {
+  // A library that has not been rescanned is the normal state for someone
+  // importing years-old history, and the key comes off the directory listing
+  // rather than the memo, so there is nothing to warm first.
+  it('keys progress by relPath on a work with no hashes anywhere', async () => {
     writeTrack('01 intro.webm');
     await insertWork({ duration: { '01 intro.webm': 60 } });
     await oldKnex('t_history').insert({
@@ -212,12 +207,10 @@ describe('import-legacy-history', () => {
     });
 
     const summary = await run();
-    expect(summary.hashesComputed).to.be.greaterThan(0);
     expect(summary.progressWritten).to.equal(1);
 
     const row = await knex('t_track_progress').first();
-    // CRC32 of the one byte written by writeTrack, as zlib.crc32 produces it.
-    expect(row.track_key).to.equal(require('zlib').crc32('x').toString(16));
+    expect(row.track_key).to.equal('01 intro.webm');
     expect(row.seconds).to.equal(59);
   });
 
@@ -236,7 +229,7 @@ describe('import-legacy-history', () => {
     expect(!!(await knex('t_track_progress').first()).completed).to.equal(true);
   });
 
-  it('gives every queue item a content hash on an unscanned work', async () => {
+  it('gives every queue item a resolvable trackId', async () => {
     writeTrack('01 intro.webm');
     writeTrack('02 main.webm');
     await insertWork({ duration: { '01 intro.webm': 60, '02 main.webm': 600 } });
@@ -246,26 +239,12 @@ describe('import-legacy-history', () => {
     });
 
     await run();
-    // A queue persisted without hashes can never report per-track progress
-    // again -- the resume-from-history path never refetches the tree.
+    // The resume-from-history path never refetches the tree, so the stored
+    // queue has to carry handles the media routes can resolve on their own.
     const state = JSON.parse((await knex('t_play_history').first()).state);
     expect(state.queue).to.have.length(2);
-    expect(state.queue.every(q => !!q.contentHash)).to.equal(true);
-  });
-
-  it('reads each file at most once per run', async () => {
-    writeTrack('SE/01 track.webm');
-    writeTrack('noSE/01 track.webm');
-    await insertWork({ duration: { 'SE/01 track.webm': 300, 'noSE/01 track.webm': 300 } });
-    await oldKnex('t_history').insert({
-      user_name: 'admin', work_id: '1', file_index: '0', file_name: '01 track.flac',
-      play_time: 150, total_time: 300, created_at: '2023-02-09 06:04:46', updated_at: '2023-02-09 06:04:46',
-    });
-
-    // Both mixes are seeded, and the anchor's folder is hashed for the queue --
-    // but the anchor track itself is shared between those two passes.
-    const summary = await run();
-    expect(summary.hashesComputed).to.equal(2);
+    expect(state.queue.map(q => q.trackId))
+      .to.deep.equal(['000001/01 intro.webm', '000001/02 main.webm']);
   });
 
   it('skips a work that is no longer in the library', async () => {
