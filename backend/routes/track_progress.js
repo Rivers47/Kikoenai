@@ -15,6 +15,10 @@ router.put('/:id/*path',
   workIdParam(),
   body('seconds').isFloat({ min: 0 }),
   body('completed').isBoolean(),
+  // When the client measured the position, not when this request arrived --
+  // see upsertTrackProgress. Optional: an older client omits it and gets the
+  // previous unconditional-overwrite behaviour.
+  body('observedAt').optional().isInt({ min: 0 }),
   async (req, res, next) => {
     if(!isValidRequest(req, res)) return;
 
@@ -28,7 +32,8 @@ router.put('/:id/*path',
         req.params.id,
         resolved.track.shortFilePath,
         req.body.seconds,
-        req.body.completed
+        req.body.completed,
+        req.body.observedAt ? Number(req.body.observedAt) : undefined
       );
       res.send({ message: '更新进度成功' });
     } catch (err) {

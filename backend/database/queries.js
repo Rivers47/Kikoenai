@@ -1327,25 +1327,59 @@ const makeQueries = (knex) => {
   // Keyed by trackId (`workId/relPath`), not by the bare track_key: that is the
   // one handle the frontend carries on a queue item and in every media URL, so
   // the client needs no second field to look progress up by.
+  //
+  // `observedAt` goes out so a client holding a local copy can tell which of the
+  // two is newer. It is the same UTC text every other timestamp column uses, so
+  // the existing strftime(..., 'localtime') display path applies unchanged.
   const getTrackProgress = async (username, work_id) => {
     const rows = await knex('t_track_progress')
-      .select('track_key', 'seconds', 'completed')
+      .select('track_key', 'seconds', 'completed', 'updated_at')
       .where('user_name', username)
       .andWhere('work_id', work_id);
     const map = {};
     for (const row of rows) {
-      map[`${work_id}/${row.track_key}`] = { seconds: row.seconds, completed: !!row.completed };
+      map[`${work_id}/${row.track_key}`] = {
+        seconds: row.seconds,
+        completed: !!row.completed,
+        observedAt: row.updated_at,
+      };
     }
     return map;
   };
 
-  const upsertTrackProgress = async (username, work_id, track_key, seconds, completed) => {
+  /**
+   * SQLite's own CURRENT_TIMESTAMP format: UTC, second resolution, as text.
+   *
+   * The representation is load-bearing, not cosmetic. `updated_at` already holds
+   * text on every existing row, and SQLite orders *all* integers below *all*
+   * text regardless of value -- so storing epoch milliseconds here would make
+   * every new write compare as older than every old row, and the freshness
+   * guard below would silently reject all of them.
+   */
+  const utcStamp = (ms) => new Date(ms).toISOString().replace('T', ' ').slice(0, 19);
+
+  /**
+   * Write a track's position, newest observation wins.
+   *
+   * `observedAt` (epoch ms) is when the client *measured* the position, not when
+   * the server heard about it. That distinction is the whole point: a write
+   * deferred by an offline outbox arrives late carrying an old observation, and
+   * ordering by arrival time would let it clobber a newer position from another
+   * device -- the stale value would look freshest precisely in the case the
+   * outbox exists to serve.
+   *
+   * Omitting it falls back to server-now, which reproduces the old
+   * unconditional-overwrite behaviour for any client that has not been updated.
+   */
+  const upsertTrackProgress = async (username, work_id, track_key, seconds, completed, observedAt) => {
+    const stamp = utcStamp(observedAt || Date.now());
     await knex.raw(`
       INSERT INTO t_track_progress (user_name, work_id, track_key, seconds, completed, updated_at)
-      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_name, work_id, track_key)
       DO UPDATE SET seconds = excluded.seconds, completed = excluded.completed, updated_at = excluded.updated_at
-    `, [username, work_id, track_key, seconds, completed]);
+      WHERE excluded.updated_at >= t_track_progress.updated_at
+    `, [username, work_id, track_key, seconds, completed, stamp]);
   };
 
   return {

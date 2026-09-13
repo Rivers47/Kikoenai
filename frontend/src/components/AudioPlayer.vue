@@ -703,12 +703,23 @@ export default {
         }
       }
 
-      fetch(apiUrl(`/api/history/${this.playWorkId}`), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-        keepalive: true,
-      }).catch(() => {})
+      // The history body is queue + index only -- position lives in
+      // t_track_progress -- so during continuous playback it does not change
+      // between flushes. Without this guard every hide re-sent a byte-identical
+      // payload, and rapid tab switching turned that into one write per switch.
+      // latestUpdatedHistory is assigned only after a confirmed delivery, so an
+      // unconfirmed or failed send still leaves this flush to retry.
+      //
+      // Only the history write is skipped. Progress is a position, which does
+      // keep changing while playing, so it is reported either way.
+      if (!this.isSameTwoHistory(this.latestUpdatedHistory, data)) {
+        fetch(apiUrl(`/api/history/${this.playWorkId}`), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+          keepalive: true,
+        }).catch(() => {})
+      }
 
       // Also report per-track progress (Phase 2)
       this._flushTrackProgressOnHide()
@@ -727,7 +738,8 @@ export default {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           seconds: Math.round(seconds * 100) / 100,
-          completed: completed
+          completed: completed,
+          observedAt: Date.now()
         }),
         keepalive: true,
       }).catch(() => {})
@@ -790,7 +802,8 @@ export default {
       if (!this._markTrackProgressReported(file.trackId, seconds)) return
       this.$axios.put(`/api/track-progress/${file.trackId}`, {
         seconds: Math.round(seconds * 100) / 100,
-        completed: completed
+        completed: completed,
+        observedAt: Date.now()
       }).catch((err) => {
         console.error('track progress report failed:', err)
       })

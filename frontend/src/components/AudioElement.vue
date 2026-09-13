@@ -348,7 +348,8 @@ export default {
       const completed = duration > 0 && seconds >= 0.95 * duration
       this.$axios.put(`/api/track-progress/${file.trackId}`, {
         seconds: Math.round(seconds * 100) / 100,
-        completed: completed
+        completed: completed,
+        observedAt: Date.now()
       }).catch((err) => {
         console.error('track progress report failed:', err)
       })

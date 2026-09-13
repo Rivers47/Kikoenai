@@ -542,7 +542,7 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 | `/api/illustrators` | GET | `EditMetadata.vue` | List illustrators (autocomplete) |
 | `/api/script_writers` | GET | `EditMetadata.vue` | List script writers (autocomplete) |
 | `/api/series` | GET | `EditMetadata.vue` | List series (autocomplete). Was the irregular `/api/seriess` |
-| `/api/track-progress/:trackId` | PUT | `AudioElement.vue`, `AudioPlayer.vue` | Report per-track playback position. Body `{seconds, completed}` — the track is addressed by the same handle as a media URL, so callers post to `/api/track-progress/${file.trackId}`. Fire-and-forget write |
+| `/api/track-progress/:trackId` | PUT | `AudioElement.vue`, `AudioPlayer.vue` | Report per-track playback position. Body `{seconds, completed, observedAt}` — `observedAt` is `Date.now()` at measurement time; the server applies the write only if it is at least as new as what it holds (`backend/AGENTS.md` §2.9c), so a deferred write cannot clobber a newer position — the track is addressed by the same handle as a media URL, so callers post to `/api/track-progress/${file.trackId}`. Fire-and-forget write |
 
 > **Tracks response:** `GET /api/tracks/:id` returns `{ tree, trackProgress }`.
 > **`trackId` is the only handle you need.** It is `${workId}/${relPath}`, so it

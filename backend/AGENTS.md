@@ -338,6 +338,22 @@ Works whose audio files are named `01.mp3` / `#2.wav` show only the filename. `t
 
 Every precondition failure is loud and exits non-zero — unknown id, no scraped description, no audio on disk, unconfigured root folder, or titles already present without `--force`. The caller named the work explicitly, so silently doing nothing would be the wrong answer; the uninformative-filename check is advisory only, printed but never a skip. `--dry-run` prints the result, then asks `write N titles? [y/N]` so an expensive model call need not be repeated to apply it; without a TTY it never writes.
 
+### 2.9c Per-track position: newest observation wins
+
+`t_track_progress` is keyed `(user_name, work_id, track_key)` where `track_key` is the relPath (§2.9a), and `upsertTrackProgress` applies a write only when it is at least as new as the row it would replace:
+
+```sql
+DO UPDATE SET ... WHERE excluded.updated_at >= t_track_progress.updated_at
+```
+
+**The timestamp is the client's observation time, not the arrival time.** That distinction is the whole point. A write deferred by an offline queue arrives late carrying an old position, so ordering by arrival would let the stale value win — and it would win hardest in exactly the case the deferral exists to serve. The client sends `observedAt` (epoch ms); a request without it falls back to server-now, which reproduces the old unconditional overwrite, so an un-updated client still works.
+
+**It reuses `updated_at` rather than adding a column.** Nothing read that column — the two selects took `track_key`/`seconds`/`completed` only — so there was nothing to migrate, and no `dbVersion` bump. `getTrackProgress` now returns it as `observedAt` so a client holding a local copy can tell which side is newer.
+
+> **The stored representation is load-bearing.** It must stay **UTC text in `CURRENT_TIMESTAMP`'s own format** (`'YYYY-MM-DD HH:MM:SS'`, produced by `utcStamp`). Every pre-existing row holds text, and SQLite orders *all* integers below *all* text regardless of value — so storing epoch milliseconds here would make every new write compare as older than every old row and the guard would silently reject all of them. Keeping the format also means the `strftime(..., 'localtime')` display conversion (`queries.js`) still applies. Second resolution means two writes in the same second tie, and `>=` lets the later arrival through; `'…SS.mmm'` would still sort correctly if finer resolution is ever wanted.
+
+Client clock skew is accepted rather than defended against: comparisons are client-to-client, and for the single-device case that is the *same* clock, so ordinary drift cancels out. There is no clamp against a deliberately wrong clock.
+
 ### 2.9 Work-Page Extras (description, images, author, reviews)
 
 The DLsite scraper reads more than the `#work_outline` spec table. The description and the images are served by `GET /api/work/:id/extras` and `GET /api/image/:id/:name` and rendered on the work page (`WorkDescription.vue`, `WorkGallery.vue`); **the scraped DLsite reviews and `authors[]` are still unexposed** — scaffolding for later features. Everything below is DLsite-only; `fanza.js` is unchanged and Fanza works get none of it, so a Fanza work shows no description tab.
@@ -521,7 +537,7 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 | `/api/history` | GET | Works the user has playback history for. Query `excludeFinished` (`all`\|`listened`, default `listened`): when `listened`, excludes rows where `t_review.progress='listened'`. Items carry a nullable `progress` |
 | `/api/history/:id` | PUT | Save playback state. Body `{state}` (the serialized queue + index; carries no position) |
 | `/api/history/:id` | DELETE | Delete this work's playback history |
-| `/api/track-progress/:id/*path` | PUT | Report per-track position. Body `{seconds, completed}`. The track is addressed exactly as the media routes address it, so the client posts to `/api/track-progress/${trackId}` and carries no second identifier. The path is resolved against the work's track list, so a path that is not a file of this work is a 404 rather than a row keyed by junk |
+| `/api/track-progress/:id/*path` | PUT | Report per-track position. Body `{seconds, completed, observedAt?}` — `observedAt` is epoch ms for when the client *measured* the position, and the write is applied only if it is at least as new as the stored one (see §2.9c). Omitting it falls back to server-now, i.e. the old unconditional overwrite. The track is addressed exactly as the media routes address it, so the client posts to `/api/track-progress/${trackId}` and carries no second identifier. The path is resolved against the work's track list, so a path that is not a file of this work is a 404 rather than a row keyed by junk |
 | `/api/review` | GET | Works the user has reviewed/rated/progress-marked. Query `filter` (one of the five progress values) |
 | `/api/review/:id` | PUT | Create/update review, rating, or progress. Query `starOnly`, `progressOnly`, `autoMark`. With `progressOnly=true&autoMark=true` it only writes `progress='listened'` when existing progress is null/empty/marked/listening; no-op on listened/replay/postponed |
 | `/api/review/:id` | DELETE | Delete the whole review row (rating + review_text + progress) |
