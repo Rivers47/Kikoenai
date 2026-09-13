@@ -1249,23 +1249,6 @@ const makeQueries = (knex) => {
       .first();
   };
 
-  async function getWorkMemo(work_id) {
-    const work = await knex('t_work')
-      .select('id', 'memo')
-      .where('id', '=', work_id)
-      .first();
-
-    return JSON.parse(work.memo);
-  }
-
-  async function setWorkMemo(work_id, memo) {
-    await knex('t_work')
-      .where('id', '=', work_id)
-      .update({
-        memo: JSON.stringify(memo)
-      });
-  }
-
   /**
    * Reads the scraped work-page extras: description, per-part description
    * structure (incl. the track list) and the sample image list.
@@ -1380,6 +1363,23 @@ const makeQueries = (knex) => {
     });
   };
 
+  /**
+   * Set display names on existing rows, by relPath. Used by
+   * scripts/extract-track-titles.js -- a targeted update rather than
+   * replaceWorkFiles, which would drop rows the extractor never looked at.
+   * @param {Object} titles { relPath: title }
+   * @returns {Promise<Number>} rows actually updated
+   */
+  const setTrackTitles = async (work_id, titles) => {
+    let updated = 0;
+    for (const [relPath, title] of Object.entries(titles || {})) {
+      updated += await knex('t_work_file')
+        .where({ work_id: String(work_id), rel_path: relPath })
+        .update({ track_title: title });
+    }
+    return updated;
+  };
+
   // t_track_progress queries (Phase 2)
   // Keyed by trackId (`workId/relPath`), not by the bare track_key: that is the
   // one handle the frontend carries on a queue item and in every media URL, so
@@ -1442,14 +1442,13 @@ const makeQueries = (knex) => {
     createUser, updateUserPassword, resetUserPassword, deleteUser,
     getWorksWithReviews, updateUserReview, deleteUserReview, resetUserProgress,
     getPlayHistory, updatePlayHistory, deletePlayHistory,
-    getWorkMemo, setWorkMemo,
     getWorkExtras, setWorkSampleImages,
     replaceWorkDlsiteReviews, getWorkDlsiteReviews,
     getTrackProgress, upsertTrackProgress,
     // Exported for the projection-agreement test: it and getTrackProgress are
     // two shapes over trackProgressFor and must never disagree.
     applyTrackProgressSeconds,
-    getWorkFiles, replaceWorkFiles,
+    getWorkFiles, replaceWorkFiles, setTrackTitles,
   };
 };
 

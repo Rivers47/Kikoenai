@@ -40,7 +40,7 @@ describe('track identity: relPath', function () {
     write('01 intro.mp3');
     write('SE/02 main.mp3');
 
-    const tracks = await getTrackList('000001', dir, {});
+    const tracks = await getTrackList('000001', dir);
     const byPath = new Map(tracks.map(t => [t.shortFilePath, t.trackId]));
 
     expect(byPath.get('01 intro.mp3')).to.equal('000001/01 intro.mp3');
@@ -50,7 +50,7 @@ describe('track identity: relPath', function () {
   it('keeps a non-ASCII path intact', async function () {
     write('絶頂トレーニング/01 囁き＆吐息♡.mp3');
 
-    const [track] = await getTrackList('000001', dir, {});
+    const [track] = await getTrackList('000001', dir);
     expect(track.shortFilePath).to.equal('絶頂トレーニング/01 囁き＆吐息♡.mp3');
     expect(track.trackId).to.equal('000001/絶頂トレーニング/01 囁き＆吐息♡.mp3');
   });
@@ -60,7 +60,7 @@ describe('track identity: relPath', function () {
   it('always spells a relPath with forward slashes', async function () {
     write('SE/sub dir/03.mp3');
 
-    const [track] = await getTrackList('000001', dir, {});
+    const [track] = await getTrackList('000001', dir);
     expect(track.shortFilePath).to.not.include('\\');
     expect(track.shortFilePath).to.equal('SE/sub dir/03.mp3');
   });
@@ -71,7 +71,7 @@ describe('track identity: relPath', function () {
     write('readme.txt');
     write('booklet.pdf');
 
-    const tracks = await getTrackList('000001', dir, {});
+    const tracks = await getTrackList('000001', dir);
     const tree = toTree(tracks, 'Work', 'w1', { name: 'root', path: dir });
     const nodes = tree.filter(n => n.type);
 

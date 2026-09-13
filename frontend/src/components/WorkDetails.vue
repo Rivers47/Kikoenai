@@ -544,7 +544,9 @@ export default {
     async scanWorkFile() {
       try {
         const response = await this.$axios.post(`/api/scan/${this.metadata.id}`);
-        if (response.data.memo) {
+        // `files` is the re-listed track count. Was `memo`, which is gone --
+        // durations and the listing both live in t_work_file now.
+        if (typeof response.data.files === 'number') {
           this.$router.go(0);
         }
       } catch(err) {

@@ -157,7 +157,7 @@ async function runImport({
     summary.historyRows = oldRows.length;
 
     // Index the current library once: work row + resolved absolute directory.
-    const workRows = await dbApi.knex('t_work').select('id', 'title', 'root_folder', 'dir', 'memo');
+    const workRows = await dbApi.knex('t_work').select('id', 'title', 'root_folder', 'dir');
     const works = new Map(workRows.map(w => [w.id, w]));
 
     const existingProgress = new Set(
@@ -193,13 +193,6 @@ async function runImport({
         continue;
       }
       const workDir = path.join(rootFolder.path, work.dir);
-
-      let memo;
-      try {
-        memo = work.memo ? JSON.parse(work.memo) : {};
-      } catch {
-        memo = {};
-      }
 
       let tracks;
       try {

@@ -23,7 +23,7 @@
 const path = require('path');
 const { orderBy } = require('natural-orderby');
 const db = require('../database/db');
-const { getTrackList, scrapeWorkMemo, supportedMediaExtList } = require('./utils');
+const { getTrackList, probeAudioDurations, supportedMediaExtList } = require('./utils');
 
 /**
  * Shape stored rows exactly the way getTrackList shapes a walk, including the
@@ -70,7 +70,7 @@ const shapeRows = (workId, workDir, rows) => {
  * @returns {Promise<Array>} the shaped track list, as listWorkTracks returns.
  */
 async function indexWorkFiles (workId, workDir, tracks, dbApi = db) {
-  const walked = tracks || await getTrackList(workId, workDir, {});
+  const walked = tracks || await getTrackList(workId, workDir);
   const existing = await dbApi.getWorkFiles(workId);
   const byRelPath = new Map(existing.map((row) => [row.rel_path, row]));
 
@@ -79,8 +79,8 @@ async function indexWorkFiles (workId, workDir, tracks, dbApi = db) {
     return {
       work_id: String(workId),
       rel_path: track.shortFilePath,
-      // A freshly walked track carries duration/trackTitle only when the caller
-      // passed a scan's output; otherwise keep whatever the row already had.
+      // A plain walk carries no duration -- only a scan probes -- so keep what the
+      // row already had. Losing it would mean an ffprobe per file to get it back.
       duration: track.duration ?? kept?.duration ?? null,
       mtime: track.mtime ?? kept?.mtime ?? null,
       track_title: track.trackTitle ?? kept?.track_title ?? null,
@@ -98,66 +98,38 @@ async function indexWorkFiles (workId, workDir, tracks, dbApi = db) {
  * `files_indexed_at` rather than a row count, so a genuinely empty work is not
  * re-walked on every request.
  */
-async function listWorkTracks (workId, workDir, { indexedAt, memo, dbApi = db } = {}) {
-  if (indexedAt === undefined || memo === undefined) {
-    const work = await dbApi.knex('t_work')
-      .select('files_indexed_at', 'memo')
-      .where('id', workId)
-      .first();
-    if (indexedAt === undefined) indexedAt = work ? work.files_indexed_at : null;
-    if (memo === undefined) memo = work ? work.memo : null;
+async function listWorkTracks (workId, workDir, { indexedAt, dbApi = db } = {}) {
+  if (indexedAt === undefined) {
+    const work = await dbApi.knex('t_work').select('files_indexed_at').where('id', workId).first();
+    indexedAt = work ? work.files_indexed_at : null;
   }
   if (!indexedAt) {
-    // Index through the memo, not a bare walk: durations cost an ffprobe each
-    // and track titles cost a model call, and both are already sitting in memo
-    // keyed by relPath. A bare walk would write NULLs over them and the next
-    // scan would have to re-probe the whole work.
-    let parsed = {};
-    try {
-      parsed = JSON.parse(memo || '{}') || {};
-    } catch {
-      parsed = {};
-    }
-    return indexWorkFilesFromMemo(workId, workDir, parsed, dbApi);
+    // One walk, no probing: ffprobe belongs to the scan paths, not to a request.
+    // Durations already in the rows are carried forward by indexWorkFiles.
+    return indexWorkFiles(workId, workDir, undefined, dbApi);
   }
   return shapeRows(workId, workDir, await dbApi.getWorkFiles(workId));
 }
 
 /**
- * Write the listing from a memo that has already been probed.
+ * What the scan paths call: walk, probe what changed, and rewrite the listing.
  *
- * `scanWork` needs this split out: it probes durations *before* the metadata
- * insert that creates the t_work row, and t_work_file has a foreign key to it --
- * so the probe and the row write cannot happen at the same moment.
+ * One entry point for all three of them, so a scan cannot refresh durations and
+ * forget the listing or the reverse -- they were separate while durations lived
+ * in t_work.memo, and keeping them together is the point of retiring it.
+ *
+ * @returns {Promise<Array>} the shaped track list
  */
-async function indexWorkFilesFromMemo (workId, workDir, memo, dbApi = db) {
-  // The memo carries duration and trackTitles; getTrackList merges them onto the
-  // walked list, and mtime comes off the memo directly.
-  const tracks = await getTrackList(workId, workDir, memo);
-  return indexWorkFiles(workId, workDir, tracks.map((track) => ({
-    ...track,
-    mtime: (memo.mtime || {})[track.shortFilePath],
-  })), dbApi);
+async function rescanWorkFiles (workId, workDir, dbApi = db) {
+  const existing = await dbApi.getWorkFiles(workId);
+  const known = new Map(existing.map((row) => [
+    row.rel_path,
+    { duration: row.duration ?? undefined, mtime: row.mtime ?? undefined },
+  ]));
+
+  const tracks = await getTrackList(workId, workDir);
+  await probeAudioDurations(workId, tracks, known);
+  return indexWorkFiles(workId, workDir, tracks, dbApi);
 }
 
-/**
- * Probe durations and rewrite the listing in one step, so a scan can never
- * refresh one and forget the other. For works that already exist; `scanWork`
- * uses the two halves separately (see above).
- *
- * Two walks -- scrapeWorkMemo's and getTrackList's -- which is deliberate. A
- * scan is dominated by ffprobe (one subprocess per audio file), so a second
- * readdir is noise, and sharing it would mean changing scrapeWorkMemo's
- * signature at every call site for no measurable gain.
- *
- * @returns {Promise<Object>} the memo, for the caller to persist.
- */
-async function rescanWorkFiles (workId, workDir, oldMemo, dbApi = db) {
-  const memo = await scrapeWorkMemo(workId, workDir, oldMemo);
-  await indexWorkFilesFromMemo(workId, workDir, memo, dbApi);
-  return memo;
-}
-
-module.exports = {
-  listWorkTracks, indexWorkFiles, indexWorkFilesFromMemo, rescanWorkFiles, shapeRows,
-};
+module.exports = { listWorkTracks, indexWorkFiles, rescanWorkFiles, shapeRows };

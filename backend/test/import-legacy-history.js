@@ -78,9 +78,20 @@ describe('import-legacy-history', () => {
 
   const run = (opts = {}) => runImport({ oldDbPath, log: () => {}, dbApi, ...opts });
 
-  const insertWork = (memo) => knex('t_work').insert({
-    id: '000001', title: 'Work One', root_folder: 'root', dir: 'w1', memo: JSON.stringify(memo),
-  });
+  // Durations live on t_work_file rows now, not in t_work.memo, and the importer
+  // reads them from there to tell two identically named mixes apart.
+  // files_indexed_at is stamped so listWorkTracks trusts the rows as complete
+  // rather than re-walking and overwriting them with NULLs.
+  const insertWork = async ({ duration = {} } = {}) => {
+    await knex('t_work').insert({
+      id: '000001', title: 'Work One', root_folder: 'root', dir: 'w1',
+      files_indexed_at: duration && Object.keys(duration).length ? new Date().toISOString() : null,
+    });
+    const rows = Object.entries(duration).map(([rel_path, value]) => ({
+      work_id: '000001', rel_path, duration: value, mtime: null, track_title: null,
+    }));
+    if (rows.length) await knex('t_work_file').insert(rows);
+  };
 
   describe('a re-encoded library (.flac -> .webm)', () => {
     beforeEach(async () => {

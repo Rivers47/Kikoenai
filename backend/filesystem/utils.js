@@ -117,68 +117,55 @@ async function transcodeToOpus(sourcePath, cachePath, bitrate) {
 }
 const transcodeToOpusLimited = (sourcePath, cachePath, bitrate) => transcodeLimitP.call(transcodeToOpus, sourcePath, cachePath, bitrate);
 
-// 从文件系统，抓取单个作品本地文件的杂项信息：
-//  * 音频文件对应的时长
-//  * TODO：文件hash
-// work_id: number
-// dir: string, absolute path
-// return json object:
-//  {
-//    duration: {
-//      'relative/path/to/audio1.mp3': 334.23, // seconds
-//      'relative/path/to/audio2.mp3': 34.3, // seconds
-//      'relative/directory/to/audio2.wav': 34.23, // seconds
-//    }
-//  }
-async function scrapeWorkMemo(work_id, dir, oldMemo) {
-  const files = await recursiveReaddir(dir);
-  // Filter out any files not matching these extensions
-  const oldMemoMtime = (oldMemo || {}).mtime || {};
-  const oldMemoDuration = (oldMemo || {}).duration || {};
-  // Callers pass the object below to db.setWorkMemo(), which replaces the whole
-  // t_work.memo JSON column. So copy oldMemo into it: an object literal holding
-  // only the keys this function fills in would drop the ones other code writes,
-  // trackTitles, on every rescan. duration and mtime are rebuilt further down,
-  // so they start empty.
-  const memo = { ...(oldMemo || {}), duration: {}, isContainLyric: false, mtime: {} };
-  await Promise.all(files
-    .filter((file) => {
-      const ext = path.extname(file).toLowerCase();
-      if (supportedSubtitleExtList.includes(ext)) {
-        memo.isContainLyric = true;
-      }
-      return supportedMediaExtList.includes(ext);
-    }) // filter
-    .map((file) => ({
-        fullPath: file,
-        // Same forward-slash normalization as getTrackList: these keys are the
-        // file's identity and must match the ones the track list looks up.
-        shortPath: file.replace(path.join(dir, '/'), '').split(path.sep).join('/')
-      })
-    ) // map
-    .map(async (fileDict) => {
-      const fstat = fs.statSync(fileDict.fullPath);
-      const newMTime = Math.round(fstat.mtime.getTime());
-      const oldMTime = oldMemoMtime[fileDict.shortPath];
-      const oldDuration = oldMemoDuration[fileDict.shortPath];
-      
-      if (oldMTime === undefined // 音频文件是新增的
-        || oldDuration === undefined // 此前没有更新过这个文件的duration
-        || oldMTime !== newMTime // 或者音频文件的最后修改时间和之前的memo记录不一致，说明文件有修改
-      ) { // 更新duration和mtime
-        console.log(`work[${work_id}] update data on file: ${fileDict.fullPath}, fstate.mtime: ${fstat.mtime.getTime()}, `);
-        memo.mtime[fileDict.shortPath] = newMTime;
-        const duration = await getAudioFileDurationLimited(fileDict.fullPath);
-        if (! isNaN(duration) && typeof(duration) === 'number') {
-          memo.duration[fileDict.shortPath] = duration;
-        }
-      } else { // 使用老的文件信息
-        memo.mtime[fileDict.shortPath] = oldMTime;
-        memo.duration[fileDict.shortPath] = oldDuration;
-      }
-    }) // map get duration
-  ); // Promise.all
-  return memo;
+/**
+ * Attach `duration` and `mtime` to the audio tracks in a list, probing only what
+ * has actually changed.
+ *
+ * ffprobe is a subprocess per file -- far too slow for a request -- so a result
+ * is reused whenever the file's mtime still matches what was recorded. This used
+ * to read and write t_work.memo; it now takes the previously recorded values and
+ * hands the new ones back, leaving storage to the caller (filesystem/workFiles.js).
+ *
+ * The mtime test is the invalidation key, and it is tested on its own rather than
+ * folded into the missing-duration case: a file with no duration may simply have
+ * failed ffprobe, which says nothing about its contents.
+ *
+ * @param {String} work_id for logging only
+ * @param {Array} tracks getTrackList output, mutated in place
+ * @param {Map<String, {duration, mtime}>} known previously recorded, by relPath
+ * @returns {Promise<Array>} the same tracks
+ */
+async function probeAudioDurations (work_id, tracks, known = new Map()) {
+  await Promise.all(tracks.map(async (track) => {
+    if (!supportedMediaExtList.includes(track.ext)) return;
+
+    const previous = known.get(track.shortFilePath) || {};
+    let newMTime;
+    try {
+      newMTime = Math.round(fs.statSync(track.fullPath).mtime.getTime());
+    } catch (err) {
+      // Gone or unreadable between the walk and now. Keep whatever was known.
+      console.error(`work[${work_id}] stat failed, file = ${track.fullPath}`, err);
+      track.duration = previous.duration;
+      track.mtime = previous.mtime;
+      return;
+    }
+
+    const unchanged = previous.mtime !== undefined
+      && previous.mtime === newMTime
+      && previous.duration !== undefined;
+    if (unchanged) {
+      track.duration = previous.duration;
+      track.mtime = previous.mtime;
+      return;
+    }
+
+    console.log(`work[${work_id}] probing duration: ${track.fullPath}`);
+    track.mtime = newMTime;
+    const duration = await getAudioFileDurationLimited(track.fullPath);
+    track.duration = (!isNaN(duration) && typeof duration === 'number') ? duration : undefined;
+  }));
+  return tracks;
 }
 
 /**
@@ -188,7 +175,7 @@ async function scrapeWorkMemo(work_id, dir, oldMemo) {
  * @param {String} dir Work directory (absolute).
  * @param {readMemo} at least a empty object, or { duration: { "relative/path/audio.mp3": 33, "audio2.mp3": 22 }} for storage audio file duration
  */
-const getTrackList = async function (id, dir, readMemo, files) {
+const getTrackList = async function (id, dir, files) {
   try {
     // Reuse a caller-provided file list to avoid
     // walking the same directory twice during a single tree-build.
@@ -237,29 +224,9 @@ const getTrackList = async function (id, dir, readMemo, files) {
       }),
     );
 
-    const durationMemo = readMemo.duration || { /* fallback */ };
-    // Human-readable track names, keyed by relPath like the two memos above.
-    // Populated out-of-band (see backend/scripts/extract-track-titles.js) for
-    // works whose files are named "01.mp3", "#2.wav" and the like. Kept in a
-    // field of its own rather than overwriting `title`: `title` is the real
-    // filename and toTree builds the stream/download URLs from it.
-    const trackTitleMemo = readMemo.trackTitles || {};
-    // add duration and track title for each audio
-    const filesAddAudioDuration = await Promise.all(sortedHashedFiles.map(async (file) => {
-      if (supportedMediaExtList.includes(file.ext)) {
-        if (undefined !== durationMemo[file.shortFilePath]) {
-          file.duration = durationMemo[file.shortFilePath];
-        }
-        if (trackTitleMemo[file.shortFilePath]) {
-          file.trackTitle = trackTitleMemo[file.shortFilePath];
-        }
-      }
-      delete file.fullPath;
-
-      return file;
-    }));
-
-    return filesAddAudioDuration;
+    // fullPath is kept: probeAudioDurations stats it, and workFiles builds the
+    // media paths from it. Callers that return this to a client strip it.
+    return sortedHashedFiles;
   } catch (err) {
     console.log('getTracList error = ', err);
     throw new Error(`Failed to get tracklist from disk: ${err}`);
@@ -616,7 +583,7 @@ module.exports = {
   deleteWorkImagesFromDisk,
   formatID,
   coverFileName,
-  scrapeWorkMemo,
+  probeAudioDurations,
   transcodeFileName,
   transcodeToOpusLimited,
 };

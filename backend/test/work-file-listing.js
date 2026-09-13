@@ -58,7 +58,7 @@ describe('work file listing (t_work_file)', () => {
     write('cover.jpg');
     write('notes.txt');
 
-    const walked = (await getTrackList('000001', workDir, {})).map((t) => t.trackId);
+    const walked = (await getTrackList('000001', workDir)).map((t) => t.trackId);
     const listed = (await listWorkTracks('000001', workDir, { dbApi })).map((t) => t.trackId);
 
     expect(listed).to.deep.equal(walked);
@@ -93,22 +93,24 @@ describe('work file listing (t_work_file)', () => {
     expect(stamped.files_indexed_at, 'an empty work is still marked indexed').to.not.equal(null);
   });
 
-  // Durations cost an ffprobe each and track titles cost a model call. Indexing
-  // must not write NULLs over them.
-  it('carries durations and track titles from the memo on first index', async () => {
-    write('01.mp3'); write('02.mp3');
-    await knex('t_work').where('id', '000001').update({
-      memo: JSON.stringify({
-        duration: { '01.mp3': 61.5, '02.mp3': 120 },
-        trackTitles: { '01.mp3': 'Opening' },
-      }),
-    });
+  // Durations cost an ffprobe each and track titles cost a model call, so the
+  // indexer must carry existing rows forward rather than write NULLs over them.
+  // This used to come from t_work.memo; the rows are the only source now.
+  it('carries durations and track titles forward when a new file appears', async () => {
+    write('01.mp3');
+    await dbApi.replaceWorkFiles('000001', [
+      { work_id: '000001', rel_path: '01.mp3', duration: 61.5, mtime: 1, track_title: 'Opening' },
+    ]);
 
-    const listed = await listWorkTracks('000001', workDir, { dbApi });
+    // A second file shows up, so the listing is rebuilt around it.
+    write('02.mp3');
+    const listed = await listWorkTracks('000001', workDir, { dbApi, indexedAt: null });
     const byPath = new Map(listed.map((t) => [t.shortFilePath, t]));
+
     expect(byPath.get('01.mp3').duration).to.equal(61.5);
     expect(byPath.get('01.mp3').trackTitle).to.equal('Opening');
-    expect(byPath.get('02.mp3').duration).to.equal(120);
+    // The new one has no duration until a scan probes it -- a request never does.
+    expect(byPath.get('02.mp3').duration).to.equal(undefined);
   });
 
   it('preserves a stored duration when re-indexing without one', async () => {
@@ -136,11 +138,11 @@ describe('work file listing (t_work_file)', () => {
 
   it('only attaches duration to audio, matching the walk', async () => {
     write('01.mp3'); write('cover.jpg');
-    await knex('t_work').where('id', '000001').update({
-      memo: JSON.stringify({ duration: { '01.mp3': 10 } }),
-    });
+    await dbApi.replaceWorkFiles('000001', [
+      { work_id: '000001', rel_path: '01.mp3', duration: 10, mtime: 1, track_title: null },
+    ]);
 
-    const listed = await listWorkTracks('000001', workDir, { dbApi });
+    const listed = await listWorkTracks('000001', workDir, { dbApi, indexedAt: null });
     const cover = listed.find((t) => t.shortFilePath === 'cover.jpg');
     expect(cover).to.not.have.property('duration');
   });

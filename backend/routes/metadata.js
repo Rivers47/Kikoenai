@@ -361,7 +361,7 @@ router.post('/scan/:id',
     const work_id = req.params.id;
     try {
       const work = await db.knex('t_work')
-        .select('root_folder', 'dir', 'memo')
+        .select('root_folder', 'dir')
         .where('id', '=', work_id)
         .first();
       if (!work) {
@@ -375,9 +375,8 @@ router.post('/scan/:id',
       }
       // Refreshes the durations *and* the t_work_file listing -- this is the
       // button that maintains what used to be rebuilt on every request.
-      const memo = await rescanWorkFiles(work_id, path.join(rootFolder.path, work.dir), JSON.parse(work.memo || '{}'));
-      await db.setWorkMemo(work_id, memo);
-      res.send({ memo });
+      const tracks = await rescanWorkFiles(work_id, path.join(rootFolder.path, work.dir));
+      res.send({ files: tracks.length });
     } catch (err) {
       console.error(err);
       res.status(500).send({error: "扫描作品文件失败：" + err.message});

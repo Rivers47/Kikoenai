@@ -9,11 +9,11 @@ const { isFanzaId, isBooksId, fanzaCid, workno } = require('../work-id');
 const { scrapeWorkMetadataFromAsmrOne } = require('../scraper/asmrOne');
 const db = require('../database/db');
 const { createSchema } = require('../database/schema');
-const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, scrapeWorkMemo, coverFileName, formatID,
+const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, coverFileName, formatID,
   deleteWorkImagesFromDisk } = require('./utils');
 const workExtras = require('./workExtras');
 const scanLog = require('./scanLog');
-const { indexWorkFilesFromMemo, rescanWorkFiles } = require('./workFiles');
+const { rescanWorkFiles } = require('./workFiles');
 const { md5 } = require('../auth/utils');
 const { nameToUUID } = require('../scraper/utils');
 
@@ -192,8 +192,8 @@ process.on('message', (m) => {
 // after the IPC channel closes, so killing only the parent used to leave this
 // process scanning invisibly: its logs go nowhere, and the `scanner` guard in
 // socket.js is in-memory, so a restarted server would let the user start a
-// second scan alongside it. Two scanners then write t_work.memo at once, and
-// setWorkMemo replaces the whole column, so one silently overwrites the other.
+// second scan alongside it. Two scanners then rewrite one work's file rows at
+// once, and replaceWorkFiles deletes before inserting, so one loses the other's.
 process.on('disconnect', () => process.exit(1));
 
 
@@ -585,13 +585,6 @@ async function processFolder(folder) {
     LOG.task.add(workId);
     LOG.task.info(workId, `发现新文件夹: "${folder.absolutePath}"`);
 
-    LOG.task.info(workId, `扫描音频文件时长`);
-    let memo = await scrapeWorkMemo(
-      workId,
-      folder.absolutePath,
-      { /* 首次添加的作品肯定没有memo，这里设置一个空object作为初始memo */}
-    );
-
     const result = await getMetadata(workId, folder.rootFolderName, folder.relativePath); // 获取元数据
 
     // 如果获取元数据失败，跳过封面图片下载
@@ -599,11 +592,11 @@ async function processFolder(folder) {
       return 'failed';
     }
 
-    await db.setWorkMemo(workId, memo);
-    // Must come after getMetadata: t_work_file has an FK to t_work, and the work
-    // row does not exist until the metadata insert above. The durations probed
-    // before that are carried onto the rows here.
-    await indexWorkFilesFromMemo(workId, folder.absolutePath, memo);
+    // After getMetadata, not before: t_work_file has an FK to t_work and the row
+    // does not exist until that insert. Probing here also means a work whose
+    // metadata scrape failed costs no ffprobe at all.
+    LOG.task.info(workId, `扫描音频文件时长`);
+    await rescanWorkFiles(workId, folder.absolutePath);
     
     // 不要在乎图片是否下载成功，dlsite上一些老作品已经没有图片了，会下载失败
     // 只要元数据插入成功就行
@@ -981,18 +974,9 @@ async function scanWorkFile(work, index, total) {
     if (!rootFolder) return "skipped";
     const absoluteWorkDir = path.join(rootFolder.path, work.dir);
 
-    // Durations *and* the t_work_file listing: this pass is what a user runs to
-    // pick up files added or removed on disk, so both have to move together.
-    let memo = await rescanWorkFiles(
-      work.id,
-      absoluteWorkDir,
-      typeof(work.memo) === 'string' 
-      ? JSON.parse(work.memo)
-      : { /* fallback empty object as memo */ }
-    );
-    // console.log('work: ', absoluteWorkDir);
-    // console.log('memo: ', memo);
-    await db.setWorkMemo(work.id, memo);
+    // Durations *and* the listing: this pass is what a user runs to pick up files
+    // added or removed on disk, so both move together.
+    await rescanWorkFiles(work.id, absoluteWorkDir);
 
     return "updated";
   } catch(error) {
@@ -1005,7 +989,7 @@ const scanWorkFileLimited = (work, index, total) => limitP.call(scanWorkFile, wo
 async function performWorkFileScan() {
   LOG.open('lyric');
   LOG.main.info(`扫描本地文件开始`);
-  const works = await db.knex('t_work').select('id', "root_folder", "dir", "memo");
+  const works = await db.knex('t_work').select('id', "root_folder", "dir");
   LOG.main.info(`总计 ${works.length} 个作品`);
 
   const results = await Promise.all(works.map((work, index) => scanWorkFileLimited(work, index, works.length)));

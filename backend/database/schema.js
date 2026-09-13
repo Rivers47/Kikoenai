@@ -1,6 +1,6 @@
 const { knex } = require('./db');
 
-const dbVersion = '20260913000000';
+const dbVersion = '20260914000000';
 
 // 数据库结构
 const createSchema = () => knex.schema
@@ -28,7 +28,6 @@ const createSchema = () => knex.schema
     table.text('rate_count_detail'); // TEXT 类型 [评价分布明细]
     table.text('rank'); // TEXT 类型 [历史销售业绩]
 
-    table.json('memo'); // 关于这个作品的各种信息记录,音频文件,音频文件时长,歌词映射
 
     table.text('description'); // TEXT 类型 [作品内容: HTML 抓取路径存原始标记，JSON 回退路径存纯文本]
     table.text('description_parts'); // JSON: the same block, per-part, incl. the track list
