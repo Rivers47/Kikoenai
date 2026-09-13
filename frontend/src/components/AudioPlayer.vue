@@ -341,6 +341,11 @@ export default {
     // during continuous listening none of them fire. This bounds how much
     // position is lost if the app dies without a visibilitychange.
     this.historyCheckIntervalId = setInterval(() => {
+      // Only while this tab is actually playing. A paused tab still holds the
+      // queue of whatever it last played, and ticking here made it re-post
+      // that frozen position every 10s -- overwriting the progress another
+      // tab (or a later session) had since written for the same work.
+      if (!this.playing) return
       this.onUpdatePlayingStatus()
     }, 10 * 1000) // 每隔一段时间更新一次播放记录
 
@@ -716,6 +721,7 @@ export default {
       const seconds = this.currentTime
       const duration = file.duration
       const completed = duration > 0 && seconds >= 0.95 * duration
+      if (!this._markTrackProgressReported(file.trackId, seconds)) return
       fetch(apiUrl(`/api/track-progress/${file.trackId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -764,12 +770,24 @@ export default {
         })
     },
 
+    // Guard against re-posting a position this tab has already reported: a
+    // repeat write carries no new information but does clobber whatever the
+    // work's progress has become in the meantime. Returns false when the
+    // report should be skipped.
+    _markTrackProgressReported (trackId, seconds) {
+      const key = `${trackId}/${seconds}`
+      if (key === this._lastReportedProgress) return false
+      this._lastReportedProgress = key
+      return true
+    },
+
     _reportTrackProgressOnUpdate () {
       const file = this.queueCopy[this.queueIndex]
       if (!file || !file.trackId || this.playWorkId === 0) return
       const seconds = this.currentTime
       const duration = file.duration
       const completed = duration > 0 && seconds >= 0.95 * duration
+      if (!this._markTrackProgressReported(file.trackId, seconds)) return
       this.$axios.put(`/api/track-progress/${file.trackId}`, {
         seconds: Math.round(seconds * 100) / 100,
         completed: completed

@@ -49,6 +49,10 @@ const mutations = {
   SET_QUEUE (state, payload) {
     state.queue = payload.queue
     state.queueIndex = payload.index
+    // The outgoing track's position must not survive into the incoming one:
+    // the progress report reads this state, and the media element only
+    // republishes it on its first timeupdate, well after the switch.
+    state.currentTime = 0
 
     if (payload.resetPlaying) {
       state.playing = true

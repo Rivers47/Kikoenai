@@ -289,7 +289,13 @@ export default {
       }
 
       if (!this.resumeHistoryDone) {
-        this.plyr.currentTime = this.resumeHistorySeconds;
+        const seconds = this.resumeHistorySeconds
+        this.plyr.currentTime = seconds;
+        // Publish the resumed position before clearing the pending-resume
+        // flag: the element only reports it on its next timeupdate, and any
+        // progress report landing in between would write the pre-seek 0 back
+        // over the position we just restored.
+        this.SET_CURRENT_TIME(seconds)
         this.RESUME_HISTORY_SECONDS_DONE()
         this.$q.notify({message: this.$t('audioelement.resumeHistory'), timeout: 1000})
       }
