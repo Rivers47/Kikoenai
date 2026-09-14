@@ -190,6 +190,7 @@ The frontend builds directly into `backend/dist/`, which is served as static con
 - [x] Smarter Play status, hide finished work in history
 - [x] Advanced search
 - [ ] Fix machine translations of UI and missing tag translations
+- [ ] Switch to Pinia
 
 ## License
 
