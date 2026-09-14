@@ -25,6 +25,8 @@ const displayIdOf = id => (isFanzaId(id) ? id : formatID(id));
 // in flight and per-work parallelism would multiply out at img.dlsite.jp.
 const REFRESH_IMAGE_CONCURRENCY = 4;
 
+const IMAGE_KIND_LABEL = { smp: '预览图', part: '说明图' };
+
 const consoleLogger = {
   info: (id, message) => console.log(`[${workno(id)}] ${message}`),
   warn: (id, message) => console.warn(`[${workno(id)}] ${message}`),
@@ -121,13 +123,21 @@ async function downloadWorkImages(id, metadata, log = consoleLogger, options = {
   // A single-work refresh has nothing to multiply with and passes a real
   // concurrency instead; images are ~1MB each, so the wait is transfer time.
   const limit = new LimitPromise(Math.max(1, concurrency));
+
+  // Per-image, not just a start and a summary. At concurrency 1 a work with 40
+  // description images is otherwise one silent stall in the middle of a scan,
+  // with nothing to tell a slow download from a hung one -- which is exactly
+  // when someone reaches for the kill button.
+  let finished = 0;
   const fetchOne = async (target) => {
+    const label = IMAGE_KIND_LABEL[target.kind] || target.kind;
     try {
       const imageRes = await axios.retryGet(target.url, { responseType: 'stream', retry: {} });
       await saveWorkImageToDisk(imageRes.data, target.file);
+      log.info(displayId, `${label} ${++finished}/${fetch.length} 下载完成: ${target.file}`);
       return target;
     } catch (err) {
-      log.warn(displayId, `在下载作品图片 ${target.file} 过程中出错: ${err.message} (URL: ${target.url})`);
+      log.warn(displayId, `${label} ${++finished}/${fetch.length} 下载失败: ${target.file} - ${err.message} (URL: ${target.url})`);
       return { ...target, file: null };
     }
   };
@@ -135,8 +145,13 @@ async function downloadWorkImages(id, metadata, log = consoleLogger, options = {
   const results = [...reuse, ...await Promise.all(fetch.map(target => limit.call(fetchOne, target)))];
 
   if (fetch.length) {
-    const downloaded = results.filter(r => r.file).length;
-    log.info(displayId, `作品图片下载完成: ${downloaded}/${targets.length}`);
+    // Split by kind: the slider images and the ones embedded in the description
+    // are downloaded together but are worth different things to the user, and a
+    // bare total hides which half failed.
+    const stored = kind => results.filter(image => image.file && image.kind === kind).length;
+    const wanted = kind => targets.filter(target => target.kind === kind).length;
+    log.info(displayId, `作品图片下载完成: 预览图 ${stored('smp')}/${wanted('smp')}, `
+      + `说明图 ${stored('part')}/${wanted('part')}.`);
   }
 
   // Page order, not fetch order: the stored list doubles as the render order.
@@ -191,6 +206,7 @@ async function saveWorkReviews(id, log = consoleLogger) {
 
   const rjcode = formatID(id);
   try {
+    log.info(rjcode, '开始抓取 DLsite 用户评论...');
     const reviews = await scrapeWorkReviewsFromDLsite(id);
     await db.replaceWorkDlsiteReviews(id, reviews);
     log.info(rjcode, `抓取到 ${reviews.length} 条 DLsite 用户评论.`);

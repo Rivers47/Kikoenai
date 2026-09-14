@@ -12,6 +12,7 @@ const { createSchema } = require('../database/schema');
 const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, scrapeWorkMemo, coverFileName, formatID,
   deleteWorkImagesFromDisk } = require('./utils');
 const workExtras = require('./workExtras');
+const scanLog = require('./scanLog');
 const { md5 } = require('../auth/utils');
 const { nameToUUID } = require('../scraper/utils');
 
@@ -26,10 +27,25 @@ process.send = process.send || function (message, callback) {
   return true;
 };
 
+// What the Scanner page holds is a live tail, not an archive. Every one of
+// these is capped: a run over a large library produces tens of thousands of
+// log lines, and an uncapped snapshot makes SCAN_INIT_STATE -- sent on every
+// page load and every reconnect -- grow until it is too big to deliver. The
+// complete, uncapped record goes to the log file instead.
+const MAX_MAIN_LOGS = 500;
+const MAX_TASK_LOGS = 200;
+const MAX_FAILED_TASKS = 200;
+const MAX_RESULTS = 500;
+
 const tasks = [];
 const failedTasks = [];
 const mainLogs = [];
 const results = [];
+
+const push = (array, entry, max) => {
+  array.push(entry);
+  if (array.length > max) array.splice(0, array.length - max);
+};
 
 const LOG = {
   // Returns a promise that settles once SCAN_FINISHED has been flushed to the
@@ -43,16 +59,32 @@ const LOG = {
   // ahead of it went out.
   finish(message) {
     console.log(` * ${message}`);
+    scanLog.write('info', message);
     return new Promise((resolve) => {
       process.send({ event: 'SCAN_FINISHED', payload: { message } }, resolve);
     });
   },
+
+  // Names the log file in the run's first line, so the page tells the user
+  // where the untruncated version lives.
+  open(runName) {
+    const filePath = scanLog.open(runName);
+    if (filePath) this.main.info(`日志文件: ${filePath}`);
+  },
+
   main: {
     __internal__(level, message) {
       console[level]("main log", message);
+      scanLog.write(level, message);
 
-      mainLogs.push({level, message });
-      process.send({ event: 'SCAN_MAIN_LOGS', payload: { mainLogs } });
+      const entry = { level, message };
+      push(mainLogs, entry, MAX_MAIN_LOGS);
+      // One entry, not the whole array. Re-sending the accumulated log on every
+      // line is quadratic in the number of lines. It bites PERFORM_UPDATE (a
+      // result per work) and PERFORM_LYRIC_SCAN (a progress line per work)
+      // rather than a scan, whose main log is a constant few lines -- but it is
+      // also what made adding per-image logging unaffordable. See AGENTS.md 2.5.
+      process.send({ event: 'SCAN_MAIN_LOG', payload: { entry } });
     },
     log(msg) { // default log at level info
       this.__internal__("info", msg);
@@ -72,15 +104,9 @@ const LOG = {
   },
   result: {
     add(rjcode, result, count) {
-      results.push({
-        rjcode,
-        result,
-        count
-      });
-      process.send({
-        event: 'SCAN_RESULTS',
-        payload: { results }
-      });
+      const entry = { rjcode, result, count };
+      push(results, entry, MAX_RESULTS);
+      process.send({ event: 'SCAN_RESULT', payload: { result: entry } });
     }
   },
   task: {
@@ -92,6 +118,7 @@ const LOG = {
         result: null,
         logs: []
       });
+      process.send({ event: 'SCAN_TASK_ADD', payload: { rjcode: taskId } });
     },
 
     // 移除作品的专属log，如果该作品的对应任务失败，则发送相应的失败消息
@@ -105,21 +132,23 @@ const LOG = {
       const removedTask = tasks[index];
       removedTask.result = result;
       tasks.splice(index, 1);
-      process.send({ event: 'SCAN_TASKS', payload: { tasks } });
+      process.send({ event: 'SCAN_TASK_REMOVE', payload: { rjcode: taskId, result } });
 
       if (removedTask.result === 'failed') {
-        failedTasks.push(removedTask);
-        process.send({ event: 'SCAN_FAILED_TASKS', payload: { failedTasks } });
+        push(failedTasks, removedTask, MAX_FAILED_TASKS);
+        process.send({ event: 'SCAN_FAILED_TASK', payload: { task: removedTask } });
       }
     },
     __internal_task__(taskId, level, msg) {
       console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8 || isFanzaId(taskId) || isBooksId(taskId)));
       console[level](`task[${workno(taskId)}] log`, msg);
+      scanLog.write(level, msg, workno(taskId));
 
       const task = tasks.find(task => task.rjcode === taskId);
       if (task) {
-        task.logs.push({ level, message: msg, });
-        process.send({ event: 'SCAN_TASKS', payload: { tasks } });
+        const entry = { level, message: msg };
+        push(task.logs, entry, MAX_TASK_LOGS);
+        process.send({ event: 'SCAN_TASK_LOG', payload: { rjcode: taskId, entry } });
       }
     },
     log(taskId, msg) { // default log at level info
@@ -798,6 +827,8 @@ async function tryProcessFolderListParallel(folderList) {
  * createCoverFolder => createSchema => cleanup => getAllFolderList => processAllFolder
  */
 async function performScan() {
+  LOG.open('scan');
+
   if (!fs.existsSync(config.coverFolderDir)) {
     try {
       fs.mkdirSync(config.coverFolderDir, { recursive: true });
@@ -888,6 +919,7 @@ const updateVoiceActorLimited = (id) => limitP.call(updateMetadata, id, { includ
 
  
 async function performUpdate(options = null) {
+  LOG.open('update');
   const baseQuery = db.knex('t_work').select('id');
   const processor = (id) => updateMetadataLimited(id, options);
 
@@ -965,6 +997,7 @@ async function scanWorkFile(work, index, total) {
 }
 const scanWorkFileLimited = (work, index, total) => limitP.call(scanWorkFile, work, index, total);
 async function performWorkFileScan() {
+  LOG.open('lyric');
   LOG.main.info(`扫描本地文件开始`);
   const works = await db.knex('t_work').select('id', "root_folder", "dir", "memo");
   LOG.main.info(`总计 ${works.length} 个作品`);
@@ -984,4 +1017,4 @@ async function performWorkFileScan() {
   process.exit(0);
 }
 
-module.exports = { performScan, performUpdate, performWorkFileScan };
+module.exports = { performScan, performUpdate, performWorkFileScan, LOG };

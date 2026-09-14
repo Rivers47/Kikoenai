@@ -171,6 +171,20 @@
 import NotifyMixin from '../../mixins/Notification.js'
 import { workno } from 'src/utils'
 
+// Mirrors the caps the scanner child applies to its own snapshot. A run over a
+// large library emits tens of thousands of lines and the panel below is not
+// virtualised, so an unbounded tail is a growing DOM on top of a growing array.
+// The complete record is in the scanner's log file, named in the first line.
+const MAX_MAIN_LOGS = 500
+const MAX_TASK_LOGS = 200
+const MAX_FAILED_TASKS = 200
+const MAX_RESULTS = 500
+
+const push = (array, entry, max) => {
+  array.push(entry)
+  if (array.length > max) array.splice(0, array.length - max)
+}
+
 export default {
   name: 'Scanner',
 
@@ -226,17 +240,34 @@ export default {
       }
     },
 
-    onSCAN_TASKS (payload) {
-      this.tasks = payload.tasks
+    // Every SCAN_* below carries one entry, not the whole accumulated array,
+    // so these handlers append. The old plural events re-sent the entire log on
+    // every line -- quadratic, and on a whole-library refresh it meant
+    // re-rendering this page's un-virtualised log panel over the full results
+    // array once per work. Measured, it never came close to dropping a socket
+    // (526KB at the largest, 2.2ms to parse); it is simply waste, and it is
+    // what made per-line image logging too expensive to add.
+    onSCAN_TASK_ADD (payload) {
+      if (!this.tasks.some(task => task.rjcode === payload.rjcode)) {
+        this.tasks.push({ rjcode: payload.rjcode, result: null, logs: [] })
+      }
     },
-    onSCAN_FAILED_TASKS (payload) {
-      this.failedTasks = payload.failedTasks
+    onSCAN_TASK_LOG (payload) {
+      const task = this.tasks.find(task => task.rjcode === payload.rjcode)
+      if (task) push(task.logs, payload.entry, MAX_TASK_LOGS)
     },
-    onSCAN_MAIN_LOGS (payload) {
-      this.mainLogs = payload.mainLogs
+    onSCAN_TASK_REMOVE (payload) {
+      const index = this.tasks.findIndex(task => task.rjcode === payload.rjcode)
+      if (index !== -1) this.tasks.splice(index, 1)
     },
-    onSCAN_RESULTS (payload) {
-      this.results = payload.results
+    onSCAN_FAILED_TASK (payload) {
+      push(this.failedTasks, payload.task, MAX_FAILED_TASKS)
+    },
+    onSCAN_MAIN_LOG (payload) {
+      push(this.mainLogs, payload.entry, MAX_MAIN_LOGS)
+    },
+    onSCAN_RESULT (payload) {
+      push(this.results, payload.result, MAX_RESULTS)
     },
     onSCAN_INIT_STATE (payload) {
       this.state = 'running'
@@ -247,13 +278,22 @@ export default {
     },
     onSCAN_FINISHED (payload) {
       this.state = 'finished'
-      this.allLogs.push({
-        level: 'info',
-        message: payload.message
-      })
+      this.tasks = []
+      // mainLogs, not allLogs: allLogs is a computed, and pushing into it wrote
+      // to a cached array that the next delta threw away -- so the line saying
+      // the scan had finished could vanish on the way in.
+      push(this.mainLogs, { level: 'info', message: payload.message }, MAX_MAIN_LOGS)
     },
     onSCAN_ERROR () {
       this.state = 'error'
+      this.tasks = []
+    },
+    // Socket.IO reconnects on its own after a drop; this is what makes the page
+    // catch up afterwards instead of staying frozen on its last line. The
+    // server answers with a fresh snapshot, or with the outcome of a run that
+    // ended while we were away.
+    onConnect () {
+      this.$socket.emit('ON_SCANNER_PAGE')
     },
     onSuccess () {
       this.loggedIn = true
@@ -282,25 +322,31 @@ export default {
 
   mounted () {
     this.$socket.emit('ON_SCANNER_PAGE')
-    this.$socket.on('SCAN_TASKS', this.onSCAN_TASKS)
-    this.$socket.on('SCAN_FAILED_TASKS', this.onSCAN_FAILED_TASKS)
-    this.$socket.on('SCAN_MAIN_LOGS', this.onSCAN_MAIN_LOGS)
-    this.$socket.on('SCAN_RESULTS', this.onSCAN_RESULTS)
+    this.$socket.on('SCAN_TASK_ADD', this.onSCAN_TASK_ADD)
+    this.$socket.on('SCAN_TASK_LOG', this.onSCAN_TASK_LOG)
+    this.$socket.on('SCAN_TASK_REMOVE', this.onSCAN_TASK_REMOVE)
+    this.$socket.on('SCAN_FAILED_TASK', this.onSCAN_FAILED_TASK)
+    this.$socket.on('SCAN_MAIN_LOG', this.onSCAN_MAIN_LOG)
+    this.$socket.on('SCAN_RESULT', this.onSCAN_RESULT)
     this.$socket.on('SCAN_INIT_STATE', this.onSCAN_INIT_STATE)
     this.$socket.on('SCAN_FINISHED', this.onSCAN_FINISHED)
     this.$socket.on('SCAN_ERROR', this.onSCAN_ERROR)
+    this.$socket.on('connect', this.onConnect)
     this.$socket.on('success', this.onSuccess)
     this.$socket.on('connect_error', this.onConnectError)
   },
 
   beforeUnmount () {
-    this.$socket.off('SCAN_TASKS', this.onSCAN_TASKS)
-    this.$socket.off('SCAN_FAILED_TASKS', this.onSCAN_FAILED_TASKS)
-    this.$socket.off('SCAN_MAIN_LOGS', this.onSCAN_MAIN_LOGS)
-    this.$socket.off('SCAN_RESULTS', this.onSCAN_RESULTS)
+    this.$socket.off('SCAN_TASK_ADD', this.onSCAN_TASK_ADD)
+    this.$socket.off('SCAN_TASK_LOG', this.onSCAN_TASK_LOG)
+    this.$socket.off('SCAN_TASK_REMOVE', this.onSCAN_TASK_REMOVE)
+    this.$socket.off('SCAN_FAILED_TASK', this.onSCAN_FAILED_TASK)
+    this.$socket.off('SCAN_MAIN_LOG', this.onSCAN_MAIN_LOG)
+    this.$socket.off('SCAN_RESULT', this.onSCAN_RESULT)
     this.$socket.off('SCAN_INIT_STATE', this.onSCAN_INIT_STATE)
     this.$socket.off('SCAN_FINISHED', this.onSCAN_FINISHED)
     this.$socket.off('SCAN_ERROR', this.onSCAN_ERROR)
+    this.$socket.off('connect', this.onConnect)
     this.$socket.off('success', this.onSuccess)
     this.$socket.off('connect_error', this.onConnectError)
   },

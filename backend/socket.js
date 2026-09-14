@@ -42,6 +42,40 @@ const initSocket = (server) => {
   }
 
   let scanner = null;
+  // The outcome of the last run, kept after the child is gone. A scan can
+  // easily outlive a socket -- a laptop sleeps, a phone backgrounds the tab,
+  // a reverse proxy times the connection out -- and Socket.IO then reconnects
+  // with a fresh socket that missed SCAN_FINISHED entirely. Without this the
+  // page sits on 'running' forever, with a kill button for a process that
+  // exited hours ago. ON_SCANNER_PAGE replays it instead.
+  let lastScanEvent = null;
+
+  const startScanner = (script, args = []) => {
+    if (scanner) return; // one at a time; see backend/AGENTS.md §3
+
+    lastScanEvent = null;
+    scanner = child_process.fork(path.join(__dirname, script), args, { silent: false }); // 子进程
+
+    scanner.on('exit', (code) => {
+      scanner = null;
+      if (code) {
+        lastScanEvent = { event: 'SCAN_ERROR', payload: undefined };
+        io.emit('SCAN_ERROR');
+      } else if (!lastScanEvent) {
+        // A clean exit whose SCAN_FINISHED never made it out (see LOG.finish in
+        // scannerModules.js). The page still has to leave 'running'.
+        lastScanEvent = { event: 'SCAN_FINISHED', payload: { message: '扫描进程已结束.' } };
+        io.emit(lastScanEvent.event, lastScanEvent.payload);
+      }
+    });
+
+    scanner.on('message', (m) => {
+      if (m.event) {
+        if (m.event === 'SCAN_FINISHED') lastScanEvent = { event: m.event, payload: m.payload };
+        io.emit(m.event, m.payload);
+      }
+    });
+  };
 
   // 有新的客户端连接时触发
   io.on('connection', function (socket) {
@@ -55,74 +89,34 @@ const initSocket = (server) => {
     // socket.on('disconnect', () => {
     //   console.log('disconnect');
     // });
-    
+
+    // Sent on mount *and* on every reconnect, so this is the resync point.
     socket.on('ON_SCANNER_PAGE', () => {
       if (scanner) {
         // 防止用户在扫描过程中刷新页面
         scanner.send({
           emit: 'SCAN_INIT_STATE'
         });
+      } else if (lastScanEvent) {
+        socket.emit(lastScanEvent.event, lastScanEvent.payload);
       }
     });
 
-    socket.on('PERFORM_SCAN', () => {
-      if (!scanner) {
-        scanner = child_process.fork(path.join(__dirname, './filesystem/scanner.js'), { silent: false }); // 子进程
-        scanner.on('exit', (code) => {
-          scanner = null;
-          if (code) {
-            io.emit('SCAN_ERROR');
-          }
-        });
-        
-        scanner.on('message', (m) => {
-          if (m.event) {
-            io.emit(m.event, m.payload);
-          }
-        });
-      }   
-    });
+    socket.on('PERFORM_SCAN', () => startScanner('./filesystem/scanner.js'));
 
-    socket.on('PERFORM_UPDATE', () => {
-      if (!scanner) {
-        scanner = child_process.fork(path.join(__dirname, './filesystem/updater.js'), ['--refreshAll'], { silent: false }); // 子进程
-        scanner.on('exit', (code) => {
-          scanner = null;
-          if (code) {
-            io.emit('SCAN_ERROR');
-          }
-        });
-        
-        scanner.on('message', (m) => {
-          if (m.event) {
-            io.emit(m.event, m.payload);
-          }
-        });
-      }   
-    });
+    socket.on('PERFORM_UPDATE', () => startScanner('./filesystem/updater.js', ['--refreshAll']));
 
-    socket.on('PERFORM_LYRIC_SCAN', () => {
-      if (!scanner) {
-        scanner = child_process.fork(path.join(__dirname, './filesystem/workFileScanner.js'), { silent: false }); // 子进程
-        scanner.on('exit', (code) => {
-          scanner = null;
-          if (code) {
-            io.emit('SCAN_ERROR');
-          }
-        });
-        
-        scanner.on('message', (m) => {
-          if (m.event) {
-            io.emit(m.event, m.payload);
-          }
-        });
-      }   
-    });
+    socket.on('PERFORM_LYRIC_SCAN', () => startScanner('./filesystem/workFileScanner.js'));
 
     socket.on('KILL_SCAN_PROCESS', () => {
-      scanner.send({
-        exit: 1
-      });
+      // The button is drawn from client-side state, which can outlive the
+      // process -- a stale page clicking it used to throw on null and take the
+      // whole server down with an unhandled 'error' event.
+      if (scanner) {
+        scanner.send({ exit: 1 });
+      } else {
+        socket.emit('SCAN_FINISHED', { message: '扫描进程已结束.' });
+      }
     });
 
     // 发生错误时触发

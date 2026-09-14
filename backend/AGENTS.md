@@ -245,10 +245,22 @@ Scanning runs in a **child process** (`child_process.fork`) for isolation:
 
 1. **Socket.IO** in `socket.js` listens for client events: `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_LYRIC_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`.
 2. It forks the appropriate scanner script (`scanner.js`, `updater.js`, or `workFileScanner.js`); each child is bound to `scannerModules.js`.
-3. The child process communicates via `process.send()` with events: `SCAN_INIT_STATE`, `SCAN_TASKS`, `SCAN_FAILED_TASKS`, `SCAN_MAIN_LOGS`, `SCAN_RESULTS`, `SCAN_FINISHED`, `SCAN_ERROR`. The parent relays any `m.event` it receives from the child to all connected clients via `io.emit(m.event, m.payload)`.
+3. The child process communicates via `process.send()`; the parent relays any `m.event` it receives to all connected clients via `io.emit(m.event, m.payload)`. The event list is in §7.
 4. `scannerModules.js` contains the heavy lifting: reading directories, parsing file structures, scraping DLsite, and upserting into the DB.
 
-Only one scanner process can run at a time (guarded by `scanner` variable in `socket.js`).
+Only one scanner process can run at a time (guarded by `scanner` variable in `socket.js`; all three `PERFORM_*` handlers go through the one `startScanner` helper).
+
+**Progress events carry one entry each, never the accumulated array.** The original events (`SCAN_MAIN_LOGS`, `SCAN_TASKS`, `SCAN_RESULTS`, `SCAN_FAILED_TASKS`, all plural) re-sent the *entire* accumulated array on every single line, which is quadratic in the number of lines. **Which runs this actually hurt is worth knowing, because it is not the one you would guess:** `performScan` calls `LOG.main` a constant ~8 times and only adds a result for non-skipped works, so a scan is fine. It is `PERFORM_UPDATE` (a result per work, so the array grows to the whole library) and `PERFORM_LYRIC_SCAN` (`扫描进度：i/total` per work) that push a library's worth of entries through the channel N times over. Deltas keep each message the size of its own line, which is also what makes per-image logging affordable.
+
+The three pieces that keep it that way:
+
+- **Deltas.** `SCAN_MAIN_LOG` / `SCAN_TASK_ADD` / `SCAN_TASK_LOG` / `SCAN_TASK_REMOVE` / `SCAN_FAILED_TASK` / `SCAN_RESULT` each carry their own entry. The frontend appends.
+- **A bounded snapshot.** `SCAN_INIT_STATE` is the one event carrying accumulated state, and it is sent on every page load *and* every reconnect — so the child keeps only a tail (`MAX_MAIN_LOGS` 500, `MAX_TASK_LOGS` 200, `MAX_FAILED_TASKS` 200, `MAX_RESULTS` 500 in `scannerModules.js`). `Scanner.vue` mirrors the same caps, since its log panel is not virtualised.
+- **A log file.** `filesystem/scanLog.js` writes the complete, uncapped run to `dataRoot/logs/scan-<timestamp>-<run>.log` (`scan` / `update` / `lyric`), keeping the last 10 runs. `LOG.open(runName)` starts it and prints the path as the run's first line, so the page names where the untruncated version lives. Writes go through a bare fd with `writeSync` on purpose: a scan ends in `process.exit()`, which does not drain a `WriteStream`, and the tail of a long run is exactly the part worth keeping. Every failure path is swallowed — a read-only data root must not stop a scan.
+
+**The scan outcome outlives the socket.** `socket.js` remembers the last `SCAN_FINISHED`/`SCAN_ERROR` in `lastScanEvent` and replays it when `ON_SCANNER_PAGE` arrives with no scanner running; `Scanner.vue` re-emits that on Socket.IO's `connect`, so a reconnect resyncs. **A multi-hour scan only needs the socket to drop once**, from any cause — a suspended laptop, a locked phone, a wifi handover, a proxy reload — and Socket.IO reconnects with a *fresh* socket that missed the terminal event. There is no total connection time limit to work around (verified against `engine.io` 6.6.9: `pingInterval` 25s / `pingTimeout` 20s, client side 45s since the last packet; `connectTimeout` 45s and `upgradeTimeout` 10s cover only the handshake and the polling→WebSocket upgrade; nothing caps a socket's lifetime). The heartbeat is also real traffic every 25s, so a *quiet* scan cannot idle out of an nginx `proxy_read_timeout` either. The gap was purely that nothing resynced after a reconnect. A clean child exit whose `SCAN_FINISHED` never made it out (see `LOG.finish`) synthesises one, and `KILL_SCAN_PROCESS` with no live scanner answers the same way instead of throwing on `null` — which used to take the server down with it.
+
+> **A page stuck on `running` is not always the page's fault.** The scan can genuinely never finish: `retryGet` (`scraper/axios.js`) arms its cancel-token timeout around `axios.get`, which with `responseType: 'stream'` resolves as soon as **headers** arrive — so `clearTimeout` fires before a single body byte is read, and `saveWorkImageToDisk` then pipes the stream with no timeout at all. A remote that accepts, sends headers and stalls hangs that promise forever, holds its `limitP` slot, and with `config.maxParallelism` of them the run stops without ever reaching `LOG.finish`. The per-image log lines are the diagnostic: a hung run stops mid-count and the log file names the file and URL it died on.
 
 ### 2.6 Scraping (`scraper/`)
 
@@ -637,8 +649,22 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 
 - **Workspace scripts:** `npm run dev:backend` / `npm start` from root.
 - **Socket.IO events (scanning):**
-  - Client → server: `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_LYRIC_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`
-  - Server → client (relayed from the scanner child process): `SCAN_INIT_STATE`, `SCAN_TASKS`, `SCAN_FAILED_TASKS`, `SCAN_MAIN_LOGS`, `SCAN_RESULTS`, `SCAN_FINISHED`, `SCAN_ERROR`
+  - Client → server: `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_LYRIC_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE` (sent on mount **and on every reconnect** — it is the resync point)
+  - Server → client (relayed from the scanner child process), each carrying one entry:
+
+    | Event | Payload |
+    |-------|---------|
+    | `SCAN_MAIN_LOG` | `{entry: {level, message}}` |
+    | `SCAN_TASK_ADD` | `{rjcode}` |
+    | `SCAN_TASK_LOG` | `{rjcode, entry: {level, message}}` |
+    | `SCAN_TASK_REMOVE` | `{rjcode, result}` |
+    | `SCAN_FAILED_TASK` | `{task: {rjcode, result, logs}}` |
+    | `SCAN_RESULT` | `{result: {rjcode, result, count}}` |
+    | `SCAN_INIT_STATE` | `{tasks, failedTasks, mainLogs, results}` — the **only** accumulated payload, and capped; answers `ON_SCANNER_PAGE` |
+    | `SCAN_FINISHED` | `{message}` — replayed from `lastScanEvent` after a reconnect |
+    | `SCAN_ERROR` | none |
+
+  - **Gone:** the plural `SCAN_MAIN_LOGS` / `SCAN_TASKS` / `SCAN_RESULTS` / `SCAN_FAILED_TASKS`, which re-sent the whole accumulated array on every line. See §2.5.
   - Scanning is **not** exposed over REST; there is no `/api/scanner` endpoint.
 
 ---
