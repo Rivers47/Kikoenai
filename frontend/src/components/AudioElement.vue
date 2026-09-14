@@ -104,7 +104,6 @@ export default {
       'forwardSeekTime',
       'rewindSeekMode',
       'forwardSeekMode',
-      'resumeHistorySeconds',
       'playWorkId',
       'playWorkVas',
       'visualPlayerCoverUrl',
@@ -120,7 +119,6 @@ export default {
 
     ...mapGetters('AudioPlayer', [
       'currentPlayingFile',
-      'resumeHistoryDone',
     ]),
 
     displayCurrentTime() {
@@ -158,17 +156,7 @@ export default {
 
     source (url, oldUrl) {
       if (url && url !== oldUrl) {
-        // Every track change lands here; a resume for a track we left can never apply.
-        if (this.resumeHistoryDone && this.resumeHistorySeconds >= 0) this.RESUME_HISTORY_SECONDS_DONE()
         this._onSourceChange(url)
-      }
-    },
-
-    // Resuming the track the element already holds loads nothing, so no
-    // canplay arrives to apply the resume.
-    resumeHistoryDone (done) {
-      if (!done && this.plyr && this.plyr.duration && this._mediaHoldsCurrentTrack()) {
-        this._applyPendingResume()
       }
     },
 
@@ -291,7 +279,6 @@ export default {
       'DECREMENT_SLEEP_TRACKS',
       'SET_REWIND_SEEK_MODE',
       'SET_FORWARD_SEEK_MODE',
-      'RESUME_HISTORY_SECONDS_DONE',
       'SET_HAS_LYRIC',
       'SET_NEW_CURRENT_TIME',
     ]),
@@ -309,28 +296,14 @@ export default {
       if (this.playing && this.plyr.currentTime !== this.plyr.duration) {
         this.plyr.play()
       }
-
-      if (!this.resumeHistoryDone) {
-        this._applyPendingResume()
-      }
-    },
-
-    _applyPendingResume () {
-      const seconds = this.resumeHistorySeconds
-      this.plyr.currentTime = seconds;
-      // Publish the resumed position before clearing the pending-resume
-      // flag: the element only reports it on its next timeupdate, and any
-      // progress report landing in between would write the pre-seek 0 back
-      // over the position we just restored.
-      this.SET_CURRENT_TIME(seconds)
-      this.RESUME_HISTORY_SECONDS_DONE()
-      this.$q.notify({message: this.$t('audioelement.resumeHistory'), timeout: 1000})
     },
 
     onTimeupdate () {
-      // Loading a new source resets the element to 0 and says so; the store
-      // already holds the pending resume position (SET_QUEUE), so keep it.
-      if (this.resumeHistoryDone) this.SET_CURRENT_TIME(this.plyr.currentTime)
+      // A source still loading reports 0, not a position; the store already
+      // holds where this track starts.
+      if (this.plyr.media.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        this.SET_CURRENT_TIME(this.plyr.currentTime)
+      }
       if (this.enablePIPLyrics) this.debouncedPlayLrc(false)
       // 睡眠定时（按分钟）：到达停止时间戳即暂停
       if (this.sleepMode && this.sleepModeType === 'minutes' && this.sleepStopAt && Date.now() >= this.sleepStopAt) {
@@ -399,15 +372,11 @@ export default {
       if (!this.plyr) return false
       const duration = Number(this.currentPlayingFile.duration) || this.plyr.duration
       if (!(duration > 0)) return false
-      let position
-      if (!this.resumeHistoryDone) {
-        position = this.resumeHistorySeconds
-      } else if (this._mediaHoldsCurrentTrack()) {
-        position = this.plyr.currentTime
-      } else {
-        // Element still holds the outgoing track: `playing` watcher runs first.
-        return false
-      }
+      // Until the element has loaded the current track, its clock belongs to
+      // the outgoing one (or says 0); the store describes the current track.
+      const loaded = this._mediaHoldsCurrentTrack()
+        && this.plyr.media.readyState >= HTMLMediaElement.HAVE_METADATA
+      const position = loaded ? this.plyr.currentTime : this.currentTime
       return position >= duration - FINISHED_EPSILON_SECONDS
     },
 
@@ -419,8 +388,7 @@ export default {
 
     _advanceIfAtEndOfTrack () {
       if (!this._atEndOfTrack()) return false
-      // Both still describe the finished track.
-      this.RESUME_HISTORY_SECONDS_DONE()
+      // Still describes the finished track.
       this.SET_CURRENT_TIME(0)
       if (this.queueIndex < this.queue.length - 1) {
         this.NEXT_TRACK()
@@ -521,6 +489,17 @@ export default {
       }
       media.src = url
       media.load()
+      // Start where the store says this track is. Set before metadata arrives,
+      // the browser holds it and seeks there itself once it can. Plyr's own
+      // setter would drop it: it ignores seeks while the duration is unknown.
+      const trackId = this.currentPlayingFile.trackId
+      if (this.currentTime > 0) {
+        media.currentTime = this.currentTime
+        if (trackId !== this._loadedTrackId) {
+          this.$q.notify({message: this.$t('audioelement.resumeHistory'), timeout: 1000})
+        }
+      }
+      this._loadedTrackId = trackId
       // Retarget now rather than leaving the outgoing track's length on screen.
       this.onDurationChange()
       return true

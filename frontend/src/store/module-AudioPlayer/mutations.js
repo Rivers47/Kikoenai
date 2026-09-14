@@ -3,6 +3,13 @@ import getters from './getters'
 import state, { SWAP_SEEK_BUTTON_KEY, FLIP_LR_CHANNEL_KEY, ENABLE_PIP_LYRICS, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, AUTO_MARK_LISTENED_KEY, REWIND_SEEK_TIME_KEY, FORWARD_SEEK_TIME_KEY, SLEEP_TIMER_KEY } from './state'
 import { apiUrl } from 'src/base-path'
 
+// Every change of the current track goes through here, so `currentTime` always
+// describes currentPlayingFile: AudioElement starts each newly loaded track from it.
+const selectTrack = (state, index, seconds = 0) => {
+  state.queueIndex = index
+  state.currentTime = seconds
+}
+
 const mutations = {
   TOGGLE_HIDE (state) {
     state.hide = !state.hide
@@ -29,24 +36,25 @@ const mutations = {
     }
 
     state.playing = true
-    state.queueIndex = index
+    selectTrack(state, index)
   },
   NEXT_TRACK: (state) => {
     if (state.queueIndex < state.queue.length - 1) {
       // Go to next track only if it exists.
       state.playing = true
-      state.queueIndex += 1
+      selectTrack(state, state.queueIndex + 1)
     }
   },
   PREVIOUS_TRACK: (state) => {
     if (state.queueIndex > 0) {
       // Go to previous track only if it exists.
       state.playing = true
-      state.queueIndex -= 1
+      selectTrack(state, state.queueIndex - 1)
     }
   },
 
   SET_QUEUE (state, payload) {
+    const previousTrackId = getters.currentPlayingFile(state).trackId
     state.queue = payload.queue
     state.queueIndex = payload.index
 
@@ -70,28 +78,26 @@ const mutations = {
     state.playWorkId = workId
     state.playWorkVas = payload.vas || []
     state.workLastTrackId = payload.workLastTrackId || ''
-    if (Object.prototype.hasOwnProperty.call(payload, "resumeHistorySeconds")) {
-      // Normalize here rather than at each call site. -1 is the "nothing to
-      // resume" sentinel, and the resumeHistoryDone getter tests `< 0` --
-      // `undefined < 0` is false, so an undefined leaking through would leave a
-      // resume pending that can never be applied.
-      // History rows carry no `seconds` of their own (PUT /api/history sends
-      // only { queue, index }); it is resolved server-side from
-      // t_track_progress, and stays undefined when that lookup misses.
-      const seconds = Number(payload.resumeHistorySeconds)
-      state.resumeHistorySeconds = Number.isFinite(seconds) ? seconds : -1
-      state.resumeHistoryTrackId = getters.currentPlayingFile(state).trackId
+
+    // -1 means "no saved position". History rows carry no `seconds` of their
+    // own (PUT /api/history sends only { queue, index }); it is resolved
+    // server-side from t_track_progress and stays undefined when that misses.
+    const seconds = Number(payload.resumeHistorySeconds)
+    const resume = Number.isFinite(seconds) && seconds >= 0 ? seconds : -1
+
+    if (getters.currentPlayingFile(state).trackId !== previousTrackId) {
+      selectTrack(state, payload.index, Math.max(resume, 0))
+    } else if (resume >= 0) {
+      // The element already holds this track, so no load will pick the
+      // position up; ask for a seek instead.
+      state.currentTime = resume
+      state.newCurrentTime = resume
     }
-    // The outgoing track's position must not survive into the incoming one:
-    // the progress report reads this state, and the media element only
-    // republishes it once the new track is seekable. Start from the resume
-    // position so the store is already right while the track loads.
-    state.currentTime = getters.resumeHistoryDone(state) ? 0 : state.resumeHistorySeconds
   },
   EMPTY_QUEUE: (state) => {
     state.playing = false
     state.queue = []
-    state.queueIndex = 0
+    selectTrack(state, 0)
     state.playWorkVas = []
     state.workLastTrackId = ''
   },
@@ -103,7 +109,7 @@ const mutations = {
 
     if (index === state.queueIndex) {
       state.playing = false
-      state.queueIndex = 0
+      selectTrack(state, 0)
     } else if (index < state.queueIndex) {
       state.queueIndex -= 1
     }
@@ -232,11 +238,6 @@ const mutations = {
   SET_ENABLE_PIP_LYRICS: (state, value) => {
     state.enablePIPLyrics = value
     LocalStorage.set(ENABLE_PIP_LYRICS, state.enablePIPLyrics)
-  },
-
-  RESUME_HISTORY_SECONDS_DONE: (state) => {
-    state.resumeHistorySeconds = -1
-    state.resumeHistoryTrackId = ''
   },
 
   SET_OLD_WORK_CARD_UI_STYLE: (state, value) => {
