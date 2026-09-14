@@ -6,7 +6,7 @@ const db = require('../database/db');
 const { isValidRequest, workIdParam } = require('./utils/validate');
 const { resolveTrack } = require('./utils/track');
 
-// Report per-track playback progress (Phase 2)
+// Report per-track playback progress
 // The track is addressed the same way the media routes address it, so the
 // frontend posts to `/api/track-progress/${trackId}` and carries no second
 // identifier. Resolving through resolveTrack also rejects a path that is not

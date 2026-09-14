@@ -594,7 +594,6 @@ export default {
     
     ...mapGetters('AudioPlayer', [
       'currentPlayingFile',
-      'resumeHistoryDone',
     ])
   },
 
@@ -709,7 +708,6 @@ export default {
     // delivers whatever survives.
     flushHistoryOnHide() {
       if (this.queueCopy.length <= 0) return;
-      if (!this.resumeHistoryDone) return;
 
       const data = {
         work_id: this.playWorkId,
@@ -719,15 +717,6 @@ export default {
         }
       }
 
-      // The history body is queue + index only -- position lives in
-      // t_track_progress -- so during continuous playback it does not change
-      // between flushes. Without this guard every hide re-sent a byte-identical
-      // payload, and rapid tab switching turned that into one write per switch.
-      // latestUpdatedHistory is assigned only after a confirmed delivery, so an
-      // unconfirmed or failed send still leaves this flush to retry.
-      //
-      // Only the history write is skipped. Progress is a position, which does
-      // keep changing while playing, so it is reported either way.
       if (!this.isSameTwoHistory(this.latestUpdatedHistory, data)) {
         sendOrQueue(this.$axios, {
           method: 'PUT',
@@ -742,14 +731,7 @@ export default {
 
 
     onUpdatePlayingStatus() {
-      // 当前播放列表为空，禁止记录播放历史
       if (this.queueCopy.length <= 0) return;
-
-      // 尚处于恢复历史记录的阶段，为了避免此时将空状态写入远程服务器覆盖有效状态，跳过本次历史更新
-      if (!this.resumeHistoryDone) {
-        console.log("尚处于恢复历史记录的状态，跳过本次历史更新")
-        return
-      }
 
       const data = {
         "work_id": this.playWorkId,
@@ -810,11 +792,6 @@ export default {
       this._reportTrackProgressOnUpdate()
     },
 
-    // The local write is unconditional; the server push is throttled. Position
-    // is durable on this device the moment it is observed, so the server only
-    // has to be fresh enough for *another* device to read -- see
-    // SERVER_PUSH_MS. `force` is for the moments where waiting is wrong: a
-    // pause, a track change, a seek, or the page going away.
     _reportTrackProgressOnUpdate ({ force = false } = {}) {
       const file = this.queueCopy[this.queueIndex]
       if (!file || !file.trackId || this.playWorkId === 0) return
@@ -827,17 +804,19 @@ export default {
       savePosition({
         trackId: file.trackId,
         workId: this.playWorkId,
-        seconds: Math.round(seconds * 100) / 100,
+        seconds: seconds,
         completed,
         observedAt,
       }).catch((err) => console.error('local position write failed:', err))
 
-      if (!this._shouldPushProgress(file.trackId, observedAt, force)) return
+      if (!force && !this._shouldPushProgress(file.trackId, observedAt)) return
+      this._lastPushedTrackId = file.trackId
+      this._lastServerPush = observedAt
       sendOrQueue(this.$axios, {
         method: 'PUT',
         url: `/api/track-progress/${file.trackId}`,
         body: {
-          seconds: Math.round(seconds * 100) / 100,
+          seconds: seconds,
           completed: completed,
           observedAt
         }
@@ -847,14 +826,10 @@ export default {
     // True when the server is due an update for this track. Tracked per track so
     // switching tracks always pushes rather than inheriting the previous one's
     // throttle window.
-    _shouldPushProgress (trackId, now, force) {
-      const due = force
-        || trackId !== this._lastPushedTrackId
-        || now - this._lastServerPush >= SERVER_PUSH_MS
-      if (!due) return false
-      this._lastPushedTrackId = trackId
-      this._lastServerPush = now
-      return true
+    _shouldPushProgress (trackId, now) {
+      const due = trackId !== this._lastPushedTrackId
+      || now - this._lastServerPush >= SERVER_PUSH_MS
+      return due
     },
 
     gotoFullScreenPlayer() {

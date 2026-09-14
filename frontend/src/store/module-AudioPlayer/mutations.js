@@ -49,10 +49,6 @@ const mutations = {
   SET_QUEUE (state, payload) {
     state.queue = payload.queue
     state.queueIndex = payload.index
-    // The outgoing track's position must not survive into the incoming one:
-    // the progress report reads this state, and the media element only
-    // republishes it on its first timeupdate, well after the switch.
-    state.currentTime = 0
 
     if (payload.resetPlaying) {
       state.playing = true
@@ -77,15 +73,20 @@ const mutations = {
     if (Object.prototype.hasOwnProperty.call(payload, "resumeHistorySeconds")) {
       // Normalize here rather than at each call site. -1 is the "nothing to
       // resume" sentinel, and the resumeHistoryDone getter tests `< 0` --
-      // `undefined < 0` is false, so an undefined leaking through left the
-      // player believing a resume was forever pending, which silently disabled
-      // both history writes and per-track progress reporting for the session.
+      // `undefined < 0` is false, so an undefined leaking through would leave a
+      // resume pending that can never be applied.
       // History rows carry no `seconds` of their own (PUT /api/history sends
       // only { queue, index }); it is resolved server-side from
       // t_track_progress, and stays undefined when that lookup misses.
       const seconds = Number(payload.resumeHistorySeconds)
       state.resumeHistorySeconds = Number.isFinite(seconds) ? seconds : -1
+      state.resumeHistoryTrackId = getters.currentPlayingFile(state).trackId
     }
+    // The outgoing track's position must not survive into the incoming one:
+    // the progress report reads this state, and the media element only
+    // republishes it once the new track is seekable. Start from the resume
+    // position so the store is already right while the track loads.
+    state.currentTime = getters.resumeHistoryDone(state) ? 0 : state.resumeHistorySeconds
   },
   EMPTY_QUEUE: (state) => {
     state.playing = false
@@ -233,12 +234,9 @@ const mutations = {
     LocalStorage.set(ENABLE_PIP_LYRICS, state.enablePIPLyrics)
   },
 
-  SET_RESUME_HISTORY_SECONDS: (state, value) => {
-    state.resumeHistorySeconds = value
-  },
-
   RESUME_HISTORY_SECONDS_DONE: (state) => {
     state.resumeHistorySeconds = -1
+    state.resumeHistoryTrackId = ''
   },
 
   SET_OLD_WORK_CARD_UI_STYLE: (state, value) => {

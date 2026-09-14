@@ -158,7 +158,17 @@ export default {
 
     source (url, oldUrl) {
       if (url && url !== oldUrl) {
+        // Every track change lands here; a resume for a track we left can never apply.
+        if (this.resumeHistoryDone && this.resumeHistorySeconds >= 0) this.RESUME_HISTORY_SECONDS_DONE()
         this._onSourceChange(url)
+      }
+    },
+
+    // Resuming the track the element already holds loads nothing, so no
+    // canplay arrives to apply the resume.
+    resumeHistoryDone (done) {
+      if (!done && this.plyr && this.plyr.duration && this._mediaHoldsCurrentTrack()) {
+        this._applyPendingResume()
       }
     },
 
@@ -301,20 +311,26 @@ export default {
       }
 
       if (!this.resumeHistoryDone) {
-        const seconds = this.resumeHistorySeconds
-        this.plyr.currentTime = seconds;
-        // Publish the resumed position before clearing the pending-resume
-        // flag: the element only reports it on its next timeupdate, and any
-        // progress report landing in between would write the pre-seek 0 back
-        // over the position we just restored.
-        this.SET_CURRENT_TIME(seconds)
-        this.RESUME_HISTORY_SECONDS_DONE()
-        this.$q.notify({message: this.$t('audioelement.resumeHistory'), timeout: 1000})
+        this._applyPendingResume()
       }
     },
 
+    _applyPendingResume () {
+      const seconds = this.resumeHistorySeconds
+      this.plyr.currentTime = seconds;
+      // Publish the resumed position before clearing the pending-resume
+      // flag: the element only reports it on its next timeupdate, and any
+      // progress report landing in between would write the pre-seek 0 back
+      // over the position we just restored.
+      this.SET_CURRENT_TIME(seconds)
+      this.RESUME_HISTORY_SECONDS_DONE()
+      this.$q.notify({message: this.$t('audioelement.resumeHistory'), timeout: 1000})
+    },
+
     onTimeupdate () {
-      this.SET_CURRENT_TIME(this.plyr.currentTime)
+      // Loading a new source resets the element to 0 and says so; the store
+      // already holds the pending resume position (SET_QUEUE), so keep it.
+      if (this.resumeHistoryDone) this.SET_CURRENT_TIME(this.plyr.currentTime)
       if (this.enablePIPLyrics) this.debouncedPlayLrc(false)
       // 睡眠定时（按分钟）：到达停止时间戳即暂停
       if (this.sleepMode && this.sleepModeType === 'minutes' && this.sleepStopAt && Date.now() >= this.sleepStopAt) {
@@ -323,8 +339,6 @@ export default {
     },
 
     // 当前播放文件夹的最后一首音频自然播放结束时，自动将进度标记为“听完”
-    // Phase 1：仅比较当前文件trackId与workLastTrackId（会话内快照，trackId稳定）
-    // Phase 2：将替换这里的条件为“主系列全部曲目已完成”
     maybeMarkWorkComplete () {
       if (this.playWorkId === 0) return
       if (!this.workLastTrackId) return
@@ -350,12 +364,8 @@ export default {
         })
     },
 
-    // Fire-and-forget per-track progress report (Phase 2).
+    // Fire-and-forget per-track progress report.
     // Reports the current track's position via its trackId.
-    //
-    // Unthrottled, unlike AudioPlayer's reporter: the only caller is onEnded,
-    // where the track just finished and `completed` flipping is exactly what
-    // another device needs to see promptly.
     _reportTrackProgress () {
       const file = this.currentPlayingFile
       if (!file || !file.trackId || this.playWorkId === 0) return
@@ -367,7 +377,7 @@ export default {
       savePosition({
         trackId: file.trackId,
         workId: this.playWorkId,
-        seconds: Math.round(seconds * 100) / 100,
+        seconds: seconds,
         completed,
         observedAt,
       }).catch((err) => console.error('local position write failed:', err))
@@ -376,7 +386,7 @@ export default {
         method: 'PUT',
         url: `/api/track-progress/${file.trackId}`,
         body: {
-          seconds: Math.round(seconds * 100) / 100,
+          seconds: seconds,
           completed: completed,
           observedAt
         }

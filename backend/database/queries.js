@@ -1380,7 +1380,7 @@ const makeQueries = (knex) => {
     return updated;
   };
 
-  // t_track_progress queries (Phase 2)
+  // t_track_progress queries
   // Keyed by trackId (`workId/relPath`), not by the bare track_key: that is the
   // one handle the frontend carries on a queue item and in every media URL, so
   // the client needs no second field to look progress up by.
