@@ -41,7 +41,7 @@ function pruneOldLogs() {
 
 /**
  * Opens the log file for this run.
- * @param {String} runName Short name of the run, e.g. 'scan' or 'lyric'.
+ * @param {String} runName Short name of the run, e.g. 'scan' or 'files'.
  * @returns {String|null} The log's path, or null if it could not be opened.
  */
 function open(runName) {

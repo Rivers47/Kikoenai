@@ -1,15 +1,5 @@
 /*
  * Custom service worker (Workbox InjectManifest mode).
- *
- * This file replaces the worker Workbox used to generate from the declarative
- * `runtimeCaching` config in quasar.config.js. The routes below are the same
- * ones, written out explicitly. The reason for the switch is that a generated
- * worker can only express routes -- it has no way to host event handlers such
- * as `backgroundfetchsuccess`, which the offline-download feature needs next.
- *
- * Build-time options (what ends up in the injected precache manifest) still
- * live in quasar.config.js under `extendInjectManifestOptions`. Runtime
- * behaviour lives here.
  */
 
 import { clientsClaim } from 'workbox-core'

@@ -106,7 +106,7 @@ const initSocket = (server) => {
 
     socket.on('PERFORM_UPDATE', () => startScanner('./filesystem/updater.js', ['--refreshAll']));
 
-    socket.on('PERFORM_LYRIC_SCAN', () => startScanner('./filesystem/workFileScanner.js'));
+    socket.on('PERFORM_WORK_FILE_SCAN', () => startScanner('./filesystem/workFileScanner.js'));
 
     socket.on('KILL_SCAN_PROCESS', () => {
       // The button is drawn from client-side state, which can outlive the

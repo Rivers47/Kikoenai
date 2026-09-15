@@ -15,20 +15,15 @@ const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
 const { isFanzaId } = require('../work-id');
 const { saveWorkImages, saveWorkReviews, skipWorkExtras, REFRESH_IMAGE_CONCURRENCY } = require('../filesystem/workExtras');
 
-// Covers come from DLsite/Fanza and effectively never change, so cache them
-// for a long time rather than paying a conditional request every time (a 304
-// carries no image data but still costs a round trip).
-// `public` is deliberate: covers are site-wide content with nothing user-specific
-// in them, so a shared cache storing one leaks nothing. Per-user JSON is covered
-// by the `private, no-cache` default in api.js.
+// HTTP cache, not for crawling the source sites.
 const COVER_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
 const COVER_FALLBACK_MAX_AGE = 5 * 60;   // 5 minutes
-const IMAGE_MAX_AGE = COVER_MAX_AGE;
+const IMAGE_MAX_AGE = COVER_MAX_AGE; // same for other images in the work page
 
 const PAGE_SIZE = config.pageSize || 12;
 const FIELDS = ['circle', 'tag', 'va', 'illustrator', 'script_writer', 'series'];
-// Route segment for each field. Everything takes a plain `-s` except `series`,
-// which is already plural -- `seriess` was what `${field}s` produced.
+
+// avoid 'seriess'
 const ROUTE_SEGMENT = (field) => (field === 'series' ? 'series' : `${field}s`);
 
 // GET work cover image
@@ -39,10 +34,7 @@ router.get('/cover/:id',
 
     const workId = req.params.id;
     const type = req.query.type || 'main'; // 'main', 'sam', '240x240', '360x360'
-    // Must be set manually: sendFile's maxAge option only applies when the
-    // response has no Cache-Control yet (send/index.js:
-    // `if (this._cacheControl && !res.getHeader('Cache-Control'))`), and api.js
-    // already sets a default on every /api response -- so the option is a no-op here.
+
     res.setHeader('Cache-Control', `public, max-age=${COVER_MAX_AGE}`);
     res.sendFile(path.join(config.coverFolderDir, coverFileName(workId, type)), {
       dotfiles: 'allow', /* Express 5: preserve v4 behavior */
@@ -94,10 +86,7 @@ router.get('/work/:id/extras',
         res.status(404).send({error: `没有 id 为 "${req.params.id}" 的作品`});
         return;
       }
-      // The column holds the seller's markup as scraped, filtered on the way
-      // out (see utils/description-html.js). A row that predates that — or one
-      // from the JSON fallback — holds plain text, and goes out as `description`
-      // for the client's plain-text path; exactly one of the two is ever set.
+
       const isHtml = looksLikeHtml(extras.description);
       res.send({
         ...extras,
@@ -126,11 +115,7 @@ router.get('/image/:id/:name',
     res.setHeader('Cache-Control', `public, max-age=${IMAGE_MAX_AGE}`);
     res.sendFile(path.join(config.imageFolderDir, name), (err) => {
       if (!err) return;
-      // Never downloaded (config.skipWorkExtras defaults to true), or deleted
-      // since. The work page asks only for images the stored list says are on
-      // disk, so this is the mismatched case, and an error page would only be
-      // rendered as a broken image anyway.
-      if (res.headersSent) return next(err); // died mid-stream, nothing to answer with
+      if (res.headersSent) return next(err);
       res.status(404).end();
     });
   });
@@ -385,12 +370,6 @@ router.post('/scan/:id',
 );
 
 // refresh metadata of a work from DLsite or Fanza, and update the database.
-//
-// Unlike PERFORM_UPDATE (which runs updater.js --refreshAll over the whole
-// library), this is one user-initiated work, so it also downloads the sample
-// and description images and re-scrapes the reviews. Neither is fatal: the
-// metadata update has already been committed by then, and a partial refresh
-// beats a 500 that tells the user nothing was saved.
 router.post('/refresh/:id',
   workIdParam(),
   async function(req, res) {

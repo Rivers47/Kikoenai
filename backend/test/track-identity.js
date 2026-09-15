@@ -170,16 +170,71 @@ describe('track identity: relPath', function () {
     it('folds the pre-rename `hash` field into trackId', async function () {
       await knex('t_play_history').insert({
         user_name: 'admin', work_id: '000001',
-        state: JSON.stringify({ index: 0, queue: [{ hash: '000001/3', title: '01 intro.mp3' }] }),
+        state: JSON.stringify({ index: 0, queue: [{ hash: '000001/3', title: 'unknown.mp3' }] }),
       });
 
       await migration.up(knex);
 
       const item = JSON.parse((await knex('t_play_history').first()).state).queue[0];
-      // No contentHash to resolve, so the legacy positional handle is kept --
+      // Nothing to resolve it by, so the legacy positional handle is kept --
       // routes/utils/track.js still resolves it.
       expect(item.trackId).to.equal('000001/3');
       expect(item).to.not.have.property('hash');
+    });
+
+    describe('a positional handle with no contentHash', function () {
+      const migrate = async (queue, workId = '000001') => {
+        await knex('t_play_history').insert({ user_name: 'admin', work_id: workId, state: JSON.stringify({ index: 0, queue }) });
+        await migration.up(knex);
+        return JSON.parse((await knex('t_play_history').first()).state).queue;
+      };
+
+      beforeEach(async function () {
+        await knex('t_work').insert({
+          id: '01636129',
+          memo: JSON.stringify({ duration: { 'SE/02 main.mp3': 1, 'NoSE/02 main.mp3': 1, 'NoSE/03 end.mp3': 1 } }),
+        });
+      });
+
+      it('rebuilds the relPath from its folder and title', async function () {
+        const [item] = await migrate([{ trackId: '01636129/5', subtitle: 'SE', title: '02 main.mp3' }], '01636129');
+        expect(item.trackId).to.equal('01636129/SE/02 main.mp3');
+      });
+
+      it('matches a folderless title only when the name is unique', async function () {
+        const queue = await migrate([
+          { trackId: '01636129/1', title: '03 end.mp3' },
+          { trackId: '01636129/2', title: '02 main.mp3' },
+        ], '01636129');
+        expect(queue.map(item => item.trackId)).to.deep.equal(['01636129/NoSE/03 end.mp3', '01636129/2']);
+      });
+
+      it('respells the pre-text-id numeric prefix of its own work', async function () {
+        const queue = await migrate([
+          { trackId: '1636129/7', subtitle: 'NoSE', title: '03 end.mp3' },
+          { trackId: '1636129/9', title: 'gone.flac' },
+        ], '01636129');
+        expect(queue.map(item => item.trackId)).to.deep.equal(['01636129/NoSE/03 end.mp3', '01636129/9']);
+      });
+
+      it('keeps the old handle when the rebuilt path is not a file the memo knows', async function () {
+        const [item] = await migrate([{ trackId: '01636129/5', subtitle: 'SE', title: '02 main.flac' }], '01636129');
+        expect(item.trackId).to.equal('01636129/5');
+      });
+
+      it('drops a default stream URL but keeps an offload one', async function () {
+        const queue = await migrate([
+          { trackId: '1636129/5', subtitle: 'SE', title: '02 main.mp3', mediaStreamUrl: '/kiko/api/media/stream/1636129/5', mediaDownloadUrl: '/api/media/download/1636129/5' },
+          { trackId: '01636129/NoSE/03 end.mp3', mediaStreamUrl: '/media/stream/root/RJ01636129/NoSE/03 end.mp3' },
+        ], '01636129');
+        expect(queue[0]).to.not.have.any.keys('mediaStreamUrl', 'mediaDownloadUrl');
+        expect(queue[1].mediaStreamUrl).to.equal('/media/stream/root/RJ01636129/NoSE/03 end.mp3');
+      });
+
+      it('leaves tracks of another work alone', async function () {
+        const [item] = await migrate([{ trackId: '000001/3', subtitle: null, title: '01 intro.mp3' }], '01636129');
+        expect(item.trackId).to.equal('000001/3');
+      });
     });
 
     it('strips contentHash from the memo once it has been used', async function () {

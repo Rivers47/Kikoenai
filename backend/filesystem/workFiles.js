@@ -1,23 +1,5 @@
 /*
  * A work's file listing, read from the database rather than the disk.
- *
- * It used to be rebuilt by walking the work folder on every request:
- * `resolveTrack` calls `getTrackList`, so each stream, download, check-lrc and
- * track-progress write cost a directory walk. On a network mount that is
- * latency times file count, and works here run to hundreds of files.
- *
- * The listing now lives in t_work_file, written by the three scan paths
- * (scanWork, scanWorkFile, POST /api/scan/:id). `getTrackList` remains the
- * filesystem walker, but it is no longer on the request path -- only the scan
- * paths and the one-off indexing below call it.
- *
- * Shared by the routes and by the CLI scripts, and deliberately not part of
- * filesystem/utils.js: that module knows nothing about the database, and the
- * scanner-side IPC lives elsewhere again (see workExtras.js for the same split).
- *
- * Every entry point takes an optional `dbApi`, defaulting to the live database,
- * the same convention scripts/backfill-progress.js uses so tests can inject an
- * in-memory knex.
  */
 
 const path = require('path');
@@ -27,9 +9,7 @@ const { getTrackList, probeAudioDurations, supportedMediaExtList } = require('./
 
 /**
  * Shape stored rows exactly the way getTrackList shapes a walk, including the
- * sort. Ordering is the part that must not drift: it decides the order of every
- * file tree, and it used to come from natural-orderby over the walked list.
- * Rows carry rel_path only -- title/subtitle/ext all derive from it.
+ * sort.
  */
 const shapeRows = (workId, workDir, rows) => {
   const shaped = rows.map((row) => {
@@ -48,7 +28,7 @@ const shapeRows = (workId, workDir, rows) => {
     };
   });
 
-  // The same comparator getTrackList uses. Keep these in step.
+  // The same comparator getTrackList uses.
   const sorted = orderBy(shaped, [v => v.subtitle, v => v.title, v => v.ext]);
 
   // getTrackList only attaches duration/trackTitle to audio, and callers read
@@ -65,8 +45,7 @@ const shapeRows = (workId, workDir, rows) => {
 
 /**
  * Walk the work folder and replace its rows. Preserves durations and track
- * titles for files that are still there -- those cost an ffprobe and an LLM
- * call respectively, so losing them to a re-index would be expensive.
+ * titles for files that are still there.
  * @returns {Promise<Array>} the shaped track list, as listWorkTracks returns.
  */
 async function indexWorkFiles (workId, workDir, tracks, dbApi = db) {
@@ -92,11 +71,7 @@ async function indexWorkFiles (workId, workDir, tracks, dbApi = db) {
 }
 
 /**
- * A work's tracks, from the database. Indexes the work once if it has never
- * been indexed -- one walk, which is what every read did before this existed.
- *
- * `files_indexed_at` rather than a row count, so a genuinely empty work is not
- * re-walked on every request.
+ * A work's tracks, from the database.
  */
 async function listWorkTracks (workId, workDir, { indexedAt, dbApi = db } = {}) {
   if (indexedAt === undefined) {
@@ -112,12 +87,6 @@ async function listWorkTracks (workId, workDir, { indexedAt, dbApi = db } = {}) 
 }
 
 /**
- * What the scan paths call: walk, probe what changed, and rewrite the listing.
- *
- * One entry point for all three of them, so a scan cannot refresh durations and
- * forget the listing or the reverse -- they were separate while durations lived
- * in t_work.memo, and keeping them together is the point of retiring it.
- *
  * @returns {Promise<Array>} the shaped track list
  */
 async function rescanWorkFiles (workId, workDir, dbApi = db) {

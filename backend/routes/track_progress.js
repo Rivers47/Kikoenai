@@ -7,17 +7,10 @@ const { isValidRequest, workIdParam } = require('./utils/validate');
 const { resolveTrack } = require('./utils/track');
 
 // Report per-track playback progress
-// The track is addressed the same way the media routes address it, so the
-// frontend posts to `/api/track-progress/${trackId}` and carries no second
-// identifier. Resolving through resolveTrack also rejects a path that is not
-// actually a file of this work, rather than writing a row keyed by junk.
 router.put('/:id/*path',
   workIdParam(),
   body('seconds').isFloat({ min: 0 }),
   body('completed').isBoolean(),
-  // When the client measured the position, not when this request arrived --
-  // see upsertTrackProgress. Optional: an older client omits it and gets the
-  // previous unconditional-overwrite behaviour.
   body('observedAt').optional().isInt({ min: 0 }),
   async (req, res, next) => {
     if(!isValidRequest(req, res)) return;
@@ -35,10 +28,10 @@ router.put('/:id/*path',
         req.body.completed,
         req.body.observedAt ? Number(req.body.observedAt) : undefined
       );
-      res.send({ message: '更新进度成功' });
+      res.send({ message: 'track progress updated' });
     } catch (err) {
       console.error(err);
-      res.status(500).send({ error: '更新进度失败' });
+      res.status(500).send({ error: 'failed to update track progress' });
     }
   }
 );

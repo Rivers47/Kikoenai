@@ -57,10 +57,7 @@ const initApp = async () => {
         await applyFix(oldVersion);
         await fixMigrations();
       }
-      // Always run pending migrations on startup. Umzug tracks executed
-      // migrations in the knex_migrations table, so `up` is idempotent.
-      // Deliberately NOT gated on the version bump above: a forgotten bump
-      // must never cause a migration to be silently skipped.
+      // Always run, so a forgotten version bump doesn't affect it
       const migrated = await runMigrations();
       if (migrated) {
         console.log(`[${migrated}] Database migration task(s) finished`);

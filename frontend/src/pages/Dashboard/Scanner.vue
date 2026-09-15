@@ -220,7 +220,7 @@ export default {
 
     performWorkFileScan () {
       this.cleanRerun()
-      this.$socket.emit('PERFORM_LYRIC_SCAN')
+      this.$socket.emit('PERFORM_WORK_FILE_SCAN')
     },
 
     performUpdate () {

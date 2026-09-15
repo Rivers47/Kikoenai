@@ -19,14 +19,9 @@ axios.interceptors.request.use((config) => {
   return config
 })
 
-// After the move to cookie sessions the old JWT is useless and cannot be revoked;
-// clear it so it does not linger in LocalStorage
+// After the move to cookie sessions clear the old JWT
 LocalStorage.remove('jwt-token')
 
-// A playback-state write that never reached the server goes to the outbox and
-// is reported to the caller as a success, so no call site needs a "queued" code
-// path -- every one of them only reads response.data.message and notifies.
-// Returns null when the request is not one we are willing to replay later.
 async function queueWrite (config) {
   if (!config || (config.method || 'get').toLowerCase() === 'get') return null
   // sendOrQueue already owns this request's row; let it see the failure.
@@ -58,12 +53,6 @@ async function queueWrite (config) {
   }
 }
 
-// Only a missing response means the request never completed; an HTTP error
-// (4xx/5xx) has err.response and must reach the caller untouched.
-//
-// There is deliberately no GET retry here. One existed on this branch's base,
-// but main reverted it (74fac47 Revert "Fix: worklist axio error") -- do not
-// reintroduce it as a side effect of the offline work.
 axios.interceptors.response.use(null, async (err) => {
   const config = err.config
   const isTransportError = !err.response && err.code !== 'ERR_CANCELED'

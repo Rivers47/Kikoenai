@@ -42,29 +42,10 @@ async function getAudioFileDuration(filePath) {
 const getAudioFileDurationLimited = (filePath) => limitP.call(getAudioFileDuration, filePath);
 
 
-// Transcoding is CPU-heavy and this runs on modest self-hosted hardware
-// (NAS/RPi), so it gets its own, smaller, dedicated concurrency budget --
-// deliberately separate from limitP (sized by maxParallelism), which bounds
-// cheap I/O-bound work (ffprobe), not CPU-bound encoding.
 const transcodeLimitP = new LimitPromise(config.transcodeMaxConcurrent || 1);
 
 /**
  * Deterministic cache filename for a transcoded (Opus) copy of a track.
- *
- * Keyed by everything the output depends on: the source file (work id +
- * relPath), the source version (mtime) and the encode settings (bitrate).
- * Miss any of those and the cache serves the wrong bytes forever -- an earlier
- * version keyed on the source content hash alone, so changing
- * config.transcodeBitrate kept serving the old bitrate from cache, and nothing
- * anywhere cleans this directory up.
- *
- * The digest is of the key, not of the file: a relPath cannot go in a filename
- * raw (slashes, spaces, unicode), and reading the audio to hash it is the cost
- * this cache exists to avoid. mtime comes from t_work.memo, already on disk.
- *
- * Changing the bitrate therefore orphans the previous cache rather than
- * invalidating it. That is a one-off admin action -- delete
- * config.transcodeCacheDir to reclaim the space.
  *
  * @param {String} id Work id (e.g. '123456', 'd215444').
  * @param {String} relPath Work-relative path of the source file.
@@ -83,8 +64,7 @@ function transcodeFileName(id, relPath, mtime, bitrate) {
 /**
  * Transcode an audio file to Opus at the given bitrate, writing through a
  * temp file + rename so a concurrent request for the same track never sees a
- * partially-written cache file -- unlike ffprobe's sub-second probe, a
- * transcode can take minutes, so a plain write is a real corruption risk here.
+ * partially-written cache file
  * @param {String} sourcePath Absolute path to the source (lossless) audio file.
  * @param {String} cachePath Absolute path to write the final Opus file to.
  * @param {String} bitrate ffmpeg -b:a value, e.g. '96k'.
@@ -120,15 +100,6 @@ const transcodeToOpusLimited = (sourcePath, cachePath, bitrate) => transcodeLimi
 /**
  * Attach `duration` and `mtime` to the audio tracks in a list, probing only what
  * has actually changed.
- *
- * ffprobe is a subprocess per file -- far too slow for a request -- so a result
- * is reused whenever the file's mtime still matches what was recorded. This used
- * to read and write t_work.memo; it now takes the previously recorded values and
- * hands the new ones back, leaving storage to the caller (filesystem/workFiles.js).
- *
- * The mtime test is the invalidation key, and it is tested on its own rather than
- * folded into the missing-duration case: a file with no duration may simply have
- * failed ffprobe, which says nothing about its contents.
  *
  * @param {String} work_id for logging only
  * @param {Array} tracks getTrackList output, mutated in place
@@ -173,12 +144,10 @@ async function probeAudioDurations (work_id, tracks, known = new Map()) {
  * containing 'title', 'subtitle' and 'trackId'.
  * @param {String} id Work identifier (e.g. '123456', '01134567', 'd215444').
  * @param {String} dir Work directory (absolute).
- * @param {readMemo} at least a empty object, or { duration: { "relative/path/audio.mp3": 33, "audio2.mp3": 22 }} for storage audio file duration
+ * @param {Array} files Optional list of files to process.
  */
 const getTrackList = async function (id, dir, files) {
   try {
-    // Reuse a caller-provided file list to avoid
-    // walking the same directory twice during a single tree-build.
     const walkedFiles = files || (await recursiveReaddir(dir));
     // Filter out any files not matching these extensions
     const filteredFiles = walkedFiles.filter((file) => {
@@ -195,9 +164,6 @@ const getTrackList = async function (id, dir, files) {
 
     // Sort by folder and title
     const sortedFiles = orderBy(filteredFiles.map((file) => {
-      // Forward slashes regardless of platform: this is the file's identity and
-      // it travels in URLs and in t_track_progress.track_key, so a Windows
-      // server must not key the same file differently from a Linux one.
       const shortFilePath = file.replace(path.join(dir, '/'), '').split(path.sep).join('/');
       const dirName = path.dirname(shortFilePath);
 
@@ -210,16 +176,14 @@ const getTrackList = async function (id, dir, files) {
       };
     }), [v => v.subtitle, v => v.title, v => v.ext]);
 
-    // Add trackId (file handle) to each file. It is the work id plus the
-    // work-relative path, which is what every media URL carries: one value
-    // identifies the file, addresses it, and keys its progress row.
+    // Add trackId (file handle) to each file.
     const sortedHashedFiles = sortedFiles.map(
       (file) => ({
         title: file.title,
         subtitle: file.subtitle,
         trackId: `${id}/${file.shortFilePath}`,
         ext: file.ext,
-        fullPath: file.fullPath, // 给后面获取音频时长提供文件的全路径
+        fullPath: file.fullPath,
         shortFilePath: file.shortFilePath,
       }),
     );
@@ -444,9 +408,7 @@ const saveCoverImageToDisk = (stream, id, type) => new Promise((resolve, reject)
 });
 
 /**
- * Collects every image a work page offers, in the order they should be
- * numbered on disk: the sample slider first, then the ones embedded in the
- * description blocks.
+ * Collects every image a work page offers.
  * @param {Object} metadata Scraped work metadata.
  * @returns {Array<Object>} [{ kind, url, thumb, width, height }]
  */
@@ -481,9 +443,6 @@ function collectWorkImages(metadata) {
 /**
  * Generate the on-disk filename for one scraped work image.
  *
- * Named by position rather than by the remote basename: description images
- * are served under opaque md5-ish names that collide across works, and the
- * sample slider's own names are only stable while DLsite keeps them.
  * @param {String} id Work id (e.g. '123456', '01134567', 'd215444')
  * @param {String} kind 'smp' for a sample-slider image, 'part' for one embedded in the description
  * @param {Number} index 1-based position within its kind
@@ -527,9 +486,6 @@ const saveWorkImageToDisk = (stream, fileName) => new Promise((resolve, reject) 
 /**
  * Deletes the scraped images belonging to a work.
  *
- * Matched by pattern rather than from the stored list, so images left behind
- * by an earlier scrape (a work whose sample count shrank, or whose images were
- * renumbered when its description changed) go too.
  * @param {String} id Work id (e.g. '123456', '01134567', 'd215444').
  * @param {Set<String>} [keep] File names to spare, for pruning after a download.
  * @returns {Promise<Number>} How many files were deleted.

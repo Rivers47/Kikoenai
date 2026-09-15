@@ -244,20 +244,20 @@ Covered by `test/base-path.js`.
 
 Scanning runs in a **child process** (`child_process.fork`) for isolation:
 
-1. **Socket.IO** in `socket.js` listens for client events: `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_LYRIC_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`.
+1. **Socket.IO** in `socket.js` listens for client events: `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_WORK_FILE_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`.
 2. It forks the appropriate scanner script (`scanner.js`, `updater.js`, or `workFileScanner.js`); each child is bound to `scannerModules.js`.
 3. The child process communicates via `process.send()`; the parent relays any `m.event` it receives to all connected clients via `io.emit(m.event, m.payload)`. The event list is in §7.
 4. `scannerModules.js` contains the heavy lifting: reading directories, parsing file structures, scraping DLsite, and upserting into the DB.
 
 Only one scanner process can run at a time (guarded by `scanner` variable in `socket.js`; all three `PERFORM_*` handlers go through the one `startScanner` helper).
 
-**Progress events carry one entry each, never the accumulated array.** The original events (`SCAN_MAIN_LOGS`, `SCAN_TASKS`, `SCAN_RESULTS`, `SCAN_FAILED_TASKS`, all plural) re-sent the *entire* accumulated array on every single line, which is quadratic in the number of lines. **Which runs this actually hurt is worth knowing, because it is not the one you would guess:** `performScan` calls `LOG.main` a constant ~8 times and only adds a result for non-skipped works, so a scan is fine. It is `PERFORM_UPDATE` (a result per work, so the array grows to the whole library) and `PERFORM_LYRIC_SCAN` (`扫描进度：i/total` per work) that push a library's worth of entries through the channel N times over. Deltas keep each message the size of its own line, which is also what makes per-image logging affordable.
+**Progress events carry one entry each, never the accumulated array.** The original events (`SCAN_MAIN_LOGS`, `SCAN_TASKS`, `SCAN_RESULTS`, `SCAN_FAILED_TASKS`, all plural) re-sent the *entire* accumulated array on every single line, which is quadratic in the number of lines. **Which runs this actually hurt is worth knowing, because it is not the one you would guess:** `performScan` calls `LOG.main` a constant ~8 times and only adds a result for non-skipped works, so a scan is fine. It is `PERFORM_UPDATE` (a result per work, so the array grows to the whole library) and `PERFORM_WORK_FILE_SCAN` (`扫描进度：i/total` per work) that push a library's worth of entries through the channel N times over. Deltas keep each message the size of its own line, which is also what makes per-image logging affordable.
 
 The three pieces that keep it that way:
 
 - **Deltas.** `SCAN_MAIN_LOG` / `SCAN_TASK_ADD` / `SCAN_TASK_LOG` / `SCAN_TASK_REMOVE` / `SCAN_FAILED_TASK` / `SCAN_RESULT` each carry their own entry. The frontend appends.
 - **A bounded snapshot.** `SCAN_INIT_STATE` is the one event carrying accumulated state, and it is sent on every page load *and* every reconnect — so the child keeps only a tail (`MAX_MAIN_LOGS` 500, `MAX_TASK_LOGS` 200, `MAX_FAILED_TASKS` 200, `MAX_RESULTS` 500 in `scannerModules.js`). `Scanner.vue` mirrors the same caps, since its log panel is not virtualised.
-- **A log file.** `filesystem/scanLog.js` writes the complete, uncapped run to `dataRoot/logs/scan-<timestamp>-<run>.log` (`scan` / `update` / `lyric`), keeping the last 10 runs. `LOG.open(runName)` starts it and prints the path as the run's first line, so the page names where the untruncated version lives. Writes go through a bare fd with `writeSync` on purpose: a scan ends in `process.exit()`, which does not drain a `WriteStream`, and the tail of a long run is exactly the part worth keeping. Every failure path is swallowed — a read-only data root must not stop a scan.
+- **A log file.** `filesystem/scanLog.js` writes the complete, uncapped run to `dataRoot/logs/scan-<timestamp>-<run>.log` (`scan` / `update` / `files`), keeping the last 10 runs. `LOG.open(runName)` starts it and prints the path as the run's first line, so the page names where the untruncated version lives. Writes go through a bare fd with `writeSync` on purpose: a scan ends in `process.exit()`, which does not drain a `WriteStream`, and the tail of a long run is exactly the part worth keeping. Every failure path is swallowed — a read-only data root must not stop a scan.
 
 **The scan outcome outlives the socket.** `socket.js` remembers the last `SCAN_FINISHED`/`SCAN_ERROR` in `lastScanEvent` and replays it when `ON_SCANNER_PAGE` arrives with no scanner running; `Scanner.vue` re-emits that on Socket.IO's `connect`, so a reconnect resyncs. **A multi-hour scan only needs the socket to drop once**, from any cause — a suspended laptop, a locked phone, a wifi handover, a proxy reload — and Socket.IO reconnects with a *fresh* socket that missed the terminal event. There is no total connection time limit to work around (verified against `engine.io` 6.6.9: `pingInterval` 25s / `pingTimeout` 20s, client side 45s since the last packet; `connectTimeout` 45s and `upgradeTimeout` 10s cover only the handshake and the polling→WebSocket upgrade; nothing caps a socket's lifetime). The heartbeat is also real traffic every 25s, so a *quiet* scan cannot idle out of an nginx `proxy_read_timeout` either. The gap was purely that nothing resynced after a reconnect. A clean child exit whose `SCAN_FINISHED` never made it out (see `LOG.finish`) synthesises one, and `KILL_SCAN_PROCESS` with no live scanner answers the same way instead of throwing on `null` — which used to take the server down with it.
 
@@ -661,7 +661,7 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 > (450MB+ for a wav-heavy work). Both problems were the content hash being used
 > as identity; see §2.9a.
 
-> **Note:** Library scanning is **not** a REST endpoint. The frontend triggers it over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN`) and listens for the `SCAN_*` events (§7). `POST /api/scan/:id` is unrelated — it re-reads one work's files, it does not scrape.
+> **Note:** Library scanning is **not** a REST endpoint. The frontend triggers it over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_WORK_FILE_SCAN`) and listens for the `SCAN_*` events (§7). `POST /api/scan/:id` is unrelated — it re-reads one work's files, it does not scrape.
 
 ### Removed at the 1.0 freeze
 
@@ -686,7 +686,7 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 
 - **Workspace scripts:** `npm run dev:backend` / `npm start` from root.
 - **Socket.IO events (scanning):**
-  - Client → server: `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_LYRIC_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE` (sent on mount **and on every reconnect** — it is the resync point)
+  - Client → server: `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_WORK_FILE_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE` (sent on mount **and on every reconnect** — it is the resync point)
   - Server → client (relayed from the scanner child process), each carrying one entry:
 
     | Event | Payload |

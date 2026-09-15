@@ -20,19 +20,12 @@ const { nameToUUID } = require('../scraper/utils');
 const { config } = require('../config');
 const { updateLock } = require('../upgrade');
 
-// 只有在子进程中 process 对象才有 send() 方法.
-// The stub takes the same (message, callback) shape as the real one so callers
-// can await a send unconditionally -- see LOG.finish.
 process.send = process.send || function (message, callback) {
   if (typeof callback === 'function') callback();
   return true;
 };
 
-// What the Scanner page holds is a live tail, not an archive. Every one of
-// these is capped: a run over a large library produces tens of thousands of
-// log lines, and an uncapped snapshot makes SCAN_INIT_STATE -- sent on every
-// page load and every reconnect -- grow until it is too big to deliver. The
-// complete, uncapped record goes to the log file instead.
+// uncapped record goes to the log file instead.
 const MAX_MAIN_LOGS = 500;
 const MAX_TASK_LOGS = 200;
 const MAX_FAILED_TASKS = 200;
@@ -49,15 +42,6 @@ const push = (array, entry, max) => {
 };
 
 const LOG = {
-  // Returns a promise that settles once SCAN_FINISHED has been flushed to the
-  // parent. process.send() is asynchronous and process.exit() does NOT drain
-  // pending IPC writes, so sending and exiting on the same tick silently drops
-  // the message once there is any backlog -- measured: with ~50 queued messages
-  // the child delivers 6 and loses the rest. The frontend only leaves its
-  // 'running' state on SCAN_FINISHED, and socket.js emits nothing on a zero
-  // exit, so losing it leaves the scanner page stuck on the last line forever.
-  // IPC is ordered, so the last message's callback also implies the backlog
-  // ahead of it went out.
   finish(message) {
     console.log(` * ${message}`);
     scanLog.write('info', message);
@@ -80,11 +64,6 @@ const LOG = {
 
       const entry = { level, message };
       push(mainLogs, entry, MAX_MAIN_LOGS);
-      // One entry, not the whole array. Re-sending the accumulated log on every
-      // line is quadratic in the number of lines. It bites PERFORM_UPDATE (a
-      // result per work) and PERFORM_LYRIC_SCAN (a progress line per work)
-      // rather than a scan, whose main log is a constant few lines -- but it is
-      // also what made adding per-image logging unaffordable. See AGENTS.md 2.5.
       process.send({ event: 'SCAN_MAIN_LOG', payload: { entry } });
     },
     log(msg) { // default log at level info
@@ -188,38 +167,26 @@ process.on('message', (m) => {
   }
 });
 
-// Exit when the server that forked us goes away. Node keeps a child running
-// after the IPC channel closes, so killing only the parent used to leave this
-// process scanning invisibly: its logs go nowhere, and the `scanner` guard in
-// socket.js is in-memory, so a restarted server would let the user start a
-// second scan alongside it. Two scanners then rewrite one work's file rows at
-// once, and replaceWorkFiles deletes before inserting, so one loses the other's.
 process.on('disconnect', () => process.exit(1));
 
 
-/**
- * 通过数组 arr 中每个对象的 id 属性来对数组去重
- * @param {Array} arr 
- */
-function uniqueFolderListSeparate(arr) {
-  const uniqueList = [];
-  const duplicateSet = {};
-
-  for (let i=0; i<arr.length; i++) {
-    for (let j=i+1; j<arr.length; j++) {
-      if (arr[i].id === arr[j].id) {
-        duplicateSet[arr[i].id] = duplicateSet[arr[i].id] || [];
-        duplicateSet[arr[i].id].push(arr[i]);
-        ++i;
-      }
-    }
-    uniqueList.push(arr[i]);
+// One folder per work id, keeping the last copy found, so no two folders race to
+// insert the same work. duplicateSet maps each duplicated id to the other copies.
+function uniqueFolderListSeparate (folders) {
+  const byId = new Map();
+  for (const folder of folders) {
+    const copies = byId.get(folder.id);
+    if (copies) copies.push(folder);
+    else byId.set(folder.id, [folder]);
   }
 
-  return {
-    uniqueList, // 去重后的数组
-    duplicateSet, // 对象，键为id，值为多余的重复项数组
-  };
+  const uniqueList = [];
+  const duplicateSet = {};
+  for (const [id, copies] of byId) {
+    uniqueList.push(copies[copies.length - 1]);
+    if (copies.length > 1) duplicateSet[id] = copies.slice(0, -1);
+  }
+  return { uniqueList, duplicateSet };
 }
 
 /**
@@ -474,12 +441,7 @@ async function downloadCovers(cover_for_id, types, candidatesFor) {
  * @returns {Promise<String>} 'added' or 'failed'
  */
 async function getFanzaCoverImage(id, types, coverUrls) {
-  const cid = fanzaCid(id); // DMM asset paths use Fanza's own form, e.g. d_215444
-  // The asset path segment varies by content type (digital/voice,
-  // digital/cg_game, ...), so the real cover URL only exists on the work
-  // page. When the caller has no scraped coverUrls (e.g. re-downloading a
-  // missing cover for an already-indexed work), re-scrape the page for them
-  // instead of guessing.
+  const cid = fanzaCid(id);
   if (!coverUrls) {
     try {
       const metadata = await scrapeWorkMetadataFromFanza(id);
@@ -592,9 +554,6 @@ async function processFolder(folder) {
       return 'failed';
     }
 
-    // After getMetadata, not before: t_work_file has an FK to t_work and the row
-    // does not exist until that insert. Probing here also means a work whose
-    // metadata scrape failed costs no ffprobe at all.
     LOG.task.info(workId, `扫描音频文件时长`);
     await rescanWorkFiles(workId, folder.absolutePath);
     
@@ -605,10 +564,6 @@ async function processFolder(folder) {
       coverResult = await getFanzaCoverImage(workId, coverTypes, result.coverUrls);
     } else {
       coverResult = await getCoverImageForTranslated(workId, coverTypes, result && result.coverUrls);
-      // Sample/description images and user reviews: extra requests, so only on
-      // first add, and only when config.skipWorkExtras is off. Re-run them for
-      // an existing work with `updater.js --images` / `--reviews`, which ignore
-      // the setting.
       if (!workExtras.skipWorkExtras()) {
         await saveWorkImages(workId, result);
         await saveWorkReviews(workId);
@@ -962,8 +917,7 @@ async function refreshWorks(query, idColumnName, processor) {
   return counts;
 }
 
-// 扫描一个作品的文件夹中的文件信息
-// 例如音频时长、是否包含歌词文件等
+// Re-index one work's folder: its file listing and audio durations.
 async function scanWorkFile(work, index, total) {
   const displayId = isFanzaId(work.id) ? work.id : formatID(work.id);
 
@@ -974,20 +928,18 @@ async function scanWorkFile(work, index, total) {
     if (!rootFolder) return "skipped";
     const absoluteWorkDir = path.join(rootFolder.path, work.dir);
 
-    // Durations *and* the listing: this pass is what a user runs to pick up files
-    // added or removed on disk, so both move together.
     await rescanWorkFiles(work.id, absoluteWorkDir);
 
     return "updated";
   } catch(error) {
-    LOG.main.error(`[${displayId}] 扫描歌词过程中发生错误：${error}`);
+    LOG.main.error(`[${displayId}] Failed to scan work files: ${error}`);
     console.error(error.stack);
     return "failed";
   }
 }
 const scanWorkFileLimited = (work, index, total) => limitP.call(scanWorkFile, work, index, total);
 async function performWorkFileScan() {
-  LOG.open('lyric');
+  LOG.open('files');
   LOG.main.info(`扫描本地文件开始`);
   const works = await db.knex('t_work').select('id', "root_folder", "dir");
   LOG.main.info(`总计 ${works.length} 个作品`);

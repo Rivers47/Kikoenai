@@ -4,32 +4,12 @@
  * `database/schema.js` has always declared it, so a **fresh** install has it. A
  * *migrated* one does not: `20260802000000` rebuilt `t_work` as `t_work_tmp` to
  * change `id` from INTEGER to TEXT, and its `createTable` never re-declared the
- * constraint -- while the same migration carefully re-declared foreign keys for
+ * constraint -- while the same migration re-declared foreign keys for
  * the `r_*` join tables and `t_play_history`. An omission in one table, not a
  * systemic one: every other table in a real database still has its keys.
- *
- * Consequence: constraint behaviour depended on how the database came to exist,
- * which is exactly what keeping `createSchema` in step with the migrations is
- * supposed to prevent. `db.js` sets `PRAGMA foreign_keys = ON`, so the constraint
- * *would* be enforced -- nothing was enforcing circle integrity on `t_work`.
- *
- * No data was harmed by the gap (measured on a real 1814-work library: zero works
- * with a `circle_id` missing from `t_circle`, zero NULLs), because `resolveLabel`
- * always creates the circle row before inserting the work.
- *
- * SQLite cannot add a constraint in place, so this is the documented
- * twelve-step table rebuild. Two details it is easy to get wrong:
- *
- *  - `PRAGMA foreign_keys` is a no-op inside a transaction, so it is toggled
- *    outside one. Other tables carry keys pointing *at* `t_work`, and dropping it
- *    with enforcement on would fail or cascade.
- *  - Columns are copied by intersecting the new table's list with what the old one
- *    actually has, rather than being hardcoded. That way the migration is correct
- *    whether or not `memo` is still present (it is dropped by 20260914000000) and
- *    cannot fail on a database carrying some other unexpected drift.
  */
 
-// The canonical shape, matching createSchema. Keep in step with database/schema.js.
+
 const defineWork = (table) => {
   table.string('id').notNullable();
   table.timestamps(true, true);

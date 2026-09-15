@@ -279,7 +279,7 @@ MainLayout
 - **REST API:** All data operations via Axios (`/api/*` endpoints). **The frontend stores no credential of any kind.** Auth is a server-side session in an `HttpOnly` cookie (`kikoeru_sid`) that the browser attaches automatically, including to `<audio>`, `<img>`, and download URLs.
 - **Never append `?token=` to an API URL.** That pattern was removed when auth moved to cookies; media and cover URLs are now built bare, e.g. `/api/media/stream/${trackId}` and `/api/cover/${workId}?type=sam`.
 - `<audio crossorigin="anonymous">` in `AudioElement.vue` sets credentials mode `same-origin`, so the cookie *is* sent on same-origin media requests. Do not change this to `use-credentials` without testing playback.
-- **WebSocket (Socket.IO):** Used for real-time scan progress updates. The client connects after auth and **both emits and listens**: it emits `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_LYRIC_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`, and listens for `SCAN_MAIN_LOG`, `SCAN_TASK_ADD`, `SCAN_TASK_LOG`, `SCAN_TASK_REMOVE`, `SCAN_FAILED_TASK`, `SCAN_RESULT`, `SCAN_INIT_STATE`, `SCAN_FINISHED`, `SCAN_ERROR` (all handled in `pages/Dashboard/Scanner.vue`). Payloads are in `backend/AGENTS.md` §7 — keep the two tables in sync.
+- **WebSocket (Socket.IO):** Used for real-time scan progress updates. The client connects after auth and **both emits and listens**: it emits `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_WORK_FILE_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`, and listens for `SCAN_MAIN_LOG`, `SCAN_TASK_ADD`, `SCAN_TASK_LOG`, `SCAN_TASK_REMOVE`, `SCAN_FAILED_TASK`, `SCAN_RESULT`, `SCAN_INIT_STATE`, `SCAN_FINISHED`, `SCAN_ERROR` (all handled in `pages/Dashboard/Scanner.vue`). Payloads are in `backend/AGENTS.md` §7 — keep the two tables in sync.
 - **Seek times are client-side:** `rewindSeekTime` / `forwardSeekTime` are read from `LocalStorage` in `module-AudioPlayer/state.js` (defaults 5s / 30s), not fetched from the server.
 
 ### 2.6b Deploy Path Prefix (`src/base-path.js`)
@@ -674,7 +674,7 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 > tree; and hashing inline here instead made the first open of a work read every
 > audio byte. Both came from using content as identity.
 
-> **Note:** Library scanning is **not** a REST endpoint. `Scanner.vue` triggers scans over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN` / `KILL_SCAN_PROCESS`) and listens for the `SCAN_*` events.
+> **Note:** Library scanning is **not** a REST endpoint. `Scanner.vue` triggers scans over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_WORK_FILE_SCAN` / `KILL_SCAN_PROCESS`) and listens for the `SCAN_*` events.
 
 ---
 

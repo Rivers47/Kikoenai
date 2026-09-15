@@ -1,26 +1,6 @@
 /**
- * Move a work's file listing into the database.
- *
- * It used to be rebuilt from disk on every request. `getTrackList` walks the
- * work folder, and `resolveTrack` calls it -- so every stream, download,
- * check-lrc and track-progress write cost a directory walk, not just the work
- * page. On a network mount that is latency times file count, on works that run
- * to hundreds of files.
- *
- * The listing now lives in t_work_file, written by the scan paths. The scan
- * button already existed for the expensive half (ffprobe durations); it now
- * maintains the listing too.
- *
- * **This migration reads no files.** t_work.memo already holds `duration`,
- * `mtime` and `trackTitles` keyed by relPath, so seeding is pure data movement
- * -- which is the whole point of seeding rather than starting empty: re-probing
- * a library with ffprobe is hours of work.
- *
- * memo covers audio only (scrapeWorkMemo filters to supportedMediaExtList), so
- * lyrics, images and PDFs are missing from the seed. `files_indexed_at` is left
- * NULL for every work, and the first read of each one completes the listing
- * with a single walk -- exactly what every read does today, and then never
- * again. See filesystem/workFiles.js.
+ * Cache a work's file tree in database.
+ * t_work_file new column, populated from t_work.memo
  */
 
 exports.up = async function (knex) {

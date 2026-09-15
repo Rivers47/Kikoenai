@@ -1,22 +1,5 @@
 /**
- * Drop `t_work.memo`.
- *
- * It held four keys, and three of them moved to t_work_file in
- * 20260913000000 -- `duration`, `mtime` and `trackTitles` are now columns on the
- * rows they describe. That migration deliberately left memo in place so the new
- * read path could be proven against real data first; this finishes the move.
- *
- * The fourth key, `isContainLyric`, is simply deleted: it was written on every
- * scan and read by nothing (grep confirms no consumer anywhere in the app).
- *
- * Nothing is copied here -- 20260913000000 already did that, and by now every
- * work has been listed either by its seed or by its first read. No filesystem
- * access, and no way to lose a duration: the rows already hold them.
- *
- * SQLite 3.35+ supports ALTER TABLE DROP COLUMN natively, which is used directly
- * rather than through knex's alterTable. Knex emulates the drop by recreating the
- * table, and t_work carries a foreign key to t_circle plus a six-column index --
- * both of which a recreation can quietly fail to restore.
+ * Drop `t_work.memo`, which has moved to t_work_file
  */
 
 exports.up = async function (knex) {
