@@ -307,10 +307,7 @@ import { formatSeconds } from '../utils'
 import { sendOrQueue, requestSync } from '../utils/outbox'
 import { savePosition } from '../utils/positions'
 
-// How stale the server's copy of a position may get during continuous playback.
-// The local store is written every tick regardless, so this only bounds how out
-// of date *another* device's view can be -- it is not a loss window.
-const SERVER_PUSH_MS = 60 * 1000
+const SERVER_PUSH_MS = 60 * 1000 //update progress to server at least every 60s
 import { debounce } from 'quasar'
 import { apiUrl } from 'src/base-path'
 
@@ -343,25 +340,11 @@ export default {
   },
 
   mounted () {
-    // Backstop for uninterrupted playback: every other trigger is a state
-    // change (track/pause/seek/queue), and during continuous listening none of
-    // them fire. This bounds how much position is lost if the app dies without
-    // a visibilitychange.
-    //
-    // Deliberately NOT onUpdatePlayingStatus: that path is for state changes
-    // and forces a server push. This is the only caller that may be throttled,
-    // so it has to stay separate -- sharing the funnel is what made a pause
-    // silently skip the server and resume at 0.
     this.historyCheckIntervalId = setInterval(() => {
-      // Only while this tab is actually playing. A paused tab still holds the
-      // queue of whatever it last played, and ticking here made it re-post
-      // that frozen position every 10s -- overwriting the progress another
-      // tab (or a later session) had since written for the same work.
       if (!this.playing) return
       this._tickTrackProgress()
-    }, 10 * 1000) // 每隔一段时间更新一次播放记录
+    }, 10 * 1000)
 
-    // 监听页面可见性变化，在页面隐藏时（锁屏/切后台）立即刷新播放进度到服务器
     document.addEventListener('visibilitychange', this.onVisibilityChange)
 
 
@@ -411,22 +394,12 @@ export default {
     // 当 ***SeekMode 变为false，表明进度条跳转已经完成
     rewindSeekMode(v) {
       if (!v) {
-        // 当用户前进后退时，currentTime可能并没有立即从audio元素中反馈到vue状态里，
-        // 因此这里需要延迟一小会，等待audio前进后退之后的更新时间抵达vue的currentTime状态，
-        // 然后再去更新播放历史
-        setTimeout(() => {
-          this.onUpdatePlayingStatus()
-        }, 100) 
+        this.onUpdatePlayingStatus()
       }
     },
     forwardSeekMode(v) {
       if (!v) {
-        // 当用户前进后退时，currentTime可能并没有立即从audio元素中反馈到vue状态里，
-        // 因此这里需要延迟一小会，等待audio前进后退之后的更新时间抵达vue的currentTime状态，
-        // 然后再去更新播放历史
-        setTimeout(() => {
-          this.onUpdatePlayingStatus()
-        }, 100)
+        this.onUpdatePlayingStatus()
       }
     },
     currentTime() {
@@ -676,11 +649,6 @@ export default {
       this.setEnablePIPLyrics(!this.enablePIPLyrics)
     },
     
-    // return true if two history updated on (onUpdatePlayingStatus) is same
-    //
-    // History carries the queue (kilobytes) and is written only when the queue
-    // or current track changes; position is owned by /api/track-progress and no
-    // longer sent here, so there is no seconds field to compare.
     isSameTwoHistory(ha, hb) {
       // 如果有任意一个是null，则认为两者不一样
       if (!(ha && hb)) return false;
@@ -694,18 +662,13 @@ export default {
       return true;
     },
 
-    // 页面隐藏时（锁屏/切后台）立即刷新播放进度，不使用防抖以确保数据到达
+    // flush progress immediately on page hidden/phone lock
     onVisibilityChange() {
       if (document.visibilityState === 'hidden') {
         this.flushHistoryOnHide()
       }
     },
 
-    // Hiding is the last moment we are guaranteed to run -- the OS may freeze
-    // the process immediately after. Both writes go through the outbox, so what
-    // matters here is that the rows are durable before we lose the thread; the
-    // requests themselves may well be killed in flight, and the service worker
-    // delivers whatever survives.
     flushHistoryOnHide() {
       if (this.queueCopy.length <= 0) return;
 
@@ -741,53 +704,28 @@ export default {
         }
       }
 
-      // A state change -- pause, track change, seek, queue edit. The user just
-      // did something, so the server hears about it now rather than waiting out
-      // the throttle: the resume paths (RecentWorks, FavListItem, WorkDetails)
-      // read state.seconds, which the server resolves from t_track_progress, so
-      // a throttled pause left them resuming at 0.
       this._reportTrackProgressOnUpdate({ force: true })
 
-      // 检查最近一次的历史更新记录，如果两次数据不变，则无需更新记录
       if (this.isSameTwoHistory(this.latestUpdatedHistory, data)) {
-        console.log("播放状态未变，跳过服务器历史更新")
         return
       }
 
       this.$axios.put(`/api/history/${this.playWorkId}`, data)
         .then((_) => {
-          console.log("更新播放状态成功")
           this.latestUpdatedHistory = data;
         })
         .catch((err) => {
-          // No `err.response` when the request never reached the server --
-          // which is the normal case during offline playback of a downloaded
-          // work, not an exceptional one. History is fire-and-forget, so log
-          // and move on rather than throwing out of the handler.
           console.error(err.response?.data?.error || err.message || err)
         })
     },
 
-    // Guard against re-posting a position this tab has already reported for
-    // *that track*: a repeat write carries no new information but does clobber
-    // whatever the track's progress has become in the meantime. Returns false
-    // when the report should be skipped.
-    //
-    // Keyed per track, not a single slot. A queue cycles through trackIds, so
-    // one slot let `A/100 -> B/0 -> A/100` through, and that second A write
-    // carried a fresh observedAt over an unchanged position -- which, now that
-    // the server orders by observedAt (backend/AGENTS.md §2.9c), beats a newer
-    // position written from another device. A Map rather than an object: a
-    // trackId is an arbitrary file path.
     _markTrackProgressReported (trackId, seconds) {
       if (this._lastReportedProgress.get(trackId) === seconds) return false
       this._lastReportedProgress.set(trackId, seconds)
       return true
     },
 
-    // The periodic backstop. Records locally every tick and lets the server
-    // throttle decide whether to push, which is the whole point of the split:
-    // continuous playback is the only case allowed to be lazy about the server.
+    // The periodic backstop.
     _tickTrackProgress () {
       this._reportTrackProgressOnUpdate()
     },
@@ -823,9 +761,6 @@ export default {
       })
     },
 
-    // True when the server is due an update for this track. Tracked per track so
-    // switching tracks always pushes rather than inheriting the previous one's
-    // throttle window.
     _shouldPushProgress (trackId, now) {
       const due = trackId !== this._lastPushedTrackId
       || now - this._lastServerPush >= SERVER_PUSH_MS
@@ -833,7 +768,6 @@ export default {
     },
 
     gotoFullScreenPlayer() {
-      // ponytail: 已在全屏页时再次点击则退出全屏，回到对应作品详情页
       if (this.isFullScreenPage) {
         this.$router.push(`/work/${this.playWorkId}`)
       } else {
