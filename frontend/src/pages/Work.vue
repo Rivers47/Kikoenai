@@ -67,9 +67,6 @@ export default {
       },
       tree: [],
       trackProgress: {},
-      // The parked track's position, reconciled against the local store. The
-      // info panel and the resume button both read this, so neither can show a
-      // number the file tree disagrees with.
       resumeSeconds: null,
       extras: { description: '', descriptionHtml: '', descriptionParts: [], sampleImages: [] },
       tab: 'files',
@@ -125,21 +122,14 @@ export default {
         const response = await this.$axios.get(`/api/tracks/${this.workid}`);
         this.tree = response.data.tree || response.data;
         this.trackProgress = response.data.trackProgress || {};
-        // trackProgress is keyed by trackId, the same handle every node and
-        // queue item carries, so progress badges paint on first render with no
-        // second lookup key.
       } catch (error) {
         if (error.response) {
-          // 请求已发出，但服务器响应的状态码不在 2xx 范围内
           this.showErrNotif(error.response.data.error || `${error.response.status} ${error.response.statusText}`)
         } else {
           this.showErrNotif(error.message || error)
         }
       }
 
-      // Reconcile against this device's own record, newest observation wins --
-      // the same rule the server applies on write. Runs even when the request
-      // above failed, which is the offline case it exists for.
       try {
         const { merged, localNewer } = mergePositions(
           this.trackProgress,
@@ -153,9 +143,6 @@ export default {
       }
     },
 
-    // Let the server catch up on anything this device knows better. Closes the
-    // gap the throttled push opens: a position observed between pushes and then
-    // lost to a hard kill would otherwise never leave the device.
     pushLocallyNewerPositions (trackIds, progress) {
       for (const trackId of trackIds) {
         const row = progress[trackId];
@@ -172,9 +159,6 @@ export default {
       }
     },
 
-    // Same rule the file tree uses, applied to the parked track. Runs off the
-    // metadata request rather than the tracks request so the panel and the
-    // resume button have a number before the directory listing resolves.
     async resolveResumeSeconds() {
       try {
         this.resumeSeconds = await resumeSecondsFor(this.workid, this.metadata.state);
@@ -188,8 +172,6 @@ export default {
         const response = await this.$axios.get(`/api/work/${this.workid}/extras`);
         this.extras = response.data;
       } catch (error) {
-        // Non-fatal: the description is an extra, and the page is perfectly
-        // usable as the file tree it has always been.
         if (error.response) {
           this.showErrNotif(error.response.data.error || `${error.response.status} ${error.response.statusText}`)
         } else {
@@ -205,12 +187,6 @@ export default {
     },
 
     resumeMetadataPlayHistory() {
-      // this.resumeSeconds is the reconciled value -- the server's state.seconds
-      // weighed against this device's own record (resumeSecondsFor), which is
-      // the same rule the file tree and the "played to" line use. Falls back to
-      // the raw server value only until that resolves; -1 is the "nothing to
-      // resume" sentinel.
-
       // 以最小化形式打开播放器
       this.$store.commit('AudioPlayer/TOGGLE_HIDE')
       this.$store.commit('AudioPlayer/SET_QUEUE', {

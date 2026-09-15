@@ -111,9 +111,6 @@ export default {
       return lastPlayItem.title;
     },
 
-    // Reconciled against this device's own record, the same rule the work page
-    // uses -- resuming from here and resuming from there must land in the same
-    // place, and reading work.state.seconds alone did not guarantee that.
     async resumeThisHistory(work) {
       const seconds = await resumeSecondsFor(work.id, work.state)
       this.$store.commit('AudioPlayer/SET_QUEUE', {

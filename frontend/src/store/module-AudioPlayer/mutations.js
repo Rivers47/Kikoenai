@@ -3,8 +3,6 @@ import getters from './getters'
 import state, { SWAP_SEEK_BUTTON_KEY, FLIP_LR_CHANNEL_KEY, ENABLE_PIP_LYRICS, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, AUTO_MARK_LISTENED_KEY, REWIND_SEEK_TIME_KEY, FORWARD_SEEK_TIME_KEY, SLEEP_TIMER_KEY } from './state'
 import { apiUrl } from 'src/base-path'
 
-// Every change of the current track goes through here, so `currentTime` always
-// describes currentPlayingFile: AudioElement starts each newly loaded track from it.
 const selectTrack = (state, index, seconds = 0) => {
   state.queueIndex = index
   state.currentTime = seconds
@@ -79,17 +77,13 @@ const mutations = {
     state.playWorkVas = payload.vas || []
     state.workLastTrackId = payload.workLastTrackId || ''
 
-    // -1 means "no saved position". History rows carry no `seconds` of their
-    // own (PUT /api/history sends only { queue, index }); it is resolved
-    // server-side from t_track_progress and stays undefined when that misses.
+    // -1 means "no saved position"
     const seconds = Number(payload.resumeHistorySeconds)
-    const resume = Number.isFinite(seconds) && seconds >= 0 ? seconds : -1
+    const resume = seconds >= 0 ? seconds : -1
 
     if (getters.currentPlayingFile(state).trackId !== previousTrackId) {
       selectTrack(state, payload.index, Math.max(resume, 0))
     } else if (resume >= 0) {
-      // The element already holds this track, so no load will pick the
-      // position up; ask for a seek instead.
       state.currentTime = resume
       state.newCurrentTime = resume
     }
@@ -189,7 +183,7 @@ const mutations = {
   SET_LYRIC_OFFSET_SECONDS: (state, value) => {
     state.lyricOffsetSeconds = value;
   },
-  // payload: { type: 'minutes', stopAt: <ms 时间戳> } 或 { type: 'tracks', tracksLeft: <int> }
+  // payload: { type: 'minutes', stopAt: <ms> } or { type: 'tracks', tracksLeft: <int> }
   SET_SLEEP_TIMER: (state, { type, stopAt = null, tracksLeft = 0 }) => {
     state.sleepMode = true
     state.sleepModeType = type
@@ -221,9 +215,6 @@ const mutations = {
     LocalStorage.set(localStorageName, state.visualPlayerCoverUrl)
   },
 
-  // SET_AUDIO_ELEMENT: (state, value) => {
-  //   state.audioElement = value
-  // }
   
   SET_SWAP_SEEK_BUTTON: (state, value) => {
     state.swapSeekButton = value

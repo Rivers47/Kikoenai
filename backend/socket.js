@@ -6,11 +6,6 @@ const { config } = require('./config');
 const { SESSION_COOKIE, getSession } = require('./auth/session');
 
 const initSocket = (server) => {
-  // Socket.IO attaches to the HTTP server, not to Express, so it never sees the
-  // router config.basePath is mounted on -- it has to be told the prefix. The
-  // client mirrors this in src/boot/socket.io.js. Empty basePath gives
-  // '/socket.io', which is the library default and what every existing install
-  // is already talking to.
   const io = socket(server, { path: `${config.basePath}/socket.io` });
   if (config.auth) {
     io.use((socket, next) => {
@@ -42,12 +37,6 @@ const initSocket = (server) => {
   }
 
   let scanner = null;
-  // The outcome of the last run, kept after the child is gone. A scan can
-  // easily outlive a socket -- a laptop sleeps, a phone backgrounds the tab,
-  // a reverse proxy times the connection out -- and Socket.IO then reconnects
-  // with a fresh socket that missed SCAN_FINISHED entirely. Without this the
-  // page sits on 'running' forever, with a kill button for a process that
-  // exited hours ago. ON_SCANNER_PAGE replays it instead.
   let lastScanEvent = null;
 
   const startScanner = (script, args = []) => {

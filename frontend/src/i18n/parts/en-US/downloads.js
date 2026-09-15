@@ -2,7 +2,7 @@ export default {
   title: 'Downloads',
   storageUsed: '{used} used of {quota}',
   totalDownloaded: '{size} downloaded',
-  empty: 'No offline downloads yet',
+  empty: 'No downloaded work yet',
   trackCount: '{count} tracks',
   lyricCount: '{count} lyrics',
   playAll: 'Play all',

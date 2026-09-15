@@ -1,14 +1,4 @@
-// Durable, on-disk record of a scan run.
-//
-// The Scanner page is a live tail, not an archive: what it holds is capped so a
-// long run cannot grow its payloads without bound, and a dropped socket loses
-// whatever arrived while it was down. The file has neither limit, so it is the
-// thing to read when a scan needs explaining after the fact.
-//
-// Writes go through a plain fd with writeSync: a scan ends in process.exit(),
-// which does not drain a WriteStream, and the tail of a long run is exactly the
-// part worth keeping. Lines are short and the run is network-bound, so the
-// synchronous write costs nothing measurable.
+// On disk log of scan runs, stored in config/logs
 
 const fs = require('fs');
 const path = require('path');
@@ -53,7 +43,7 @@ function open(runName) {
     fd = fs.openSync(filePath, 'a');
   } catch (err) {
     // A read-only or missing data root must not stop the scan itself.
-    console.error(`无法创建扫描日志文件: ${err.message}`);
+    console.error(`Can't open log file: ${err.message}`);
     fd = null;
     filePath = null;
   }

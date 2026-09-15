@@ -1,8 +1,6 @@
 /*
  * The app's one IndexedDB database, shared by every store that needs to outlive
- * the page. Kept in its own module because both the page and the service worker
- * open it, and because a second connection with a different version would block
- * the first.
+ * the page.
  *
  * Stores:
  *   outbox    - playback-state writes awaiting delivery (utils/outbox.js)
@@ -12,7 +10,6 @@
  */
 
 const DB_NAME = 'kikoenai'
-// v1 had `outbox` alone. Bumping adds `positions` without touching it.
 const DB_VERSION = 2
 
 export const OUTBOX_STORE = 'outbox'
@@ -30,14 +27,10 @@ function openDb () {
           db.createObjectStore(OUTBOX_STORE, { keyPath: 'key' })
         }
         if (!db.objectStoreNames.contains(POSITIONS_STORE)) {
-          // Indexed by workId so a work's rows are one getAll rather than a scan
-          // of every track ever played.
           const store = db.createObjectStore(POSITIONS_STORE, { keyPath: 'trackId' })
           store.createIndex('workId', 'workId')
         }
       }
-      // A tab still holding v1 open blocks the upgrade, and the promise would
-      // otherwise never settle with nothing said. Surface it instead.
       req.onblocked = () => {
         console.warn('[kikoenai] IndexedDB upgrade blocked by another open tab; close it to continue')
       }

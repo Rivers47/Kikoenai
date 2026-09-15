@@ -1,16 +1,5 @@
 /*
  * Durable queue for playback-state writes.
- *
- * A write is captured whenever it cannot be shown to have reached the server:
- * genuinely offline, but just as often online with the phone locked and the
- * radio throttled or the process frozen mid-request.
- * Delivery is the service worker's `sync` event, which survives the page being
- * frozen or closed. This module is imported by both sides: the page enqueues,
- * the worker drains.
- *
- * It is a *delivery* queue only. Reading a position back is utils/positions.js:
- * a row here exists only until it is delivered, so it could never answer "where
- * was I" -- which is why pendingProgress() was removed rather than kept.
  */
 
 import { apiUrl, stripBasePath } from '../base-path'
@@ -59,15 +48,10 @@ export async function entries () {
 export async function requestSync () {
   if (!canSync()) return
   try {
-    // Not serviceWorker.ready: it never settles without an active worker, and
-    // sendOrQueue awaits this on its failure path -- so a missing registration
-    // hung the write instead of letting it fail.
     const registration = await activeRegistration()
     if (!registration || !('sync' in registration)) return
     await registration.sync.register(SYNC_TAG)
   } catch (err) {
-    // Never let scheduling failure surface: the row is already durable and
-    // some later caller will re-register.
     console.error('outbox sync registration failed:', err)
   }
 }
@@ -76,9 +60,6 @@ export async function sendOrQueue (http, { method, url, body }) {
   url = apiUrl(url)
 
   if (!canSync()) {
-    // Matches what these call sites did before the outbox: fire, and log the
-    // failure. Throwing instead would surface as an unhandled rejection --
-    // none of them await this.
     try {
       await http({ method, url, data: body, __outboxed: true })
     } catch (err) {

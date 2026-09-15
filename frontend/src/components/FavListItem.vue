@@ -150,9 +150,6 @@ export default {
       showReviewDialog: false,
       hideRating: false,
       progress: '',
-      // The parked track's position, reconciled against this device's own
-      // record. The badge below used to render metadata.state.seconds raw, which
-      // is the server's copy and can lag a throttled push.
       resumeSeconds: null
     }
   },

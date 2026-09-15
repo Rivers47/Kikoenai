@@ -5,7 +5,7 @@ export default {
   playNext: 'Play next',
   download: 'Download file',
   downloadOffline: 'Download for offline',
-  removeOfflineDownload: 'Remove offline download',
+  removeOfflineDownload: 'Remove downloaded files',
   previous: 'Previous',
   next: 'Next',
   setAsCover: 'Set as visualizer cover',

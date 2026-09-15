@@ -209,8 +209,6 @@ export default {
       confirm: false,
       randId: null,
       showScroller: false,
-      // Teardown for the service-worker download listener (see
-      // initOfflineDownloads). Not reactive state -- just held for unmount.
       unsubscribeDownloadMessages: null,
       contrastMode: getContrastMode(),
       links: [
@@ -240,6 +238,7 @@ export default {
     this.initUser();
     this.checkLockFileNotice();
     this.fetchSharedConfig();
+    requestSync();
     this.initOfflineDownloads();
   },
 
@@ -292,33 +291,8 @@ export default {
       this.$router.push(filter ? { path: '/works', query: { filter } } : '/works')
     },
 
-    // A whole-work download runs as a Background Fetch and completes in the
-    // service worker, which may happen with no tab open. So on boot the
-    // manifest is reconciled against Cache Storage (the source of truth for
-    // what is actually downloaded), and a listener keeps an open tab in sync
-    // with fetches that finish while it is running.
-    // Without this the origin's storage is *best-effort*: the browser may evict
-    // it under disk pressure, not only when the user clears site data. Playback
-    // positions live in IndexedDB now (utils/positions.js), so eviction would
-    // silently lose them. Chromium generally grants this outright for an
-    // installed PWA; Firefox prompts. Advisory only -- nothing depends on it.
-    async requestPersistentStorage () {
-      if (!navigator.storage || !navigator.storage.persist) return;
-      try {
-        const granted = await navigator.storage.persist();
-        if (!granted) console.warn('[kikoenai] persistent storage not granted; local positions may be evicted');
-      } catch (err) {
-        console.error('persistent storage request failed:', err);
-      }
-    },
-
     initOfflineDownloads () {
       if (!('serviceWorker' in navigator)) return;
-
-      // Rows survive a process that was killed outright, with no chance to
-      // register a sync of its own. Boot is where those get picked up.
-      requestSync();
-      this.requestPersistentStorage();
 
       this.unsubscribeDownloadMessages = onDownloadMessage({
         onSuccess: (workId, stored) => {
@@ -385,9 +359,6 @@ export default {
         })
     },
 
-    // 检查升级后是否留有需要重新扫描的提示（见 backend/routes/version.js）。
-    // 原本这里还会提示有新版本可用，但那个检查比对的是上游仓库的发布版本，
-    // 与本项目无关，已连同后端的 GitHub 请求一起移除。
     checkLockFileNotice () {
       this.$axios.get('/api/version')
         .then((res) => {

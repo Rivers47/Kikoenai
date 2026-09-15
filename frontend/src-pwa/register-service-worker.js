@@ -7,11 +7,9 @@ import { basePath } from '../src/base-path'
 
 const serviceWorkerFile = `${basePath}/${process.env.SERVICE_WORKER_FILE.split('/').pop()}`
 
-// No service worker in dev, because HMR depends on fetching those fresh.
-// What this costs, now that startWorkDownload has a foreground path: whole-work
-// downloads DO work in dev, because canBackgroundFetch() is false without a
-// worker and Cache Storage does not need one. Offline *playback* still does not
-// -- AudioElement requests /api/media/offline/... over the network and there is
+// No service worker in dev.
+// Offline playback won't work when running with `npm run dev`
+// because AudioElement requests /api/media/offline/... over the network and there is
 // no worker to answer it from the cache. Use a production build for that.
 if (process.env.DEV) {
   navigator.serviceWorker?.getRegistrations()

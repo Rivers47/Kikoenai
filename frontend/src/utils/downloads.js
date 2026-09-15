@@ -1,8 +1,5 @@
 // Offline-download orchestration: fetches a file and stores it in the service
-// worker's Cache Storage bucket so it can be served offline (see the caching
-// routes in src-pwa/custom-service-worker.js). Vuex (store/module-Downloads)
-// only holds the manifest of what's been downloaded -- the actual bytes live in
-// Cache Storage, not in the store.
+// worker's Cache Storage bucket
 //
 // Two download paths exist:
 //   - per-track  -> cacheFile(), a plain foreground fetch. Small and immediate;
@@ -17,19 +14,20 @@ import { activeRegistration } from './service-worker'
 const CACHE_NAME = 'offline-tracks'
 
 /**
- * One spelling for a cached URL, so two producers cannot disagree about it.
- *
- * The manifest stores what apiUrl() produced -- a raw path, which since trackIds
- * became `workId/relPath` contains spaces and unicode. The service worker reports
- * `new URL(record.request.url).pathname`, which is percent-**encoded**. Comparing
- * those as strings silently matched nothing, so a finished whole-work download
- * never promoted its rows and the button stayed on "downloading" until a reload
- * (reconcileDownloads happened to work, because cache.match normalizes URLs).
- *
- * Decode rather than encode: the manifest key is local state, not a wire format,
- * and the raw form is what every other caller already builds. A filename holding
- * a literal `%` makes decodeURI throw, so fall back to the input.
+ * Ask for persistent storage, or local storage is evicted non-deterministically.
  */
+async function requestPersistentStorage () {
+  if (!navigator.storage || !navigator.storage.persist) return
+  try {
+    if (await navigator.storage.persisted()) return
+    if (!await navigator.storage.persist()) {
+      console.warn('[kikoenai] persistent storage not granted; downloads and local positions may be evicted')
+    }
+  } catch (err) {
+    console.error('persistent storage request failed:', err)
+  }
+}
+
 export function cacheKeyFor (url) {
   const raw = String(url || '')
   try {
@@ -40,6 +38,7 @@ export function cacheKeyFor (url) {
 }
 
 export async function cacheFile (url) {
+  await requestPersistentStorage()
   const response = await fetch(url)
   if (!response.ok) {
     throw new Error(`download failed: ${url} (${response.status})`)
@@ -55,11 +54,6 @@ export async function uncacheFile (url) {
   await cache.delete(url)
 }
 
-// Walks a /api/tracks/:id tree (nested by folder, per toTree() on the
-// backend) and flattens it to the audio/lyric leaf nodes a work-level
-// download needs to fetch. Mirrors the extension grouping the backend's
-// /api/media/offline route uses -- 'text' nodes there are exactly the
-// .txt/.lrc/.srt/.ass/.vtt files that route serves as-is.
 export function collectDownloadableFiles (tree) {
   const files = []
   const walk = (nodes) => {
@@ -71,9 +65,6 @@ export function collectDownloadableFiles (tree) {
           trackId: node.trackId,
           title: node.title,
           type: node.type === 'audio' ? 'audio' : 'lyric',
-          // Carried so a queue built from the manifest can show a track length
-          // -- offline there is no tree to read it from. trackId doubles as the
-          // progress key, so nothing else is needed to report position.
           duration: node.duration,
         })
       }
@@ -87,13 +78,6 @@ export const BG_FETCH_ID_PREFIX = 'kikoenai-work-'
 
 export const bgFetchIdFor = (workId) => `${BG_FETCH_ID_PREFIX}${workId}`
 
-/**
- * Whether a whole-work download can be handed to the browser.
- *
- * Two conditions, and the second is the one that used to be missed: the API can
- * exist while no worker is there to own the fetch. Chromium-only either way --
- * everywhere else this is false and the foreground path runs instead.
- */
 export async function canBackgroundFetch () {
   if (!('BackgroundFetchManager' in self)) return false
   const registration = await activeRegistration()
@@ -140,18 +124,6 @@ export function buildWorkDownloadPlan (workId, tree) {
 
 /**
  * Fetch a work's files in the page, for engines without Background Fetch.
- *
- * The trade against the background path is the tab: this runs in the page, so
- * navigating away or closing it abandons the download. The caller tells the user
- * so. `reconcileDownloads` cleans up the rows afterwards either way.
- *
- * Serial rather than parallel, deliberately: progress is what the user watches
- * instead of an OS notification, and N-at-a-time makes "12 of 43" meaningless.
- *
- * All-or-nothing on failure, matching Background Fetch's own semantics (any
- * non-2xx record discards the batch). That keeps `isWorkDownloaded` honest --
- * it is keyed on the metadata rows being promoted, so a half-cached work must
- * not look complete. See the note in frontend/AGENTS.md §3.
  */
 export async function downloadWorkInForeground ({ rows, onProgress }) {
   const stored = []
@@ -177,13 +149,9 @@ export async function downloadWorkInForeground ({ rows, onProgress }) {
 
 /**
  * Start a whole-work download by whichever route this browser supports.
- *
- * `mode` tells the caller which happened, because the two differ in ways the UI
- * has to reflect: 'background' finishes in the service worker and promotes its
- * rows by message, possibly with no tab open, while 'foreground' has already
- * finished by the time this resolves and hands back its `stored` list directly.
  */
 export async function startWorkDownload ({ workId, workTitle, rows, title, onProgress }) {
+  await requestPersistentStorage()
   if (!(await canBackgroundFetch())) {
     return downloadWorkInForeground({ rows, onProgress })
   }
@@ -209,13 +177,6 @@ export async function reconcileDownloads (downloadedFiles) {
   const pending = downloadedFiles.filter(f => f.pending)
   if (pending.length === 0) return { promote: [], drop: [] }
 
-  // A fetch still in flight has legitimately not written its files yet --
-  // dropping those rows would delete a download in progress.
-  //
-  // Not serviceWorker.ready: with no active worker that never settles, and this
-  // runs on boot, so reconcile would silently never happen. No worker also means
-  // no Background Fetch can be running, so an empty set is the right answer --
-  // which is exactly the case on engines using the foreground path.
   const registration = await activeRegistration()
   const activeIds = registration && 'backgroundFetch' in registration
     ? await registration.backgroundFetch.getIds()

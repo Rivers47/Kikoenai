@@ -1,6 +1,6 @@
 <template>
   <q-page class="q-pa-md">
-    <!-- 标题 & 存储用量 -->
+    <!-- Title & Storage used -->
     <div class="row items-center q-mb-sm">
       <span class="text-h5 text-weight-regular q-pa-xs relative-position">
         {{ $t('downloads.title') }}
@@ -28,7 +28,7 @@
     </div>
 
     <template v-else>
-      <!-- 排序 & 显示模式 -->
+      <!-- Sort & Display Mode -->
       <div class="row justify-between items-center q-mb-md q-gutter-sm">
         <q-select
           dense
@@ -66,7 +66,7 @@
         <q-spinner-dots color="primary" size="40px" />
       </div>
 
-      <!-- 列表模式 -->
+      <!-- List View -->
       <q-list v-else-if="listMode" bordered separator class="shadow-2">
         <div v-for="work in sortedWorks" :key="work.workId">
           <WorkListItem :metadata="cardMetadata(work)" :cover-url="work.thumbUrl" :showLabel="false">
@@ -120,7 +120,7 @@
         </div>
       </q-list>
 
-      <!-- 卡片模式 -->
+      <!-- Card View -->
       <div v-else class="row q-col-gutter-x-md q-col-gutter-y-lg">
         <div
           class="col-xs-12 col-sm-6 col-md-4 col-lg-3 col-xl-2"
@@ -130,7 +130,7 @@
         >
           <WorkCard :metadata="cardMetadata(work)" :cover-url="work.coverUrl" />
 
-          <!-- 下载信息栏 -->
+          <!-- Download Info Bar -->
           <div class="row items-center justify-between q-mt-xs q-px-sm">
             <span class="col-auto text-caption text-on-surface-variant">{{ workSummary(work) }}</span>
             <div class="col-auto row items-center no-wrap">
@@ -152,8 +152,7 @@ import WorkListItem from 'components/WorkListItem'
 import { uncacheFile } from '../utils/downloads'
 import { positionsForWork } from '../utils/positions'
 
-// Own LocalStorage keys -- deliberately NOT the Works page's `listMode` /
-// `sortCategoryOption`, so the two pages keep independent view preferences.
+// Own LocalStorage keys
 const LIST_MODE_KEY = 'downloads_list_mode'
 const SORT_BY_KEY = 'downloads_sort_by'
 
@@ -186,8 +185,6 @@ export default {
       sortOptions: ['downloadedAt', 'title', 'size'],
       expandedWorkIds: [],
       metadataLoading: false,
-      // workId -> /api/work/:id response, or null when it couldn't be fetched
-      // (offline and never cached). Cards fall back to a stub in that case.
       metadataByWorkId: {},
     }
   },
@@ -201,14 +198,10 @@ export default {
       'totalDownloadedBytes',
     ]),
 
-    // Groups the flat manifest by work, keeping manifest order within a work --
-    // entries are committed in tree-walk order, so that's the track order.
     downloadedWorks () {
       const byWorkId = new Map()
 
-      // Skip `pending` rows: a whole-work Background Fetch claims its manifest
-      // rows up front, before the bytes are in Cache Storage. Listing those
-      // here would offer works that cannot actually be played offline yet.
+      // Skip `pending` rows
       for (const file of this.downloadedFiles.filter(f => !f.pending)) {
         let work = byWorkId.get(file.workId)
         if (!work) {
@@ -241,8 +234,6 @@ export default {
         }
       }
 
-      // Point both cover slots at whichever variant was actually cached: works
-      // downloaded before the three-variant change only have ?type=main.
       for (const work of byWorkId.values()) {
         if (!work.coverUrl) work.coverUrl = `/api/cover/${work.workId}?type=main`
         if (!work.thumbUrl) work.thumbUrl = work.coverUrl
@@ -281,9 +272,6 @@ export default {
   methods: {
     formatBytes,
 
-    // Live metadata when online, the SW's cached copy when offline; the stub
-    // keeps the card renderable when neither is available. Omitting
-    // rate_count_detail is what keeps WorkCard's rating tooltip hidden.
     cardMetadata (work) {
       const metadata = this.metadataByWorkId[work.workId]
       if (metadata) return metadata
@@ -330,8 +318,6 @@ export default {
       }
     },
 
-    // Failures are expected (offline, work deleted server-side) -- fall back to
-    // the stub silently instead of a wall of error notifications.
     fetchMetadata () {
       const pending = this.downloadedWorks
         .filter(work => !(work.workId in this.metadataByWorkId))
@@ -343,8 +329,6 @@ export default {
             this.metadataByWorkId[work.workId] = null
           }))
 
-      // Nothing new to fetch (e.g. re-entered after a delete): don't flip the
-      // loading flag, which would needlessly remount every card.
       if (pending.length === 0) return Promise.resolve()
 
       this.metadataLoading = true
@@ -357,9 +341,6 @@ export default {
       if (work.tracks.length === 0) return
 
       const metadata = this.metadataByWorkId[work.workId]
-      // duration comes from the manifest: without it the player shows no track
-      // length, and offline there is no tree to recover it from. trackId is
-      // both the media URL and the progress key, so nothing else is needed.
       const queue = work.tracks.map(file => ({
         trackId: file.trackId,
         title: file.title,
@@ -432,8 +413,6 @@ export default {
 
     this.fetchMetadata()
     this.updateStorageEstimate()
-    // Best-effort: reduces (doesn't guarantee) eviction risk under storage
-    // pressure. No-op / silently ignored where unsupported.
     if (navigator.storage && navigator.storage.persist) {
       navigator.storage.persist()
     }

@@ -1,8 +1,6 @@
 // Configuration for your app
 // https://quasar.dev/quasar-cli-webpack/quasar-config-js
 
-// The server owns the deploy-time URL prefix (config.basePath), so the token it
-// swaps in has to come from there rather than being spelled twice.
 const { PUBLIC_PATH_TOKEN } = require('../backend/base-path')
 
 module.exports = function (ctx) {
@@ -62,16 +60,6 @@ module.exports = function (ctx) {
     build: {
       vueRouterMode: 'history',
 
-      // One build, deployable at the root or under any sub-path.
-      //
-      // Every URL webpack and Quasar bake into index.html, sw.js and
-      // manifest.json gets this placeholder instead of a real prefix; the
-      // backend replaces it with config.basePath as it serves those three
-      // files (backend/base-path.js). Anything the app builds at runtime reads
-      // the prefix from window.__KIKO_BASE__ instead -- see src/base-path.js.
-      //
-      // Dev keeps '/': `quasar dev` serves from the root and does not go
-      // through the backend, so there would be nothing to do the swap.
       publicPath: ctx.dev ? '/' : PUBLIC_PATH_TOKEN,
 
       // Output directly to the backend's dist/ so it's served as static content
@@ -126,16 +114,8 @@ module.exports = function (ctx) {
 
     // https://quasar.dev/quasar-cli-webpack/developing-pwa/configuring-pwa
     pwa: {
-      // InjectManifest, not GenerateSW: the offline-download feature needs
-      // service-worker event handlers (Background Fetch), which a generated
-      // worker cannot express. The worker is hand-written in
-      // src-pwa/custom-service-worker.js -- caching routes, navigation
-      // fallback, skipWaiting/clientsClaim all live there now.
       workboxMode: 'InjectManifest',
       extendManifestJson (json) {
-        // Relative to the manifest's own URL, so an installed app scopes itself
-        // to wherever it was installed from. Quasar's default start_url is
-        // build.publicPath, which here is the unresolved placeholder.
         json.start_url = '.'
         json.scope = '.'
       },
@@ -145,10 +125,6 @@ module.exports = function (ctx) {
         opts.exclude = opts.exclude || []
         opts.exclude.push(/manifest\.json$/, /.*.js.map$/)
         if (ctx.dev) {
-          // Webpack's HMR payloads are one-shot and hash-named: precaching them
-          // serves stale hot updates, and their changing names rewrite the
-          // manifest (and so sw.js) on every recompile, firing the "new
-          // version" notification each time.
           opts.exclude.push(/\.hot-update\./)
         }
       },

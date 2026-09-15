@@ -298,16 +298,12 @@ export default {
       required: true
     },
 
-    // Scraped work images (t_work.sample_images); the gallery shows them after
-    // the cover.
     images: {
       type: Array,
       required: false,
       default() { return [] }
     },
 
-    // The parked track's position, already reconciled against the local store by
-    // Work.vue. null until that resolves; the fallback below covers the gap.
     resumeSeconds: {
       type: Number,
       required: false,
@@ -319,8 +315,7 @@ export default {
     return {
       refreshMetadataLoading: false,
       downloadOfflineLoading: false,
-      // { done, total } while a foreground download runs. Null on the background
-      // path, where the browser's own notification carries the progress.
+      // { done, total } while a foreground download runs
       downloadProgress: null,
       userMarked: false,
       rating: 0,
@@ -374,8 +369,7 @@ export default {
     },
 
     // Reconciled against the local store by the parent, so this reads the same
-    // number the file tree shows. Reading metadata.state.seconds directly is
-    // what made the panel and the tree disagree.
+    // number the file tree shows.
     historySeconds() {
       return this.resumeSeconds ?? this.metadata.state?.seconds ?? 0
     },
@@ -398,7 +392,7 @@ export default {
       'isWorkDownloading',
     ]),
 
-    // Three states, not two: a Background Fetch keeps running after this page
+    // Three states: a Background Fetch keeps running after this page
     // is closed, so "downloading" has to be visible on return.
     offlineDownloadLabel () {
       // A foreground download is watched rather than backgrounded, so its

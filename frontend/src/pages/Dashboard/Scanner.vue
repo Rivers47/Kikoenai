@@ -171,10 +171,6 @@
 import NotifyMixin from '../../mixins/Notification.js'
 import { workno } from 'src/utils'
 
-// Mirrors the caps the scanner child applies to its own snapshot. A run over a
-// large library emits tens of thousands of lines and the panel below is not
-// virtualised, so an unbounded tail is a growing DOM on top of a growing array.
-// The complete record is in the scanner's log file, named in the first line.
 const MAX_MAIN_LOGS = 500
 const MAX_TASK_LOGS = 200
 const MAX_FAILED_TASKS = 200
@@ -240,13 +236,6 @@ export default {
       }
     },
 
-    // Every SCAN_* below carries one entry, not the whole accumulated array,
-    // so these handlers append. The old plural events re-sent the entire log on
-    // every line -- quadratic, and on a whole-library refresh it meant
-    // re-rendering this page's un-virtualised log panel over the full results
-    // array once per work. Measured, it never came close to dropping a socket
-    // (526KB at the largest, 2.2ms to parse); it is simply waste, and it is
-    // what made per-line image logging too expensive to add.
     onSCAN_TASK_ADD (payload) {
       if (!this.tasks.some(task => task.rjcode === payload.rjcode)) {
         this.tasks.push({ rjcode: payload.rjcode, result: null, logs: [] })
@@ -279,19 +268,12 @@ export default {
     onSCAN_FINISHED (payload) {
       this.state = 'finished'
       this.tasks = []
-      // mainLogs, not allLogs: allLogs is a computed, and pushing into it wrote
-      // to a cached array that the next delta threw away -- so the line saying
-      // the scan had finished could vanish on the way in.
       push(this.mainLogs, { level: 'info', message: payload.message }, MAX_MAIN_LOGS)
     },
     onSCAN_ERROR () {
       this.state = 'error'
       this.tasks = []
     },
-    // Socket.IO reconnects on its own after a drop; this is what makes the page
-    // catch up afterwards instead of staying frozen on its last line. The
-    // server answers with a fresh snapshot, or with the outcome of a run that
-    // ended while we were away.
     onConnect () {
       this.$socket.emit('ON_SCANNER_PAGE')
     },

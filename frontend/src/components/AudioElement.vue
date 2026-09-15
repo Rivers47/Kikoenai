@@ -216,13 +216,8 @@ export default {
 
   created() {
     this.debouncedPlayLrc = debounce(this.playLrc, 100, true);
-    // Non-reactive: where the loading track should start, until it gets there.
     this._pendingStart = null;
-    // Bumped on every loadLrcFile() call so a slower load for a track the user
-    // has already skipped past cannot apply its lyrics over the current one.
-    // Multi-speaker tracks fetch one file per speaker, which widens the window.
     this._lrcLoadId = 0;
-    // Non-reactive: rebuilt wholesale per track and only ever read by index.
     this._lyricFrames = [];
   },
 
@@ -231,9 +226,6 @@ export default {
 
     onPause() {
       this.playLrc(false)
-      // No _reportTrackProgress() here: PAUSE() flips AudioPlayer's `playing`
-      // state, whose watcher runs onUpdatePlayingStatus, which already reports
-      // this track's progress.
       this.PAUSE()
     },
     onPlaying() {

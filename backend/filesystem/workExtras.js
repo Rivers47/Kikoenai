@@ -1,15 +1,7 @@
 // Sample/description image download and DLsite review scraping.
-//
-// Lives outside scannerModules.js because two callers need it: the scanner
-// child process, and POST /api/refresh/:id in the web process. Requiring
-// scannerModules from a route would drag in the child-process IPC plumbing
-// (it reassigns process.send) and the scan concurrency limiter.
-//
-// The logger is injected so the scanner can route messages to its SCAN_* IPC
-// events while the route just writes to the console.
 
 const fs = require('fs');
-const LimitPromise = require('limit-promise'); // 限制并发数量
+const LimitPromise = require('limit-promise');
 
 const axios = require('../scraper/axios');
 const db = require('../database/db');
@@ -20,9 +12,7 @@ const { isFanzaId, workno } = require('../work-id');
 
 const displayIdOf = id => (isFanzaId(id) ? id : formatID(id));
 
-// A single-work refresh is the user waiting on a button, and it is the only
-// thing running -- unlike a scan, where config.maxParallelism works are already
-// in flight and per-work parallelism would multiply out at img.dlsite.jp.
+// separate limit for single work refresh
 const REFRESH_IMAGE_CONCURRENCY = 4;
 
 const IMAGE_KIND_LABEL = { smp: '预览图', part: '说明图' };
@@ -115,19 +105,8 @@ async function downloadWorkImages(id, metadata, log = consoleLogger, options = {
       + `${reuse.length ? `, 跳过已有 ${reuse.length} 张` : ''})...`);
   }
 
-  // One at a time by default, and the default is what the scanner gets: it
-  // already runs config.maxParallelism works at once, so fetching a work's
-  // images in parallel multiplies out -- 16 works x 10 images was ~160
-  // concurrent requests at img.dlsite.jp, well above the ~48 the cover
-  // downloads ever produced, and enough to get the whole scan rate-limited.
-  // A single-work refresh has nothing to multiply with and passes a real
-  // concurrency instead; images are ~1MB each, so the wait is transfer time.
   const limit = new LimitPromise(Math.max(1, concurrency));
 
-  // Per-image, not just a start and a summary. At concurrency 1 a work with 40
-  // description images is otherwise one silent stall in the middle of a scan,
-  // with nothing to tell a slow download from a hung one -- which is exactly
-  // when someone reaches for the kill button.
   let finished = 0;
   const fetchOne = async (target) => {
     const label = IMAGE_KIND_LABEL[target.kind] || target.kind;
@@ -145,13 +124,10 @@ async function downloadWorkImages(id, metadata, log = consoleLogger, options = {
   const results = [...reuse, ...await Promise.all(fetch.map(target => limit.call(fetchOne, target)))];
 
   if (fetch.length) {
-    // Split by kind: the slider images and the ones embedded in the description
-    // are downloaded together but are worth different things to the user, and a
-    // bare total hides which half failed.
     const stored = kind => results.filter(image => image.file && image.kind === kind).length;
     const wanted = kind => targets.filter(target => target.kind === kind).length;
-    log.info(displayId, `作品图片下载完成: 预览图 ${stored('smp')}/${wanted('smp')}, `
-      + `说明图 ${stored('part')}/${wanted('part')}.`);
+    log.info(displayId, `Work image downloaded: sample ${stored('smp')}/${wanted('smp')}, `
+      + `part ${stored('part')}/${wanted('part')}.`);
   }
 
   // Page order, not fetch order: the stored list doubles as the render order.
@@ -193,10 +169,6 @@ async function saveWorkImages(id, metadata, log = consoleLogger, options = {}) {
 /**
  * Scrapes every DLsite user review of a work and replaces the stored set.
  *
- * Reviews are the one part of the work page that grows without bound, so this
- * runs only where it is asked for: a newly added work, a single-work refresh,
- * or an explicit `--includeReviews` update. Never fatal — a work with no
- * reviews is normal.
  * @param {String} id Work id.
  * @param {Object} [log] Logger with info(id, message) / warn(id, message).
  * @returns {Promise<Number>} Number of reviews stored.

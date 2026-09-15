@@ -45,7 +45,7 @@ export function workImageUrl(workid, image) {
 
 /** The DLsite work page for a work id, on the floor that actually serves it. */
 export function dlsiteWorkUrl(id) {
-  const floor = isBooksId(id) ? 'books' : 'home';
+  const floor = isBooksId(id) ? 'books' : 'maniax';
   return `https://www.dlsite.com/${floor}/work/=/product_id/${workno(id)}.html`;
 }
 
