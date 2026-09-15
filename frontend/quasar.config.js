@@ -1,8 +1,6 @@
 // Configuration for your app
 // https://quasar.dev/quasar-cli-webpack/quasar-config-js
 
-// The server owns the deploy-time URL prefix (config.basePath), so the token it
-// swaps in has to come from there rather than being spelled twice.
 const { PUBLIC_PATH_TOKEN } = require('../backend/base-path')
 
 module.exports = function (ctx) {
@@ -62,16 +60,6 @@ module.exports = function (ctx) {
     build: {
       vueRouterMode: 'history',
 
-      // One build, deployable at the root or under any sub-path.
-      //
-      // Every URL webpack and Quasar bake into index.html, sw.js and
-      // manifest.json gets this placeholder instead of a real prefix; the
-      // backend replaces it with config.basePath as it serves those three
-      // files (backend/base-path.js). Anything the app builds at runtime reads
-      // the prefix from window.__KIKO_BASE__ instead -- see src/base-path.js.
-      //
-      // Dev keeps '/': `quasar dev` serves from the root and does not go
-      // through the backend, so there would be nothing to do the swap.
       publicPath: ctx.dev ? '/' : PUBLIC_PATH_TOKEN,
 
       // Output directly to the backend's dist/ so it's served as static content
@@ -126,27 +114,29 @@ module.exports = function (ctx) {
 
     // https://quasar.dev/quasar-cli-webpack/developing-pwa/configuring-pwa
     pwa: {
-      workboxMode: 'GenerateSW',
+      workboxMode: 'InjectManifest',
       extendManifestJson (json) {
-        // Relative to the manifest's own URL, so an installed app scopes itself
-        // to wherever it was installed from. Quasar's default start_url is
-        // build.publicPath, which here is the unresolved placeholder.
         json.start_url = '.'
         json.scope = '.'
       },
-      extendGenerateSWOptions (opts) {
-        opts.skipWaiting = true
-        opts.clientsClaim = true
+      // Build-time only: what workbox-build puts into the injected precache
+      // manifest. Runtime behaviour does NOT belong here anymore.
+      extendInjectManifestOptions (opts) {
         opts.exclude = opts.exclude || []
         opts.exclude.push(/manifest\.json$/, /.*.js.map$/)
-        opts.navigateFallbackDenylist = opts.navigateFallbackDenylist || []
-        // Unanchored on purpose: under config.basePath the pathname these are
-        // matched against is /prefix/api/..., which an anchored ^\/api\/ would
-        // miss, silently handing API requests the SPA shell when offline.
-        opts.navigateFallbackDenylist.push(
-          /\/api\//,
-          /\/media\//
-        )
+        if (ctx.dev) {
+          opts.exclude.push(/\.hot-update\./)
+        }
+      },
+      // The custom service worker is bundled by esbuild, not webpack/babel --
+      // it is the only part of the app that is. Quasar's default browser
+      // target includes `safari14`, and esbuild refuses to emit destructuring
+      // for Safari 14.0 (a known engine bug it cannot lower), which the
+      // workbox-* packages use throughout. Safari 14.1 fixed that bug, so
+      // raising the floor for this bundle alone is enough. The app's own
+      // target is untouched.
+      extendPWACustomSWConf (esbuildConf) {
+        esbuildConf.target = ['es2022', 'firefox115', 'chrome115', 'safari14.1']
       }
     },
 

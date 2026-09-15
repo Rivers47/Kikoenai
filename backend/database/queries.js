@@ -48,23 +48,33 @@ const makeQueries = (knex) => {
     }
   }
 
+
   /**
-   * Overwrite each history row's state.seconds from t_track_progress, keyed by
-   * the work and the relPath of the track the queue is parked on. PUT
-   * /api/history only fires on play/pause/track-change, so the position it
-   * carries goes stale between writes; t_track_progress is the one updated on
-   * an interval. Rows whose queue item predates relPath handles (no resolvable
-   * trackId, or no progress row yet) keep their stored seconds.
-   *
-   * The lookup is keyed by (work_id, track_key), not track_key alone: a relPath
-   * is only unique inside one work, and plenty of works ship an identically
-   * named file (`01.mp3`, `SE/track01.wav`), so a single-column match let one
-   * work's position overwrite another's.
+   * Setter for track progress
    * @param {String} username
-   * @param {Array<Object>} rows - Rows carrying a JSON `state` string; mutated in place.
-   *   The work id is read from `work_id`, falling back to `id` — getPlayHistory
-   *   selects t_work.id, assembleWorks passes raw t_play_history rows.
+   * @param {{workId?: String, relPaths?: Array<String>}} selector
+   * @returns {Promise<Map>} `${workId}\u0000${relPath}` -> {seconds, completed, observedAt}
    */
+  const trackProgressFor = async (username, { workId, relPaths } = {}) => {
+    const byKey = new Map();
+    if (relPaths && !relPaths.length) return byKey;
+
+    let query = knex('t_track_progress')
+      .select('work_id', 'track_key', 'seconds', 'completed', 'updated_at')
+      .where('user_name', username);
+    if (workId !== undefined) query = query.andWhere('work_id', String(workId));
+    if (relPaths) query = query.whereIn('track_key', relPaths);
+
+    for (const row of await query) {
+      byKey.set(`${row.work_id}\u0000${row.track_key}`, {
+        seconds: row.seconds,
+        completed: !!row.completed,
+        observedAt: row.updated_at,
+      });
+    }
+    return byKey;
+  };
+
   const applyTrackProgressSeconds = async (username, rows) => {
     const progressKey = (workId, trackKey) => `${workId}\u0000${trackKey}`;
     const parsed = [];
@@ -87,15 +97,14 @@ const makeQueries = (knex) => {
     }
     if (!parsed.length) return;
 
-    const progress = await knex('t_track_progress')
-      .select('work_id', 'track_key', 'seconds')
-      .where('user_name', username)
-      .whereIn('track_key', parsed.map(p => p.relPath));
-    const byKey = new Map(progress.map(p => [progressKey(p.work_id, p.track_key), p.seconds]));
+    const byKey = await trackProgressFor(username, { relPaths: parsed.map((p) => p.relPath) });
 
     for (const p of parsed) {
-      if (!byKey.has(p.key)) continue;
-      p.state.seconds = byKey.get(p.key);
+      const hit = byKey.get(p.key);
+      if (!hit) continue;
+      p.state.seconds = hit.seconds;
+      // The client needs this to tell whether its own local row is newer.
+      p.state.secondsObservedAt = hit.observedAt;
       p.row.state = JSON.stringify(p.state);
     }
   };
@@ -298,7 +307,7 @@ const makeQueries = (knex) => {
   });
 
   /**
-   * 更新音声的动态元数据
+   * Update work's metadata
    * @param {Object} work Work object.
    */
   const updateWorkMetadata = (work, options = {}) => knex.transaction(async (trx) => {
@@ -1215,23 +1224,6 @@ const makeQueries = (knex) => {
       .first();
   };
 
-  async function getWorkMemo(work_id) {
-    const work = await knex('t_work')
-      .select('id', 'memo')
-      .where('id', '=', work_id)
-      .first();
-
-    return JSON.parse(work.memo);
-  }
-
-  async function setWorkMemo(work_id, memo) {
-    await knex('t_work')
-      .where('id', '=', work_id)
-      .update({
-        memo: JSON.stringify(memo)
-      });
-  }
-
   /**
    * Reads the scraped work-page extras: description, per-part description
    * structure (incl. the track list) and the sample image list.
@@ -1323,26 +1315,51 @@ const makeQueries = (knex) => {
     });
   }
 
-  // t_track_progress queries (Phase 2)
-  // Keyed by trackId (`workId/relPath`), not by the bare track_key: that is the
-  // one handle the frontend carries on a queue item and in every media URL, so
-  // the client needs no second field to look progress up by.
-  //
-  // `observedAt` goes out so a client holding a local copy can tell which of the
-  // two is newer. It is the same UTC text every other timestamp column uses, so
-  // the existing strftime(..., 'localtime') display path applies unchanged.
+  // t_work_file: a work's local file tree
+  // Written only by the scan paths (see filesystem/workFiles.js).
+  const getWorkFiles = async (work_id) => knex('t_work_file')
+    .select('rel_path', 'duration', 'mtime', 'track_title')
+    .where('work_id', String(work_id));
+
+  /**
+   * Replace a work's file rows and stamp files_indexed_at
+   */
+  const replaceWorkFiles = async (work_id, rows) => {
+    await knex.transaction(async (trx) => {
+      await trx('t_work_file').where('work_id', String(work_id)).del();
+      // Chunked: SQLite caps bound parameters per statement, and a 472-file
+      // work times five columns gets close enough to matter.
+      for (let i = 0; i < rows.length; i += 100) {
+        await trx('t_work_file').insert(rows.slice(i, i + 100));
+      }
+      await trx('t_work').where('id', String(work_id)).update({ files_indexed_at: knex.fn.now() });
+    });
+  };
+
+  /**
+   * Set display names on existing rows, by relPath. Used by
+   * scripts/extract-track-titles.js -- a targeted update rather than
+   * replaceWorkFiles, which would drop rows the extractor never looked at.
+   * @param {Object} titles { relPath: title }
+   * @returns {Promise<Number>} rows actually updated
+   */
+  const setTrackTitles = async (work_id, titles) => {
+    let updated = 0;
+    for (const [relPath, title] of Object.entries(titles || {})) {
+      updated += await knex('t_work_file')
+        .where({ work_id: String(work_id), rel_path: relPath })
+        .update({ track_title: title });
+    }
+    return updated;
+  };
+
+  // t_track_progress queries
   const getTrackProgress = async (username, work_id) => {
-    const rows = await knex('t_track_progress')
-      .select('track_key', 'seconds', 'completed', 'updated_at')
-      .where('user_name', username)
-      .andWhere('work_id', work_id);
+    const byKey = await trackProgressFor(username, { workId: work_id });
     const map = {};
-    for (const row of rows) {
-      map[`${work_id}/${row.track_key}`] = {
-        seconds: row.seconds,
-        completed: !!row.completed,
-        observedAt: row.updated_at,
-      };
+    for (const [key, hit] of byKey) {
+      // key is `${workId}\u0000${relPath}`; the client wants it keyed by trackId.
+      map[key.replace('\u0000', '/')] = hit;
     }
     return map;
   };
@@ -1350,26 +1367,12 @@ const makeQueries = (knex) => {
   /**
    * SQLite's own CURRENT_TIMESTAMP format: UTC, second resolution, as text.
    *
-   * The representation is load-bearing, not cosmetic. `updated_at` already holds
-   * text on every existing row, and SQLite orders *all* integers below *all*
-   * text regardless of value -- so storing epoch milliseconds here would make
-   * every new write compare as older than every old row, and the freshness
-   * guard below would silently reject all of them.
+   * Changing this to other formats would need a db migration.
    */
   const utcStamp = (ms) => new Date(ms).toISOString().replace('T', ' ').slice(0, 19);
 
   /**
    * Write a track's position, newest observation wins.
-   *
-   * `observedAt` (epoch ms) is when the client *measured* the position, not when
-   * the server heard about it. That distinction is the whole point: a write
-   * deferred by an offline outbox arrives late carrying an old observation, and
-   * ordering by arrival time would let it clobber a newer position from another
-   * device -- the stale value would look freshest precisely in the case the
-   * outbox exists to serve.
-   *
-   * Omitting it falls back to server-now, which reproduces the old
-   * unconditional-overwrite behaviour for any client that has not been updated.
    */
   const upsertTrackProgress = async (username, work_id, track_key, seconds, completed, observedAt) => {
     const stamp = utcStamp(observedAt || Date.now());
@@ -1391,10 +1394,13 @@ const makeQueries = (knex) => {
     createUser, updateUserPassword, resetUserPassword, deleteUser,
     getWorksWithReviews, updateUserReview, deleteUserReview, resetUserProgress,
     getPlayHistory, updatePlayHistory, deletePlayHistory,
-    getWorkMemo, setWorkMemo,
     getWorkExtras, setWorkSampleImages,
     replaceWorkDlsiteReviews, getWorkDlsiteReviews,
     getTrackProgress, upsertTrackProgress,
+    // Exported for the projection-agreement test: it and getTrackProgress are
+    // two shapes over trackProgressFor and must never disagree.
+    applyTrackProgressSeconds,
+    getWorkFiles, replaceWorkFiles, setTrackTitles,
   };
 };
 

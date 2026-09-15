@@ -5,28 +5,17 @@ import { basePath } from '../src/base-path'
 // events passes a ServiceWorkerRegistration instance in their arguments.
 // ServiceWorkerRegistration: https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration
 
- 
-// process.env.SERVICE_WORKER_FILE is build.publicPath + the worker's filename,
-// so in production it carries the unresolved placeholder -- only the filename
-// part of it is usable. A worker's scope can never be broader than its own URL,
-// so both the URL and the scope have to name the deploy prefix, or an install
-// under /kikoeru would register a worker that controls nothing.
 const serviceWorkerFile = `${basePath}/${process.env.SERVICE_WORKER_FILE.split('/').pop()}`
 
-// `quasar dev -m pwa` emits a real Workbox worker -- skipWaiting + clientsClaim,
-// precaching index.html, the bundle, even the hot-update files. Every recompile
-// ships a new worker that claims the live page and then answers from that stale
-// snapshot, so the HMR client's hash never matches and the page reloads forever.
-// Unregister rather than merely skip: a worker left behind by an earlier dev
-// session keeps controlling localhost:8080 on its own.
+// No service worker in dev.
+// Offline playback won't work when running with `npm run dev`
+// because AudioElement requests /api/media/offline/... over the network and there is
+// no worker to answer it from the cache. Use a production build for that.
 if (process.env.DEV) {
   navigator.serviceWorker?.getRegistrations()
     .then(registrations => registrations.forEach(registration => registration.unregister()))
 } else {
   register(serviceWorkerFile, {
-    // The registrationOptions object will be passed as the second argument
-    // to ServiceWorkerContainer.register()
-    // https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerContainer/register#Parameter
     registrationOptions: { scope: `${basePath}/` },
 
     ready (/* registration */) {
@@ -53,8 +42,8 @@ if (process.env.DEV) {
       // console.log('No internet connection found. App is running in offline mode.')
     },
 
-    error (/* err */) {
-      // console.error('Error during service worker registration:', err)
+    error (err) {
+      console.error('[kikoenai] service worker registration failed:', err)
     }
   })
 }

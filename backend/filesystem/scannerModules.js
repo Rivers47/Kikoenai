@@ -9,50 +9,62 @@ const { isFanzaId, isBooksId, fanzaCid, workno } = require('../work-id');
 const { scrapeWorkMetadataFromAsmrOne } = require('../scraper/asmrOne');
 const db = require('../database/db');
 const { createSchema } = require('../database/schema');
-const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, scrapeWorkMemo, coverFileName, formatID,
+const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, coverFileName, formatID,
   deleteWorkImagesFromDisk } = require('./utils');
 const workExtras = require('./workExtras');
+const scanLog = require('./scanLog');
+const { rescanWorkFiles } = require('./workFiles');
 const { md5 } = require('../auth/utils');
 const { nameToUUID } = require('../scraper/utils');
 
 const { config } = require('../config');
 const { updateLock } = require('../upgrade');
 
-// 只有在子进程中 process 对象才有 send() 方法.
-// The stub takes the same (message, callback) shape as the real one so callers
-// can await a send unconditionally -- see LOG.finish.
 process.send = process.send || function (message, callback) {
   if (typeof callback === 'function') callback();
   return true;
 };
+
+// uncapped record goes to the log file instead.
+const MAX_MAIN_LOGS = 500;
+const MAX_TASK_LOGS = 200;
+const MAX_FAILED_TASKS = 200;
+const MAX_RESULTS = 500;
 
 const tasks = [];
 const failedTasks = [];
 const mainLogs = [];
 const results = [];
 
+const push = (array, entry, max) => {
+  array.push(entry);
+  if (array.length > max) array.splice(0, array.length - max);
+};
+
 const LOG = {
-  // Returns a promise that settles once SCAN_FINISHED has been flushed to the
-  // parent. process.send() is asynchronous and process.exit() does NOT drain
-  // pending IPC writes, so sending and exiting on the same tick silently drops
-  // the message once there is any backlog -- measured: with ~50 queued messages
-  // the child delivers 6 and loses the rest. The frontend only leaves its
-  // 'running' state on SCAN_FINISHED, and socket.js emits nothing on a zero
-  // exit, so losing it leaves the scanner page stuck on the last line forever.
-  // IPC is ordered, so the last message's callback also implies the backlog
-  // ahead of it went out.
   finish(message) {
     console.log(` * ${message}`);
+    scanLog.write('info', message);
     return new Promise((resolve) => {
       process.send({ event: 'SCAN_FINISHED', payload: { message } }, resolve);
     });
   },
+
+  // Names the log file in the run's first line, so the page tells the user
+  // where the untruncated version lives.
+  open(runName) {
+    const filePath = scanLog.open(runName);
+    if (filePath) this.main.info(`日志文件: ${filePath}`);
+  },
+
   main: {
     __internal__(level, message) {
       console[level]("main log", message);
+      scanLog.write(level, message);
 
-      mainLogs.push({level, message });
-      process.send({ event: 'SCAN_MAIN_LOGS', payload: { mainLogs } });
+      const entry = { level, message };
+      push(mainLogs, entry, MAX_MAIN_LOGS);
+      process.send({ event: 'SCAN_MAIN_LOG', payload: { entry } });
     },
     log(msg) { // default log at level info
       this.__internal__("info", msg);
@@ -72,15 +84,9 @@ const LOG = {
   },
   result: {
     add(rjcode, result, count) {
-      results.push({
-        rjcode,
-        result,
-        count
-      });
-      process.send({
-        event: 'SCAN_RESULTS',
-        payload: { results }
-      });
+      const entry = { rjcode, result, count };
+      push(results, entry, MAX_RESULTS);
+      process.send({ event: 'SCAN_RESULT', payload: { result: entry } });
     }
   },
   task: {
@@ -92,6 +98,7 @@ const LOG = {
         result: null,
         logs: []
       });
+      process.send({ event: 'SCAN_TASK_ADD', payload: { rjcode: taskId } });
     },
 
     // 移除作品的专属log，如果该作品的对应任务失败，则发送相应的失败消息
@@ -105,21 +112,23 @@ const LOG = {
       const removedTask = tasks[index];
       removedTask.result = result;
       tasks.splice(index, 1);
-      process.send({ event: 'SCAN_TASKS', payload: { tasks } });
+      process.send({ event: 'SCAN_TASK_REMOVE', payload: { rjcode: taskId, result } });
 
       if (removedTask.result === 'failed') {
-        failedTasks.push(removedTask);
-        process.send({ event: 'SCAN_FAILED_TASKS', payload: { failedTasks } });
+        push(failedTasks, removedTask, MAX_FAILED_TASKS);
+        process.send({ event: 'SCAN_FAILED_TASK', payload: { task: removedTask } });
       }
     },
     __internal_task__(taskId, level, msg) {
       console.assert(typeof(taskId) === "string" && (taskId.length === 6 || taskId.length === 8 || isFanzaId(taskId) || isBooksId(taskId)));
       console[level](`task[${workno(taskId)}] log`, msg);
+      scanLog.write(level, msg, workno(taskId));
 
       const task = tasks.find(task => task.rjcode === taskId);
       if (task) {
-        task.logs.push({ level, message: msg, });
-        process.send({ event: 'SCAN_TASKS', payload: { tasks } });
+        const entry = { level, message: msg };
+        push(task.logs, entry, MAX_TASK_LOGS);
+        process.send({ event: 'SCAN_TASK_LOG', payload: { rjcode: taskId, entry } });
       }
     },
     log(taskId, msg) { // default log at level info
@@ -158,38 +167,26 @@ process.on('message', (m) => {
   }
 });
 
-// Exit when the server that forked us goes away. Node keeps a child running
-// after the IPC channel closes, so killing only the parent used to leave this
-// process scanning invisibly: its logs go nowhere, and the `scanner` guard in
-// socket.js is in-memory, so a restarted server would let the user start a
-// second scan alongside it. Two scanners then write t_work.memo at once, and
-// setWorkMemo replaces the whole column, so one silently overwrites the other.
 process.on('disconnect', () => process.exit(1));
 
 
-/**
- * 通过数组 arr 中每个对象的 id 属性来对数组去重
- * @param {Array} arr 
- */
-function uniqueFolderListSeparate(arr) {
-  const uniqueList = [];
-  const duplicateSet = {};
-
-  for (let i=0; i<arr.length; i++) {
-    for (let j=i+1; j<arr.length; j++) {
-      if (arr[i].id === arr[j].id) {
-        duplicateSet[arr[i].id] = duplicateSet[arr[i].id] || [];
-        duplicateSet[arr[i].id].push(arr[i]);
-        ++i;
-      }
-    }
-    uniqueList.push(arr[i]);
+// One folder per work id, keeping the last copy found, so no two folders race to
+// insert the same work. duplicateSet maps each duplicated id to the other copies.
+function uniqueFolderListSeparate (folders) {
+  const byId = new Map();
+  for (const folder of folders) {
+    const copies = byId.get(folder.id);
+    if (copies) copies.push(folder);
+    else byId.set(folder.id, [folder]);
   }
 
-  return {
-    uniqueList, // 去重后的数组
-    duplicateSet, // 对象，键为id，值为多余的重复项数组
-  };
+  const uniqueList = [];
+  const duplicateSet = {};
+  for (const [id, copies] of byId) {
+    uniqueList.push(copies[copies.length - 1]);
+    if (copies.length > 1) duplicateSet[id] = copies.slice(0, -1);
+  }
+  return { uniqueList, duplicateSet };
 }
 
 /**
@@ -444,12 +441,7 @@ async function downloadCovers(cover_for_id, types, candidatesFor) {
  * @returns {Promise<String>} 'added' or 'failed'
  */
 async function getFanzaCoverImage(id, types, coverUrls) {
-  const cid = fanzaCid(id); // DMM asset paths use Fanza's own form, e.g. d_215444
-  // The asset path segment varies by content type (digital/voice,
-  // digital/cg_game, ...), so the real cover URL only exists on the work
-  // page. When the caller has no scraped coverUrls (e.g. re-downloading a
-  // missing cover for an already-indexed work), re-scrape the page for them
-  // instead of guessing.
+  const cid = fanzaCid(id);
   if (!coverUrls) {
     try {
       const metadata = await scrapeWorkMetadataFromFanza(id);
@@ -555,13 +547,6 @@ async function processFolder(folder) {
     LOG.task.add(workId);
     LOG.task.info(workId, `发现新文件夹: "${folder.absolutePath}"`);
 
-    LOG.task.info(workId, `扫描音频文件时长`);
-    let memo = await scrapeWorkMemo(
-      workId,
-      folder.absolutePath,
-      { /* 首次添加的作品肯定没有memo，这里设置一个空object作为初始memo */}
-    );
-
     const result = await getMetadata(workId, folder.rootFolderName, folder.relativePath); // 获取元数据
 
     // 如果获取元数据失败，跳过封面图片下载
@@ -569,7 +554,8 @@ async function processFolder(folder) {
       return 'failed';
     }
 
-    await db.setWorkMemo(workId, memo);
+    LOG.task.info(workId, `扫描音频文件时长`);
+    await rescanWorkFiles(workId, folder.absolutePath);
     
     // 不要在乎图片是否下载成功，dlsite上一些老作品已经没有图片了，会下载失败
     // 只要元数据插入成功就行
@@ -578,10 +564,6 @@ async function processFolder(folder) {
       coverResult = await getFanzaCoverImage(workId, coverTypes, result.coverUrls);
     } else {
       coverResult = await getCoverImageForTranslated(workId, coverTypes, result && result.coverUrls);
-      // Sample/description images and user reviews: extra requests, so only on
-      // first add, and only when config.skipWorkExtras is off. Re-run them for
-      // an existing work with `updater.js --images` / `--reviews`, which ignore
-      // the setting.
       if (!workExtras.skipWorkExtras()) {
         await saveWorkImages(workId, result);
         await saveWorkReviews(workId);
@@ -798,6 +780,8 @@ async function tryProcessFolderListParallel(folderList) {
  * createCoverFolder => createSchema => cleanup => getAllFolderList => processAllFolder
  */
 async function performScan() {
+  LOG.open('scan');
+
   if (!fs.existsSync(config.coverFolderDir)) {
     try {
       fs.mkdirSync(config.coverFolderDir, { recursive: true });
@@ -888,6 +872,7 @@ const updateVoiceActorLimited = (id) => limitP.call(updateMetadata, id, { includ
 
  
 async function performUpdate(options = null) {
+  LOG.open('update');
   const baseQuery = db.knex('t_work').select('id');
   const processor = (id) => updateMetadataLimited(id, options);
 
@@ -932,8 +917,7 @@ async function refreshWorks(query, idColumnName, processor) {
   return counts;
 }
 
-// 扫描一个作品的文件夹中的文件信息
-// 例如音频时长、是否包含歌词文件等
+// Re-index one work's folder: its file listing and audio durations.
 async function scanWorkFile(work, index, total) {
   const displayId = isFanzaId(work.id) ? work.id : formatID(work.id);
 
@@ -944,29 +928,20 @@ async function scanWorkFile(work, index, total) {
     if (!rootFolder) return "skipped";
     const absoluteWorkDir = path.join(rootFolder.path, work.dir);
 
-    // work memo, for instance, memorize all audio durations
-    let memo = await scrapeWorkMemo(
-      work.id,
-      absoluteWorkDir,
-      typeof(work.memo) === 'string' 
-      ? JSON.parse(work.memo)
-      : { /* fallback empty object as memo */ }
-    );
-    // console.log('work: ', absoluteWorkDir);
-    // console.log('memo: ', memo);
-    await db.setWorkMemo(work.id, memo);
+    await rescanWorkFiles(work.id, absoluteWorkDir);
 
     return "updated";
   } catch(error) {
-    LOG.main.error(`[${displayId}] 扫描歌词过程中发生错误：${error}`);
+    LOG.main.error(`[${displayId}] Failed to scan work files: ${error}`);
     console.error(error.stack);
     return "failed";
   }
 }
 const scanWorkFileLimited = (work, index, total) => limitP.call(scanWorkFile, work, index, total);
 async function performWorkFileScan() {
+  LOG.open('files');
   LOG.main.info(`扫描本地文件开始`);
-  const works = await db.knex('t_work').select('id', "root_folder", "dir", "memo");
+  const works = await db.knex('t_work').select('id', "root_folder", "dir");
   LOG.main.info(`总计 ${works.length} 个作品`);
 
   const results = await Promise.all(works.map((work, index) => scanWorkFileLimited(work, index, works.length)));
@@ -984,4 +959,4 @@ async function performWorkFileScan() {
   process.exit(0);
 }
 
-module.exports = { performScan, performUpdate, performWorkFileScan };
+module.exports = { performScan, performUpdate, performWorkFileScan, LOG };

@@ -51,7 +51,8 @@ const path = require('path');
 const Knex = require('knex');
 const db = require(path.join(__dirname, '..', 'database', 'db'));
 const { config } = require(path.join(__dirname, '..', 'config'));
-const { getTrackList, formatID } = require(path.join(__dirname, '..', 'filesystem', 'utils'));
+const { formatID } = require(path.join(__dirname, '..', 'filesystem', 'utils'));
+const { listWorkTracks } = require(path.join(__dirname, '..', 'filesystem', 'workFiles'));
 
 // Same threshold the player uses to call a track finished.
 const COMPLETE_RATIO = 0.95;
@@ -156,7 +157,7 @@ async function runImport({
     summary.historyRows = oldRows.length;
 
     // Index the current library once: work row + resolved absolute directory.
-    const workRows = await dbApi.knex('t_work').select('id', 'title', 'root_folder', 'dir', 'memo');
+    const workRows = await dbApi.knex('t_work').select('id', 'title', 'root_folder', 'dir');
     const works = new Map(workRows.map(w => [w.id, w]));
 
     const existingProgress = new Set(
@@ -193,16 +194,9 @@ async function runImport({
       }
       const workDir = path.join(rootFolder.path, work.dir);
 
-      let memo;
-      try {
-        memo = work.memo ? JSON.parse(work.memo) : {};
-      } catch {
-        memo = {};
-      }
-
       let tracks;
       try {
-        tracks = (await getTrackList(workId, workDir, memo))
+        tracks = (await listWorkTracks(workId, workDir, { dbApi }))
           .filter(t => !NON_AUDIO_EXT.has(t.ext));
       } catch (err) {
         summary.worksFailed++;

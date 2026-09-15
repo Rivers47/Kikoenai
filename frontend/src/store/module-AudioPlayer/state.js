@@ -63,10 +63,6 @@ export default function () {
     // 注意android chrome不支持画中画，firefox估计也不支持，因此在android设备上禁用这一功能
     enablePIPLyrics: LocalStorage.has(ENABLE_PIP_LYRICS) && LocalStorage.getItem(ENABLE_PIP_LYRICS) && !(navigator.userAgent.toLowerCase().indexOf('android') > -1), 
 
-    // 当从历史记录播放时，这里记录当前queue[queueIndex]应当恢复到的seconds时间，
-    // -1表示无需恢复，其他大于等于0的数字需要在onCanplay时间触发并完成时间跳转之后，再次设置为-1
-    resumeHistorySeconds: -1,
-
     // 是否切换回旧式的作品卡片，某些人需要直接展示所有tag，保留旧式UI的选项
     oldWorkCardUIStyle: LocalStorage.has(OLD_WORK_CARD_UI_STYLE_KEY) && LocalStorage.getItem(OLD_WORK_CARD_UI_STYLE_KEY),
 

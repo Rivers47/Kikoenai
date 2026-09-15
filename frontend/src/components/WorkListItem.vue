@@ -58,7 +58,14 @@
         </div>
       </q-item-label>
     </q-item-section>
-  </q-item>   
+
+    <!-- Trailing actions/info supplied by the parent (e.g. the Downloads page
+         hangs size + play/remove buttons here). Buttons inside must use
+         @click.stop -- the item itself is a router link. -->
+    <q-item-section side v-if="$slots.side">
+      <slot name="side"></slot>
+    </q-item-section>
+  </q-item>
 </template>
 
 <script>
@@ -82,6 +89,11 @@ export default {
       type: Boolean,
       default: true
     },
+    // Optional cover source override -- see Cover's prop of the same name.
+    coverUrl: {
+      type: String,
+      default: ''
+    },
   },
 
   methods: {
@@ -90,6 +102,7 @@ export default {
 
   computed: {
     samCoverUrl () {
+      if (this.coverUrl) return this.coverUrl
       return this.metadata.id ? apiUrl(`/api/cover/${this.metadata.id}?type=sam`) : ""
     },
   }

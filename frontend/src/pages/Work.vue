@@ -1,6 +1,6 @@
 <template>
   <div>
-    <WorkDetails :metadata="metadata" :images="extras.sampleImages" @reset="requestData()" @resumeHistory="resumeMetadataPlayHistory" />
+    <WorkDetails :metadata="metadata" :images="extras.sampleImages" :resumeSeconds="resumeSeconds" @reset="requestData()" @resumeHistory="resumeMetadataPlayHistory" />
     <!-- <WorkQueue :queue="tracks" :editable="false" /> -->
 
     <!-- Tabs only appear once there is a second thing to show. A work with no
@@ -43,6 +43,8 @@ import WorkDetails from 'components/WorkDetails'
 import WorkTree from 'components/WorkTree'
 import WorkDescription from 'components/WorkDescription'
 import NotifyMixin from '../mixins/Notification.js'
+import { sendOrQueue } from '../utils/outbox'
+import { positionsForWork, mergePositions, resumeSecondsFor } from '../utils/positions'
 
 export default {
   name: 'Work',
@@ -65,6 +67,7 @@ export default {
       },
       tree: [],
       trackProgress: {},
+      resumeSeconds: null,
       extras: { description: '', descriptionHtml: '', descriptionParts: [], sampleImages: [] },
       tab: 'files',
     }
@@ -103,6 +106,7 @@ export default {
         this.metadata = response.data
         // Do not auto-resume playback history on page load; the user must
         // explicitly click the "Resume History" button (see WorkDetails.vue).
+        await this.resolveResumeSeconds();
       } catch (error ) {
         if (error.response) {
           // 请求已发出，但服务器响应的状态码不在 2xx 范围内
@@ -118,16 +122,48 @@ export default {
         const response = await this.$axios.get(`/api/tracks/${this.workid}`);
         this.tree = response.data.tree || response.data;
         this.trackProgress = response.data.trackProgress || {};
-        // trackProgress is keyed by trackId, the same handle every node and
-        // queue item carries, so progress badges paint on first render with no
-        // second lookup key.
       } catch (error) {
         if (error.response) {
-          // 请求已发出，但服务器响应的状态码不在 2xx 范围内
           this.showErrNotif(error.response.data.error || `${error.response.status} ${error.response.statusText}`)
         } else {
           this.showErrNotif(error.message || error)
         }
+      }
+
+      try {
+        const { merged, localNewer } = mergePositions(
+          this.trackProgress,
+          await positionsForWork(this.workid)
+        );
+        this.trackProgress = merged;
+        this.pushLocallyNewerPositions(localNewer, merged);
+      } catch (err) {
+        // A failed local read must not cost us the server's answer.
+        console.error('local position read failed:', err);
+      }
+    },
+
+    pushLocallyNewerPositions (trackIds, progress) {
+      for (const trackId of trackIds) {
+        const row = progress[trackId];
+        if (!row) continue;
+        sendOrQueue(this.$axios, {
+          method: 'PUT',
+          url: `/api/track-progress/${trackId}`,
+          body: {
+            seconds: row.seconds,
+            completed: !!row.completed,
+            observedAt: row.observedAt
+          }
+        });
+      }
+    },
+
+    async resolveResumeSeconds() {
+      try {
+        this.resumeSeconds = await resumeSecondsFor(this.workid, this.metadata.state);
+      } catch (err) {
+        console.error('resume reconciliation failed:', err);
       }
     },
 
@@ -136,8 +172,6 @@ export default {
         const response = await this.$axios.get(`/api/work/${this.workid}/extras`);
         this.extras = response.data;
       } catch (error) {
-        // Non-fatal: the description is an extra, and the page is perfectly
-        // usable as the file tree it has always been.
         if (error.response) {
           this.showErrNotif(error.response.data.error || `${error.response.status} ${error.response.statusText}`)
         } else {
@@ -153,13 +187,6 @@ export default {
     },
 
     resumeMetadataPlayHistory() {
-      // Position comes from state.seconds, which GET /api/work/:id resolved
-      // from t_track_progress -- the same value the "played to" line shows.
-      // Not this.trackProgress: it only arrives with GET /api/tracks/:id, which
-      // lists the work directory and so resolves after the metadata request
-      // that renders this button, so the lookup missed and resumed at 0.
-      // -1 is the "nothing to resume" sentinel for rows with no position yet.
-
       // 以最小化形式打开播放器
       this.$store.commit('AudioPlayer/TOGGLE_HIDE')
       this.$store.commit('AudioPlayer/SET_QUEUE', {
@@ -168,7 +195,7 @@ export default {
         queue: this.metadata.state.queue,
         index: this.metadata.state.index,
         resetPlaying: false,
-        resumeHistorySeconds: this.metadata.state.seconds ?? -1,
+        resumeHistorySeconds: this.resumeSeconds ?? this.metadata.state.seconds ?? -1,
         workLastTrackId: this.metadata.state.queue.length ? this.metadata.state.queue[this.metadata.state.queue.length - 1].trackId : ''
       })
     }

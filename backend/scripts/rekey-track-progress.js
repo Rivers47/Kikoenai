@@ -25,7 +25,7 @@ const zlib = require('zlib');
 const path = require('path');
 const db = require(path.join(__dirname, '..', 'database', 'db'));
 const { config } = require(path.join(__dirname, '..', 'config'));
-const { getTrackList } = require(path.join(__dirname, '..', 'filesystem', 'utils'));
+const { listWorkTracks } = require(path.join(__dirname, '..', 'filesystem', 'workFiles'));
 
 // A key the migration left behind: 8 lowercase hex digits. A relPath cannot look
 // like one, because a tracked file always carries an extension.
@@ -84,7 +84,7 @@ async function run({ dryRun = false, purge = false, log = console.log, dbApi = d
     const workDir = path.join(rootFolder.path, work.dir);
     let tracks;
     try {
-      tracks = await getTrackList(workId, workDir, {});
+      tracks = await listWorkTracks(workId, workDir, { dbApi });
     } catch (err) {
       log(`  work ${workId}: cannot list files (${err.message}), skipping ${workRows.length} rows`);
       unresolved += workRows.length;

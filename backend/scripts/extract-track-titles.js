@@ -1,5 +1,5 @@
 /*
- * Fill in memo.trackTitles for works whose audio files are named "01.mp3",
+ * Fill in t_work_file.track_title for works whose audio files are named "01.mp3",
  * "#2.wav" and the like, by extracting the track list out of the scraped
  * DLsite description.
  *
@@ -7,7 +7,7 @@
  * endpoint, which most deployments will not have, and it is only useful for the
  * small minority of works whose filenames carry no titles. Nothing in the
  * server imports it. The server side is just the storage contract --
- * memo.trackTitles = { relPath: title } -- which getTrackList reads and the
+ * t_work_file.track_title, keyed by relPath -- which the file listing reads and the
  * work tree renders as `trackTitle || title`.
  *
  * Configuration is env only, never config.json: routes/config.js strips just
@@ -41,7 +41,8 @@ const { hideBin } = require('yargs/helpers');
 
 const db = require('../database/db');
 const { config } = require('../config');
-const { getTrackList, formatID } = require('../filesystem/utils');
+const { formatID } = require('../filesystem/utils');
+const { listWorkTracks } = require('../filesystem/workFiles');
 const { isFanzaId, canonicalizeWorkId } = require('../work-id');
 
 const argv = yargs(hideBin(process.argv))
@@ -353,7 +354,7 @@ async function run() {
   if (workId !== argv.workId) console.log(`(${argv.workId} -> ${workId})`);
 
   const work = await db.knex('t_work')
-    .select('id', 'title', 'root_folder', 'dir', 'memo', 'description', 'description_parts')
+    .select('id', 'title', 'root_folder', 'dir', 'description', 'description_parts')
     .where('id', workId)
     .first();
 
@@ -375,8 +376,7 @@ async function run() {
     throw new Error(`Work ${workId} has no stored description. Scrape it first: POST /api/refresh/${workId}`);
   }
 
-  const memo = work.memo ? JSON.parse(work.memo) : {};
-  const existing = Object.keys(memo.trackTitles || {}).length;
+  const existing = (await db.getWorkFiles(work.id)).filter((row) => row.track_title).length;
   if (existing && !argv.force) {
     throw new Error(`Work ${workId} already has ${existing} track titles. Pass --force to overwrite.`);
   }
@@ -384,8 +384,8 @@ async function run() {
   const rootFolder = config.rootFolders.find(rf => rf.name === work.root_folder);
   if (!rootFolder) throw new Error(`Root folder "${work.root_folder}" is not configured.`);
 
-  // Third arg is the memo: getTrackList reads duration/contentHash/trackTitles off it.
-  const tracks = await getTrackList(work.id, path.join(rootFolder.path, work.dir), memo);
+  // From t_work_file, which already carries duration and any track titles.
+  const tracks = await listWorkTracks(work.id, path.join(rootFolder.path, work.dir));
   const audio = tracks.filter(t => AUDIO_EXT.includes(t.ext));
   if (!audio.length) throw new Error(`Work ${workId} has no audio files on disk.`);
 
@@ -432,14 +432,13 @@ async function run() {
     return;
   }
 
-  // Key by relPath, matching memo.duration and memo.mtime.
+  // Keyed by relPath, which is what t_work_file rows key on.
   const byRelPath = {};
   for (const t of audio) {
     if (accepted[t.title]) byRelPath[t.shortFilePath] = accepted[t.title];
   }
-  memo.trackTitles = { ...(memo.trackTitles || {}), ...byRelPath };
-  await db.setWorkMemo(work.id, memo);
-  console.log(`  wrote ${Object.keys(byRelPath).length} titles`);
+  const written = await db.setTrackTitles(work.id, byRelPath);
+  console.log(`  wrote ${written} titles`);
 }
 
 run()

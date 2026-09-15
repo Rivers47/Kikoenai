@@ -1,0 +1,17 @@
+export default {
+  title: 'ダウンロード',
+  storageUsed: '{used} / {quota} 使用中',
+  totalDownloaded: '{size} ダウンロード済み',
+  empty: 'ダウンロードはまだありません',
+  trackCount: 'トラック {count} 個',
+  lyricCount: '歌詞 {count} 個',
+  playAll: 'すべて再生',
+  showTracks: 'トラックを表示',
+  hideTracks: 'トラックを隠す',
+  removeWork: 'ダウンロードを削除',
+  removeWorkConfirm: '「{title}」のローカルファイルをすべて削除しますか？',
+  sortBy: '並び替え',
+  sortDownloadedAt: 'ダウンロード日時',
+  sortTitle: 'タイトル',
+  sortSize: 'ファイルサイズ',
+}

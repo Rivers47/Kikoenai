@@ -48,6 +48,7 @@ backend/config
 backend/sqlite
 backend/covers
 backend/images
+backend/logs
 
 # Media: the default library mount point.
 # On a developer machine it holds real voice works.

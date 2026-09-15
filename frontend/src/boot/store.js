@@ -1,18 +1,14 @@
 import { boot } from 'quasar/wrappers'
-import { createStore } from 'vuex'
+import createStore from '../store'
 
-import AudioPlayer from '../store/module-AudioPlayer'
-import User from '../store/module-User'
-
+// @quasar/app-webpack v4 dropped Vuex support -- its store provider only ever
+// auto-installs a Pinia store from src/stores/, so `hasStore` is false and
+// src/store/index.js is never wired up by the framework. The store therefore
+// has to be created and installed here.
+//
+// Register new Vuex modules in src/store/index.js, NOT in this file: keeping a
+// second module list here is how the Downloads module ended up missing from
+// the live store while looking registered.
 export default boot(({ app }) => {
-  const store = createStore({
-    modules: {
-      AudioPlayer,
-      User
-    },
-     
-    strict: process.env.DEV
-  })
-
-  app.use(store)
+  app.use(createStore())
 })

@@ -120,7 +120,7 @@ SQLite3 via Knex.js with the following tables:
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
-| `t_work` | Voice works (audio albums) | `id` (TEXT — see id note below), `title`, `dir`, `circle_id`, `nsfw`, `release`, `dl_count`, `price`, `rate_average_2dp`, `memo` (JSON), `description` (**markup** as scraped; plain text on older rows and from the JSON fallback), `description_parts` (JSON), `sample_images` (JSON) |
+| `t_work` | Voice works (audio albums) | `id` (TEXT — see id note below), `title`, `dir`, `circle_id`, `nsfw`, `release`, `dl_count`, `price`, `rate_average_2dp`, `description` (**markup** as scraped; plain text on older rows and from the JSON fallback), `description_parts` (JSON), `sample_images` (JSON) |
 | `t_circle` | Circles (artist groups) | `id` (UUID), `name` |
 | `t_tag` | Tags | `id` (UUID), `name` |
 | `t_va` | Voice actors | `id` (UUID v5), `name` |
@@ -137,6 +137,7 @@ SQLite3 via Knex.js with the following tables:
 | `t_user` | Users | `name` (PK), `password`, `group` |
 | `t_review` | Reviews & progress | `user_name`, `work_id`, `rating`, `review_text`, `progress` |
 | `t_play_history` | Playback state | `user_name`, `work_id`, `state` (JSON) |
+| `t_work_file` | A work's file listing, so a request never walks the filesystem (§2.9-0) | `work_id`, `rel_path` (PK), `duration`, `mtime`, `track_title` |
 | `t_dlsite_review` | Scraped DLsite user reviews | `id` (DLsite `member_review_id`), `work_id`, `rate`, `review_title`, `review_text`, `genres` (JSON) |
 
 **Work id / label id note (since migration `20260802000000`):** `t_work.id` and all `work_id` foreign keys are **TEXT**. A DLsite doujin work id is stored already RJ-padded (`'123456'` 6-digit, or `'01134567'` 8-digit — matching `formatID`), so the work URL `/work/123456` shows the original RJ id directly; a DLsite **books** work id keeps its prefix, `'BJ635795'`; a Fanza (DMM doujin) work id is the content-id **without its underscore**, `'d215444'` (migration `20260828000000`; DMM writes it `d_215444`). The prefix distinguishes the source — there is no separate source column. **`RJ` is stripped because it is implicit; `BJ` is not, and dropping it would collide `BJ635795` with `RJ635795`.** `work-id.js` owns the helpers: `isFanzaId`, `isBooksId`, `canonicalizeWorkId` (`d_215444` → `d215444`, `bj…` → `BJ…`), `fanzaCid` (back to DMM's form), and `workno` (the prefixed spelling each store uses in URLs and asset file names — the single source for `RJ…`/`BJ…`/`d_…`). **All** label ids (circle/tag/va/illustrator/script_writer/series/author) are name-based UUIDs (TEXT PK) resolved by `resolveLabel` in `queries.js`; DLsite RG/genre/SRI ids scraped from the storefront are no longer used as DB ids, and a label shared across DLsite + Fanza merges into one row.
@@ -243,12 +244,24 @@ Covered by `test/base-path.js`.
 
 Scanning runs in a **child process** (`child_process.fork`) for isolation:
 
-1. **Socket.IO** in `socket.js` listens for client events: `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_LYRIC_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`.
+1. **Socket.IO** in `socket.js` listens for client events: `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_WORK_FILE_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`.
 2. It forks the appropriate scanner script (`scanner.js`, `updater.js`, or `workFileScanner.js`); each child is bound to `scannerModules.js`.
-3. The child process communicates via `process.send()` with events: `SCAN_INIT_STATE`, `SCAN_TASKS`, `SCAN_FAILED_TASKS`, `SCAN_MAIN_LOGS`, `SCAN_RESULTS`, `SCAN_FINISHED`, `SCAN_ERROR`. The parent relays any `m.event` it receives from the child to all connected clients via `io.emit(m.event, m.payload)`.
+3. The child process communicates via `process.send()`; the parent relays any `m.event` it receives to all connected clients via `io.emit(m.event, m.payload)`. The event list is in §7.
 4. `scannerModules.js` contains the heavy lifting: reading directories, parsing file structures, scraping DLsite, and upserting into the DB.
 
-Only one scanner process can run at a time (guarded by `scanner` variable in `socket.js`).
+Only one scanner process can run at a time (guarded by `scanner` variable in `socket.js`; all three `PERFORM_*` handlers go through the one `startScanner` helper).
+
+**Progress events carry one entry each, never the accumulated array.** The original events (`SCAN_MAIN_LOGS`, `SCAN_TASKS`, `SCAN_RESULTS`, `SCAN_FAILED_TASKS`, all plural) re-sent the *entire* accumulated array on every single line, which is quadratic in the number of lines. **Which runs this actually hurt is worth knowing, because it is not the one you would guess:** `performScan` calls `LOG.main` a constant ~8 times and only adds a result for non-skipped works, so a scan is fine. It is `PERFORM_UPDATE` (a result per work, so the array grows to the whole library) and `PERFORM_WORK_FILE_SCAN` (`扫描进度：i/total` per work) that push a library's worth of entries through the channel N times over. Deltas keep each message the size of its own line, which is also what makes per-image logging affordable.
+
+The three pieces that keep it that way:
+
+- **Deltas.** `SCAN_MAIN_LOG` / `SCAN_TASK_ADD` / `SCAN_TASK_LOG` / `SCAN_TASK_REMOVE` / `SCAN_FAILED_TASK` / `SCAN_RESULT` each carry their own entry. The frontend appends.
+- **A bounded snapshot.** `SCAN_INIT_STATE` is the one event carrying accumulated state, and it is sent on every page load *and* every reconnect — so the child keeps only a tail (`MAX_MAIN_LOGS` 500, `MAX_TASK_LOGS` 200, `MAX_FAILED_TASKS` 200, `MAX_RESULTS` 500 in `scannerModules.js`). `Scanner.vue` mirrors the same caps, since its log panel is not virtualised.
+- **A log file.** `filesystem/scanLog.js` writes the complete, uncapped run to `dataRoot/logs/scan-<timestamp>-<run>.log` (`scan` / `update` / `files`), keeping the last 10 runs. `LOG.open(runName)` starts it and prints the path as the run's first line, so the page names where the untruncated version lives. Writes go through a bare fd with `writeSync` on purpose: a scan ends in `process.exit()`, which does not drain a `WriteStream`, and the tail of a long run is exactly the part worth keeping. Every failure path is swallowed — a read-only data root must not stop a scan.
+
+**The scan outcome outlives the socket.** `socket.js` remembers the last `SCAN_FINISHED`/`SCAN_ERROR` in `lastScanEvent` and replays it when `ON_SCANNER_PAGE` arrives with no scanner running; `Scanner.vue` re-emits that on Socket.IO's `connect`, so a reconnect resyncs. **A multi-hour scan only needs the socket to drop once**, from any cause — a suspended laptop, a locked phone, a wifi handover, a proxy reload — and Socket.IO reconnects with a *fresh* socket that missed the terminal event. There is no total connection time limit to work around (verified against `engine.io` 6.6.9: `pingInterval` 25s / `pingTimeout` 20s, client side 45s since the last packet; `connectTimeout` 45s and `upgradeTimeout` 10s cover only the handshake and the polling→WebSocket upgrade; nothing caps a socket's lifetime). The heartbeat is also real traffic every 25s, so a *quiet* scan cannot idle out of an nginx `proxy_read_timeout` either. The gap was purely that nothing resynced after a reconnect. A clean child exit whose `SCAN_FINISHED` never made it out (see `LOG.finish`) synthesises one, and `KILL_SCAN_PROCESS` with no live scanner answers the same way instead of throwing on `null` — which used to take the server down with it.
+
+> **A page stuck on `running` is not always the page's fault.** The scan can genuinely never finish: `retryGet` (`scraper/axios.js`) arms its cancel-token timeout around `axios.get`, which with `responseType: 'stream'` resolves as soon as **headers** arrive — so `clearTimeout` fires before a single body byte is read, and `saveWorkImageToDisk` then pipes the stream with no timeout at all. A remote that accepts, sends headers and stalls hangs that promise forever, holds its `limitP` slot, and with `config.maxParallelism` of them the run stops without ever reaching `LOG.finish`. The per-image log lines are the diagnostic: a hung run stops mid-count and the log file names the file and URL it died on.
 
 ### 2.6 Scraping (`scraper/`)
 
@@ -278,6 +291,7 @@ All routes mounted under `/api`:
 
 ### 2.8 Media Streaming (`routes/media.js`)
 
+- **Resolution is a database lookup, not a directory walk** — `resolveTrack` reads `t_work_file` (§2.9-0). It is on every media request, so this was the single largest filesystem cost in the app.
 - Audio files are streamed using `fs.createReadStream` with range request support (206 Partial Content for seeking).
 - Cover images served from `covers/` directory.
 - File listing traverses the work directory and returns track info (name, duration, format).
@@ -311,22 +325,52 @@ Covered by `test/lyric-discovery.js`. To diagnose a real folder — which files
 match, which are orphaned and why, and whether each one parses — run
 `npm run check:lyrics -- <folder>` from the repo root.
 
-### 2.9a Writing `t_work.memo`
+### 2.9-0 The file listing lives in the database (`t_work_file`)
 
-`setWorkMemo` replaces the **whole** JSON column, so anything that builds a memo must spread the old one first. The keys are written by different producers and none of them knows about the others: `duration`/`mtime`/`isContainLyric` by `scrapeWorkMemo` (scan and `POST /api/scan/:id`), `trackTitles` by `scripts/extract-track-titles.js`. `scrapeWorkMemo` used to start from a bare `{ duration, isContainLyric, mtime }`, so every rescan silently wiped the extracted track titles.
+A work's file list used to be rebuilt by walking the folder **on every request**. `getTrackList` walks, and `resolveTrack` (`routes/utils/track.js`) calls it — so every stream, download, `check-lrc` and track-progress write cost a directory walk, not just the work page. On a network mount that is latency × file count, on works that run to hundreds of files.
 
-**Every memo map is keyed by relPath, and so is everything else.** `duration`, `mtime` and `trackTitles` all use it, `trackId` is `${workId}/${relPath}`, and `t_track_progress.track_key` holds the relPath alone. Both places that build a relPath — `getTrackList` and `scrapeWorkMemo` — normalize the platform separator to `/`; **change one and you must change the other**, or a Windows server writes memo keys the track list cannot look up.
+It now comes from `t_work_file`, keyed `(work_id, rel_path)`. Measured on a 43-file work: first read 1 walk, every read after it **0**, and five media requests **0** where it used to be one each.
 
-> **Removed: the content hash.** `memo.contentHash` held a CRC32 per file and `t_track_progress` was keyed by it, on the theory that a rename should not lose a position. It was deleted in migration `20260912000000` because it never bought that: its own cache was invalidated by mtime, so a content change that preserved mtime left a stale hash forever — the hash inherited mtime's trust level while costing a full read of every audio byte on the first open of a work. It also made *global* content identity a liability rather than a feature, since reused SE/BGM/trial tracks are byte-identical across works and one work's position could overwrite another's (which is why the progress lookup is compound `(work_id, track_key)` — still necessary, as two works can share a relPath too). Deleting it removed `scrapeWorkHashes`, a load-bearing ordering constraint between it and `scrapeWorkMemo`, and the hash-warming passes in `scanWork`/`scanWorkFile` (`filesystem/scannerModules.js`). The accepted trade-off is that renaming or moving a file loses that track's position; `memo.trackTitles` already exists so display names need no renaming on disk. `scripts/rekey-track-progress.js` is the opt-in recovery tool for rows the migration could not convert, and is the only place CRC32 still lives.
+**`filesystem/workFiles.js` is the only way in.** It returns exactly the shape `getTrackList` returns, so nothing below it changed:
 
-### 2.9b Track Titles (`memo.trackTitles`)
+| function | for |
+|---|---|
+| `listWorkTracks(workId, workDir, {indexedAt, dbApi})` | the read path — routes and scripts |
+| `indexWorkFiles` | the lazy one-off index: walks, but **never probes** — ffprobe belongs to a scan, not a request |
+| `rescanWorkFiles` | all three scan paths — walk, probe what changed, relist, in one step, so a scan cannot refresh one and forget the other |
 
-Works whose audio files are named `01.mp3` / `#2.wav` show only the filename. `t_work.memo.trackTitles` maps **relPath → display name**, exactly like `memo.duration` and `memo.mtime`:
+Every entry point takes an optional `dbApi` (defaulting to the live database), the same convention `scripts/backfill-progress.js` uses, so tests inject an in-memory knex.
 
-- `getTrackList` (`filesystem/utils.js`) merges it onto audio files as **`trackTitle`**, next to the existing duration merge. `toTree` carries it onto the audio node.
+- **`getTrackList` is still the filesystem walker** — it is just no longer on the request path. Only the scan paths and the one-off indexing call it.
+- **Ordering must not drift.** The rows carry `rel_path` only; `title`/`subtitle`/`ext` derive from it, and the list is sorted with the *same* `natural-orderby` comparator `getTrackList` uses. It decides the order of every file tree in the UI, so `test/work-file-listing.js` asserts the two produce an identical sequence. Change one comparator, change both.
+- **`files_indexed_at` on `t_work`, not a row count.** NULL means never indexed, so the first read walks once and persists — exactly what every read did before — and a genuinely empty work is not re-walked forever.
+- **A plain walk never overwrites a duration or a title with NULL.** They cost an ffprobe and a model call respectively, so `indexWorkFiles` carries forward whatever the existing row held for any path still present. Only a scan sets them.
+- **Row writes are one transaction** (`replaceWorkFiles`): delete, insert chunked at 100 rows (SQLite's bound-parameter cap), stamp `files_indexed_at`. A half-written listing would otherwise read as complete.
+
+> **A file deleted on disk stays listed until the next scan, and playing it 404s.** Previously it silently vanished from the tree. This is the deliberate trade for not touching the filesystem on reads — the "scan file changes" button is the fix. A work whose folder is *unmounted* now lists its tracks and 404s on play, where before the tree was empty.
+
+Migration `20260913000000` seeds the table from `memo` — pure data movement, **no filesystem access** — and leaves `files_indexed_at` NULL so each work completes its own listing on first read. Memo covers audio only (`scrapeWorkMemo` filters to `supportedMediaExtList`), which is why the completion walk is needed for lyrics, images and PDFs. Measured on a real library: 30,476 rows across 1,804 works in 4s, every duration preserved.
+
+### 2.9a Per-file facts: `t_work_file`, not `t_work.memo`
+
+`duration`, `mtime` and `track_title` are **columns on the row they describe** (§2.9-0). `t_work.memo` is gone — dropped in migration `20260914000000` after `20260913000000` moved its three live keys onto the rows. Its fourth key, `isContainLyric`, was written on every scan and read by nothing, so it simply went.
+
+**Everything is keyed by relPath.** `t_work_file.rel_path`, `t_track_progress.track_key`, and the tail of a `trackId` (`${workId}/${relPath}`) are all the same string. It is normalized to forward slashes at the one place it is built (`getTrackList`), so a Windows server keys a file the same way a Linux one does.
+
+**Durations are the expensive thing, and `mtime` is the invalidation key.** `probeAudioDurations` (`filesystem/utils.js`) runs ffprobe — one subprocess per audio file — only where a file's mtime no longer matches what the row recorded. It takes the previously known values and hands the new ones back; storage is `filesystem/workFiles.js`'s job. The mtime test is deliberately separate from "this row has no duration": a file may simply have failed ffprobe, which says nothing about its contents, and folding the two together would re-probe it on every scan forever.
+
+**`getTrackList` is a pure walker.** No memo parameter, no duration or track-title merge — those come from the rows. Keeping storage out of the walker is what allowed the request path to stop touching the filesystem at all.
+
+> **Removed: the content hash.** `memo.contentHash` held a CRC32 per file and `t_track_progress` was keyed by it, on the theory that a rename should not lose a position. It was deleted in migration `20260912000000` because it never bought that: its own cache was invalidated by mtime, so a content change that preserved mtime left a stale hash forever — the hash inherited mtime's trust level while costing a full read of every audio byte on the first open of a work. It also made *global* content identity a liability rather than a feature, since reused SE/BGM/trial tracks are byte-identical across works and one work's position could overwrite another's (which is why the progress lookup is compound `(work_id, track_key)` — still necessary, as two works can share a relPath too). The accepted trade-off is that renaming or moving a file loses that track's position; `track_title` exists so display names need no renaming on disk. `scripts/rekey-track-progress.js` is the opt-in recovery tool for rows that migration could not convert, and is the only place CRC32 still lives.
+
+### 2.9b Track Titles (`t_work_file.track_title`)
+
+Works whose audio files are named `01.mp3` / `#2.wav` show only the filename. `t_work_file.track_title` is the display name for the row's file, written out-of-band by `scripts/extract-track-titles.js` through `db.setTrackTitles` — a targeted update rather than `replaceWorkFiles`, which would drop rows the extractor never looked at:
+
+- `filesystem/workFiles.js` exposes it on a track as **`trackTitle`**, alongside `duration`. `toTree` carries it onto the audio node.
 - **`trackTitle` is a separate field, never a replacement for `title`.** `title` is the real filename and `toTree` builds the offload stream/download URLs from it — overwriting it breaks playback.
 - Frontend renders `item.trackTitle || item.title`, with the filename demoted to a caption when a title exists (`WorkTree.vue`).
-- No migration, no new route: `memo` is already JSON and `GET /api/tracks/:id` already selects it.
+- No new route: `GET /api/tracks/:id` reads the rows the title lives on.
 
 **Populating it is out-of-band.** `scripts/extract-track-titles.js <workId>` is a standalone CLI, not a server feature — nothing in the server imports it, and there is no `defaultConfig` key. It handles **exactly one work per run** (deliberately: the output is a judgement call worth eyeballing before it lands in the DB, and the works needing it are a few circles, not a library sweep). It reads `description` + `description_parts`, and:
 
@@ -339,6 +383,10 @@ Works whose audio files are named `01.mp3` / `#2.wav` show only the filename. `t
 Every precondition failure is loud and exits non-zero — unknown id, no scraped description, no audio on disk, unconfigured root folder, or titles already present without `--force`. The caller named the work explicitly, so silently doing nothing would be the wrong answer; the uninformative-filename check is advisory only, printed but never a skip. `--dry-run` prints the result, then asks `write N titles? [y/N]` so an expensive model call need not be repeated to apply it; without a TTY it never writes.
 
 ### 2.9c Per-track position: newest observation wins
+
+**One accessor, two projections.** `trackProgressFor(username, {workId | relPaths})` owns the query, the columns and the row shape; `getTrackProgress` (map for one work, for `GET /api/tracks/:id`) and `applyTrackProgressSeconds` (the parked track per history row, for `GET /api/history` and `/api/work/:id`) are projections over it. They had already drifted — the first selected `updated_at`, the second did not — so the work page's file tree and its info panel disagreed about the same position, and the same resume behaved differently depending on which page you started from. `test/progress-projections.js` asserts they cannot disagree again. The two *endpoints* still return different shapes on purpose: a list view must not pull a whole file tree per row just to read one number.
+
+`applyTrackProgressSeconds` exposes `state.secondsObservedAt` beside `state.seconds`, which is what lets a client tell whether its own local copy is newer.
 
 `t_track_progress` is keyed `(user_name, work_id, track_key)` where `track_key` is the relPath (§2.9a), and `upsertTrackProgress` applies a write only when it is at least as new as the row it would replace:
 
@@ -437,7 +485,7 @@ Both are non-fatal in the route: `db.updateWorkMetadata` has already committed b
 - **Cover cache headers (`routes/metadata.js`):** `/api/cover/:id` overrides the API default via `res.sendFile`'s `maxAge`, which emits `Cache-Control: public, max-age=2592000` (30 days). `public` is deliberate and fine here — covers are site-wide content with nothing user-specific in them, so a shared cache storing one leaks nothing. Per-user JSON is covered by the `private, no-cache` default above.
   - **The missing-cover fallback gets `COVER_FALLBACK_MAX_AGE` (5 min), not the long one.** A work scraped after its placeholder was cached would otherwise show `no-image.jpg` for 30 days. This is the rule that actually matters — don't collapse the two branches into one `maxAge`.
 - **Child process IPC:** Uses `process.on('message')` / `process.send()`. Parent (Socket.IO) relays events to all connected clients.
-- **Scanner concurrency:** Only one scanner child process runs at a time, guarded by the in-memory `scanner` variable in `socket.js` (not a lock file). Subsequent `PERFORM_*` events are ignored while a scan is in progress. Because that guard is in memory, it does not survive a restart — so the scanner child exits on `process.on('disconnect')` (`scannerModules.js`) when the parent dies. Node otherwise keeps a forked child running after the IPC channel closes, and killing only the server (`kill <pid>`, or a supervisor restarting the parent — Ctrl+C and `docker stop` reach the whole process group and were never affected) left it scanning invisibly: logs going to a dead channel, and a restarted server willing to start a second scan beside it. Two scanners writing `t_work.memo` at once is silent data loss, since `setWorkMemo` replaces the whole column.
+- **Scanner concurrency:** Only one scanner child process runs at a time, guarded by the in-memory `scanner` variable in `socket.js` (not a lock file). Subsequent `PERFORM_*` events are ignored while a scan is in progress. Because that guard is in memory, it does not survive a restart — so the scanner child exits on `process.on('disconnect')` (`scannerModules.js`) when the parent dies. Node otherwise keeps a forked child running after the IPC channel closes, and killing only the server (`kill <pid>`, or a supervisor restarting the parent — Ctrl+C and `docker stop` reach the whole process group and were never affected) left it scanning invisibly: logs going to a dead channel, and a restarted server willing to start a second scan beside it. Two scanners rewriting one work's `t_work_file` rows at once is silent data loss, since `replaceWorkFiles` deletes before inserting.
 - **Update lock file:** `upgrade.js` maintains `update.lock` in the config folder for the one-time upgrade/migration process (e.g. `fixVA`). Its state is surfaced as `lockFileExists` in the `/api/version` response — this is unrelated to scan concurrency.
 - **Express 5 migration notes:** `res.sendFile`/`express.static` now reject paths containing dot-segments unless `dotfiles: 'allow'` — `routes/media.js` passes `{ dotfiles: 'allow' }` to its `res.sendFile` calls to preserve v4 behavior for user audio paths. `express-validator` is on **v7**, where `.optional({ nullable: true })` became `.optional()`. `req.body` is `undefined` (not `{}`) before body parsing. Async route handlers have rejected promises forwarded to the error handler automatically.
 - **Metadata editing (admin only):** `PUT /api/work/:id` (`routes/metadata.js`) is gated by `config.auth && req.user.name !== 'admin'` → 403. When `config.auth` is false, all requests act as admin and editing is unrestricted. The handler validates the body with `express-validator` and delegates to `db.editWorkMetadata(workId, data)`, which runs in a single Knex transaction and **replaces** (not merges) the tag/VA/illustrator/script-writer/series relationships for the work, then re-fetches via `db.getWorkMetadata`.
@@ -525,7 +573,7 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 | `/api/image/:id/:name` | GET | One scraped sample/description image from `config.imageFolderDir`. `name` must match `workImageFileNamePattern(id)` (`filesystem/utils.js`, shared with `deleteWorkImagesFromDisk`) — caller-supplied, so it is matched, never sanitized. 30-day `public` cache like covers. **404 with no placeholder when the file is absent.** The frontend only asks for images whose stored entry has a `file`, and **never falls back to the remote DLsite url** — an undownloaded image is simply not shown, rather than hotlinking img.dlsite.jp from every viewer's browser |
 | `/api/circles` `/api/tags` `/api/vas` `/api/illustrators` `/api/script_writers` `/api/series` | GET | List all labels of that kind, ordered by name |
 | `/api/circles/:id` … `/api/series/:id` | GET | Resolve one label id (UUID) to its row; 404 otherwise |
-| `/api/scan/:id` | POST | Re-read one work's files (durations, lyric presence, changed mtimes) → `{memo}`. Deliberately does **not** hash — see §2.9a |
+| `/api/scan/:id` | POST | Re-walk one work, re-probe changed durations, and rewrite its `t_work_file` listing → `{files}`, the re-listed track count. Was `{memo}`, which no longer exists — see §2.9a |
 | `/api/refresh/:id` | POST | Re-scrape one work from DLsite/Fanza: metadata (`refreshAll`), then sample/description images and DLsite reviews. Returns `{message, metadata, images, reviews}` where `images`/`reviews` are counts. Image and review failures are non-fatal (metadata is already committed) |
 
 > **The six label route segments are `ROUTE_SEGMENT(field)` in `metadata.js`**, which is `${field}s` for everything except `series` (already plural). They are registered as a **literal-path loop** over `FIELDS`, because Express 5 (path-to-regexp v8) dropped regex char-classes in route strings; each handler gets its `field` by closure.
@@ -549,6 +597,7 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 |----------|--------|---------|
 | `/api/media/stream/:id/*path` | GET | Stream one file (Range supported). Redirects to the reverse proxy when `config.offloadMedia` is on, except `.txt`/`.lrc`, which Express serves itself for `jschardet` charset detection |
 | `/api/media/download/:id/*path` | GET | Same file as an attachment |
+| `/api/media/offline/:id/*path` | GET | The best offline-friendly copy of a track: a lossless source (`.wav`/`.flac`) is transcoded to Opus on first request and cached on disk under `config.transcodeCacheDir`; lossy audio and text are served as-is. Always served by Express, never offloaded — the proxy maps to the original file and has no place for a cached transcode. 503 when `config.enableTranscoding` is off |
 | `/api/media/check-lrc/:id/*path` | GET | Lyric sidecars for a track → `{result, message, lyrics: [{trackId, lyricExtension}]}`, one entry per speaker — see §2.8b |
 
 > **`*path` is the work-relative path, and it is the file's one identity.** A
@@ -612,7 +661,7 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 > (450MB+ for a wav-heavy work). Both problems were the content hash being used
 > as identity; see §2.9a.
 
-> **Note:** Library scanning is **not** a REST endpoint. The frontend triggers it over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN`) and listens for the `SCAN_*` events (§7). `POST /api/scan/:id` is unrelated — it re-reads one work's files, it does not scrape.
+> **Note:** Library scanning is **not** a REST endpoint. The frontend triggers it over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_WORK_FILE_SCAN`) and listens for the `SCAN_*` events (§7). `POST /api/scan/:id` is unrelated — it re-reads one work's files, it does not scrape.
 
 ### Removed at the 1.0 freeze
 
@@ -637,8 +686,22 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 
 - **Workspace scripts:** `npm run dev:backend` / `npm start` from root.
 - **Socket.IO events (scanning):**
-  - Client → server: `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_LYRIC_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`
-  - Server → client (relayed from the scanner child process): `SCAN_INIT_STATE`, `SCAN_TASKS`, `SCAN_FAILED_TASKS`, `SCAN_MAIN_LOGS`, `SCAN_RESULTS`, `SCAN_FINISHED`, `SCAN_ERROR`
+  - Client → server: `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_WORK_FILE_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE` (sent on mount **and on every reconnect** — it is the resync point)
+  - Server → client (relayed from the scanner child process), each carrying one entry:
+
+    | Event | Payload |
+    |-------|---------|
+    | `SCAN_MAIN_LOG` | `{entry: {level, message}}` |
+    | `SCAN_TASK_ADD` | `{rjcode}` |
+    | `SCAN_TASK_LOG` | `{rjcode, entry: {level, message}}` |
+    | `SCAN_TASK_REMOVE` | `{rjcode, result}` |
+    | `SCAN_FAILED_TASK` | `{task: {rjcode, result, logs}}` |
+    | `SCAN_RESULT` | `{result: {rjcode, result, count}}` |
+    | `SCAN_INIT_STATE` | `{tasks, failedTasks, mainLogs, results}` — the **only** accumulated payload, and capped; answers `ON_SCANNER_PAGE` |
+    | `SCAN_FINISHED` | `{message}` — replayed from `lastScanEvent` after a reconnect |
+    | `SCAN_ERROR` | none |
+
+  - **Gone:** the plural `SCAN_MAIN_LOGS` / `SCAN_TASKS` / `SCAN_RESULTS` / `SCAN_FAILED_TASKS`, which re-sent the whole accumulated array on every line. See §2.5.
   - Scanning is **not** exposed over REST; there is no `/api/scanner` endpoint.
 
 ---
@@ -677,8 +740,10 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
   - `work-id.js` — id canonicalization (Fanza + DLsite books), `workno` spelling, cover/image file naming, `getFolderList` work-code detection, and migration `20260828000000` up/down
   - `description-html.js` — `looksLikeHtml`, and the sanitizer allowlist: tag/attribute filtering, script removal, unknown-tag unwrapping, colour stripping, image rewriting (incl. `basePath`) and link handling
   - `work-images.js` — `collectWorkImages` ordering/dedup, the `deleteWorkImagesFromDisk` wipe **and** its `keep`-set prune (against a real temp folder), and what `workImageFileNamePattern` will and will not match
+  - `work-file-listing.js` — `t_work_file`: ordering identical to the filesystem walk (the assertion that matters), all tracked file types present, indexed-once-then-no-walk (proved by deleting the folder and reading again), and durations/track titles carried forward across a re-index rather than NULLed
+  - `progress-projections.js` — `getTrackProgress` and `applyTrackProgressSeconds` report the same `seconds` and `observedAt` for the same track; the test that would have caught the `updated_at` drift
   - `track-identity.js` — relPath as the one file identity: `trackId` construction, non-ASCII and subdirectory paths, forward-slash normalization, `relPath` on every node type, the legacy positional-index branch, migration `20260912000000`, and `scripts/rekey-track-progress.js` (the only place CRC32 survives)
-  - `work-memo.js` — `scrapeWorkMemo` mtime/duration caching, `trackTitles` preservation across a rescan, and that its keys match `getTrackList`'s
+  - `work-files.js` — `probeAudioDurations`: reuses a known duration on an unchanged mtime, re-probes when the mtime moved, re-probes a known mtime with no duration (the case a naive guard would skip forever), leaves non-audio alone, and keeps what was known when a file vanishes mid-scan. Also asserts `getTrackList` is a pure walker with no duration or trackTitle of its own
   - `history-seconds.js` — `applyTrackProgressSeconds` overriding stale history positions, and the compound `(work_id, track_key)` lookup that keeps two works with an identically named file apart
   - `benchmark.js` — DB query benchmark; Skips if `backend/sqlite/db.sqlite3` is missing/empty;
 - **Run:** `npm test` (sets `NODE_ENV=test`)

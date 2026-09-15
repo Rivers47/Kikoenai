@@ -1,6 +1,6 @@
 const { knex } = require('./db');
 
-const dbVersion = '20260912000000';
+const dbVersion = '20260915000000';
 
 // 数据库结构
 const createSchema = () => knex.schema
@@ -28,11 +28,12 @@ const createSchema = () => knex.schema
     table.text('rate_count_detail'); // TEXT 类型 [评价分布明细]
     table.text('rank'); // TEXT 类型 [历史销售业绩]
 
-    table.json('memo'); // 关于这个作品的各种信息记录,音频文件,音频文件时长,歌词映射
 
     table.text('description'); // TEXT 类型 [作品内容: HTML 抓取路径存原始标记，JSON 回退路径存纯文本]
     table.text('description_parts'); // JSON: the same block, per-part, incl. the track list
     table.text('sample_images'); // JSON: [{url, thumb, width, height, file}]
+    // When this work's files were last listed into t_work_file. NULL means never
+    table.datetime('files_indexed_at');
 
     table.primary('id');
     table.foreign('circle_id').references('id').inTable('t_circle'); // FOREIGN KEY 外键
@@ -156,9 +157,21 @@ const createSchema = () => knex.schema
     table.foreign('work_id').references('id').inTable('t_work').onDelete('CASCADE');
     table.primary(['user_name', 'work_id', 'track_key']);
   })
+  .createTable('t_work_file', (table) => {
+    table.string('work_id').notNullable();
+
+    table.string('rel_path').notNullable();
+    table.float('duration');
+    table.integer('mtime');
+    table.string('track_title'); // custom display name 
+
+    table.foreign('work_id').references('id').inTable('t_work').onDelete('CASCADE');
+    table.primary(['work_id', 'rel_path']);
+  })
   .createTable('t_dlsite_review', (table) => {
     // DLsite's own member_review_id. Distinct from t_review, which holds
     // *this server's* users' ratings and progress.
+    // TODO: Might be used for other shop sites in the future, but name is fixed.
     table.string('id').notNullable();
     table.string('work_id').notNullable();
     table.string('reviewer_id');
@@ -194,11 +207,11 @@ const createSchema = () => knex.schema
     table.index('expires_at');
   })
   .then(() => {
-    console.log(' * 成功构建数据库结构.');
+    console.log(' * Database schema created.');
   })
   .catch((err) => {
     if (err.toString().indexOf('table `t_circle` already exists') !== -1) {
-      console.log(' * 数据库结构已经存在.');
+      console.log(' * Database schema already exists.');
     } else {
       throw err;
     }

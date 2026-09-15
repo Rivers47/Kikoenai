@@ -22,7 +22,12 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 │   ├── material-theme.json               # Generated Material color tokens (see scripts/generate-theme.mjs)
 │   ├── utils/
 │   │   ├── contrast.js                   # Contrast-ratio helpers for theme-aware text colors
+│   │   ├── downloads.js                  # Offline downloads: cacheFile/uncacheFile (per-track, foreground) + buildWorkDownloadPlan/startWorkDownload/reconcileDownloads/onDownloadMessage (whole-work, Background Fetch)
+│   │   ├── idb.js                        # The one IndexedDB database, shared by outbox + positions (§3b)
+│   │   ├── service-worker.js             # activeRegistration(): the worker lookup that cannot hang
 │   │   ├── lyrics.js                     # Per-speaker lyric colours + MAX_LYRIC_STREAMS
+│   │   ├── outbox.js                     # Durable delivery queue for playback-state writes, drained by Background Sync
+│   │   ├── positions.js                  # Local-first playback position: savePosition/positionsForWork/mergePositions (§3b)
 │   │   └── subtitles.js                  # SRT/VTT/LRC parsing + stream merging (§2.9)
 │   ├── css/
 │   │   ├── app.scss                      # Global styles
@@ -61,6 +66,7 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 │   │   ├── Favourites.vue                # Favorites, history, progress
 │   │   ├── FullScreenPlayer.vue          # Full-screen player mode
 │   │   ├── TextViewer.vue                # In-app text file viewer (route /text/:trackId)
+│   │   ├── Downloads.vue                 # Offline library: manifest grouped by work, rendered with WorkCard/WorkListItem (grid/list toggle, sort), storage quota, play-all, per-work/per-track remove
 │   │   ├── Error404.vue                  # 404 page
 │   │   └── Dashboard/
 │   │       ├── Folders.vue               # Library folder management
@@ -74,15 +80,15 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 │   │   ├── PlayerBar.vue                 # Mini player bar (bottom of screen)
 │   │   ├── LyricsBar.vue                 # Lyrics display below player
 │   │   ├── PIPLyrics.vue                 # Picture-in-picture lyrics overlay
-│   │   ├── WorkCard.vue                  # Work card (grid mode); `oldStyle` prop switches to the legacy look
-│   │   ├── WorkListItem.vue              # Work list item (list mode)
+│   │   ├── WorkCard.vue                  # Work card (grid mode); `oldStyle` prop switches to the legacy look; optional `coverUrl` prop overrides the cover source
+│   │   ├── WorkListItem.vue              # Work list item (list mode); optional `coverUrl` prop + `side` slot for trailing actions
 │   │   ├── WorkDetails.vue               # Work detail panel (metadata, review, rating; opens EditMetadata for admins)
 │   │   ├── EditMetadata.vue             # Admin-only metadata edit dialog (PUT /api/work/:id)
 │   │   ├── WorkTree.vue                  # Track tree view for a work
 │   │   ├── WorkDescription.vue           # Scraped DLsite description, sanitized markup via v-html (Description tab of Work.vue)
 │   │   ├── WorkGallery.vue               # Work-page cover carousel: cover + scraped images
 │   │   ├── ImageViewer.vue               # Maximized image viewer with pinch/wheel zoom + pan (work tree and gallery)
-│   │   ├── Cover.vue                     # Cover image + id/release/tag chips (cards/lists/player)
+│   │   ├── Cover.vue                     # Cover image + id/release/tag chips (cards/lists/player); optional `coverUrl` prop overrides `/api/cover/:id`
 │   │   ├── RecentWorks.vue               # Recently played works section
 │   │   ├── Scrollable.vue                # Scrollable container helper
 │   │   ├── SleepMode.vue                 # Sleep timer dialog
@@ -102,10 +108,19 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 │   │   │   ├── getters.js
 │   │   │   ├── mutations.js
 │   │   │   └── actions.js
+│   │   ├── module-Downloads/             # Offline-download manifest Vuex module
+│   │   │   ├── index.js
+│   │   │   ├── state.js                  # State (downloadedFiles, enableTranscoding)
+│   │   │   ├── getters.js                # isDownloaded, isFileDownloaded, isWorkDownloaded, totalDownloadedBytes
+│   │   │   ├── mutations.js              # ADD_DOWNLOADED_FILE, REMOVE_DOWNLOADED_FILE, SET_ENABLE_TRANSCODING
+│   │   │   └── actions.js                # Unused (see src/utils/downloads.js) -- kept for structural consistency with the other modules
 │   │   └── store-flag.d.ts
 │   └── mixins/
 │       └── Notification.js               # Notification helper mixin (showErrNotif, etc.)
 ├── src-pwa/                              # PWA service worker files
+│   ├── custom-service-worker.js          # Hand-written Workbox SW (InjectManifest): precache, nav fallback, offline-tracks caching routes
+│   ├── register-service-worker.js        # SW registration + update notification (unchanged by the InjectManifest switch)
+│   └── manifest.json                     # Web app manifest
 ├── quasar.config.js                      # Quasar framework configuration
 ├── package.json
 └── README.md
@@ -167,7 +182,7 @@ The `/favourites/*` children are generated by the `prefixRoutes` helper at the t
 {
   hide: false,                    // Player panel visibility
   playing: false,                 // Play/pause state
-  currentTime: 0,                 // Current playback position (seconds)
+  currentTime: 0,                 // Position in the current track (seconds); set with queueIndex by selectTrack, and a newly loaded track starts from it
   newCurrentTime: -1,             // Seek target (-1 = none)
   duration: 0,                    // Track duration
   source: "",                     // Audio source URL
@@ -196,7 +211,6 @@ The `/favourites/*` children are generated by the `prefixRoutes` helper at the t
   workLastTrackId: '',            // Last track of the playing folder; drives auto-mark-listened
   autoMarkListened: true,         // Auto-mark the work listened when workLastTrackId ends
   enablePIPLyrics: false,         // Picture-in-picture lyrics (force-disabled on Android)
-  resumeHistorySeconds: -1,       // Resume position from history (-1 = none; cleared in onCanplay)
   oldWorkCardUIStyle: false,      // Legacy card UI toggle
 }
 ```
@@ -210,6 +224,16 @@ The `/favourites/*` children are generated by the `prefixRoutes` helper at the t
   group: ''       // User group
 }
 ```
+
+**`Downloads` module** (`module-Downloads/`) — Offline-download manifest (metadata only; actual bytes live in the service worker's `offline-tracks` Cache Storage bucket, populated by `src/utils/downloads.js`'s `cacheFile`/`uncacheFile`, not by this module):
+
+```javascript
+{
+  downloadedFiles: [], // { url, workId, trackId, type: 'audio'|'lyric'|'cover'|'metadata', title, workTitle, bytes, downloadedAt, contentHash?, duration? }[], persisted to LocalStorage `downloaded_files`
+  enableTranscoding: false, // from GET /api/config/shared, fetched once in MainLayout.vue on boot; gates whether download UI is shown
+}
+```
+Unlike `AudioPlayer`/`User`, has no real actions (matches the existing convention — this app uses Vuex for state+mutations only, never `dispatch`; async orchestration lives in component methods or `src/utils/downloads.js`). Key getters: `isDownloaded(trackId)` (audio only — drives `AudioElement.vue`'s `source` computed and the per-track UI toggle), `isFileDownloaded(trackId)` (any type — used for lyric files, which have their own trackId), `isWorkDownloaded(workId)`, `totalDownloadedBytes`. `Downloads.vue` reads the raw `downloadedFiles` state and groups it by `workId` itself (the manifest order within a work is the tree order the download walked).
 
 ### 2.4 Boot Files
 
@@ -255,7 +279,7 @@ MainLayout
 - **REST API:** All data operations via Axios (`/api/*` endpoints). **The frontend stores no credential of any kind.** Auth is a server-side session in an `HttpOnly` cookie (`kikoeru_sid`) that the browser attaches automatically, including to `<audio>`, `<img>`, and download URLs.
 - **Never append `?token=` to an API URL.** That pattern was removed when auth moved to cookies; media and cover URLs are now built bare, e.g. `/api/media/stream/${trackId}` and `/api/cover/${workId}?type=sam`.
 - `<audio crossorigin="anonymous">` in `AudioElement.vue` sets credentials mode `same-origin`, so the cookie *is* sent on same-origin media requests. Do not change this to `use-credentials` without testing playback.
-- **WebSocket (Socket.IO):** Used for real-time scan progress updates. The client connects after auth and **both emits and listens**: it emits `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_LYRIC_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`, and listens for `SCAN_INIT_STATE`, `SCAN_TASKS`, `SCAN_FAILED_TASKS`, `SCAN_MAIN_LOGS`, `SCAN_RESULTS`, `SCAN_FINISHED`, `SCAN_ERROR` (all handled in `pages/Dashboard/Scanner.vue`).
+- **WebSocket (Socket.IO):** Used for real-time scan progress updates. The client connects after auth and **both emits and listens**: it emits `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_WORK_FILE_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`, and listens for `SCAN_MAIN_LOG`, `SCAN_TASK_ADD`, `SCAN_TASK_LOG`, `SCAN_TASK_REMOVE`, `SCAN_FAILED_TASK`, `SCAN_RESULT`, `SCAN_INIT_STATE`, `SCAN_FINISHED`, `SCAN_ERROR` (all handled in `pages/Dashboard/Scanner.vue`). Payloads are in `backend/AGENTS.md` §7 — keep the two tables in sync.
 - **Seek times are client-side:** `rewindSeekTime` / `forwardSeekTime` are read from `LocalStorage` in `module-AudioPlayer/state.js` (defaults 5s / 30s), not fetched from the server.
 
 ### 2.6b Deploy Path Prefix (`src/base-path.js`)
@@ -270,8 +294,19 @@ rebuild — which splits every URL in the app into two kinds:
 | Baked in at build time — `<script>`/`<link>` hrefs, SW precache manifest, web app manifest | `build.publicPath` is the placeholder `/__KIKO_BASE__/`; the backend swaps it for the real prefix while serving `index.html`, `sw.js` and `manifest.json` |
 | Built at runtime — API calls, router base, Socket.IO path, SW registration | `src/base-path.js` reads `window.__KIKO_BASE__`, injected into `index.html` by that same pass |
 
-`src/base-path.js` exports `basePath` (`''` or `/prefix`, never trailing-slashed)
-and `apiUrl(url)`.
+`src/base-path.js` exports `basePath` (`''` or `/prefix`, never trailing-slashed),
+`apiUrl(url)`, `appUrl(url)` (the same for non-`/api` paths — the Background
+Fetch notification icon, the worker's `openWindow` target) and
+`stripBasePath(pathname)` (the inverse, for matching an incoming URL against a root-relative
+pattern).
+
+**It resolves the prefix differently in the service worker.** There is no
+`window` there and no `index.html` to read the injection from, so it falls back
+to `self.registration.scope`, which carries the prefix because the worker is
+registered with an explicit `scope` (below). The worker imports this module
+(via `utils/outbox.js` and its own caching routes), and without that fallback
+every offline route would match against a prefix of `''` and silently never
+fire on a sub-path install.
 
 **Rules when adding a request:**
 
@@ -285,6 +320,11 @@ and `apiUrl(url)`.
 - **Backend-supplied URLs (`mediaStreamUrl`, `mediaDownloadUrl`) already carry
   the prefix.** Do not wrap them; only the `/api/media/...` fallback branch
   beside them needs it (`WorkTree.vue`, `AudioElement.vue`).
+- **A URL that becomes a Cache Storage key must be prefixed at the point it is
+  built** — `buildWorkDownloadPlan`/`cacheFile` in `src/utils/downloads.js`, and
+  the rows `sendOrQueue` writes to the outbox. These go to Background Fetch, a
+  bare `fetch()` and `cache.put()`, none of which run an interceptor, and a
+  CacheFirst route that looks up a key nobody wrote is just a cache miss.
 - **`quasar dev` injects no global**, so `basePath` is `''` and every URL is
   exactly what it was before this existed. A prefix is only ever exercised
   through the backend.
@@ -313,16 +353,22 @@ sub-path install would otherwise register a worker that controls nothing.
 
    Two things the end-of-track check has to be careful about, both about *which* position it is reading:
 
-   - **Before the element has applied a pending history resume**, its own `currentTime` is 0 and says nothing; `resumeHistorySeconds` is the position playback is about to start from, so that is what gets compared. Duration comes from the queue item's `duration` memo for the same reason — the element may not have loaded metadata yet.
-   - **When the element still holds the outgoing track**, its position belongs to that track. Picking a track by hand while paused runs the `playing` watcher before the `source` watcher swaps the element over, so `_mediaHoldsCurrentTrack` compares `media.currentSrc` against `source` and the check bails out when they disagree. Without it, hand-picking a track right after a sleep-timer stop would skip a track.
+   - **Until the element has loaded the current track, its clock says nothing about it**: 0 while a resume is still loading, or the outgoing track's position. Picking a track by hand while paused runs the `playing` watcher before the `source` watcher swaps the element over. So the check reads the element only when `_mediaHoldsCurrentTrack` and `readyState >= HAVE_METADATA`, and otherwise reads the store's `currentTime`, which always describes the current track (`selectTrack` in `module-AudioPlayer/mutations.js`). Without it, hand-picking a track right after a sleep-timer stop would skip a track.
+   - **Duration comes from the queue item's `duration` memo** for the same reason — the element may not have loaded metadata yet.
 
-   `_advanceIfAtEndOfTrack` clears the pending `resumeHistorySeconds` and zeroes `currentTime` before advancing: both still describe the finished track, and `onCanplay` / the `queueIndex` watcher would otherwise apply them to the track being loaded. On the last track there is nothing to advance to, so it rewinds to 0 instead of leaving the element ended, which Firefox answers by stopping.
+   `_advanceIfAtEndOfTrack` zeroes `currentTime` before advancing, since it still describes the finished track. On the last track there is nothing to advance to, so it rewinds to 0 instead of leaving the element ended, which Firefox answers by stopping.
 
 5. **Dark Mode:** Toggled via Quasar's `Dark` plugin, persisted in browser across sessions.
 6. **Progress Tracking:** Users can mark works as `listening`, `listened`, `replay`, or `postponed`.
 7. **Work Card Variants:** One component, `WorkCard.vue`, renders both styles: the modern one (tags revealed on hover over the cover) and, with `oldStyle` set, the legacy one (tag chips below the body, text price/sold line, `mic` icon on VA chips). `Works.vue` binds the prop to `oldWorkCardUIStyle`, persisted under LocalStorage key `old_work_card_ui_style_key`. Both share the `workcard` i18n scope.
 8. **Metadata Editing (admin only):** `WorkDetails.vue` shows an "edit metadata" button (i18n key) only when the current user is an admin (computed `isAdmin`: auth disabled, or `group === 'administrator'`, or `name === 'admin'`). It opens `EditMetadata.vue`, which PUTs to `/api/work/:id` with `{title, nsfw, release, circle, tags[], vas[], illustrators[], scriptWriters[], series}` — **tag names sent are the canonical Japanese names** (the backend canonicalizes them again via `resolveTagLabel`). Tag/VA/illustrator/script-writer/series inputs use Quasar `q-select` with `use-input` autocomplete, fetching options from `/api/tags`, `/api/vas`, `/api/illustrators`, `/api/script_writers`, `/api/series`. For tags, the option **label** is the translated name (`$tTag`) but the bound **value** is the canonical Japanese name, so storage stays canonical. **`filterTags` matches the typed text against the canonical name only** (`o.name`), not against the displayed label — deliberately, to stay consistent with `/api/search`, which is parsed server-side and understands canonical Japanese alone. The same applies to `filteredItems` in `List.vue`. Do not "fix" either to match the translated name without changing the backend too. On save, the dialog emits `saved` and `WorkDetails.vue` re-reads the work metadata.
 9. **Keyboard Shortcuts:** Space for play/pause, arrow keys for seeking, etc. (handled in AudioPlayer).
+10. **Scan progress (`Dashboard/Scanner.vue`):** every `SCAN_*` event carries **one** entry and the page appends it — the old plural events re-sent the whole accumulated array on every line, which on a whole-library refresh meant re-rendering this page's un-virtualised log panel over the full results array once per work. **This was never a socket problem** (the largest message was ~526KB, 2.2ms to parse, ~382KB/s averaged over a long run — nowhere near a heartbeat timeout); it was waste, and it is what made per-line image logging too expensive to add. Three things follow, and none of them are optional:
+    - **Append, never assign.** `SCAN_INIT_STATE` is the only handler that replaces state wholesale.
+    - **The arrays are capped** (`MAX_MAIN_LOGS` 500, `MAX_TASK_LOGS` 200, `MAX_FAILED_TASKS` 200, `MAX_RESULTS` 500), mirroring the scanner child. The log panel is a plain `v-for`, not virtualised, so an unbounded tail is a growing DOM on top of a growing array. The complete record is in the scanner's log file, whose path is the run's first log line.
+    - **`connect` re-emits `ON_SCANNER_PAGE`.** Socket.IO reconnects by itself after a drop; this is what makes the page catch up rather than stay frozen. The server answers with a fresh snapshot, or — for a run that ended while the socket was down — with the remembered `SCAN_FINISHED`.
+
+    `onSCAN_FINISHED` pushes into `mainLogs`, **not** `allLogs`: `allLogs` is a computed, and pushing into it wrote to a cached array the next delta threw away, so the line announcing the scan had finished could vanish on the way in.
 
 ### 2.9 Multi-speaker lyrics
 
@@ -446,8 +492,46 @@ Two separate translation layers, kept apart:
 - **Keep-Alive:** `Works` and `Favourites` are wrapped in `<keep-alive :include="['Works', 'Favourites']">` in `MainLayout.vue`. Their `activated` hooks should be used for data refreshes when returning from other pages. A cached page stays mounted, so any `q-infinite-scroll` on it keeps listening to scroll events while it is off-screen — both pages therefore freeze their scroller in `deactivated` (`stopLoad = true`) and thaw it in `activated`.
 - **SPA History Fallback:** The backend uses `connect-history-api-fallback` so Vue Router handles all non-`/api` routes. No hash routing needed.
 - **Dev Server Proxy:** In development (`quasar dev`), `quasar.config.js` proxies `/api` and `/socket.io` to `localhost:8888` (the backend).
-- **Service Worker:** PWA mode uses Workbox (GenerateSW). The SW config in `quasar.config.js` excludes `/api/` and `/media/` from navigation fallback. **Those denylist patterns are deliberately unanchored** — under a deploy path prefix the pathname they match against is `/kikoeru/api/...`, and an anchored `^\/api\/` would miss it, silently handing API requests the SPA shell while offline.
+- **Service Worker:** PWA mode uses Workbox in **InjectManifest** mode — the worker is hand-written at `src-pwa/custom-service-worker.js`, not generated. `quasar.config.js` now carries only *build-time* PWA options (`extendInjectManifestOptions` → the precache `exclude` list, and `extendPWACustomSWConf` → the esbuild target); all *runtime* behaviour (`skipWaiting`/`clientsClaim`, navigation fallback, caching routes) lives in the worker file. The switch from GenerateSW was required because a generated worker can only express routes, and the offline-download feature needs SW event handlers (Background Fetch).
+  - The worker excludes `/api/*` and `/media/*` from navigation fallback, and registers three routes (all into a single `offline-tracks` Cache Storage bucket): `CacheFirst` + `RangeRequestsPlugin` on `/api/media/offline/*` (tracks/lyrics), `CacheFirst` on `/api/cover/*` (work covers), and `NetworkFirst` on `/api/work/:id`, `/api/tracks/:id`, `/api/review` (work-detail page JSON — live data when online, cached snapshot as offline fallback). The first two are populated only by the explicit download action (`src/utils/downloads.js`), never by ordinary streaming; the third also auto-populates on any successful browse, since JSON metadata is small and bounding it risks evicting a downloaded work's snapshot.
+  - **Match routes on the pathname, never on an `^/api/...`-anchored RegExp — and strip the deploy prefix first.** The matchers call `appPath(url)` (`stripBasePath(url.pathname)`), because under a sub-path install every pathname arrives as `/prefix/api/...`; on a root-served install it is the identity. Workbox's `RegExpRoute` execs the pattern against the *absolute* URL (`url.href`, e.g. `https://host/api/...`), so a leading `^\/api\/` can never match. The original `runtimeCaching` config made exactly this mistake and all three routes were silently dead — downloads were written to Cache Storage by the page but never served back from it, so offline playback did not work. (`NavigationRoute`'s denylist is unaffected: it matches on `url.pathname + url.search`, which is why navigation exclusion always worked. **Keep those denylist patterns unanchored** — under a deploy path prefix the pathname is `/kikoeru/api/...`, and an anchored `^\/api\/` would miss it, silently handing API requests the SPA shell while offline.)
+  - The old warning about `require('workbox-range-requests')` no longer applies — that package only crashed when imported from the Node-side config file; inside the worker it is imported normally.
+  - The custom SW is bundled by **esbuild**, not webpack/babel — the only part of the app that is. Quasar's default browser target includes `safari14`, and esbuild refuses to emit the destructuring the `workbox-*` packages use for that target (a Safari 14.0 engine bug it cannot lower). `extendPWACustomSWConf` raises the floor to `safari14.1` for this bundle alone; the app's own target is untouched. The `workbox-{core,precaching,routing,strategies,range-requests}` packages are now explicit devDependencies rather than transitive ones.
+  - See `module-Downloads` (§2.3) and the `/api/media/offline/:id/:index` endpoint (§6, `backend/AGENTS.md` §6) for the rest of the feature.
+- **Whole-work downloads use Background Fetch (Chromium only).** `WorkDetails.toggleWorkOfflineDownload` no longer loops over files itself — it builds the plan (`buildWorkDownloadPlan`), commits every manifest row with `pending: true`, then hands the whole batch to the browser via `startWorkDownload`. Registration ids are `kikoenai-work-<workId>`.
+  - **The page never sees completion.** The browser downloads with no tab open and wakes the service worker, which moves the records into `offline-tracks` and `postMessage`s any open client (`kikoenai/download-{success,fail,abort}`). `MainLayout.initOfflineDownloads` listens for those, and on boot calls `reconcileDownloads()` to catch fetches that finished while the app was closed.
+  - **Why rows are written up front:** only the page knows track titles, and the SW must not have to invent metadata. It reports which URLs landed; `PROMOTE_DOWNLOADED_FILES` clears `pending` and fills in `bytes`.
+  - **Manifest URLs are matched through `cacheKeyFor`, never as raw strings.** The manifest holds what `apiUrl()` produced — a raw path — while the service worker reports `new URL(record.request.url).pathname`, which is percent-**encoded**. Those were byte-identical while a trackId was `workId/index`; since it became `workId/relPath` they differ for any track with a space or a non-ASCII character, i.e. almost all of them. String equality therefore matched nothing, so a finished whole-work download never promoted its rows and the button stayed on "downloading" until a reload — `reconcileDownloads` recovered it only because `cache.match` normalizes URLs. Both `PROMOTE_DOWNLOADED_FILES` and `REMOVE_DOWNLOADED_FILES` normalize now; keep any new comparison doing the same.
+  - **All `module-Downloads` getters ignore `pending` rows.** This preserves the existing semantics exactly — `isWorkDownloaded` still keys on `metadata` rows as the completion marker, and `isDownloaded` must not return true for a track still in flight or `AudioElement` would switch playback to a URL that is not cached yet. Rows from the per-track foreground path have no `pending` flag and are unaffected, as are manifests written before this change.
+  - **Reconcile only examines pending rows**, and skips works with an in-flight registration (`backgroundFetch.getIds()`) — otherwise a boot during an active download would drop its rows. It early-returns before touching `backgroundFetch`, which is what keeps it from throwing on engines that lack the API.
+  - **Lyrics need two cached things, not one.** The `.lrc`/`.srt`/`.vtt` file is downloaded as a `lyric` row, but `AudioElement.loadLrcFile` first calls `/api/media/check-lrc/<trackId>` to find out *which* file holds the lyrics — so that lookup is in the plan too (as a `metadata` row with `trackId: null`) and has its own `NetworkFirst` route. It returns 200 `{result: false}` for tracks without lyrics, so including every audio track is safe.
+  - **One failed request fails the whole batch.** Background Fetch fires `backgroundfetchfail` if *any* record ends non-2xx, and the SW then caches nothing for that work. A single track whose transcode 500s therefore discards the entire work download rather than leaving it half-cached. (Deliberate — it keeps `isWorkDownloaded` honest — but it makes whole-work downloads only as reliable as the least reliable track.)
+  - **Two download paths, picked by `canBackgroundFetch()`.** Background Fetch where it exists (Chromium), a serial `cacheFile()` loop in the page everywhere else. `startWorkDownload` returns `{ mode }` because the two differ in ways the caller must handle: `'background'` finishes in the service worker and promotes its rows by message, possibly with no tab open, while `'foreground'` has already finished when the promise resolves and hands back `stored` for the caller to promote directly.
+  - **The foreground path dies with the tab.** It runs in the page, so navigating away abandons the download — the user is told before it starts (`downloadOfflineForeground`), and progress goes on the button (`downloadOfflineProgress`) since there is no OS notification. Serial rather than parallel on purpose: progress is the thing being watched, and N-at-a-time makes "12 of 43" meaningless.
+  - **Both paths are all-or-nothing.** Background Fetch discards the batch if any record is non-2xx; the foreground loop uncaches what it already fetched and rethrows. `isWorkDownloaded` is keyed on the metadata rows being promoted, so a half-cached work must never look complete.
+  - **`canBackgroundFetch()` checks for a usable registration, not just the API.** The two are different, and conflating them was a real bug: `'BackgroundFetchManager' in self` is true in Chromium even with no worker registered, and `startWorkDownload` then awaited `navigator.serviceWorker.ready` — which **never settles** without an active worker. The result was a spinner that ran forever, reproducible with `npm run dev` (which unregisters the worker) and on any plain-HTTP origin. `utils/service-worker.js` exists solely so nothing awaits `ready` again; `requestSync` and `reconcileDownloads` had the same latent hang.
+- **Playback position is local-first (`src/utils/positions.js`), with the server as a replica.** §3b. Position is durable on this device the moment it is observed, so no request has to survive an unload for the same-device case to work.
+- **Playback-state writes go through an IndexedDB outbox (`src/utils/outbox.js`), replayed by Background Sync.** A write is captured whenever it cannot be shown to have reached the server. That is *not* only the offline case — the common one is a locked phone whose radio is throttled or whose process is frozen mid-request. Nothing in the module consults `navigator.onLine`.
+  - DB `kikoenai` **v2**, store `outbox`, keyPath `key` = `` `${method}:${endpointPath(url)}` ``. The URL identifies the target completely — a track-progress write carries its `trackId` (`workId/relPath`) in the path — so method+URL is the whole key. It *is* the coalescing key, so `put()` overwrites and a track re-reported every 10s stays one row. Replay is oldest-first by `createdAt`.
+  - **Rows store the URL that will actually be sent**, deploy prefix included — `drain()` replays them with a bare `fetch()`, where no axios interceptor runs to add one. The `QUEUEABLE` patterns stay root-relative, so every match strips the prefix first (`endpointPath`).
+  - **Queueable endpoints only:** `/api/track-progress`, `/api/history`, `/api/review` (which covers `/api/review/progress`). Admin config, credentials, metadata edits and scan/refresh are deliberately excluded — replaying those hours later is a footgun.
+  - **Two capture paths.** `sendOrQueue()` enqueues *before* sending and deletes the row on success — used by the player, because a request killed when the OS freezes the page runs no `catch` at all. Everything else is captured by the `boot/axios.js` response interceptor, which enqueues on transport error and resolves with a **synthetic success** (`{ data: { message: t('common.success') } }`), so no call site needs a "queued" code path and the deferral is invisible. `sendOrQueue` marks its config `__outboxed` so the interceptor does not queue the same request twice and delete the row it just wrote.
+  - `boot/axios.js` also sets a 10s timeout **on queueable writes only** — without one a throttled radio hangs forever and no handler runs. It is not a global default because `POST /api/backfill/progress` runs the whole library synchronously.
+  - **`enqueue()` does not register a sync**; while online that would have the worker replay a row the caller is about to deliver itself. `requestSync()` is called on boot (`MainLayout.initOfflineDownloads` — picks up rows from a process that was killed outright), on page hide, and whenever a delivery attempt fails.
+  - **`drain()` throwing is the retry mechanism** — a rejected `waitUntil` makes Chromium re-fire `sync` with backoff. 401/403 keeps the row (the session lapsed, the write was fine); other 4xx drops it, or it would wedge the queue forever.
+  - **Reads are not this module's job.** `pendingProgress()` was removed: it could only see *undelivered* writes, so a row vanished the moment it synced, and `canSync()` made it return `{}` off Chromium. `utils/positions.js` is the read path now — see §3b.
+  - **A replayed row can no longer clobber a newer one.** `upsertTrackProgress` applies a write only when its `observedAt` is at least as new as the stored one (`backend/AGENTS.md` §2.9c), and every sender carries `observedAt` — so a row delivered hours late loses to whatever was observed after it. This used to be an accepted last-write-wins compromise.
+  - **Switched off entirely without Background Sync (`canSync()`, i.e. non-Chromium).** The outbox is the one place in this feature set that *detects* a capability instead of failing loudly, because nothing would ever drain the store: a row would outlive its write forever. So `sendOrQueue` degrades to a plain send-and-log and `queueWrite` returns `null` so the call site sees its transport error (a synthetic success would be a lie when nothing will deliver it). **Reads are unaffected** — `positions` is written on every engine, which is the point of keeping it out of this module.
+
+    **This is not quite pre-outbox behaviour, and the gap is the page-hide path.** `enqueue()` sits *inside* the `canSync()` branch, so off Chromium the write intent is never stored at all — the degraded path is a plain axios XHR, and the browser cancels an in-flight XHR on unload. What it replaced was a `keepalive` `fetch`, which the browser commits to finishing after the document goes away. So on Safari/Firefox a position flushed at `visibilitychange` is dispatched on a transport the browser is free to cancel, where before it was dispatched on one it is not. **How much that actually costs is unverified** — it depends on those engines honouring `keepalive` at all, which is worth checking against a support table before treating it as a regression. Deliberate either way: Background Sync is the point of this branch and compatibility was explicitly not a goal. It only becomes a defect on merge to `main`.
+
+    Note also that `keepalive` is the weaker mechanism for the case this branch targets. It only survives the *document* being destroyed — not the OS suspending the process or cutting the radio, and it cannot retry. Background Sync hands delivery to an OS-level queue that runs when connectivity returns, which is the only thing that survives a locked phone with the radio down. The 10s `setInterval` backstop in `AudioPlayer.mounted` is what bounds the loss under every mechanism.
+
+    The blocker for closing it is a *deliverer*, not storage: `drain()` has exactly one caller, the worker's `sync` listener, so a row stored without Background Sync would never be sent. A drain on app boot would be engine-agnostic and would make enqueueing worthwhile everywhere — or the hide path could send with `keepalive` `fetch` on every engine (bodies are capped at 64KiB; a real history queue measures ~6KB, so it fits comfortably).
+  - **Needs a secure context, like everything service-worker-backed here.** On a plain-HTTP origin (a raw LAN IP, say) no worker registers, so `sync` never fires, Background Fetch throws, and the app will not install as a PWA. IndexedDB still works, so writes are captured and simply never drain — which reads as a broken outbox rather than an undeliverable one. Test over HTTPS, or grant the origin `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
+  - This **replaced** the `keepalive` `fetch` flushes on `visibilitychange` (`flushHistoryOnHide` / the deleted `_flushTrackProgressOnHide`). A row that survives the freeze plus a worker that delivers it afterwards is stronger **on Chromium** — but only there; see the `canSync()` note above for what the swap costs everywhere else. Even on Chromium the enqueue is async work started at `visibilitychange`, so a process frozen before the IndexedDB transaction commits stores nothing, which is the case `keepalive` was specified to cover. The 10s interval stays — it sets position *freshness*, not durability.
 - **Deploy path prefix:** never hardcode a root-absolute `/api/...` string into an `<img>`/`<audio>` `src` or a `fetch` — wrap it in `apiUrl()` from `src/base-path.js`. Axios call sites are handled by an interceptor. See §2.6b.
+- **Cover cache keys:** each cover variant is a *separate* Cache Storage entry (`/api/cover/:id`, `?type=main`, `?type=sam`), and different components request different ones (`Cover` the bare URL, `WorkListItem`/the player `?type=sam`, `WorkDetails`/the Downloads page `?type=main`). `WorkDetails.toggleWorkOfflineDownload` therefore caches all three. Manifests written before that change hold only `?type=main`, which is why `Downloads.vue` passes the manifest's own cover URL down via the `coverUrl` prop instead of relying on the default variant being cached.
 - **LocalStorage Keys (reserved):**
   | Key | Type | Purpose |
   |-----|------|---------|
@@ -461,8 +545,37 @@ Two separate translation layers, kept apart:
   | `old_work_card_ui_style_key` | boolean | Legacy card UI toggle |
   | `app_language` | string | UI locale (`zh-CN`/`en-US`/`ja-JP`/`zh-TW`); set by the Settings language switcher, auto-detected from browser on first load |
   | `tag_language` | string | Tag display locale — one of the four locales, or `follow` (default) to track `app_language`. See §2.10 |
+  | `downloaded_files` | array | Offline-download manifest (`module-Downloads/state.js`): `{url, workId, trackId, type, title, workTitle, bytes, downloadedAt}[]`, plus `contentHash`/`duration` on audio rows. Metadata only — actual bytes live in the service worker's Cache Storage, not here. Those two extra fields are what lets `Downloads.playWork` build a queue that can report progress and show a track length with no tree to read from; manifests written before they were recorded simply lack them. |
+  | `downloads_list_mode` | boolean | Downloads page grid/list toggle (separate from the Works page's `listMode`) |
+  | `downloads_sort_by` | string | Downloads page sort (`downloadedAt`/`title`/`size`) |
 
 ---
+
+### 3b Local-first playback position (`src/utils/positions.js`)
+
+Position used to live **only** on the server, which made unload-time delivery load-bearing — and nothing available is reliable everywhere (`keepalive` survives the document dying but not the OS suspending the process; Background Sync is Chromium-only). Writing locally removes the dependency instead of trying to strengthen it.
+
+| | writes | why |
+|---|---|---|
+| **local** (`positions` store) | every 10s tick **and** every state change | durable the instant it is observed; survives reload, offline, and a hard kill |
+| **server** (`PUT /api/track-progress`) | state changes, page hide, and at most once per `SERVER_PUSH_MS` (60s) per track | only needs to be fresh enough for *another device* to read |
+
+The 10s interval in `AudioPlayer.mounted` did not change cadence — it now drives the local write and merely trips the server throttle. Server traffic during continuous listening drops from ~360 writes/hour to ~60.
+
+> **Only the interval may be throttled, and that is why it has its own entry point** (`_tickTrackProgress`) instead of calling `onUpdatePlayingStatus` like it used to. Every *state change* goes through `onUpdatePlayingStatus` and forces a push, because the resume paths — `RecentWorks.resumeThisHistory`, `FavListItem`, `Work.resumeMetadataPlayHistory` — read `state.seconds`, which the **server** resolves from `t_track_progress` (`applyTrackProgressSeconds`). Share the funnel and a throttled pause never reaches `t_track_progress`, so those paths resume at 0 while the file tree (which reads the merged `trackProgress`) shows the right value. That asymmetry is the symptom to recognise.
+
+- **Store `positions` in the shared `kikoenai` DB** (v2; `utils/idb.js` owns `openDb`/`run` for both stores, because a second connection on a different version would block the first). `keyPath: 'trackId'`, plus a `workId` index so one work's rows are a single `getAll` rather than a scan of every track ever played.
+- **`savePosition()` skips a write when a stored row is newer.** These fire from async handlers and can land out of order.
+- **`positionsForWork()` returns the same shape as the server's `trackProgress` map**, deliberately, so `mergePositions` needs no adapter on either side.
+- **`resolvePosition(local, server)` is the single rule**, and `mergePositions` applies it across a work. Every consumer goes through one of the two: the file tree badge (`WorkTree.savedPosition`), the info panel (`WorkDetails.historySeconds`), the Favourites badge, and all three resume entry points (`Work.resumeMetadataPlayHistory`, `RecentWorks.resumeThisHistory`, `FavListItem.playHistory`) via `resumeSecondsFor(workId, state)`. They used to read different things — the tree took the merged map while the panel and the list views read `state.seconds` from the server's history join — so a throttled push made them contradict each other, and **the same resume landed in a different place depending on which page you started from**.
+- **`mergePositions(server, local)` takes the newer `observedAt` per track** — the same rule the server applies on write (`backend/AGENTS.md` §2.9c), so the two cannot disagree about precedence. It also reports which trackIds the local copy won, and `Work.vue:pushLocallyNewerPositions` sends those. That closes the gap the throttle opens: a position observed between pushes and then lost to a hard kill would otherwise never leave the device.
+
+> **The two sides store `observedAt` differently, and getting it wrong fails silently.** The server returns `'YYYY-MM-DD HH:MM:SS'` — space-separated, UTC, **no timezone marker** — while local rows hold epoch ms. `Date.parse` treats an unmarked string as *local* time, so parsing the server's value directly would shift it by the machine's offset and make local win every comparison. `toEpoch()` normalises with `replace(' ', 'T') + 'Z'`; route every comparison through it.
+
+- **`navigator.storage.persist()` is requested at boot** (`MainLayout.requestPersistentStorage`). Without it the origin's storage is *best-effort* and the browser may evict it under disk pressure, not only when the user clears data — which would silently lose positions. Advisory only; nothing depends on the grant.
+- **Growth is unbounded by design**: one row per track ever played, ~120 B each, so ~4 MB for a 30k-track library. Not worth pruning code.
+- **`_markTrackProgressReported` gates both reporters**, and a forced push with an unchanged position is correctly a no-op. It is one of the three race fixes in `7c33e02`, but it was a **single slot** (`trackId/seconds`) and had to become a per-track `Map`: a queue cycles through trackIds, so `A/100 → B/0 → A/100` slipped through and re-wrote A with a fresh `observedAt` over an unchanged position — harmless when the server overwrote unconditionally, a cross-device clobber now that it orders by `observedAt`.
+- **The report bookkeeping is non-reactive**, declared in `created()` next to the debounce rather than in `data()` — written on every report, never rendered, same reasoning as `_lrcLoadId` in `AudioElement`.
 
 ## 4. Dependencies
 
@@ -516,7 +629,7 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 | `/api/auth/me` | POST | `Login.vue` | Log in; server sets the session cookie. **Login POSTs to `/api/auth/me`** — there is no `/api/auth/login` |
 | `/api/auth/logout` | POST | `MainLayout.vue` | Destroy the server-side session and clear the cookie |
 | `/api/works` | GET | `Works.vue` | List/search works (paginated, sorted, filtered) |
-| `/api/work/:id` | GET | `Work.vue` | Get work metadata + playback state |
+| `/api/work/:id` | GET | `Work.vue`, `Downloads.vue` | Get work metadata + playback state. `state.secondsObservedAt` accompanies `state.seconds` so the client can tell whether its own local row is newer (see §3b). `Downloads.vue` fetches one per downloaded work to render real `WorkCard`s; served from the SW cache when offline |
 | `/api/work/:id/extras` | GET | `Work.vue` | `{description, descriptionHtml, descriptionParts, sampleImages}` — feeds the Description tab and the cover gallery. `descriptionHtml` is the seller's own markup, **sanitized by the backend per request**, and is what `WorkDescription.vue` renders with `v-html`; `description`/`descriptionParts[].text` are the plain-text path for rows scraped before the markup was kept (the backend decides which of the two is populated, so the component just checks `html`). A rescan or refresh upgrades a row from one to the other. Failure is non-fatal: the page is still the file tree it always was |
 | `/api/image/:id/:name` | GET | `WorkGallery.vue`, `WorkDescription.vue` (via `workImageUrl()` in `src/utils.js`) | One scraped image. **Local copies only:** `workImageUrl` returns `''` for an entry with no `file` (nothing was downloaded — backend `config.skipWorkExtras` defaults to `true`) and callers drop the empty ones, so an undownloaded image is left out rather than hotlinked from img.dlsite.jp. Run `updater.js --images`, or turn `skipWorkExtras` off, to get them |
 | `/api/tags` | GET | `List.vue` | List all tags |
@@ -524,9 +637,10 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 | `/api/vas` | GET | `List.vue` | List all VAs |
 | `/api/media/stream/:trackId` | GET | `AudioElement.vue`, `WorkTree.vue` | Stream a track (supports Range). Feeds `<audio src>` directly; the session cookie authenticates it, so the URL carries no credential |
 | `/api/media/download/:trackId` | GET | `WorkTree.vue` | Download a file |
+| `/api/media/offline/:trackId` | GET | `AudioElement.vue`, `WorkTree.vue`, `WorkDetails.vue`, `src/utils/downloads.js` | Best offline-friendly copy of a track (transcoded Opus for lossless sources, as-is otherwise). Populates the `offline-tracks` Cache Storage bucket via the explicit download action; `AudioElement.vue`'s `source` computed prefers this URL once a track is downloaded, online or offline (see `module-Downloads`). |
 | `/api/media/check-lrc/:trackId` | GET | `AudioElement.vue` | Lyric sidecar files for a track; returns `{result, message, lyrics: [{trackId, lyricExtension}]}`, one entry per speaker (see §2.9). The flat pre-multi-speaker `trackId`/`lyricExtension` fields were removed at the 1.0 freeze, along with the fallback that read them. |
-| `/api/cover/:id` | GET | `Cover.vue`, `AudioElement.vue` | Get cover image (`?type=main\|240x240\|sam`) |
-| `/api/tracks/:id` | GET | `Work.vue` | Track tree for a work (see Phase 2 note below) |
+| `/api/cover/:id` | GET | `Cover.vue`, `AudioElement.vue`, `WorkListItem.vue`, `Downloads.vue` | Get cover image (`?type=main\|240x240\|sam`). Each variant is its own cache key — see the cover-cache-keys note in §3 |
+| `/api/tracks/:id` | GET | `Work.vue` | Track tree for a work |
 | `/api/review` | GET | `Favourites.vue` | List works the user has reviewed/rated/progress-marked |
 | `/api/review/:id` | PUT/DELETE | `WorkDetails.vue`, `WorkCard.vue`, `FavListItem.vue`, `WriteReview.vue`, `AudioElement.vue` | Create/update or delete one work's review. PUT with `progressOnly=true` and `autoMark=true` only writes `progress='listened'` if existing is not terminal (listened/replay/postponed) |
 | `/api/review/:id/progress` | DELETE | `WorkDetails.vue` | Clear only `progress` (NULL), preserving rating/review_text. If the row has no rating/review_text, the whole row is deleted |
@@ -537,12 +651,12 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 | `/api/config/admin` | GET/PUT | `Folders.vue`, `Advanced.vue` | Admin config read/write |
 | `/api/credentials/users` | GET/POST/PUT/DELETE | `UserManage.vue` | List / create / update / delete users (admin). Was `/user` for the three write verbs |
 | `/api/refresh/:id` | POST | `WorkDetails.vue` | Re-fetch metadata for one work |
-| `/api/scan/:id` | POST | `WorkDetails.vue` | Re-read one work's files (durations, lyric presence). Was `/api/work/scan/:id` |
+| `/api/scan/:id` | POST | `WorkDetails.vue` | Re-walk one work and rewrite its file listing. Returns `{files}`, the re-listed track count — `WorkDetails.scanWorkFile` reloads the page when it is a number. Was `{memo}`, which no longer exists |
 | `/api/work/:id` | PUT | `EditMetadata.vue` | Manually edit work metadata (admin only). Work id is a string: DLsite doujin RJ-padded (`\d{6,8}`), DLsite books (`BJ\d{6,8}`, prefix kept) or Fanza (`d\d+`, underscore-free). `src/utils.js` mirrors backend `work-id.js`: `isFanzaId`/`isBooksId`/`fanzaCid`, plus `workno` (the code as its store spells it — use it for any `RJ`/`BJ` prefix in a template) and `dlsiteWorkUrl` (books works link to the `/books/` floor, doujin to `/home/`). |
 | `/api/illustrators` | GET | `EditMetadata.vue` | List illustrators (autocomplete) |
 | `/api/script_writers` | GET | `EditMetadata.vue` | List script writers (autocomplete) |
 | `/api/series` | GET | `EditMetadata.vue` | List series (autocomplete). Was the irregular `/api/seriess` |
-| `/api/track-progress/:trackId` | PUT | `AudioElement.vue`, `AudioPlayer.vue` | Report per-track playback position. Body `{seconds, completed, observedAt}` — `observedAt` is `Date.now()` at measurement time; the server applies the write only if it is at least as new as what it holds (`backend/AGENTS.md` §2.9c), so a deferred write cannot clobber a newer position — the track is addressed by the same handle as a media URL, so callers post to `/api/track-progress/${file.trackId}`. Fire-and-forget write |
+| `/api/track-progress/:trackId` | PUT | `AudioElement.vue`, `AudioPlayer.vue` | Report per-track playback position. Body `{seconds, completed, observedAt}` — `observedAt` is `Date.now()` at measurement time; the server applies the write only if it is at least as new as what it holds (`backend/AGENTS.md` §2.9c), so a deferred write cannot clobber a newer position — the track is addressed by the same handle as a media URL, so callers post to `/api/track-progress/${file.trackId}`. Fire-and-forget write, and **throttled**: at most once per 60s per track during continuous playback, immediate on state change and page hide (see §3b) |
 
 > **Tracks response:** `GET /api/tracks/:id` returns `{ tree, trackProgress }`.
 > **`trackId` is the only handle you need.** It is `${workId}/${relPath}`, so it
@@ -560,7 +674,7 @@ Never swap the two: `title` is what the backend builds media URLs from (see `bac
 > tree; and hashing inline here instead made the first open of a work read every
 > audio byte. Both came from using content as identity.
 
-> **Note:** Library scanning is **not** a REST endpoint. `Scanner.vue` triggers scans over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN` / `KILL_SCAN_PROCESS`) and listens for the `SCAN_*` events.
+> **Note:** Library scanning is **not** a REST endpoint. `Scanner.vue` triggers scans over Socket.IO (`PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_WORK_FILE_SCAN` / `KILL_SCAN_PROCESS`) and listens for the `SCAN_*` events.
 
 ---
 
@@ -570,7 +684,7 @@ Build output goes directly into `backend/dist/` (configured via `distDir` in `qu
 
 - **Workspace scripts:** `npm run dev:frontend` / `npm run build:frontend` from root.
 - **Dev proxy:** `quasar dev` proxies `/api` and `/socket.io` to `localhost:8888`.
-- **Socket.IO client:** Exposed globally as `$socket` (`src/boot/socket.io.js`), connects after auth. Drives library scanning in `Scanner.vue` — emits `PERFORM_SCAN` / `PERFORM_UPDATE` / `PERFORM_LYRIC_SCAN` / `KILL_SCAN_PROCESS` / `ON_SCANNER_PAGE` and listens for `SCAN_INIT_STATE`, `SCAN_TASKS`, `SCAN_FAILED_TASKS`, `SCAN_MAIN_LOGS`, `SCAN_RESULTS`, `SCAN_FINISHED`, `SCAN_ERROR`.
+- **Socket.IO client:** Exposed globally as `$socket` (`src/boot/socket.io.js`), connects after auth. Drives library scanning in `Scanner.vue` — see §2.6 and `backend/AGENTS.md` §7 for the event list.
 
 ---
 
@@ -611,6 +725,9 @@ Build output goes directly into `backend/dist/` (configured via `distDir` in `qu
 ## 10. Development Tips
 
 - **Auth in dev:** If auth is enabled, log in via `/login` first. The session cookie survives hot reloads. Note `config.auth` defaults to `false` outside `NODE_ENV=production`, so auth is usually off in dev.
-- **PWA testing:** `src-pwa/register-service-worker.js` skips registration under `process.env.DEV` and unregisters whatever is already there, so dev has no service worker. That is not Quasar's doing — `quasar dev -m pwa` does emit a real Workbox worker (`skipWaiting` + `clientsClaim`, precaching `index.html`, `app.js`, `vendor.js` and even the `*.hot-update.js` files), and leaving it registered puts the page in an endless reload loop: each recompile ships a new worker that claims the live page and then answers from its stale snapshot, so the HMR client's hash never matches. Use a production build to test PWA features.
+- **PWA testing:** `src-pwa/register-service-worker.js` unregisters any worker under `process.env.DEV`, so dev has none. That is not Quasar's doing — `quasar dev -m pwa` emits a real Workbox worker (`skipWaiting` + `clientsClaim`, precaching `index.html`, `app.js`, `vendor.js` and the `*.hot-update.*` files). **The reason is HMR:** Hot Module Replacement has to fetch those hot-update files fresh, and a cache in front of them means the patch does not apply, so webpack either full-reloads or quietly runs stale code.
+  - **Not the old infinite-reload loop**, which had a different cause: an `updated()` `Notify` whose `onDismiss` called `location.reload()`, and `onDismiss` fires on the dismiss *timeout* too — so every recompile scheduled a reload ten seconds out. Deleting that `Notify` fixed it (`17e3e6b`); unregistering never addressed it. Do not remove the dev block on the grounds that the loop is gone.
+  - **What dev can and cannot test now.** Whole-work downloads *do* work, because `canBackgroundFetch()` is false without a worker and the foreground path needs only Cache Storage. Offline *playback* does not — `AudioElement` requests `/api/media/offline/...` over the network and nothing is there to answer from cache. Background Fetch, Background Sync and offline navigation all need a production build.
+  - **Testing footgun:** DevTools → Application → Service Workers → **Bypass for network** makes a correctly registered worker look entirely absent — `navigator.serviceWorker.controller` reads `null` and every offline behaviour fails. Combined with the Offline checkbox it is indistinguishable from broken offline support. Also note Firefox's offline throttle serves from the HTTP cache, so a reload can succeed there with no worker involved at all; Chromium's is the stricter test, and pulling wifi is stricter still.
 - **Dark mode:** Quasar's `Dark` plugin respects OS preference (`dark: auto`). Toggle via `Dark.toggle()` in `MainLayout.vue`.
 - **Component debugging:** Install Vue DevTools for inspecting Vuex state and component hierarchy.

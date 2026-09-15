@@ -1,15 +1,7 @@
 // Sample/description image download and DLsite review scraping.
-//
-// Lives outside scannerModules.js because two callers need it: the scanner
-// child process, and POST /api/refresh/:id in the web process. Requiring
-// scannerModules from a route would drag in the child-process IPC plumbing
-// (it reassigns process.send) and the scan concurrency limiter.
-//
-// The logger is injected so the scanner can route messages to its SCAN_* IPC
-// events while the route just writes to the console.
 
 const fs = require('fs');
-const LimitPromise = require('limit-promise'); // 限制并发数量
+const LimitPromise = require('limit-promise');
 
 const axios = require('../scraper/axios');
 const db = require('../database/db');
@@ -20,10 +12,10 @@ const { isFanzaId, workno } = require('../work-id');
 
 const displayIdOf = id => (isFanzaId(id) ? id : formatID(id));
 
-// A single-work refresh is the user waiting on a button, and it is the only
-// thing running -- unlike a scan, where config.maxParallelism works are already
-// in flight and per-work parallelism would multiply out at img.dlsite.jp.
+// separate limit for single work refresh
 const REFRESH_IMAGE_CONCURRENCY = 4;
+
+const IMAGE_KIND_LABEL = { smp: '预览图', part: '说明图' };
 
 const consoleLogger = {
   info: (id, message) => console.log(`[${workno(id)}] ${message}`),
@@ -113,21 +105,18 @@ async function downloadWorkImages(id, metadata, log = consoleLogger, options = {
       + `${reuse.length ? `, 跳过已有 ${reuse.length} 张` : ''})...`);
   }
 
-  // One at a time by default, and the default is what the scanner gets: it
-  // already runs config.maxParallelism works at once, so fetching a work's
-  // images in parallel multiplies out -- 16 works x 10 images was ~160
-  // concurrent requests at img.dlsite.jp, well above the ~48 the cover
-  // downloads ever produced, and enough to get the whole scan rate-limited.
-  // A single-work refresh has nothing to multiply with and passes a real
-  // concurrency instead; images are ~1MB each, so the wait is transfer time.
   const limit = new LimitPromise(Math.max(1, concurrency));
+
+  let finished = 0;
   const fetchOne = async (target) => {
+    const label = IMAGE_KIND_LABEL[target.kind] || target.kind;
     try {
       const imageRes = await axios.retryGet(target.url, { responseType: 'stream', retry: {} });
       await saveWorkImageToDisk(imageRes.data, target.file);
+      log.info(displayId, `${label} ${++finished}/${fetch.length} 下载完成: ${target.file}`);
       return target;
     } catch (err) {
-      log.warn(displayId, `在下载作品图片 ${target.file} 过程中出错: ${err.message} (URL: ${target.url})`);
+      log.warn(displayId, `${label} ${++finished}/${fetch.length} 下载失败: ${target.file} - ${err.message} (URL: ${target.url})`);
       return { ...target, file: null };
     }
   };
@@ -135,8 +124,10 @@ async function downloadWorkImages(id, metadata, log = consoleLogger, options = {
   const results = [...reuse, ...await Promise.all(fetch.map(target => limit.call(fetchOne, target)))];
 
   if (fetch.length) {
-    const downloaded = results.filter(r => r.file).length;
-    log.info(displayId, `作品图片下载完成: ${downloaded}/${targets.length}`);
+    const stored = kind => results.filter(image => image.file && image.kind === kind).length;
+    const wanted = kind => targets.filter(target => target.kind === kind).length;
+    log.info(displayId, `Work image downloaded: sample ${stored('smp')}/${wanted('smp')}, `
+      + `part ${stored('part')}/${wanted('part')}.`);
   }
 
   // Page order, not fetch order: the stored list doubles as the render order.
@@ -178,10 +169,6 @@ async function saveWorkImages(id, metadata, log = consoleLogger, options = {}) {
 /**
  * Scrapes every DLsite user review of a work and replaces the stored set.
  *
- * Reviews are the one part of the work page that grows without bound, so this
- * runs only where it is asked for: a newly added work, a single-work refresh,
- * or an explicit `--includeReviews` update. Never fatal — a work with no
- * reviews is normal.
  * @param {String} id Work id.
  * @param {Object} [log] Logger with info(id, message) / warn(id, message).
  * @returns {Promise<Number>} Number of reviews stored.
@@ -191,6 +178,7 @@ async function saveWorkReviews(id, log = consoleLogger) {
 
   const rjcode = formatID(id);
   try {
+    log.info(rjcode, '开始抓取 DLsite 用户评论...');
     const reviews = await scrapeWorkReviewsFromDLsite(id);
     await db.replaceWorkDlsiteReviews(id, reviews);
     log.info(rjcode, `抓取到 ${reviews.length} 条 DLsite 用户评论.`);

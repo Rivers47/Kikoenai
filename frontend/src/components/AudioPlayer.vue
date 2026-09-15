@@ -304,6 +304,10 @@ import Scrollable from 'components/Scrollable'
 import SleepMode from 'components/SleepMode'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import { formatSeconds } from '../utils'
+import { sendOrQueue, requestSync } from '../utils/outbox'
+import { savePosition } from '../utils/positions'
+
+const SERVER_PUSH_MS = 60 * 1000 //update progress to server at least every 60s
 import { debounce } from 'quasar'
 import { apiUrl } from 'src/base-path'
 
@@ -336,20 +340,11 @@ export default {
   },
 
   mounted () {
-    // Backstop for uninterrupted playback: every other trigger for
-    // onUpdatePlayingStatus is a state change (track/pause/seek/queue), and
-    // during continuous listening none of them fire. This bounds how much
-    // position is lost if the app dies without a visibilitychange.
     this.historyCheckIntervalId = setInterval(() => {
-      // Only while this tab is actually playing. A paused tab still holds the
-      // queue of whatever it last played, and ticking here made it re-post
-      // that frozen position every 10s -- overwriting the progress another
-      // tab (or a later session) had since written for the same work.
       if (!this.playing) return
-      this.onUpdatePlayingStatus()
-    }, 10 * 1000) // 每隔一段时间更新一次播放记录
+      this._tickTrackProgress()
+    }, 10 * 1000)
 
-    // 监听页面可见性变化，在页面隐藏时（锁屏/切后台）立即刷新播放进度到服务器
     document.addEventListener('visibilitychange', this.onVisibilityChange)
 
 
@@ -399,22 +394,12 @@ export default {
     // 当 ***SeekMode 变为false，表明进度条跳转已经完成
     rewindSeekMode(v) {
       if (!v) {
-        // 当用户前进后退时，currentTime可能并没有立即从audio元素中反馈到vue状态里，
-        // 因此这里需要延迟一小会，等待audio前进后退之后的更新时间抵达vue的currentTime状态，
-        // 然后再去更新播放历史
-        setTimeout(() => {
-          this.onUpdatePlayingStatus()
-        }, 100) 
+        this.onUpdatePlayingStatus()
       }
     },
     forwardSeekMode(v) {
       if (!v) {
-        // 当用户前进后退时，currentTime可能并没有立即从audio元素中反馈到vue状态里，
-        // 因此这里需要延迟一小会，等待audio前进后退之后的更新时间抵达vue的currentTime状态，
-        // 然后再去更新播放历史
-        setTimeout(() => {
-          this.onUpdatePlayingStatus()
-        }, 100)
+        this.onUpdatePlayingStatus()
       }
     },
     currentTime() {
@@ -582,7 +567,6 @@ export default {
     
     ...mapGetters('AudioPlayer', [
       'currentPlayingFile',
-      'resumeHistoryDone',
     ])
   },
 
@@ -665,11 +649,6 @@ export default {
       this.setEnablePIPLyrics(!this.enablePIPLyrics)
     },
     
-    // return true if two history updated on (onUpdatePlayingStatus) is same
-    //
-    // History carries the queue (kilobytes) and is written only when the queue
-    // or current track changes; position is owned by /api/track-progress and no
-    // longer sent here, so there is no seconds field to compare.
     isSameTwoHistory(ha, hb) {
       // 如果有任意一个是null，则认为两者不一样
       if (!(ha && hb)) return false;
@@ -683,17 +662,15 @@ export default {
       return true;
     },
 
-    // 页面隐藏时（锁屏/切后台）立即刷新播放进度，不使用防抖以确保数据到达
+    // flush progress immediately on page hidden/phone lock
     onVisibilityChange() {
       if (document.visibilityState === 'hidden') {
         this.flushHistoryOnHide()
       }
     },
 
-    // 使用 keepalive fetch 确保页面关闭时播放进度能够送达服务器
     flushHistoryOnHide() {
       if (this.queueCopy.length <= 0) return;
-      if (!this.resumeHistoryDone) return;
 
       const data = {
         work_id: this.playWorkId,
@@ -703,58 +680,21 @@ export default {
         }
       }
 
-      // The history body is queue + index only -- position lives in
-      // t_track_progress -- so during continuous playback it does not change
-      // between flushes. Without this guard every hide re-sent a byte-identical
-      // payload, and rapid tab switching turned that into one write per switch.
-      // latestUpdatedHistory is assigned only after a confirmed delivery, so an
-      // unconfirmed or failed send still leaves this flush to retry.
-      //
-      // Only the history write is skipped. Progress is a position, which does
-      // keep changing while playing, so it is reported either way.
       if (!this.isSameTwoHistory(this.latestUpdatedHistory, data)) {
-        fetch(apiUrl(`/api/history/${this.playWorkId}`), {
+        sendOrQueue(this.$axios, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-          keepalive: true,
-        }).catch(() => {})
+          url: `/api/history/${this.playWorkId}`,
+          body: { state: data.state }
+        })
       }
 
-      // Also report per-track progress (Phase 2)
-      this._flushTrackProgressOnHide()
+      this._reportTrackProgressOnUpdate({ force: true })
+      requestSync()
     },
 
-    // Fire-and-forget per-track progress on page hide (Phase 2)
-    _flushTrackProgressOnHide () {
-      const file = this.queueCopy[this.queueIndex]
-      if (!file || !file.trackId || this.playWorkId === 0) return
-      const seconds = this.currentTime
-      const duration = file.duration
-      const completed = duration > 0 && seconds >= 0.95 * duration
-      if (!this._markTrackProgressReported(file.trackId, seconds)) return
-      fetch(apiUrl(`/api/track-progress/${file.trackId}`), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          seconds: Math.round(seconds * 100) / 100,
-          completed: completed,
-          observedAt: Date.now()
-        }),
-        keepalive: true,
-      }).catch(() => {})
-    },
 
-    
     onUpdatePlayingStatus() {
-      // 当前播放列表为空，禁止记录播放历史
       if (this.queueCopy.length <= 0) return;
-
-      // 尚处于恢复历史记录的阶段，为了避免此时将空状态写入远程服务器覆盖有效状态，跳过本次历史更新
-      if (!this.resumeHistoryDone) {
-        console.log("尚处于恢复历史记录的状态，跳过本次历史更新")
-        return
-      }
 
       const data = {
         "work_id": this.playWorkId,
@@ -764,53 +704,70 @@ export default {
         }
       }
 
-      this._reportTrackProgressOnUpdate()
+      this._reportTrackProgressOnUpdate({ force: true })
 
-      // 检查最近一次的历史更新记录，如果两次数据不变，则无需更新记录
       if (this.isSameTwoHistory(this.latestUpdatedHistory, data)) {
-        console.log("播放状态未变，跳过服务器历史更新")
         return
       }
 
       this.$axios.put(`/api/history/${this.playWorkId}`, data)
         .then((_) => {
-          console.log("更新播放状态成功")
           this.latestUpdatedHistory = data;
         })
         .catch((err) => {
-          console.error(err.response.data.error)
+          console.error(err.response?.data?.error || err.message || err)
         })
     },
 
-    // Guard against re-posting a position this tab has already reported: a
-    // repeat write carries no new information but does clobber whatever the
-    // work's progress has become in the meantime. Returns false when the
-    // report should be skipped.
     _markTrackProgressReported (trackId, seconds) {
-      const key = `${trackId}/${seconds}`
-      if (key === this._lastReportedProgress) return false
-      this._lastReportedProgress = key
+      if (this._lastReportedProgress.get(trackId) === seconds) return false
+      this._lastReportedProgress.set(trackId, seconds)
       return true
     },
 
-    _reportTrackProgressOnUpdate () {
+    // The periodic backstop.
+    _tickTrackProgress () {
+      this._reportTrackProgressOnUpdate()
+    },
+
+    _reportTrackProgressOnUpdate ({ force = false } = {}) {
       const file = this.queueCopy[this.queueIndex]
       if (!file || !file.trackId || this.playWorkId === 0) return
       const seconds = this.currentTime
       const duration = file.duration
       const completed = duration > 0 && seconds >= 0.95 * duration
       if (!this._markTrackProgressReported(file.trackId, seconds)) return
-      this.$axios.put(`/api/track-progress/${file.trackId}`, {
-        seconds: Math.round(seconds * 100) / 100,
-        completed: completed,
-        observedAt: Date.now()
-      }).catch((err) => {
-        console.error('track progress report failed:', err)
+      const observedAt = Date.now()
+
+      savePosition({
+        trackId: file.trackId,
+        workId: this.playWorkId,
+        seconds: seconds,
+        completed,
+        observedAt,
+      }).catch((err) => console.error('local position write failed:', err))
+
+      if (!force && !this._shouldPushProgress(file.trackId, observedAt)) return
+      this._lastPushedTrackId = file.trackId
+      this._lastServerPush = observedAt
+      sendOrQueue(this.$axios, {
+        method: 'PUT',
+        url: `/api/track-progress/${file.trackId}`,
+        body: {
+          seconds: seconds,
+          completed: completed,
+          observedAt
+        }
       })
     },
 
+    _shouldPushProgress (trackId, now) {
+      const due = trackId !== this._lastPushedTrackId
+      || now - this._lastServerPush >= SERVER_PUSH_MS
+      return due
+    },
+
     gotoFullScreenPlayer() {
-      // ponytail: 已在全屏页时再次点击则退出全屏，回到对应作品详情页
       if (this.isFullScreenPage) {
         this.$router.push(`/work/${this.playWorkId}`)
       } else {
@@ -858,6 +815,12 @@ export default {
   created() {
     // 历史更新函数防抖动
     this.onUpdatePlayingStatus = debounce(this.onUpdatePlayingStatus, 500);
+
+    // Non-reactive: written on every progress report and never rendered.
+    // trackId -> last reported seconds, and the server-push throttle window.
+    this._lastReportedProgress = new Map();
+    this._lastServerPush = 0;
+    this._lastPushedTrackId = '';
   }
 }
 </script>

@@ -1,47 +1,11 @@
 /**
  * One file identity: relPath replaces the CRC32 content hash.
- *
- * A file inside a work was addressed three different ways — a positional index
- * in media URLs, a relPath in every t_work.memo map, and a CRC32 of the file's
- * contents in t_track_progress.track_key. relPath wins because the memo already
- * used it, and because the hash never bought what it appeared to: its own cache
- * was invalidated by mtime, so it inherited mtime's trust level while costing a
- * full read of every audio byte on first open of a work.
- *
- * This migration rekeys the stored data, using each work's own
- * memo.contentHash map (relPath → hash) inverted. It reads no files: migrations
- * run on every boot and a work directory may be unmounted at that moment.
- *
- * What cannot be converted is KEPT, never deleted. An older scrapeWorkMemo
- * wiped memo.contentHash on every rescan (see AGENTS.md §2.9a), so in a
- * long-lived database most works with progress rows have no hash map left to
- * invert — measured at 212 of 230 works on the author's library. Those rows are
- * not junk: the old tree endpoint would recompute the hash on next open and
- * revive them, so deleting them here would be silent data loss.
- *
- * A leftover hash-shaped track_key is inert rather than harmful: nothing looks a
- * key up by hash any more, and a relPath can never collide with one (a tracked
- * file carries an extension, so it always contains a '.'). To recover the
- * positions rather than leave them stranded, run the opt-in
- * `scripts/rekey-track-progress.js`, which reads the files to finish the job —
- * deliberately a separate tool, since reading every audio file is exactly the
- * cost this change exists to remove from the request path.
- *
- * A play-history queue item with no contentHash predates per-track progress and
- * is left on its `workId/index` handle, which routes/utils/track.js resolves
- * through its documented legacy branch — stored user data cannot be refetched
- * the way a client cache can.
  */
 
 // `${workId}/${relPath}` — the handle the API now serves and the frontend stores.
 const trackIdFor = (workId, relPath) => `${workId}/${relPath}`;
 
-// A key this migration has not converted yet: 8 lowercase hex digits. A relPath
-// cannot look like one, because a tracked file always carries an extension.
-// Tested explicitly rather than inferred from "did not resolve": re-running this
-// migration finds the memos already stripped, so nothing resolves and every row
-// -- including the ones already converted -- would otherwise be reported as
-// stranded. Must stay in step with HASH_KEY in scripts/rekey-track-progress.js.
+// Must stay in step with HASH_KEY in scripts/rekey-track-progress.js.
 const HASH_KEY = /^[0-9a-f]{8}$/;
 
 /** relPath → hash, inverted to hash → relPath. First writer wins on a tie. */
@@ -60,11 +24,81 @@ const invertHashes = (memoJson) => {
   return { memo, byHash };
 };
 
+/** Every relPath the memo knows, spelled the way trackIds are (forward slashes). */
+const memoPaths = (memo) => new Set(
+  ['duration', 'mtime', 'trackTitles']
+    .flatMap((field) => Object.keys((memo && memo[field]) || {}))
+    .map((relPath) => String(relPath).split('\\').join('/'))
+);
+
+const POSITIONAL = /^\d+$/;
+
+/**
+ * The work a trackId prefix names, as this history row spells it. Only the
+ * pre-text-id numeric spelling of the row's own work (`1636129` for `01636129`)
+ * is rewritten: a queue can hold tracks of other works, and those are left alone.
+ */
+const workIdForPrefix = (prefix, rowWorkId) => {
+  if (prefix === rowWorkId) return rowWorkId;
+  const bare = (id) => id.replace(/^0+/, '');
+  return POSITIONAL.test(prefix) && POSITIONAL.test(rowWorkId) && bare(prefix) === bare(rowWorkId)
+    ? rowWorkId
+    : null;
+};
+
+/** Rebuild a positional item's relPath from its title and folder, if the memo has that file. */
+const relPathFromItem = (item, paths) => {
+  if (typeof item.title !== 'string' || !item.title) return null;
+  let candidate = null;
+  if (typeof item.subtitle === 'string') {
+    candidate = `${item.subtitle.split('\\').join('/')}/${item.title}`;
+  } else if (item.subtitle === null) {
+    candidate = item.title;
+  } else {
+    // Older queue items dropped the folder: accept the name only when it is unique.
+    const matches = [...paths].filter((p) => p === item.title || p.endsWith(`/${item.title}`));
+    if (matches.length === 1) candidate = matches[0];
+  }
+  // A guessed path that is not on the list would 404, where the old handle still plays.
+  return candidate && paths.has(candidate) ? candidate : null;
+};
+
+/**
+ * Convert an item still on a positional or legacy-prefixed handle. Returns true
+ * when the item now holds a `workId/relPath` trackId, false when it was left alone.
+ * Mutates the item; the pre-rename `hash` field is folded in by the caller after.
+ */
+const resolveLegacyHandle = (item, rowWorkId, byWork) => {
+  const handle = typeof item.trackId === 'string' ? item.trackId : item.hash;
+  if (typeof handle !== 'string') return false;
+  const slash = handle.indexOf('/');
+  if (slash <= 0) return false;
+  const rest = handle.slice(slash + 1);
+  const workId = workIdForPrefix(handle.slice(0, slash), rowWorkId);
+  if (!workId) return !POSITIONAL.test(rest);
+
+  if (!POSITIONAL.test(rest)) {
+    // Already a relPath; only the prefix may need respelling.
+    item.trackId = trackIdFor(workId, rest);
+    return true;
+  }
+  const entry = byWork.get(workId);
+  const relPath = entry && relPathFromItem(item, entry.paths);
+  if (!relPath) {
+    if (workId !== handle.slice(0, slash)) item.trackId = `${workId}/${rest}`;
+    return false;
+  }
+  item.trackId = trackIdFor(workId, relPath);
+  return true;
+};
+
 exports.up = async function (knex) {
   const works = await knex('t_work').select('id', 'memo');
   const byWork = new Map();
   for (const work of works) {
-    byWork.set(String(work.id), invertHashes(work.memo));
+    const entry = invertHashes(work.memo);
+    entry.paths = memoPaths(entry.memo);
+    byWork.set(String(work.id), entry);
   }
 
   // 1. t_track_progress: track_key from CRC32 to relPath.
@@ -108,23 +142,35 @@ exports.up = async function (knex) {
     }
     if (!state || !Array.isArray(state.queue)) continue;
 
-    const entry = byWork.get(String(row.work_id));
+    const rowWorkId = String(row.work_id);
+    const entry = byWork.get(rowWorkId);
     let changed = false;
     let resolvedAll = true;
     for (const item of state.queue) {
       const hash = item.contentHash;
       const relPath = hash && entry && entry.byHash.get(hash);
+      const before = item.trackId;
       if (relPath) {
         item.trackId = trackIdFor(row.work_id, relPath);
-        changed = true;
-      } else {
+      } else if (!resolveLegacyHandle(item, rowWorkId, byWork)) {
         resolvedAll = false;
       }
+      if (item.trackId !== before) changed = true;
       // contentHash is no longer anyone's key; drop it either way so the queue
       // stops re-uploading a dead field on every history PUT.
       if ('contentHash' in item) {
         delete item.contentHash;
         changed = true;
+      }
+      // A stored default stream/download URL still names the old handle, and
+      // AudioElement prefers mediaStreamUrl over the trackId -- so it would keep
+      // playing the positional URL and skip a downloaded copy. The player derives
+      // the default itself; only an offload URL (no /api/) is worth keeping.
+      for (const [field, route] of [['mediaStreamUrl', '/api/media/stream/'], ['mediaDownloadUrl', '/api/media/download/']]) {
+        if (typeof item[field] === 'string' && item[field].includes(route)) {
+          delete item[field];
+          changed = true;
+        }
       }
       // The pre-rename spelling of trackId. Fold it in so there is one field.
       if ('hash' in item) {

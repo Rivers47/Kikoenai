@@ -253,6 +253,8 @@
 
       <q-btn dense @click="scanWorkFile" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.scanFiles')" />
 
+      <q-btn v-if="enableTranscoding" dense :loading="downloadOfflineLoading" @click="toggleWorkOfflineDownload" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="offlineDownloadLabel" />
+
       <q-btn v-if="isAdmin" dense @click="showEditDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.editMetadata')" />
 
       <q-btn dense :loading="refreshMetadataLoading" @click="refreshMetadata" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.refreshMetadata')" />
@@ -272,8 +274,10 @@ import EditMetadata from './EditMetadata'
 import SearchableLabel from './SearchableLabel'
 import LabelDropdown from './LabelDropdown'
 import NotifyMixin from '../mixins/Notification.js'
-import { mapState } from 'vuex'
+import { mapState, mapGetters } from 'vuex'
 import { isFanzaId, fanzaCid, dlsiteWorkUrl, labelRoute, workno } from 'src/utils'
+import { uncacheFile, buildWorkDownloadPlan, startWorkDownload, bgFetchIdFor, canBackgroundFetch } from '../utils/downloads'
+import { activeRegistration } from '../utils/service-worker'
 
 export default {
   name: 'WorkDetails',
@@ -294,18 +298,25 @@ export default {
       required: true
     },
 
-    // Scraped work images (t_work.sample_images); the gallery shows them after
-    // the cover.
     images: {
       type: Array,
       required: false,
       default() { return [] }
+    },
+
+    resumeSeconds: {
+      type: Number,
+      required: false,
+      default: null
     }
   },
 
   data() {
     return {
       refreshMetadataLoading: false,
+      downloadOfflineLoading: false,
+      // { done, total } while a foreground download runs
+      downloadProgress: null,
       userMarked: false,
       rating: 0,
       progress: '',
@@ -357,8 +368,10 @@ export default {
       return track ? (track.title || '—') : '—'
     },
 
+    // Reconciled against the local store by the parent, so this reads the same
+    // number the file tree shows.
     historySeconds() {
-      return this.metadata.state?.seconds ?? 0
+      return this.resumeSeconds ?? this.metadata.state?.seconds ?? 0
     },
 
     isAdmin() {
@@ -369,6 +382,28 @@ export default {
       'playing',
       'playWorkId'
     ]),
+
+    ...mapState('Downloads', [
+      'enableTranscoding',
+    ]),
+
+    ...mapGetters('Downloads', [
+      'isWorkDownloaded',
+      'isWorkDownloading',
+    ]),
+
+    // Three states: a Background Fetch keeps running after this page
+    // is closed, so "downloading" has to be visible on return.
+    offlineDownloadLabel () {
+      // A foreground download is watched rather than backgrounded, so its
+      // progress goes on the button -- there is no OS notification for it.
+      if (this.downloadProgress) {
+        return this.$t('workdetails.downloadOfflineProgress', this.downloadProgress);
+      }
+      if (this.isWorkDownloading(this.metadata.id)) return this.$t('workdetails.downloadOfflineInProgress');
+      if (this.isWorkDownloaded(this.metadata.id)) return this.$t('workdetails.removeOfflineDownload');
+      return this.$t('workdetails.downloadOffline');
+    },
   },
 
   watch: {
@@ -503,7 +538,9 @@ export default {
     async scanWorkFile() {
       try {
         const response = await this.$axios.post(`/api/scan/${this.metadata.id}`);
-        if (response.data.memo) {
+        // `files` is the re-listed track count. Was `memo`, which is gone --
+        // durations and the listing both live in t_work_file now.
+        if (typeof response.data.files === 'number') {
           this.$router.go(0);
         }
       } catch(err) {
@@ -531,7 +568,102 @@ export default {
       const mins = Math.floor(totalSeconds / 60)
       const secs = Math.floor(totalSeconds % 60)
       return `${mins}:${secs.toString().padStart(2, '0')}`
-    }
+    },
+
+    // Pulls in everything needed to fully use this work offline: audio
+    // tracks, lyric/subtitle files, the cover image, and the JSON metadata
+    // Work.vue/WorkDetails.vue need to render -- not just the audio. See
+    // frontend/CLAUDE.md for why the metadata JSON is included too.
+    //
+    // The download itself runs as a Background Fetch: this method returns as
+    // soon as it is registered, and the service worker finishes the job even
+    // if the tab is closed.
+    async toggleWorkOfflineDownload() {
+      const workId = this.metadata.id;
+
+      if (this.isWorkDownloaded(workId) || this.isWorkDownloading(workId)) {
+        // Cancel first if a fetch is still running, otherwise the browser
+        // keeps downloading a work the user just removed.
+        if (this.isWorkDownloading(workId)) {
+          // Only a background fetch can be running to abort; a foreground one
+          // owns the page, so there is no tab left to press this button in.
+          const registration = await activeRegistration();
+          if (registration && 'backgroundFetch' in registration) {
+            const running = await registration.backgroundFetch.get(bgFetchIdFor(workId));
+            if (running) await running.abort();
+          }
+        }
+
+        const filesToRemove = this.$store.state.Downloads.downloadedFiles.filter(f => f.workId === workId);
+        for (const file of filesToRemove) {
+          await uncacheFile(file.url);
+        }
+        this.$store.commit('Downloads/REMOVE_DOWNLOADED_FILES', filesToRemove.map(f => f.url));
+        return;
+      }
+
+      this.downloadOfflineLoading = true;
+      this.downloadProgress = null;
+      try {
+        // Without Background Fetch the download lives in this page, so leaving it
+        // abandons the download. Say so before starting rather than letting the
+        // user discover it by navigating away.
+        if (!(await canBackgroundFetch())) {
+          this.showSuccNotif(this.$t('workdetails.downloadOfflineForeground'));
+        }
+        const tracksResponse = await this.$axios.get(`/api/tracks/${workId}`);
+        const tree = tracksResponse.data.tree || tracksResponse.data;
+        const rows = buildWorkDownloadPlan(workId, tree);
+
+        // Claim every row up front, pending. The page is the only side that
+        // knows track titles, and the download completes in the service worker
+        // -- possibly with no tab open -- so the manifest is written here and
+        // promoted later rather than being built as files arrive.
+        for (const row of rows) {
+          this.$store.commit('Downloads/ADD_DOWNLOADED_FILE', {
+            ...row,
+            workId,
+            workTitle: this.metadata.title,
+            bytes: 0,
+            downloadedAt: Date.now(),
+            pending: true,
+          });
+        }
+
+        let result;
+        try {
+          result = await startWorkDownload({
+            workId,
+            workTitle: this.metadata.title,
+            rows,
+            title: this.$t('workdetails.downloadOfflineNotificationTitle', { title: this.metadata.title }),
+            // Only fires on the foreground path; the background one reports
+            // progress through the browser's own notification instead.
+            onProgress: ({ done, total }) => { this.downloadProgress = { done, total }; },
+          });
+        } catch (err) {
+          // Nothing will promote these rows -- either the fetch never started or
+          // the foreground run failed and rolled its own bytes back.
+          this.$store.commit('Downloads/REMOVE_DOWNLOADED_FILES', rows.map(r => r.url));
+          throw err;
+        }
+
+        if (result.mode === 'foreground') {
+          // Already finished by the time we get here, and no service worker will
+          // post a completion message -- so promote the rows directly.
+          this.$store.commit('Downloads/PROMOTE_DOWNLOADED_FILES', result.stored);
+          this.showSuccNotif(this.$t('workdetails.downloadOfflineComplete', { title: this.metadata.title }));
+        } else {
+          this.showSuccNotif(this.$t('workdetails.downloadOfflineStarted'));
+        }
+      } catch(err) {
+        console.error(err);
+        this.showErrNotif(err.message || err);
+      } finally {
+        this.downloadOfflineLoading = false;
+        this.downloadProgress = null;
+      }
+    },
   }
 }
 </script>

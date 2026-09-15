@@ -7,10 +7,6 @@ const getters = {
     }
   },
 
-  resumeHistoryDone: (state) => {
-    return state.resumeHistorySeconds < 0
-  },
-
   isQueueEmpty: (state) => {
     return state.queue.length == 0
   },

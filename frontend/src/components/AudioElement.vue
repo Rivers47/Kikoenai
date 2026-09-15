@@ -30,6 +30,8 @@ import NotifyMixin from '../mixins/Notification.js'
 import { formatSeconds } from '../utils'
 import { MAX_LYRIC_STREAMS } from 'src/utils/lyrics'
 import { convert_srt_vtt_to_lrc_streams, mergeLyricStreams } from 'src/utils/subtitles'
+import { sendOrQueue } from '../utils/outbox'
+import { savePosition } from '../utils/positions'
 import { debounce } from 'quasar';
 import Plyr from 'plyr'
 import { apiUrl } from 'src/base-path'
@@ -68,14 +70,20 @@ export default {
     },
 
     source () {
+      const trackId = this.currentPlayingFile.trackId
       if (this.currentPlayingFile.mediaStreamUrl) {
         return `${this.currentPlayingFile.mediaStreamUrl}`
-      } else if (this.currentPlayingFile.trackId) {
-        return apiUrl(`/api/media/stream/${this.currentPlayingFile.trackId}`)
+      } else if (trackId && this.isDownloaded(trackId)) {
+        // Once downloaded, always play from the offline copy
+        return apiUrl(`/api/media/offline/${trackId}`)
+      } else if (trackId) {
+        return apiUrl(`/api/media/stream/${trackId}`)
       } else {
         return ""
       }
     },
+
+    ...mapGetters('Downloads', ['isDownloaded', 'isFileDownloaded']),
 
     ...mapState('AudioPlayer', [
       'playing',
@@ -92,7 +100,6 @@ export default {
       'forwardSeekTime',
       'rewindSeekMode',
       'forwardSeekMode',
-      'resumeHistorySeconds',
       'playWorkId',
       'playWorkVas',
       'visualPlayerCoverUrl',
@@ -108,7 +115,6 @@ export default {
 
     ...mapGetters('AudioPlayer', [
       'currentPlayingFile',
-      'resumeHistoryDone',
     ]),
 
     displayCurrentTime() {
@@ -210,11 +216,8 @@ export default {
 
   created() {
     this.debouncedPlayLrc = debounce(this.playLrc, 100, true);
-    // Bumped on every loadLrcFile() call so a slower load for a track the user
-    // has already skipped past cannot apply its lyrics over the current one.
-    // Multi-speaker tracks fetch one file per speaker, which widens the window.
+    this._pendingStart = null;
     this._lrcLoadId = 0;
-    // Non-reactive: rebuilt wholesale per track and only ever read by index.
     this._lyricFrames = [];
   },
 
@@ -223,12 +226,6 @@ export default {
 
     onPause() {
       this.playLrc(false)
-      // No _reportTrackProgress() here: PAUSE() flips AudioPlayer's `playing`
-      // state, whose watcher runs onUpdatePlayingStatus, which already reports
-      // this track's progress. Calling it here too produced two PUTs per pause
-      // for the same track ~500ms apart (the watcher path is debounced).
-      // onEnded still reports directly -- there it is not redundant, since it
-      // must run before the queue advances to capture the finishing track.
       this.PAUSE()
     },
     onPlaying() {
@@ -237,14 +234,6 @@ export default {
       this.PLAY()
     },
 
-    // Once the flip-LR graph exists, createMediaElementSource has permanently
-    // rerouted the element's output through the context, so a suspended
-    // context means silent playback. The resume() at graph construction is not
-    // enough on its own: applyFlipLRChannel runs from mounted() when the
-    // setting is persisted on, which is before any user activation, and
-    // autoplay policy rejects a resume() there. Retrying on each play covers
-    // that, and any later suspension (iOS suspends the context when the audio
-    // session is interrupted, and never resumes it by itself).
     resumeAudioContext () {
       if (this._lrCtx && this._lrCtx.state === 'suspended') {
         this._lrCtx.resume().catch(() => {})
@@ -269,7 +258,6 @@ export default {
       'DECREMENT_SLEEP_TRACKS',
       'SET_REWIND_SEEK_MODE',
       'SET_FORWARD_SEEK_MODE',
-      'RESUME_HISTORY_SECONDS_DONE',
       'SET_HAS_LYRIC',
       'SET_NEW_CURRENT_TIME',
     ]),
@@ -284,35 +272,28 @@ export default {
     onCanplay () {
       this.onDurationChange()
 
+      this._applyPendingStart(true)
+
       if (this.playing && this.plyr.currentTime !== this.plyr.duration) {
         this.plyr.play()
-      }
-
-      if (!this.resumeHistoryDone) {
-        const seconds = this.resumeHistorySeconds
-        this.plyr.currentTime = seconds;
-        // Publish the resumed position before clearing the pending-resume
-        // flag: the element only reports it on its next timeupdate, and any
-        // progress report landing in between would write the pre-seek 0 back
-        // over the position we just restored.
-        this.SET_CURRENT_TIME(seconds)
-        this.RESUME_HISTORY_SECONDS_DONE()
-        this.$q.notify({message: this.$t('audioelement.resumeHistory'), timeout: 1000})
       }
     },
 
     onTimeupdate () {
-      this.SET_CURRENT_TIME(this.plyr.currentTime)
+      // Until the start position has been applied, the element's clock is the
+      // pre-seek one -- publishing it would overwrite where this track should
+      // start, and then there would be nothing left to seek to.
+      if (this._pendingStart === null && this.plyr.media.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        this.SET_CURRENT_TIME(this.plyr.currentTime)
+      }
       if (this.enablePIPLyrics) this.debouncedPlayLrc(false)
-      // 睡眠定时（按分钟）：到达停止时间戳即暂停
+
       if (this.sleepMode && this.sleepModeType === 'minutes' && this.sleepStopAt && Date.now() >= this.sleepStopAt) {
         this._stopBySleepTimer()
       }
     },
 
-    // 当前播放文件夹的最后一首音频自然播放结束时，自动将进度标记为“听完”
-    // Phase 1：仅比较当前文件trackId与workLastTrackId（会话内快照，trackId稳定）
-    // Phase 2：将替换这里的条件为“主系列全部曲目已完成”
+    // Mark as finished when the last track in queue finishes
     maybeMarkWorkComplete () {
       if (this.playWorkId === 0) return
       if (!this.workLastTrackId) return
@@ -338,7 +319,7 @@ export default {
         })
     },
 
-    // Fire-and-forget per-track progress report (Phase 2).
+    // Fire-and-forget per-track progress report.
     // Reports the current track's position via its trackId.
     _reportTrackProgress () {
       const file = this.currentPlayingFile
@@ -346,12 +327,24 @@ export default {
       const seconds = this.plyr ? this.plyr.currentTime : 0
       const duration = this.plyr ? this.plyr.duration : 0
       const completed = duration > 0 && seconds >= 0.95 * duration
-      this.$axios.put(`/api/track-progress/${file.trackId}`, {
-        seconds: Math.round(seconds * 100) / 100,
-        completed: completed,
-        observedAt: Date.now()
-      }).catch((err) => {
-        console.error('track progress report failed:', err)
+      const observedAt = Date.now()
+
+      savePosition({
+        trackId: file.trackId,
+        workId: this.playWorkId,
+        seconds: seconds,
+        completed,
+        observedAt,
+      }).catch((err) => console.error('local position write failed:', err))
+
+      sendOrQueue(this.$axios, {
+        method: 'PUT',
+        url: `/api/track-progress/${file.trackId}`,
+        body: {
+          seconds: seconds,
+          completed: completed,
+          observedAt
+        }
       })
     },
 
@@ -361,16 +354,26 @@ export default {
       if (!this.plyr) return false
       const duration = Number(this.currentPlayingFile.duration) || this.plyr.duration
       if (!(duration > 0)) return false
-      let position
-      if (!this.resumeHistoryDone) {
-        position = this.resumeHistorySeconds
-      } else if (this._mediaHoldsCurrentTrack()) {
-        position = this.plyr.currentTime
-      } else {
-        // Element still holds the outgoing track: `playing` watcher runs first.
-        return false
-      }
+      // Until the element has loaded the current track, its clock belongs to
+      // the outgoing one (or says 0); the store describes the current track.
+      const loaded = this._mediaHoldsCurrentTrack()
+        && this.plyr.media.readyState >= HTMLMediaElement.HAVE_METADATA
+      const position = loaded ? this.plyr.currentTime : this.currentTime
       return position >= duration - FINISHED_EPSILON_SECONDS
+    },
+
+    // Apply the start position this track was loaded with, now that the file is
+    // further along. `last` is canplay: hold it no longer, so a file the browser
+    // will not seek in ends up owning its own clock again.
+    _applyPendingStart (last) {
+      const seconds = this._pendingStart
+      if (seconds === null) return
+      const media = this.plyr.media
+      if (Math.abs(media.currentTime - seconds) > 0.5) media.currentTime = seconds
+      if (last || Math.abs(media.currentTime - seconds) <= 0.5) {
+        this._pendingStart = null
+        this.SET_CURRENT_TIME(media.currentTime)
+      }
     },
 
     _mediaHoldsCurrentTrack () {
@@ -381,8 +384,7 @@ export default {
 
     _advanceIfAtEndOfTrack () {
       if (!this._atEndOfTrack()) return false
-      // Both still describe the finished track.
-      this.RESUME_HISTORY_SECONDS_DONE()
+      // Still describes the finished track.
       this.SET_CURRENT_TIME(0)
       if (this.queueIndex < this.queue.length - 1) {
         this.NEXT_TRACK()
@@ -412,8 +414,7 @@ export default {
       // Must run before the switch below so currentPlayingFile still
       // refers to the track that just ended.
       this._reportTrackProgress()
-      // 睡眠定时（按曲目）：剩余曲目数为 0 时在当前曲目结束后停止，否则扣减一首
-      // 必须在切换曲目逻辑之前处理：一旦推进到下一曲，"当前曲目结束后停止" 就无法实现了
+      
       if (this.sleepMode && this.sleepModeType === 'tracks') {
         if (this.sleepTracksLeft <= 0) {
           // Stay on the finished track: advancing here would make the
@@ -483,6 +484,21 @@ export default {
       }
       media.src = url
       media.load()
+      // Start where the store says this track is. Setting it before metadata
+      // arrives is only a request: a container with no duration in its header
+      // (Opus in WebM) has nothing to seek against yet, and Safari drops it --
+      // so it is kept and applied again once the file is ready. Written to the
+      // media element, not Plyr, whose setter ignores seeks while the duration
+      // is unknown.
+      const trackId = this.currentPlayingFile.trackId
+      this._pendingStart = this.currentTime > 0 ? this.currentTime : null
+      if (this.currentTime > 0) {
+        media.currentTime = this.currentTime
+        if (trackId !== this._loadedTrackId) {
+          this.$q.notify({message: this.$t('audioelement.resumeHistory'), timeout: 1000})
+        }
+      }
+      this._loadedTrackId = trackId
       // Retarget now rather than leaving the outgoing track's length on screen.
       this.onDurationChange()
       return true
@@ -561,7 +577,13 @@ export default {
         }
 
         const fetched = await Promise.all(sources.map(async (source) => {
-          const response = await this.$axios.get(`/api/media/stream/${source.trackId}`);
+          // Same mechanism as the audio source computed: once a work is
+          // downloaded, its lyric files are downloaded too (see downloadWork in
+          // WorkDetails.vue), so prefer serving them from the offline copy.
+          const lrcUrl = this.isFileDownloaded(source.trackId)
+            ? `/api/media/offline/${source.trackId}`
+            : `/api/media/stream/${source.trackId}`;
+          const response = await this.$axios.get(lrcUrl);
           const lyricExtension = (source.lyricExtension || '').toLowerCase();
           if (lyricExtension === '.srt' || lyricExtension === '.vtt') {
             console.log('srt convert to lrc');
@@ -736,6 +758,8 @@ export default {
 
       this.SET_VOLUME(player.volume);
       
+      // Safari can take the seek here for a file it refused before metadata.
+      player.on('loadedmetadata', () => this._applyPendingStart());
       player.on('canplay', () => this.onCanplay());
       player.on('timeupdate', () => this.onTimeupdate());
       player.on('seeked', () => this.onSeeked());
@@ -758,14 +782,10 @@ export default {
       // retained as a no-op hook; flip is applied lazily via applyFlipLRChannel
     },
 
-    // createMediaElementSource 是单向门：一旦调用，媒体输出即被该 AudioContext
-    // 接管，无法回到原生路径。因此首启后整条路由保留，切换只改 splitter->merger
-    // 的接法（交叉 vs 正常），close 仅在组件卸载时执行。
     applyFlipLRChannel () {
       const media = this.plyr && this.plyr.media
       if (!media) return
 
-      // 首次开启：构建路由并缓存节点
       if (!this._lrCtx) {
         const AudioCtx = window.AudioContext || window.webkitAudioContext
         if (!AudioCtx) return
@@ -782,7 +802,6 @@ export default {
         this._lrMerger = merger
       }
 
-      // 重接 splitter -> merger：开启时交叉，关闭时正常
       try { this._lrSplitter.disconnect() } catch (e) { /* already disconnected */ }
       if (this.flipLRChannel) {
         this._lrSplitter.connect(this._lrMerger, 0, 1) // L -> right out

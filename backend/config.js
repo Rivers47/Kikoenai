@@ -2,29 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// The four persistent data folders (config/sqlite/covers/images) all hang off
-// dataRoot. It defaults to the application directory, which cannot take a
-// single volume without shadowing app.js, node_modules and dist -- that is why
-// the old container layout needed one mount per folder.
-//
-// KIKO_DATA_DIR moves all four somewhere outside the app directory, so one
-// mount covers everything: the container image sets it to /appdata, and the
-// portable Windows launcher sets it to the folder holding Kikoenai.bat.
-//
-// The voice-work library is deliberately NOT under here -- it is the user's
-// media, mounted separately, and never follows dataRoot.
-//
-// appDir is kept separately because a config.json written before this variable
-// was set stores folder paths as absolute paths inside it; see rerootFromAppDir.
 const appDir = __dirname;
 const dataRoot = process.env.KIKO_DATA_DIR || appDir;
 
-// Loud, advisory only: the container image used to keep these folders under the
-// application directory and now defaults to KIKO_DATA_DIR=/appdata. An operator
-// upgrading without moving their volumes would otherwise start against an empty
-// directory, rescan, and lose ratings/reviews/progress/history -- none of which
-// a rescan can rebuild. Nothing is changed here; the point is that the failure
-// must not be silent.
 if (process.env.IS_DOCKER && dataRoot !== appDir) {
   const legacyDb = path.join(appDir, 'sqlite', 'db.sqlite3');
   const currentDb = path.join(dataRoot, 'sqlite', 'db.sqlite3');
@@ -60,10 +40,6 @@ const defaultConfig = {
   version: pjson.version,
   production: process.env.NODE_ENV === 'production' ? true : false,
   dbBusyTimeout: 1000,
-  // Concurrent works during a scan. Each work now costs a page scrape, an API
-  // call, 3 cover downloads, its sample/description images and its reviews, so
-  // 16 at once is enough to get rate-limited by DLsite. Lower this further if
-  // scans still stall; it only affects scan speed.
   maxParallelism: 8,
   rootFolders: [
     // {
@@ -71,17 +47,7 @@ const defaultConfig = {
     //   path: ''
     // }
   ],
-  // Skip downloading sample/description images and scraping user reviews during
-  // library scans, refreshAll, and the per-work refresh route. Defaults to true:
-  // neither is surfaced in the UI yet, and together they are what makes a scan
-  // expensive -- N image downloads plus paginated review requests per work, which
-  // is what gets it rate-limited by DLsite.
-  // The work description, its per-part structure and the sample image URL list
-  // are NOT gated: they are parsed from the work page already being fetched, so
-  // they cost no extra request, and extract-track-titles.js needs the description.
-  // Independent of the explicit `updater.js --images/--reviews` flags, which
-  // always run: asking for them by name is already opting in.
-  skipWorkExtras: true,
+  skipWorkExtras: true, // Skip downloading all sample images, the desciption, and reviews
   coverFolderDir: path.join(dataRoot, 'covers'),
   imageFolderDir: path.join(dataRoot, 'images'), // Scraped sample/description images, kept out of the cover cache
   databaseFolderDir: path.join(dataRoot, 'sqlite'),
@@ -103,29 +69,8 @@ const defaultConfig = {
   httpProxyHost: '',
   httpProxyPort: 0,
   listenPort: 8888,
-  // Serve everything -- WebApp, /api and /socket.io -- under a sub-path, so
-  // the app can share a hostname with other services instead of taking a
-  // subdomain of its own: "/kikoeru" puts it at https://example.com/kikoeru/.
-  // Empty means the root of the hostname, which is the default and what every
-  // existing install already does.
-  //
-  // The reverse proxy must pass the prefix through rather than strip it: the
-  // browser and this server have to agree on one set of URLs. See README.md.
-  //
-  // Not applied to offloadStreamPath/offloadDownloadPath below -- those address
-  // the reverse proxy's own virtual directories, so write the prefix into them
-  // yourself if that is where you mounted the library.
   basePath: '',
   blockRemoteConnection: false,
-  // Hostnames (no port) this server should answer requests for, in addition to
-  // localhost/loopback/private-LAN addresses, which are always allowed. Defends
-  // against DNS-rebinding-style attacks where a malicious site's own domain is
-  // briefly pointed at this server's address: the browser treats such a request
-  // as "same-origin" (same hostname string) even though the IP just changed, so
-  // it will still carry a valid session cookie unless the Host header itself is
-  // checked server-side. Empty by default -- opt-in, so upgrading does not lock
-  // out an existing public hostname nobody has listed yet. Add your domain (e.g.
-  // "kikoeru.example.com") once you have one to start enforcing.
   allowedHosts: [],
   behindProxy: false,
   httpsEnabled: false,
@@ -139,6 +84,11 @@ const defaultConfig = {
   offloadMedia: false,
   offloadStreamPath: '/media/stream/',          // /media/stream/RJ123456/subdirs/track.mp3
   offloadDownloadPath: '/media/download/',      // /media/download/RJ123456/subdirs/track.mp3
+  enableTranscoding: true,
+  transcodeBitrate: '96k',
+  transcodeMaxConcurrent: 1,
+  transcodeCacheDir: path.join(dataRoot, 'transcodes'),
+  transcodeUseDefaultPath: false, // Ignores transcodeCacheDir if set to true
 };
 const initConfig = (writeConfigToFile = !process.env.FREEZE_CONFIG_FILE) => {
   config = Object.assign(config, defaultConfig);
@@ -166,17 +116,6 @@ const setConfig = (newConfig, writeConfigToFile = !process.env.FREEZE_CONFIG_FIL
 
 // Re-root a data folder that an earlier run pinned inside the application
 // directory.
-//
-// The admin panel saves folder paths as absolute, so a config.json written
-// before KIKO_DATA_DIR was set holds e.g. "/usr/src/kikoeru/covers". Setting
-// KIKO_DATA_DIR afterwards would move only the folders that config.json does
-// not mention, silently leaving the covers and the database behind at the old
-// location. Anything outside the app directory is a deliberate choice by the
-// user (a big disk, a network share) and is left alone.
-//
-// Deliberately not applied to rootFolders or voiceWorkDefaultPath: those are
-// the user's media mounts, not app state, and rewriting them would break a
-// working library.
 const rerootFromAppDir = (dir) => {
   if (dataRoot === appDir) return dir;
 
@@ -205,19 +144,15 @@ const resolveDataFolder = (dir, defaultName, useDefault) => {
 };
 
 /**
- * Resolve the three configurable data folders in place.
+ * Resolve the four configurable data folders in place.
  *
- * Must run after ANY assignment into `config`, not just the initial read:
- * updateConfig re-reads the raw file and hands it to setConfig, whose
- * Object.assign would otherwise put the unresolved on-disk values back --
- * silently undoing rerootFromAppDir and then persisting the stale paths.
- * That is how a version upgrade could leave covers pointing inside the
- * application directory while the database, opened earlier, stayed correct.
+ * Must run after ANY assignment into `config`, not just the initial read.
  */
 const resolveDataFolders = () => {
   config.coverFolderDir = resolveDataFolder(config.coverFolderDir, 'covers', config.coverUseDefaultPath);
   config.imageFolderDir = resolveDataFolder(config.imageFolderDir, 'images', config.imageUseDefaultPath);
   config.databaseFolderDir = resolveDataFolder(config.databaseFolderDir, 'sqlite', config.dbUseDefaultPath);
+  config.transcodeCacheDir = resolveDataFolder(config.transcodeCacheDir, 'transcodes', config.transcodeUseDefaultPath);
 };
 
 /**
@@ -243,8 +178,7 @@ const readConfig = () => {
     }
   }
 
-  // Ignored, not dropped: rewriting config.json is destructive, and a stale key
-  // is the only trace of what the user actually tried to configure.
+  // Ignored, not dropped.
   const unknownKeys = Object.keys(config).filter(key => !(key in defaultConfig));
   if (unknownKeys.length) {
     console.log('配置项未被使用，已忽略:', unknownKeys.join(', '));
@@ -291,10 +225,14 @@ class publicConfig {
   get forwardSeekTime() {
     return config.forwardSeekTime;
   }
+  get enableTranscoding() {
+    return config.enableTranscoding;
+  }
   export() {
     return {
       rewindSeekTime: this.rewindSeekTime,
       forwardSeekTime: this.forwardSeekTime,
+      enableTranscoding: this.enableTranscoding,
     };
   }
 }
@@ -318,5 +256,5 @@ if (!fs.existsSync(configPath)) {
 }
 
 module.exports = {
-  setConfig, updateConfig, config, sharedConfigHandle, configFolderDir
+  setConfig, updateConfig, config, sharedConfigHandle, configFolderDir, dataRoot
 };

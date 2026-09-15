@@ -14,8 +14,13 @@ const initApp = async () => {
 
   
   async function runMigrations () {
-    const log = ({ action, migration }) => console.log('Doing ' + action + ' on ' + migration);
+    let count = 0;
+    const log = ({ action, migration }) => {
+      count += 1;
+      console.log('Finished ' + action + ' on ' + migration);
+    };
     await knexMigrate('up', {}, log);
+    return count;
   }
 
   async function skipMigrations () {
@@ -52,13 +57,13 @@ const initApp = async () => {
         await applyFix(oldVersion);
         await fixMigrations();
       }
-      // Always run pending migrations on startup. Umzug tracks executed
-      // migrations in the knex_migrations table, so `up` is idempotent.
-      // Deliberately NOT gated on the version bump above: a forgotten bump
-      // must never cause a migration to be silently skipped.
-      await runMigrations();
+      // Always run, so a forgotten version bump doesn't affect it
+      const migrated = await runMigrations();
+      if (migrated) {
+        console.log(`[${migrated}] Database migration task(s) finished`);
+      }
       if (isUpgrade) {
-        console.log('数据库迁移完成');
+        console.log('Update completed');
         updateConfig();
       }
     } catch (error) {

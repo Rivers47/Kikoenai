@@ -186,6 +186,8 @@ import NotifyMixin from '../mixins/Notification.js'
 import { mapMutations, mapState, mapGetters } from 'vuex'
 import { Dark } from 'quasar'
 import { CONTRAST_MODES, getContrastMode, setContrastMode } from 'src/utils/contrast'
+import { onDownloadMessage, reconcileDownloads } from 'src/utils/downloads'
+import { requestSync } from 'src/utils/outbox'
 
 export default {
   name: 'MainLayout',
@@ -207,11 +209,13 @@ export default {
       confirm: false,
       randId: null,
       showScroller: false,
+      unsubscribeDownloadMessages: null,
       contrastMode: getContrastMode(),
       links: [
         { titleKey: 'mediaLibrary', icon: 'widgets', path: '/' },
         { titleKey: 'fullScreenMode', icon: 'play_circle', path: '/fullScreenPlayer' },
         { titleKey: 'favourites', icon: 'favorite', path: '/favourites' },
+        { titleKey: 'downloads', icon: 'download_done', path: '/downloads' },
         { titleKey: 'circles', icon: 'group', path: '/circles' },
         { titleKey: 'tags', icon: 'label', path: '/tags' },
         { titleKey: 'voiceActors', icon: 'mic', path: '/vas' },
@@ -233,6 +237,13 @@ export default {
   mounted () {
     this.initUser();
     this.checkLockFileNotice();
+    this.fetchSharedConfig();
+    requestSync();
+    this.initOfflineDownloads();
+  },
+
+  beforeUnmount () {
+    if (this.unsubscribeDownloadMessages) this.unsubscribeDownloadMessages();
   },
 
   computed: {
@@ -280,6 +291,49 @@ export default {
       this.$router.push(filter ? { path: '/works', query: { filter } } : '/works')
     },
 
+    initOfflineDownloads () {
+      if (!('serviceWorker' in navigator)) return;
+
+      this.unsubscribeDownloadMessages = onDownloadMessage({
+        onSuccess: (workId, stored) => {
+          this.$store.commit('Downloads/PROMOTE_DOWNLOADED_FILES', stored);
+          const work = this.$store.state.Downloads.downloadedFiles.find(f => f.workId === workId);
+          this.showSuccNotif(this.$t('mainlayout.downloadComplete', { title: work?.workTitle || workId }));
+        },
+        onFail: (workId) => {
+          this.discardPendingDownload(workId);
+          this.showErrNotif(this.$t('mainlayout.downloadFailed', { title: workId }));
+        },
+        onAbort: (workId) => this.discardPendingDownload(workId),
+      });
+
+      reconcileDownloads(this.$store.state.Downloads.downloadedFiles)
+        .then(({ promote, drop }) => {
+          if (promote.length) this.$store.commit('Downloads/PROMOTE_DOWNLOADED_FILES', promote);
+          if (drop.length) this.$store.commit('Downloads/REMOVE_DOWNLOADED_FILES', drop);
+        })
+        .catch((error) => {
+          console.error(error)
+        });
+    },
+
+    discardPendingDownload (workId) {
+      const urls = this.$store.state.Downloads.downloadedFiles
+        .filter(f => f.pending && f.workId === workId)
+        .map(f => f.url);
+      if (urls.length) this.$store.commit('Downloads/REMOVE_DOWNLOADED_FILES', urls);
+    },
+
+    fetchSharedConfig () {
+      this.$axios.get('/api/config/shared')
+        .then((res) => {
+          this.$store.commit('Downloads/SET_ENABLE_TRANSCODING', !!res.data.sharedConfig.enableTranscoding)
+        })
+        .catch((error) => {
+          console.error(error)
+        })
+    },
+
     initUser () {
       this.$axios.get('/api/auth/me')
         .then((res) => {
@@ -305,9 +359,6 @@ export default {
         })
     },
 
-    // 检查升级后是否留有需要重新扫描的提示（见 backend/routes/version.js）。
-    // 原本这里还会提示有新版本可用，但那个检查比对的是上游仓库的发布版本，
-    // 与本项目无关，已连同后端的 GitHub 请求一起移除。
     checkLockFileNotice () {
       this.$axios.get('/api/version')
         .then((res) => {

@@ -16,6 +16,8 @@ const knexLib = require('knex');
 const { getTrackList, toTree } = require('../filesystem/utils');
 const { legacyIndex } = require('../routes/utils/track');
 const migration = require('../database/migrations/20260912000000_relpath_track_keys');
+const { addWorkFileSchema } = require('./helpers/schema');
+const { makeQueries } = require('../database/queries');
 
 describe('track identity: relPath', function () {
   let dir;
@@ -38,7 +40,7 @@ describe('track identity: relPath', function () {
     write('01 intro.mp3');
     write('SE/02 main.mp3');
 
-    const tracks = await getTrackList('000001', dir, {});
+    const tracks = await getTrackList('000001', dir);
     const byPath = new Map(tracks.map(t => [t.shortFilePath, t.trackId]));
 
     expect(byPath.get('01 intro.mp3')).to.equal('000001/01 intro.mp3');
@@ -48,7 +50,7 @@ describe('track identity: relPath', function () {
   it('keeps a non-ASCII path intact', async function () {
     write('絶頂トレーニング/01 囁き＆吐息♡.mp3');
 
-    const [track] = await getTrackList('000001', dir, {});
+    const [track] = await getTrackList('000001', dir);
     expect(track.shortFilePath).to.equal('絶頂トレーニング/01 囁き＆吐息♡.mp3');
     expect(track.trackId).to.equal('000001/絶頂トレーニング/01 囁き＆吐息♡.mp3');
   });
@@ -58,7 +60,7 @@ describe('track identity: relPath', function () {
   it('always spells a relPath with forward slashes', async function () {
     write('SE/sub dir/03.mp3');
 
-    const [track] = await getTrackList('000001', dir, {});
+    const [track] = await getTrackList('000001', dir);
     expect(track.shortFilePath).to.not.include('\\');
     expect(track.shortFilePath).to.equal('SE/sub dir/03.mp3');
   });
@@ -69,7 +71,7 @@ describe('track identity: relPath', function () {
     write('readme.txt');
     write('booklet.pdf');
 
-    const tracks = await getTrackList('000001', dir, {});
+    const tracks = await getTrackList('000001', dir);
     const tree = toTree(tracks, 'Work', 'w1', { name: 'root', path: dir });
     const nodes = tree.filter(n => n.type);
 
@@ -168,16 +170,71 @@ describe('track identity: relPath', function () {
     it('folds the pre-rename `hash` field into trackId', async function () {
       await knex('t_play_history').insert({
         user_name: 'admin', work_id: '000001',
-        state: JSON.stringify({ index: 0, queue: [{ hash: '000001/3', title: '01 intro.mp3' }] }),
+        state: JSON.stringify({ index: 0, queue: [{ hash: '000001/3', title: 'unknown.mp3' }] }),
       });
 
       await migration.up(knex);
 
       const item = JSON.parse((await knex('t_play_history').first()).state).queue[0];
-      // No contentHash to resolve, so the legacy positional handle is kept --
+      // Nothing to resolve it by, so the legacy positional handle is kept --
       // routes/utils/track.js still resolves it.
       expect(item.trackId).to.equal('000001/3');
       expect(item).to.not.have.property('hash');
+    });
+
+    describe('a positional handle with no contentHash', function () {
+      const migrate = async (queue, workId = '000001') => {
+        await knex('t_play_history').insert({ user_name: 'admin', work_id: workId, state: JSON.stringify({ index: 0, queue }) });
+        await migration.up(knex);
+        return JSON.parse((await knex('t_play_history').first()).state).queue;
+      };
+
+      beforeEach(async function () {
+        await knex('t_work').insert({
+          id: '01636129',
+          memo: JSON.stringify({ duration: { 'SE/02 main.mp3': 1, 'NoSE/02 main.mp3': 1, 'NoSE/03 end.mp3': 1 } }),
+        });
+      });
+
+      it('rebuilds the relPath from its folder and title', async function () {
+        const [item] = await migrate([{ trackId: '01636129/5', subtitle: 'SE', title: '02 main.mp3' }], '01636129');
+        expect(item.trackId).to.equal('01636129/SE/02 main.mp3');
+      });
+
+      it('matches a folderless title only when the name is unique', async function () {
+        const queue = await migrate([
+          { trackId: '01636129/1', title: '03 end.mp3' },
+          { trackId: '01636129/2', title: '02 main.mp3' },
+        ], '01636129');
+        expect(queue.map(item => item.trackId)).to.deep.equal(['01636129/NoSE/03 end.mp3', '01636129/2']);
+      });
+
+      it('respells the pre-text-id numeric prefix of its own work', async function () {
+        const queue = await migrate([
+          { trackId: '1636129/7', subtitle: 'NoSE', title: '03 end.mp3' },
+          { trackId: '1636129/9', title: 'gone.flac' },
+        ], '01636129');
+        expect(queue.map(item => item.trackId)).to.deep.equal(['01636129/NoSE/03 end.mp3', '01636129/9']);
+      });
+
+      it('keeps the old handle when the rebuilt path is not a file the memo knows', async function () {
+        const [item] = await migrate([{ trackId: '01636129/5', subtitle: 'SE', title: '02 main.flac' }], '01636129');
+        expect(item.trackId).to.equal('01636129/5');
+      });
+
+      it('drops a default stream URL but keeps an offload one', async function () {
+        const queue = await migrate([
+          { trackId: '1636129/5', subtitle: 'SE', title: '02 main.mp3', mediaStreamUrl: '/kiko/api/media/stream/1636129/5', mediaDownloadUrl: '/api/media/download/1636129/5' },
+          { trackId: '01636129/NoSE/03 end.mp3', mediaStreamUrl: '/media/stream/root/RJ01636129/NoSE/03 end.mp3' },
+        ], '01636129');
+        expect(queue[0]).to.not.have.any.keys('mediaStreamUrl', 'mediaDownloadUrl');
+        expect(queue[1].mediaStreamUrl).to.equal('/media/stream/root/RJ01636129/NoSE/03 end.mp3');
+      });
+
+      it('leaves tracks of another work alone', async function () {
+        const [item] = await migrate([{ trackId: '000001/3', subtitle: null, title: '01 intro.mp3' }], '01636129');
+        expect(item.trackId).to.equal('000001/3');
+      });
     });
 
     it('strips contentHash from the memo once it has been used', async function () {
@@ -227,6 +284,7 @@ describe('rekey-track-progress (opt-in recovery)', function () {
       t.float('seconds'); t.boolean('completed'); t.timestamp('updated_at');
       t.primary(['user_name', 'work_id', 'track_key']);
     });
+    await addWorkFileSchema(knex);
     await knex('t_work').insert({ id: '000001', root_folder: 'root', dir: 'w1' });
   });
 
@@ -242,7 +300,7 @@ describe('rekey-track-progress (opt-in recovery)', function () {
   it('recovers a stranded row by hashing the file it names', async function () {
     await seed(hashOf('aaaa'), 77);
 
-    const summary = await run({ log: () => {}, dbApi: { knex } });
+    const summary = await run({ log: () => {}, dbApi: { knex, ...makeQueries(knex) } });
     expect(summary.recovered).to.equal(1);
 
     const row = await knex('t_track_progress').first();
@@ -253,7 +311,7 @@ describe('rekey-track-progress (opt-in recovery)', function () {
   it('leaves a row alone when no file matches its hash', async function () {
     await seed('deadbeef');
 
-    const summary = await run({ log: () => {}, dbApi: { knex } });
+    const summary = await run({ log: () => {}, dbApi: { knex, ...makeQueries(knex) } });
     expect(summary.unresolved).to.equal(1);
     expect((await knex('t_track_progress').first()).track_key).to.equal('deadbeef');
   });
@@ -261,7 +319,7 @@ describe('rekey-track-progress (opt-in recovery)', function () {
   it('writes nothing on a dry run', async function () {
     await seed(hashOf('aaaa'));
 
-    const summary = await run({ dryRun: true, log: () => {}, dbApi: { knex } });
+    const summary = await run({ dryRun: true, log: () => {}, dbApi: { knex, ...makeQueries(knex) } });
     expect(summary.recovered).to.equal(1);
     expect((await knex('t_track_progress').first()).track_key).to.equal(hashOf('aaaa'));
   });
@@ -269,7 +327,7 @@ describe('rekey-track-progress (opt-in recovery)', function () {
   it('discards the leftovers on --purge', async function () {
     await seed('deadbeef');
 
-    const summary = await run({ purge: true, log: () => {}, dbApi: { knex } });
+    const summary = await run({ purge: true, log: () => {}, dbApi: { knex, ...makeQueries(knex) } });
     expect(summary.purged).to.equal(1);
     expect(await knex('t_track_progress').first()).to.equal(undefined);
   });
@@ -277,7 +335,7 @@ describe('rekey-track-progress (opt-in recovery)', function () {
   it('does nothing when every key is already a relPath', async function () {
     await seed('01 intro.mp3');
 
-    const summary = await run({ log: () => {}, dbApi: { knex } });
+    const summary = await run({ log: () => {}, dbApi: { knex, ...makeQueries(knex) } });
     expect(summary).to.deep.equal({ stale: 0, recovered: 0, purged: 0, unresolved: 0 });
   });
 });

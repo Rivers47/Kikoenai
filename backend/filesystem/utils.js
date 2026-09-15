@@ -1,4 +1,5 @@
 const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 // Replacement for recursive-readdir: returns all files recursively as absolute paths
 // Uses sync glob since the walked directories are bounded and the result is needed immediately.
@@ -41,69 +42,101 @@ async function getAudioFileDuration(filePath) {
 const getAudioFileDurationLimited = (filePath) => limitP.call(getAudioFileDuration, filePath);
 
 
+const transcodeLimitP = new LimitPromise(config.transcodeMaxConcurrent || 1);
 
-// 从文件系统，抓取单个作品本地文件的杂项信息：
-//  * 音频文件对应的时长
-//  * TODO：文件hash
-// work_id: number
-// dir: string, absolute path
-// return json object:
-//  {
-//    duration: {
-//      'relative/path/to/audio1.mp3': 334.23, // seconds
-//      'relative/path/to/audio2.mp3': 34.3, // seconds
-//      'relative/directory/to/audio2.wav': 34.23, // seconds
-//    }
-//  }
-async function scrapeWorkMemo(work_id, dir, oldMemo) {
-  const files = await recursiveReaddir(dir);
-  // Filter out any files not matching these extensions
-  const oldMemoMtime = (oldMemo || {}).mtime || {};
-  const oldMemoDuration = (oldMemo || {}).duration || {};
-  // Callers pass the object below to db.setWorkMemo(), which replaces the whole
-  // t_work.memo JSON column. So copy oldMemo into it: an object literal holding
-  // only the keys this function fills in would drop the ones other code writes,
-  // trackTitles, on every rescan. duration and mtime are rebuilt further down,
-  // so they start empty.
-  const memo = { ...(oldMemo || {}), duration: {}, isContainLyric: false, mtime: {} };
-  await Promise.all(files
-    .filter((file) => {
-      const ext = path.extname(file).toLowerCase();
-      if (supportedSubtitleExtList.includes(ext)) {
-        memo.isContainLyric = true;
+/**
+ * Deterministic cache filename for a transcoded (Opus) copy of a track.
+ *
+ * @param {String} id Work id (e.g. '123456', 'd215444').
+ * @param {String} relPath Work-relative path of the source file.
+ * @param {Number|String} mtime Source mtime (ms), from memo.mtime.
+ * @param {String} bitrate ffmpeg -b:a value, e.g. '96k'.
+ * @returns {String} e.g. '123456_a1b2c3d4e5f6a7b8.opus'
+ */
+function transcodeFileName(id, relPath, mtime, bitrate) {
+  const digest = crypto.createHash('sha256')
+    .update(`${relPath}\u0000${mtime}\u0000${bitrate}`)
+    .digest('hex')
+    .slice(0, 16);
+  return `${id}_${digest}.opus`;
+}
+
+/**
+ * Transcode an audio file to Opus at the given bitrate, writing through a
+ * temp file + rename so a concurrent request for the same track never sees a
+ * partially-written cache file
+ * @param {String} sourcePath Absolute path to the source (lossless) audio file.
+ * @param {String} cachePath Absolute path to write the final Opus file to.
+ * @param {String} bitrate ffmpeg -b:a value, e.g. '96k'.
+ */
+async function transcodeToOpus(sourcePath, cachePath, bitrate) {
+  fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+  const tmpPath = `${cachePath}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    await execFile('ffmpeg', [
+      '-y',
+      '-i', sourcePath,
+      '-map_metadata', '-1',
+      '-vn',
+      '-c:a', 'libopus',
+      '-b:a', bitrate,
+      tmpPath,
+    ], { timeout: 600000 });
+    fs.renameSync(tmpPath, cachePath);
+  } catch (err) {
+    try {
+      fs.unlinkSync(tmpPath);
+    } catch (unlinkErr) {
+      // ENOENT is fine -- ffmpeg may have failed before ever writing tmpPath
+      if (unlinkErr.code !== 'ENOENT') {
+        console.error(`failed to clean up transcode tmp file: ${tmpPath}`, unlinkErr);
       }
-      return supportedMediaExtList.includes(ext);
-    }) // filter
-    .map((file) => ({
-        fullPath: file,
-        // Same forward-slash normalization as getTrackList: these keys are the
-        // file's identity and must match the ones the track list looks up.
-        shortPath: file.replace(path.join(dir, '/'), '').split(path.sep).join('/')
-      })
-    ) // map
-    .map(async (fileDict) => {
-      const fstat = fs.statSync(fileDict.fullPath);
-      const newMTime = Math.round(fstat.mtime.getTime());
-      const oldMTime = oldMemoMtime[fileDict.shortPath];
-      const oldDuration = oldMemoDuration[fileDict.shortPath];
-      
-      if (oldMTime === undefined // 音频文件是新增的
-        || oldDuration === undefined // 此前没有更新过这个文件的duration
-        || oldMTime !== newMTime // 或者音频文件的最后修改时间和之前的memo记录不一致，说明文件有修改
-      ) { // 更新duration和mtime
-        console.log(`work[${work_id}] update data on file: ${fileDict.fullPath}, fstate.mtime: ${fstat.mtime.getTime()}, `);
-        memo.mtime[fileDict.shortPath] = newMTime;
-        const duration = await getAudioFileDurationLimited(fileDict.fullPath);
-        if (! isNaN(duration) && typeof(duration) === 'number') {
-          memo.duration[fileDict.shortPath] = duration;
-        }
-      } else { // 使用老的文件信息
-        memo.mtime[fileDict.shortPath] = oldMTime;
-        memo.duration[fileDict.shortPath] = oldDuration;
-      }
-    }) // map get duration
-  ); // Promise.all
-  return memo;
+    }
+    throw err;
+  }
+}
+const transcodeToOpusLimited = (sourcePath, cachePath, bitrate) => transcodeLimitP.call(transcodeToOpus, sourcePath, cachePath, bitrate);
+
+/**
+ * Attach `duration` and `mtime` to the audio tracks in a list, probing only what
+ * has actually changed.
+ *
+ * @param {String} work_id for logging only
+ * @param {Array} tracks getTrackList output, mutated in place
+ * @param {Map<String, {duration, mtime}>} known previously recorded, by relPath
+ * @returns {Promise<Array>} the same tracks
+ */
+async function probeAudioDurations (work_id, tracks, known = new Map()) {
+  await Promise.all(tracks.map(async (track) => {
+    if (!supportedMediaExtList.includes(track.ext)) return;
+
+    const previous = known.get(track.shortFilePath) || {};
+    let newMTime;
+    try {
+      newMTime = Math.round(fs.statSync(track.fullPath).mtime.getTime());
+    } catch (err) {
+      // Gone or unreadable between the walk and now. Keep whatever was known.
+      console.error(`work[${work_id}] stat failed, file = ${track.fullPath}`, err);
+      track.duration = previous.duration;
+      track.mtime = previous.mtime;
+      return;
+    }
+
+    const unchanged = previous.mtime !== undefined
+      && previous.mtime === newMTime
+      && previous.duration !== undefined;
+    if (unchanged) {
+      track.duration = previous.duration;
+      track.mtime = previous.mtime;
+      return;
+    }
+
+    console.log(`work[${work_id}] probing duration: ${track.fullPath}`);
+    track.mtime = newMTime;
+    const duration = await getAudioFileDurationLimited(track.fullPath);
+    track.duration = (!isNaN(duration) && typeof duration === 'number') ? duration : undefined;
+  }));
+  return tracks;
 }
 
 /**
@@ -111,12 +144,10 @@ async function scrapeWorkMemo(work_id, dir, oldMemo) {
  * containing 'title', 'subtitle' and 'trackId'.
  * @param {String} id Work identifier (e.g. '123456', '01134567', 'd215444').
  * @param {String} dir Work directory (absolute).
- * @param {readMemo} at least a empty object, or { duration: { "relative/path/audio.mp3": 33, "audio2.mp3": 22 }} for storage audio file duration
+ * @param {Array} files Optional list of files to process.
  */
-const getTrackList = async function (id, dir, readMemo, files) {
+const getTrackList = async function (id, dir, files) {
   try {
-    // Reuse a caller-provided file list to avoid
-    // walking the same directory twice during a single tree-build.
     const walkedFiles = files || (await recursiveReaddir(dir));
     // Filter out any files not matching these extensions
     const filteredFiles = walkedFiles.filter((file) => {
@@ -133,9 +164,6 @@ const getTrackList = async function (id, dir, readMemo, files) {
 
     // Sort by folder and title
     const sortedFiles = orderBy(filteredFiles.map((file) => {
-      // Forward slashes regardless of platform: this is the file's identity and
-      // it travels in URLs and in t_track_progress.track_key, so a Windows
-      // server must not key the same file differently from a Linux one.
       const shortFilePath = file.replace(path.join(dir, '/'), '').split(path.sep).join('/');
       const dirName = path.dirname(shortFilePath);
 
@@ -148,43 +176,21 @@ const getTrackList = async function (id, dir, readMemo, files) {
       };
     }), [v => v.subtitle, v => v.title, v => v.ext]);
 
-    // Add trackId (file handle) to each file. It is the work id plus the
-    // work-relative path, which is what every media URL carries: one value
-    // identifies the file, addresses it, and keys its progress row.
+    // Add trackId (file handle) to each file.
     const sortedHashedFiles = sortedFiles.map(
       (file) => ({
         title: file.title,
         subtitle: file.subtitle,
         trackId: `${id}/${file.shortFilePath}`,
         ext: file.ext,
-        fullPath: file.fullPath, // 给后面获取音频时长提供文件的全路径
+        fullPath: file.fullPath,
         shortFilePath: file.shortFilePath,
       }),
     );
 
-    const durationMemo = readMemo.duration || { /* fallback */ };
-    // Human-readable track names, keyed by relPath like the two memos above.
-    // Populated out-of-band (see backend/scripts/extract-track-titles.js) for
-    // works whose files are named "01.mp3", "#2.wav" and the like. Kept in a
-    // field of its own rather than overwriting `title`: `title` is the real
-    // filename and toTree builds the stream/download URLs from it.
-    const trackTitleMemo = readMemo.trackTitles || {};
-    // add duration and track title for each audio
-    const filesAddAudioDuration = await Promise.all(sortedHashedFiles.map(async (file) => {
-      if (supportedMediaExtList.includes(file.ext)) {
-        if (undefined !== durationMemo[file.shortFilePath]) {
-          file.duration = durationMemo[file.shortFilePath];
-        }
-        if (trackTitleMemo[file.shortFilePath]) {
-          file.trackTitle = trackTitleMemo[file.shortFilePath];
-        }
-      }
-      delete file.fullPath;
-
-      return file;
-    }));
-
-    return filesAddAudioDuration;
+    // fullPath is kept: probeAudioDurations stats it, and workFiles builds the
+    // media paths from it. Callers that return this to a client strip it.
+    return sortedHashedFiles;
   } catch (err) {
     console.log('getTracList error = ', err);
     throw new Error(`Failed to get tracklist from disk: ${err}`);
@@ -402,9 +408,7 @@ const saveCoverImageToDisk = (stream, id, type) => new Promise((resolve, reject)
 });
 
 /**
- * Collects every image a work page offers, in the order they should be
- * numbered on disk: the sample slider first, then the ones embedded in the
- * description blocks.
+ * Collects every image a work page offers.
  * @param {Object} metadata Scraped work metadata.
  * @returns {Array<Object>} [{ kind, url, thumb, width, height }]
  */
@@ -439,9 +443,6 @@ function collectWorkImages(metadata) {
 /**
  * Generate the on-disk filename for one scraped work image.
  *
- * Named by position rather than by the remote basename: description images
- * are served under opaque md5-ish names that collide across works, and the
- * sample slider's own names are only stable while DLsite keeps them.
  * @param {String} id Work id (e.g. '123456', '01134567', 'd215444')
  * @param {String} kind 'smp' for a sample-slider image, 'part' for one embedded in the description
  * @param {Number} index 1-based position within its kind
@@ -485,9 +486,6 @@ const saveWorkImageToDisk = (stream, fileName) => new Promise((resolve, reject) 
 /**
  * Deletes the scraped images belonging to a work.
  *
- * Matched by pattern rather than from the stored list, so images left behind
- * by an earlier scrape (a work whose sample count shrank, or whose images were
- * renumbered when its description changed) go too.
  * @param {String} id Work id (e.g. '123456', '01134567', 'd215444').
  * @param {Set<String>} [keep] File names to spare, for pruning after a download.
  * @returns {Promise<Number>} How many files were deleted.
@@ -541,5 +539,7 @@ module.exports = {
   deleteWorkImagesFromDisk,
   formatID,
   coverFileName,
-  scrapeWorkMemo,
+  probeAudioDurations,
+  transcodeFileName,
+  transcodeToOpusLimited,
 };

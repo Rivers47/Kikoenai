@@ -82,7 +82,7 @@
           <div>
             <span class="text-accent">{{ $t('favlistitem.progress') }}：</span>
             <q-badge color="tertiary-container" text-color="on-tertiary-container">{{ metadata.state.index+1 }} / {{ metadata.state.queue.length }}</q-badge>
-            <q-badge color="primary-container" text-color="on-primary-container">{{ humanReadableSeconds(metadata.state.seconds) }}</q-badge>
+            <q-badge color="primary-container" text-color="on-primary-container">{{ humanReadableSeconds(resumeSeconds ?? metadata.state.seconds) }}</q-badge>
             <span class="text-muted">
               {{ metadata.state.queue[metadata.state.index].title }}
             </span>
@@ -116,6 +116,7 @@ import WriteReview from './WriteReview'
 import NotifyMixin from '../mixins/Notification.js'
 import { apiUrl } from 'src/base-path'
 import { labelRoute } from 'src/utils'
+import { resumeSecondsFor } from '../utils/positions'
 import SearchableLabel from './SearchableLabel'
 
 export default {
@@ -148,7 +149,8 @@ export default {
       rating: 0,
       showReviewDialog: false,
       hideRating: false,
-      progress: ''
+      progress: '',
+      resumeSeconds: null
     }
   },
 
@@ -171,12 +173,14 @@ export default {
   mounted() {
     // 可以用mounted因为初始化时metadata不为空
     this.setMetadata();
+    this.resolveResumeSeconds();
   },
 
   watch: {
     // 需要watch metadata 当父component刷新metadata时更新
     metadata () {
       this.setMetadata();
+      this.resolveResumeSeconds();
     }
   },
 
@@ -275,17 +279,28 @@ export default {
         })
     },
 
-    playHistory(workId, historyState) {
+    async resolveResumeSeconds() {
+      if (!this.metadata || !this.metadata.state) return
+      try {
+        this.resumeSeconds = await resumeSecondsFor(this.workid, this.metadata.state)
+      } catch (err) {
+        console.error('resume reconciliation failed:', err)
+      }
+    },
+
+    // Same reconciliation as the work page and Recent Works: resuming the same
+    // history row must land in the same place from any entry point.
+    async playHistory(workId, historyState) {
+      const seconds = await resumeSecondsFor(workId, historyState)
       this.$store.commit('AudioPlayer/SET_QUEUE', {
         workId: workId,
         vas: this.metadata.vas,
         queue: historyState.queue,
         index: historyState.index,
         resetPlaying: false,
-        resumeHistorySeconds: historyState.seconds,
+        resumeHistorySeconds: seconds,
         workLastTrackId: historyState.queue.length ? historyState.queue[historyState.queue.length - 1].trackId : ''
       })
-      // this.$store.commit('AudioPlayer/SET_RESUME_HISTORY_SECONDS', historyState.seconds)
     }
   }
 

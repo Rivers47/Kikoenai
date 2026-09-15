@@ -4,7 +4,7 @@
          on top of the cover, and nesting them inside the link would put an
          anchor (and their menu button) inside another anchor. -->
     <div class="cover-wrap">
-      <Cover :workid="metadata.id" :release="metadata.release" :tags="oldStyle ? [] : metadata.tags" />
+      <Cover :workid="metadata.id" :release="metadata.release" :tags="oldStyle ? [] : metadata.tags" :cover-url="coverUrl" />
       <router-link class="cover-link" :to="`/work/${metadata.id}`" :aria-label="metadata.title" />
     </div>
 
@@ -163,6 +163,11 @@ export default {
     oldStyle: {
       type: Boolean,
       default: false
+    },
+    // Optional cover source override, forwarded to Cover (see there).
+    coverUrl: {
+      type: String,
+      default: ''
     }
   },
 
