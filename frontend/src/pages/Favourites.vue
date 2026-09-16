@@ -139,8 +139,6 @@ export default {
         updated_at: this.$t('favourites.sortByUpdatedAt'),
         userRating: this.$t('favourites.sortByRating'),
         release: this.$t('favourites.sortByRelease'),
-        review_count: this.$t('favourites.sortByReviewCount'),
-        dl_count: this.$t('favourites.sortByDlCount'),
         allage: this.$t('favourites.sortByAllAge'),
         nsfw: this.$t('favourites.sortByNsfw'),
       }

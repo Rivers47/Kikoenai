@@ -13,8 +13,6 @@ export default {
   sortByUpdatedAt: 'Mark time',
   sortByRating: 'Rating',
   sortByRelease: 'Release date',
-  sortByReviewCount: 'Review count',
-  sortByDlCount: 'Sales count',
   sortByAllAge: 'All-age',
   sortByNsfw: '18+',
 }

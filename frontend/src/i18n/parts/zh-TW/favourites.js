@@ -13,8 +13,6 @@ export default {
   sortByUpdatedAt: '標記時間',
   sortByRating: '評價',
   sortByRelease: '發布時間',
-  sortByReviewCount: '評論數量',
-  sortByDlCount: '售出數量',
   sortByAllAge: '全年齡',
   sortByNsfw: '18禁',
 }

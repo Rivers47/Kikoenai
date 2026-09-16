@@ -13,8 +13,6 @@ export default {
   sortByUpdatedAt: '标记时间',
   sortByRating: '评价',
   sortByRelease: '发布时间',
-  sortByReviewCount: '评论数量',
-  sortByDlCount: '售出数量',
   sortByAllAge: '全年龄',
   sortByNsfw: '18禁',
 }

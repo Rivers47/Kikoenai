@@ -183,7 +183,7 @@ export default {
 
       // 排序种类，例如可以选择按照发售日期来排序结果
       sortCategoryOption: "release",
-      sortCategoryOptions: ["release", "rating", "dl_count", "price", "rate_average_2dp", "review_count", "id", "created_at", "random"],
+      sortCategoryOptions: ["release", "rating", "created_at", "random"],
 
       nsfwOption: "nsfw_0", 
       nsfwOptions: ["nsfw_0", "nsfw_1", "nsfw_2"], // nsfw_0无年龄限制，nsfw_1全年龄，nsfw_2十八禁
@@ -373,11 +373,6 @@ export default {
       switch(label) {
         case "release": return this.$t('works.release');
         case "rating": return this.$t('works.rating');
-        case "dl_count": return this.$t('works.dlCount');
-        case "price": return this.$t('works.price');
-        case "rate_average_2dp": return this.$t('works.rateAverage');
-        case "review_count": return this.$t('works.reviewCount');
-        case "id": return this.$t('works.workId');
         case "created_at": return this.$t('works.createdAt');
         case "random": return this.$t('works.random');
         case "nsfw_0": return this.$t('works.nsfwAll');

@@ -164,7 +164,7 @@ router.get('/tracks/:id',
 // GET list of work ids without any search
 router.get('/works', 
   query('page').optional().isInt(),
-  query('order').optional().isIn(["release", "rating", "dl_count", "price", "rate_average_2dp", "review_count", "id", "created_at", "random", "betterRandom"]),
+  query('order').optional().isIn(["release", "rating", "created_at", "random", "betterRandom"]),
   query('sort').optional().isIn(['desc', 'asc']),
   query('nsfw').optional().isInt().isIn([0/* 无年龄限制 */, 1 /* 全年龄 */, 2 /* 仅R18 */]),
   query('seed').optional().isInt(),
@@ -234,8 +234,8 @@ router.get('/search', async (req, res, next) => {
   const filter = req.query.filter ? req.query.filter.trim() : '';
 
   const currentPage = parseInt(req.query.page) || 1;
-  // 通过 "音声id, 贩卖日, 用户评价， 售出数, 评论数量, 价格, 平均评价, 全年龄新作" 排序
-  // ['id', 'release', 'rating', 'dl_count', 'review_count', 'price', 'rate_average_2dp', 'nsfw']
+  // 通过 "贩卖日, 用户评价, 全年龄新作" 排序
+  // ['release', 'rating', 'nsfw']
   const order = req.query.order || 'release';
   const sort = req.query.sort || 'desc';
   const nsfw = parseInt(req.query.nsfw || '0'); 

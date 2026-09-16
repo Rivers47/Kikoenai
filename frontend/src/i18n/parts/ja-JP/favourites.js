@@ -13,8 +13,6 @@ export default {
   sortByUpdatedAt: 'マーク日時',
   sortByRating: '評価',
   sortByRelease: 'リリース日',
-  sortByReviewCount: 'レビュー数',
-  sortByDlCount: '販売数',
   sortByAllAge: '全年齢',
   sortByNsfw: '18禁',
 }
