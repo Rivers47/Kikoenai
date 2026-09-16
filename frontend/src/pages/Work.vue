@@ -187,8 +187,8 @@ export default {
     },
 
     resumeMetadataPlayHistory() {
-      // 以最小化形式打开播放器
-      this.$store.commit('AudioPlayer/TOGGLE_HIDE')
+      // open player minimized
+      //if (!this.$store.state.AudioPlayer.hide) this.$store.commit('AudioPlayer/TOGGLE_HIDE')
       this.$store.commit('AudioPlayer/SET_QUEUE', {
         workId: this.metadata.id,
         vas: this.metadata.vas,
