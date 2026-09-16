@@ -60,6 +60,12 @@ module.exports = function (ctx) {
     build: {
       vueRouterMode: 'history',
 
+      // Baked in so the UI can report the version it was BUILT at, which a
+      // stale cached PWA will disagree with /api/version about.
+      env: {
+        APP_VERSION: require('./package.json').version
+      },
+
       publicPath: ctx.dev ? '/' : PUBLIC_PATH_TOKEN,
 
       // Output directly to the backend's dist/ so it's served as static content

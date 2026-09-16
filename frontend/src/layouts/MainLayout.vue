@@ -36,7 +36,7 @@
       bordered
       content-class=""
     >
-      <q-scroll-area class="fit padding-bottom-play-bar">
+      <q-scroll-area class="fit padding-bottom-play-bar" content-style="min-height: 100%; display: flex; flex-direction: column">
         <q-list>
           <q-item
             clickable
@@ -135,6 +135,10 @@
             </q-item-section>
           </q-item>
         </q-list>
+
+        <div v-if="version && !miniState" class="q-mt-auto q-px-md q-py-sm text-caption text-grey text-center">
+          v{{ version }}<span v-if="uiVersion !== version"> / ui v{{ uiVersion }}</span>
+        </div>
       </q-scroll-area>
     </q-drawer>
 
@@ -208,6 +212,8 @@ export default {
       miniState: true,
       confirm: false,
       randId: null,
+      version: '',
+      uiVersion: process.env.APP_VERSION,
       showScroller: false,
       unsubscribeDownloadMessages: null,
       contrastMode: getContrastMode(),
@@ -236,7 +242,7 @@ export default {
 
   mounted () {
     this.initUser();
-    this.checkLockFileNotice();
+    this.fetchVersion();
     this.fetchSharedConfig();
     requestSync();
     this.initOfflineDownloads();
@@ -359,9 +365,10 @@ export default {
         })
     },
 
-    checkLockFileNotice () {
+    fetchVersion () {
       this.$axios.get('/api/version')
         .then((res) => {
+          this.version = res.data.current;
           if (res.data.lockFileExists) {
             this.$q.notify ({
               message: res.data.lockReason,
