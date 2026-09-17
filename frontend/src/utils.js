@@ -146,3 +146,18 @@ export function filterWithLabel(filter, field, name, negate = false) {
   const kept = parseSearchQuery(filter).filter((t) => !(t.field === field && t.value === name));
   return formatSearchQuery([...kept, { field, value: name, exact: true, negate }]);
 }
+
+/**
+ * Suppress the browser's own callout menu on a long-press.
+ *
+ * A label is a link, and a link answers a long-press with "open in new tab /
+ * copy link" — which on Android arrives at ~500ms, before the 600ms
+ * `v-touch-hold` that opens the refine menu, so both end up on screen. Only
+ * the touch path is swallowed; a mouse right-click keeps its menu, which is
+ * the same split the `(pointer: coarse)` styles make.
+ *
+ * @param {Event} event - the contextmenu event
+ */
+export function suppressTouchCallout(event) {
+  if (window.matchMedia('(pointer: coarse)').matches) event.preventDefault();
+}

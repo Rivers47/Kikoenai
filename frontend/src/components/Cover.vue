@@ -5,7 +5,8 @@
     style="max-width: 560px;"
     transition="fade"
   >
-    <div class="absolute-top-left transparent" style="padding: 0;">
+    <!-- hide work id and release in thumbnail mode for cleaner look -->
+    <div v-if="release !== ''" class="absolute-top-left transparent" style="padding: 0;">
       <q-chip dense square color="surface-container" text-color="on-surface" class="q-ma-sm shadow-3">
         {{code}}
       </q-chip>
@@ -19,18 +20,20 @@
 
     <!-- 标签 -->
     <div class="q-pa-none q-ma-sm absolute-bottom-left tags-panel">
-      <SearchableLabel
+      <LabelDropdown
         v-for="tag in tags"
         :key='tag.id'
         :to="labelRoute('tag', tag.name)"
         field="tag"
-        chip
         :name="tag.name"
-        >
-        <q-chip dense square class="shadow-3" :lang="$tagLang">
-          {{ $tTag(tag.name) }}
-        </q-chip>
-      </SearchableLabel>
+        :label="$tTag(tag.name)"
+        dense
+        size="md"
+        color="surface-container"
+        text-color="on-surface"
+        class="shadow-3 q-ma-xs"
+        :lang="$tagLang"
+      />
     </div>
 
     <!--其他自定义组件-->
@@ -41,14 +44,14 @@
 <script>
 
 import { workno, labelRoute } from 'src/utils'
-import SearchableLabel from './SearchableLabel'
+import LabelDropdown from './LabelDropdown'
 import { apiUrl } from 'src/base-path'
 
 export default {
   name: 'Cover',
 
   components: {
-    SearchableLabel,
+    LabelDropdown,
   },
 
   props: {
@@ -104,6 +107,29 @@ export default {
   border-radius: 5px;
   // background: radial-gradient(closest-side at center, rgba(0, 0, 0, 0.8) 0, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0) 100%);
   // background: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0,0,0,0.4) 30%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0.4) 70%, rgba(0,0,0,0));
+}
+
+// These cover the artwork, so they are trimmed back towards the dense chips
+// they replaced: the side padding is the chip's 0.4em, and the box is 24px,
+// the smallest target WCAG 2.2 allows rather than the button's own 2em. The
+// arrow is sized to clear 24px too, since it is a target in its own right.
+.tags-panel :deep(.q-btn--dense) {
+  min-height: 24px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.tags-panel :deep(.q-btn-dropdown--current) {
+  padding-left: 0.4em;
+  padding-right: 0.4em;
+}
+
+.tags-panel :deep(.q-btn-dropdown__arrow-container) {
+  padding: 0 3px;
+}
+
+.tags-panel :deep(.q-btn-dropdown__arrow) {
+  font-size: 18px;
 }
 
 </style>

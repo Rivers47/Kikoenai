@@ -5,6 +5,7 @@
     v-model="menuOpen"
     v-touch-hold="onHold"
     @click.capture="onClick"
+    @contextmenu="suppressTouchCallout"
     :toggle-aria-label="$t('searchablelabel.refineWith', { name })"
   >
     <q-list dense style="min-width: 160px">
@@ -29,6 +30,12 @@
 @media (pointer: coarse) {
   :deep(.q-btn-dropdown__arrow-container) {
     display: none;
+  }
+
+  /* Stop the long-press from selecting text or raising the OS callout menu. */
+  .q-btn-dropdown {
+    -webkit-touch-callout: none;
+    user-select: none;
   }
 
   /* Make the right side still rounded when arrow is hidden */
@@ -59,7 +66,7 @@
 </style>
 
 <script>
-import { filterWithLabel } from 'src/utils'
+import { filterWithLabel, suppressTouchCallout } from 'src/utils'
 
 export default {
   name: 'LabelDropdown',
@@ -83,6 +90,8 @@ export default {
   },
 
   methods: {
+    suppressTouchCallout,
+
     onHold () {
       this.justHeld = true
       this.menuOpen = true

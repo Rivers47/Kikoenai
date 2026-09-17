@@ -4,7 +4,7 @@
          on top of the cover, and nesting them inside the link would put an
          anchor (and their menu button) inside another anchor. -->
     <div class="cover-wrap">
-      <Cover :workid="metadata.id" :release="metadata.release" :tags="oldStyle ? [] : metadata.tags" :cover-url="coverUrl" />
+      <Cover :workid="metadata.id" :release="thumbnailMode ? '' : metadata.release" :tags="oldStyle || thumbnailMode ? [] : metadata.tags" :cover-url="coverUrl" />
       <router-link class="cover-link" :to="`/work/${metadata.id}`" :aria-label="metadata.title" />
     </div>
 
@@ -97,19 +97,21 @@
 
       <!-- 标签，新版样式下改在封面上显示 -->
       <div class="q-ma-xs" v-if="oldStyle && showTags">
-        <SearchableLabel
+        <LabelDropdown
           v-for="(tag, index) in metadata.tags"
           :to="labelRoute('tag', tag.name)"
           field="tag"
-          chip
-          caret-class="text-on-surface"
           :name="tag.name"
+          :label="$tTag(tag.name)"
           :key=index
-        >
-          <q-chip size="md" class="shadow-2" color="surface-container" text-color="on-surface" :lang="$tagLang">
-            {{ $tTag(tag.name) }}
-          </q-chip>
-        </SearchableLabel>
+          dense
+          size="md"
+          rounded
+          color="surface-container"
+          text-color="on-surface"
+          class="shadow-2 q-ma-xs"
+          :lang="$tagLang"
+        />
       </div>
 
       <!-- 声优 -->
@@ -117,19 +119,20 @@
         class="q-mx-xs q-my-sm"
         :class="{ 'horize-scroll-va-list': !oldStyle && $q.platform.has.touch }"
       >
-        <SearchableLabel
+        <LabelDropdown
           v-for="(va, index) in metadata.vas"
           :to="labelRoute('va', va.name)"
           field="va"
-          chip
-          caret-class="text-on-primary-container"
           :name="va.name"
+          :label="va.name"
           :key=index
-        >
-          <q-chip square size="md" class="shadow-2" color="primary-container" text-color="on-primary-container" :icon="oldStyle ? 'mic' : undefined">
-            {{ va.name }}
-          </q-chip>
-        </SearchableLabel>
+          dense
+          size="md"
+          :icon="oldStyle ? 'mic' : undefined"
+          color="primary-container"
+          text-color="on-primary-container"
+          class="shadow-2 q-ma-xs"
+        />
       </div>
     </div>
   </q-card>
@@ -140,6 +143,7 @@ import Cover from 'components/Cover'
 import NotifyMixin from '../mixins/Notification.js'
 import { isFanzaId, fanzaCid, dlsiteWorkUrl, labelRoute } from 'src/utils'
 import SearchableLabel from './SearchableLabel'
+import LabelDropdown from './LabelDropdown'
 
 export default {
   name: 'WorkCard',
@@ -148,6 +152,7 @@ export default {
 
   components: {
     SearchableLabel,
+    LabelDropdown,
     Cover
   },
 
