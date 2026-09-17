@@ -11,32 +11,31 @@
     </router-link>
 
     <button
-      ref="caret"
       type="button"
       class="searchable-label__caret"
       :aria-label="$t('searchablelabel.refineWith', { name })"
       @click.stop.prevent
     >
       <q-icon name="expand_more" size="16px" />
+
+      <q-menu v-model="menuOpen" anchor="bottom left" self="top left">
+        <q-list dense style="min-width: 160px">
+          <q-item clickable v-close-popup @click="apply(false)">
+            <q-item-section avatar class="searchable-label__avatar">
+              <q-icon name="add" size="xs" />
+            </q-item-section>
+            <q-item-section>{{ $t('searchablelabel.include') }}</q-item-section>
+          </q-item>
+
+          <q-item clickable v-close-popup @click="apply(true)">
+            <q-item-section avatar class="searchable-label__avatar">
+              <q-icon name="remove" size="xs" />
+            </q-item-section>
+            <q-item-section>{{ $t('searchablelabel.exclude') }}</q-item-section>
+          </q-item>
+        </q-list>
+      </q-menu>
     </button>
-
-    <q-menu v-model="menuOpen" :target="caretEl" anchor="bottom left" self="top left">
-      <q-list dense style="min-width: 160px">
-        <q-item clickable v-close-popup @click="apply(false)">
-          <q-item-section avatar class="searchable-label__avatar">
-            <q-icon name="add" size="xs" />
-          </q-item-section>
-          <q-item-section>{{ $t('searchablelabel.include') }}</q-item-section>
-        </q-item>
-
-        <q-item clickable v-close-popup @click="apply(true)">
-          <q-item-section avatar class="searchable-label__avatar">
-            <q-icon name="remove" size="xs" />
-          </q-item-section>
-          <q-item-section>{{ $t('searchablelabel.exclude') }}</q-item-section>
-        </q-item>
-      </q-list>
-    </q-menu>
   </span>
 </template>
 
@@ -127,13 +126,8 @@ export default {
   data () {
     return {
       menuOpen: false,
-      justHeld: false,
-      caretEl: null
+      justHeld: false
     }
-  },
-
-  mounted () {
-    this.caretEl = this.$refs.caret
   },
 
   methods: {

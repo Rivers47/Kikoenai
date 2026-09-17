@@ -1,10 +1,10 @@
 <template>
-  <q-card class="card hover-show">
+  <q-card class="card hover-show" @pointerenter.once="revealTags = true">
     <!-- The cover link is an overlay rather than a wrapper: the tag chips sit
          on top of the cover, and nesting them inside the link would put an
          anchor (and their menu button) inside another anchor. -->
     <div class="cover-wrap">
-      <Cover :workid="metadata.id" :release="thumbnailMode ? '' : metadata.release" :tags="oldStyle || thumbnailMode ? [] : metadata.tags" :cover-url="coverUrl" />
+      <Cover :workid="metadata.id" :release="thumbnailMode ? '' : metadata.release" :tags="coverTags" :cover-url="coverUrl" />
       <router-link class="cover-link" :to="`/work/${metadata.id}`" :aria-label="metadata.title" />
     </div>
 
@@ -180,11 +180,17 @@ export default {
     return {
       rating: 0,
       userMarked: false,
-      showTags: true
+      showTags: true,
+      revealTags: false
     }
   },
 
   computed: {
+    // Built on first hover: a screenful of drop-down buttons costs more than the rest of the card.
+    coverTags () {
+      return this.oldStyle || this.thumbnailMode || !this.revealTags ? [] : this.metadata.tags;
+    },
+
     sortedRatings: function() {
       function compare(a, b) {
         return (a.review_point > b.review_point) ? -1 : 1;
