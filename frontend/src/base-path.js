@@ -72,3 +72,19 @@ export function stripBasePath (pathname) {
   if (pathname.startsWith(`${basePath}/`)) return pathname.slice(basePath.length)
   return pathname
 }
+
+/**
+ * Percent-encode a trackId for use as URL path segments.
+ *
+ * Mirrors backend/routes/utils/url.js. A trackId is `${workId}/${relPath}` and
+ * relPath is a real file name, so it can contain URL syntax -- a track named
+ * `#1.foo.opus` truncated the path at the fragment marker and 404'd on a file
+ * that existed. Per segment, so the `/` separators survive; `encodeURI` is not
+ * enough, since it leaves `#` and `?` alone by design.
+ *
+ * Both ends must agree: `toQueueItem` compares a tree node's mediaStreamUrl
+ * against the URL derived here, and a mismatch makes it carry a redundant copy.
+ */
+export function encodeTrackId (trackId) {
+  return String(trackId).split('/').map(encodeURIComponent).join('/')
+}

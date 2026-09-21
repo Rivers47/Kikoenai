@@ -228,11 +228,18 @@ class publicConfig {
   get enableTranscoding() {
     return config.enableTranscoding;
   }
+  // Whether the track-title suggester has an endpoint to call. A boolean, never
+  // the settings themselves: the LLM config is env-only (see track-titles.js)
+  // precisely so no key can reach a browser, and this must not undo that.
+  get llmConfigured() {
+    return Boolean(process.env.KIKO_LLM_BASE_URL && process.env.KIKO_LLM_MODEL);
+  }
   export() {
     return {
       rewindSeekTime: this.rewindSeekTime,
       forwardSeekTime: this.forwardSeekTime,
       enableTranscoding: this.enableTranscoding,
+      llmConfigured: this.llmConfigured,
     };
   }
 }

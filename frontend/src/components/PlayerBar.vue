@@ -53,13 +53,13 @@
         
         <q-item-section>
           <Scrollable class="full-width" :stop="!hide">
-            <span class="audio-name relative-position">{{ currentPlayingFile.title }}</span>
+            <span class="audio-name relative-position">{{ currentPlayingTitle }}</span>
           </Scrollable>
           <Scrollable class="full-width" :stop="!hide">
             <span class="work-name relative-position">{{ currentPlayingFile.workTitle }}</span>
           </Scrollable>
           <!--
-          <q-item-label lines="2">{{ currentPlayingFile.title }}</q-item-label>
+          <q-item-label lines="2">{{ currentPlayingTitle }}</q-item-label>
           <q-item-label caption lines="1">{{ currentPlayingFile.workTitle }}</q-item-label>
           -->
         </q-item-section>
@@ -164,7 +164,8 @@ export default {
     ]),
 
     ...mapGetters('AudioPlayer', [
-      'currentPlayingFile'
+      'currentPlayingFile',
+      'currentPlayingTitle'
     ]),
 
 

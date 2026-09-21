@@ -222,6 +222,7 @@
         <div class="row justify-between">
           <q-card-actions align="left">
             <q-btn flat :label="$t('common.cancel')" @click="closeDialog()" />
+            <q-btn flat icon="edit_note" :label="$t('editmetadata.editTrackTitles')" @click="showTrackTitlesDialog = true" />
           </q-card-actions>
           <q-card-actions align="right" class="text-primary">
             <q-btn flat :label="$t('common.save')" :loading="saving" @click="submitEdit()" />
@@ -229,16 +230,28 @@
         </div>
       </q-card>
     </q-dialog>
+
+    <EditTrackTitles
+      v-if="showTrackTitlesDialog"
+      :metadata="metadata"
+      @saved="onTrackTitlesSaved"
+      @closed="showTrackTitlesDialog = false"
+    />
   </div>
 </template>
 
 <script>
 import NotifyMixin from '../mixins/Notification.js'
+import EditTrackTitles from './EditTrackTitles'
 
 export default {
   name: 'EditMetadata',
 
   mixins: [NotifyMixin],
+
+  components: {
+    EditTrackTitles,
+  },
 
   props: {
     metadata: {
@@ -250,6 +263,7 @@ export default {
   data() {
     return {
       showEditDialog: true,
+      showTrackTitlesDialog: false,
       saving: false,
       editable: {
         title: '',
@@ -290,6 +304,13 @@ export default {
   methods: {
     closeDialog() {
       this.$emit('closed');
+    },
+
+    // Track titles live on t_work_file, not in the metadata payload, so they
+    // save on their own. 'saved' is what makes WorkDetails refetch the work.
+    onTrackTitlesSaved() {
+      this.showTrackTitlesDialog = false;
+      this.$emit('saved');
     },
 
     async fetchOptions(endpoint) {

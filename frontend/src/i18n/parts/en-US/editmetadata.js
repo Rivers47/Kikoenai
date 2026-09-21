@@ -16,4 +16,5 @@ export default {
   selectSeries: 'Select series (clearable)',
   noSeriesMatch: 'No matching series',
   saveSuccess: 'Metadata updated successfully',
+  editTrackTitles: 'Edit track titles',
 }

@@ -44,4 +44,8 @@ const WORK_ID_RE = /^(bj\d{6,8}|\d{6,8}|d_?\d+)$/i;
  */
 const workIdParam = () => require('express-validator').param('id').isString().matches(WORK_ID_RE).customSanitizer(normalizeWorkId);
 
-module.exports = { isValidRequest, workIdParam };
+// WORK_ID_RE and normalizeWorkId are exported for callers with no
+// express-validator chain to hang them off -- the Socket.IO handlers, which
+// take a work id straight from the client. The id shape is a contract
+// (backend/AGENTS.md §6); a second copy of this regex would drift.
+module.exports = { isValidRequest, workIdParam, WORK_ID_RE, normalizeWorkId };

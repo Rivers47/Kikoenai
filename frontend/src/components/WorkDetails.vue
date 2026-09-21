@@ -365,7 +365,10 @@ export default {
       if (!state || !state.queue || state.queue.length === 0) return '—'
       const idx = Math.min(state.index ?? 0, state.queue.length - 1)
       const track = state.queue[idx]
-      return track ? (track.title || '—') : '—'
+      // trackTitle when the work has one, same as the file tree right below
+      // this panel. Queues stored before track titles existed carry none and
+      // keep showing the filename until rebuilt from the tree.
+      return track ? (track.trackTitle || track.title || '—') : '—'
     },
 
     // Reconciled against the local store by the parent, so this reads the same

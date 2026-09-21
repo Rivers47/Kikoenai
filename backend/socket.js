@@ -4,6 +4,7 @@ const cookie = require('cookie');
 const child_process = require('child_process'); // 子进程
 const { config } = require('./config');
 const { SESSION_COOKIE, getSession } = require('./auth/session');
+const { suggestTrackTitles, SuggestError } = require('./suggest-track-titles');
 
 const initSocket = (server) => {
   const io = socket(server, { path: `${config.basePath}/socket.io` });
@@ -105,6 +106,30 @@ const initSocket = (server) => {
         scanner.send({ exit: 1 });
       } else {
         socket.emit('SCAN_FINISHED', { message: '扫描进程已结束.' });
+      }
+    });
+
+    // Propose a track list for one work from its scraped description.
+    //
+    // Over the socket rather than a route because a local model regularly runs
+    // past what a reverse proxy will hold a request open for; see
+    // suggest-track-titles.js. Unlike the scan events there is no global guard
+    // and no forked child -- this is per-work, per-admin and in-process, so the
+    // answer goes back to the asking socket with `socket.emit`. Using io.emit
+    // here would drop one admin's suggestion into another's dialog.
+    //
+    // `workId` is echoed on both replies so a dialog can ignore an answer to a
+    // request it no longer cares about.
+    socket.on('SUGGEST_TRACK_TITLES', async (payload) => {
+      const workId = payload && payload.workId;
+      try {
+        const result = await suggestTrackTitles(workId);
+        socket.emit('SUGGEST_TRACK_TITLES_RESULT', { workId, ...result });
+      } catch (err) {
+        // A SuggestError is a precondition the admin can act on. Anything else
+        // is the model endpoint failing or a real bug, so it gets logged.
+        if (!(err instanceof SuggestError)) console.error(err);
+        socket.emit('SUGGEST_TRACK_TITLES_ERROR', { workId, error: err.message });
       }
     });
 

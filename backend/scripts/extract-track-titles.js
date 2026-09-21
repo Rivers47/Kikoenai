@@ -3,16 +3,15 @@
  * "#2.wav" and the like, by extracting the track list out of the scraped
  * DLsite description.
  *
- * Deliberately a standalone script, not a server feature: it needs an LLM
- * endpoint, which most deployments will not have, and it is only useful for the
- * small minority of works whose filenames carry no titles. Nothing in the
- * server imports it. The server side is just the storage contract --
- * t_work_file.track_title, keyed by relPath -- which the file listing reads and the
- * work tree renders as `trackTitle || title`.
+ * The extraction itself lives in ../track-titles.js, shared with
+ * POST /api/work/:id/track-titles/suggest. What is here is the CLI around it:
+ * argument parsing, the loud precondition failures, and the write.
  *
- * Configuration is env only, never config.json: routes/config.js strips just
- * md5secret/jwtsecret from GET /api/config/admin, so anything added to
- * defaultConfig is readable by admin and lands in config backups.
+ * This stays a script as well as a route because it writes straight to the
+ * database with no review step, which is the right shape for a terminal and the
+ * wrong one for a web request -- the dialog proposes, this applies.
+ *
+ * Configuration is env only, never config.json -- see ../track-titles.js:
  *
  *   KIKO_LLM_BASE_URL   OpenAI-compatible base, e.g. http://localhost:11434/v1
  *                       or https://openrouter.ai/api/v1
@@ -35,7 +34,6 @@
 
 const path = require('path');
 const readline = require('readline/promises');
-const cheerio = require('cheerio');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 
@@ -44,6 +42,18 @@ const { config } = require('../config');
 const { formatID } = require('../filesystem/utils');
 const { listWorkTracks } = require('../filesystem/workFiles');
 const { isFanzaId, canonicalizeWorkId } = require('../work-id');
+const {
+  AUDIO_EXT,
+  isLlmConfigured,
+  isUninformative,
+  htmlToText,
+  structuredTitles,
+  distinctTrackNames,
+  buildHaystack,
+  buildPrompt,
+  callModel,
+  validate,
+} = require('../track-titles');
 
 const argv = yargs(hideBin(process.argv))
   .usage('$0 <workId> [options]')
@@ -56,28 +66,6 @@ const argv = yargs(hideBin(process.argv))
   .demandCommand(0)
   .strict()
   .argv;
-
-const BASE_URL = process.env.KIKO_LLM_BASE_URL;
-const API_KEY = process.env.KIKO_LLM_API_KEY;
-const MODEL = process.env.KIKO_LLM_MODEL;
-// Provider-specific knobs, merged into the request body. There is no portable
-// way to switch reasoning off across OpenAI-compatible servers, so rather than
-// guess, pass whatever yours wants:
-//   vLLM / SGLang (Qwen3):  {"chat_template_kwargs":{"enable_thinking":false}}
-//   Ollama:                 {"think":false}
-//   OpenRouter:             {"reasoning":{"exclude":true}}
-const EXTRA_BODY = process.env.KIKO_LLM_EXTRA_BODY ? JSON.parse(process.env.KIKO_LLM_EXTRA_BODY) : {};
-// Generous on purpose. This is a per-work tool you run and watch, so the
-// timeout exists to stop an endpoint stalling forever, not to enforce speed --
-// a local model on CPU can take many minutes for one work, especially with
-// reasoning still switched on.
-const TIMEOUT_MS = parseInt(process.env.KIKO_LLM_TIMEOUT_MS, 10) || 600000;
-
-const AUDIO_EXT = ['.mp3', '.wav', '.flac', '.m4a', '.ogg', '.opus'];
-
-// A filename that already carries a title needs no help. Anything that is only
-// digits, punctuation and a track-ish prefix does.
-const UNINFORMATIVE = /^(?:track|trk|tr|no|#|＃)?[\s._\-–—]*[0-9０-９]{1,3}[\s._\-–—]*$/i;
 
 /**
  * Accept the id in whatever shape it was copied from -- a DLsite URL, the work
@@ -99,237 +87,6 @@ const normalizeWorkId = (raw) => {
   return formatID(parseInt(digits, 10));
 };
 
-const isUninformative = (fileName) => {
-  const stem = fileName.replace(/\.[^.]+$/, '').trim();
-  return UNINFORMATIVE.test(stem);
-};
-
-/**
- * Plain text of scraped description markup, preserving the line structure the
- * markup implies.
- *
- * This is the only place the flattening happens. `t_work.description` holds the
- * seller's own markup (the work page renders it), but a model aligning titles to
- * filenames wants prose, and `.text()` alone drops <br> and runs block elements
- * together, turning a formatted blurb into one unreadable line.
- *
- * The <br> replacement is a sentinel, not a bare '\n': DLsite writes
- * "<br />\n", so a literal newline usually follows the tag in the source, and
- * turning the tag into a newline of its own would double every line break. The
- * sentinel swallows that following source newline, leaving "<br /><br />" as
- * the only way to get a blank line.
- * @param {String} html
- * @returns {String}
- */
-function htmlToText(html) {
-  if (!html) return '';
-  const $ = cheerio.load(html, null, false);
-  $('br').replaceWith('\u0000');
-  $('p, div, li, tr, h1, h2, h3, h4, h5, h6').append('\u0000');
-  return $.root().text()
-    .replace(/\r/g, '')
-    .replace(/[ \t]*\u0000[ \t]*\n?/g, '\n')
-    .replace(/[ \t]*\n[ \t]*/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-/**
- * Flatten a title to one display line.
- *
- * Sellers wrap titles across lines in the prose, and asking for the whole line
- * brings the breaks along. The tree renders each track as a single-line label,
- * so a stored newline is only ever noise.
- *
- * Line breaks and tabs collapse to one space and runs of ASCII spaces collapse
- * to one; the ideographic space U+3000 is left alone, because in Japanese
- * titles it is deliberate typography rather than accidental whitespace.
- * @param {String} title
- * @returns {String}
- */
-const cleanTitle = title => String(title)
-  .replace(/[\r\n\t]+/g, ' ')
-  .replace(/ {2,}/g, ' ')
-  .trim();
-
-/**
- * Track titles DLsite already published structurally, in a work_parts
- * type_tracklist block. About one work in six has these, and for those no model
- * is needed at all.
- */
-function structuredTitles(descriptionParts) {
-  const out = [];
-  for (const part of descriptionParts || []) {
-    for (const track of (part.tracks || [])) {
-      if (track && track.title && track.title.trim()) out.push(cleanTitle(track.title));
-    }
-  }
-  return out;
-}
-
-/**
- * Text a title must appear in to count as "copied, not invented".
- *
- * Includes the structured track titles as well as the prose, so a work whose
- * list DLsite published structurally is not rejected wholesale.
- */
-function buildHaystack(description, descriptionParts) {
-  return [description || '', ...structuredTitles(descriptionParts)]
-    .join('\n')
-    .replace(/\s+/g, '');
-}
-
-const SYSTEM_PROMPT = `You extract track lists from Japanese DLsite work descriptions.
-
-You are given a description and a list of audio filenames in disk order.
-Return which description track title belongs to which filename.
-
-Rules:
-- Every "title" you output MUST be copied verbatim from the description. Never
-  translate, summarise, reword or invent. Copy the exact characters.
-- Copy the WHOLE line, including any leading track number or marker exactly as
-  written ("Track1 ...", "01 ...", "\u2460 ...", "\u25c6 ..."). Do not strip it and do not
-  renumber. The number is how a human spots a misaligned mapping.
-- Do not include duration markers, "プレイ内容(...)" lines, campaign or credit
-  text, or the total runtime line.
-- The description may list a different number of tracks than there are files
-  (bonus tracks, trial folders, duplicate mp3/wav copies). Only map a filename
-  when you are confident. Leave it out otherwise.
-- If the description contains no track list at all, return {"tracks": []}.
-
-Respond with JSON only, no prose:
-{"tracks": [{"file": "<exact filename from the list>", "title": "<verbatim from description>"}]}`;
-
-/**
- * The text handed to the model: the prose description, plus any structured
- * track titles, which live outside `description` (see buildHaystack).
- */
-function buildPrompt(description, structured) {
-  if (!structured.length) return description || '';
-  return `${description || ''}\n\n# Track list\n${structured.join('\n')}`;
-}
-
-async function callModel(description, fileNames) {
-  const body = {
-    model: MODEL,
-    // Deterministic: this is verbatim span extraction, so there is nothing to
-    // be creative about, and a rerun should give the same answer.
-    temperature: 0,
-    ...EXTRA_BODY,
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      {
-        role: 'user',
-        content: `# Description\n${description}\n\n# Files (disk order)\n${fileNames.map((f, i) => `${i + 1}. ${f}`).join('\n')}`,
-      },
-    ],
-    response_format: { type: 'json_object' },
-  };
-
-  const headers = { 'Content-Type': 'application/json' };
-  if (API_KEY) headers.Authorization = `Bearer ${API_KEY}`;
-
-  const url = `${BASE_URL.replace(/\/$/, '')}/chat/completions`;
-
-  // Everything on the wire, untruncated. This is a one-work debugging tool and
-  // guessing at what the model saw is the slowest way to work out why an
-  // extraction went wrong.
-  console.log(`\n----- REQUEST -> POST ${url}`);
-  console.log(JSON.stringify({
-    // The key is the one thing not echoed verbatim: this output gets pasted
-    // into issues and chat windows.
-    ...headers, ...(API_KEY ? { Authorization: 'Bearer <redacted>' } : {}),
-  }, null, 2));
-  console.log(JSON.stringify(body, null, 2));
-
-  // Without a timeout a stalled endpoint hangs the script indefinitely -- the
-  // same failure the review scraper had.
-  const started = Date.now();
-  let res;
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-  } catch (err) {
-    if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-      throw new Error(
-        `LLM did not answer within ${Math.round(TIMEOUT_MS / 1000)}s. `
-        + 'Raise KIKO_LLM_TIMEOUT_MS (milliseconds), switch off reasoning via '
-        + 'KIKO_LLM_EXTRA_BODY, or use a smaller model.',
-      );
-    }
-    throw err;
-  }
-
-  // Read the body once, as text, so the raw bytes can be shown whether or not
-  // the response was ok and whether or not it happens to be JSON.
-  const raw = await res.text();
-  console.log(`\n----- RESPONSE <- ${res.status} ${res.statusText} (${((Date.now() - started) / 1000).toFixed(1)}s)`);
-  for (const [k, v] of res.headers) console.log(`${k}: ${v}`);
-  console.log(raw);
-  console.log('----- END\n');
-
-  if (!res.ok) throw new Error(`LLM ${res.status}: ${raw.slice(0, 200)}`);
-
-  let json;
-  try {
-    json = JSON.parse(raw);
-  } catch {
-    throw new Error('LLM response was not JSON (see RESPONSE above).');
-  }
-  const content = json.choices && json.choices[0] && json.choices[0].message.content;
-  if (!content) throw new Error('LLM returned no content');
-
-  // Reasoning models emit their chain of thought inline in the content, and
-  // response_format does not suppress it -- Qwen3 under Ollama defaults to
-  // thinking on, so JSON.parse would fail on the leading <think> block. Strip
-  // it, drop any code fence, then take the outermost {...} so trailing prose
-  // cannot break the parse either.
-  let cleaned = content.replace(/<(think|thinking|reasoning)>[\s\S]*?<\/\1>/gi, '').trim();
-  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
-  if (start === -1 || end <= start) {
-    throw new Error(`LLM returned no JSON object: ${cleaned.slice(0, 200)}`);
-  }
-  return JSON.parse(cleaned.slice(start, end + 1));
-}
-
-/**
- * Drop anything the model did not copy out of the description.
- *
- * This is the guard that makes the whole thing safe to run unattended: the
- * dominant failure is a model paraphrasing Japanese rather than copying it, and
- * a paraphrased title is indistinguishable from a real one once it is in the
- * database. Comparing against the description catches it for free.
- */
-function validate(parsed, haystack, fileNames) {
-  const bySet = new Set(fileNames);
-  const accepted = {};
-  const rejected = [];
-
-  for (const row of (parsed.tracks || [])) {
-    if (!row || typeof row.file !== 'string' || typeof row.title !== 'string') continue;
-    const title = cleanTitle(row.title);
-    if (!title) continue;
-    if (!bySet.has(row.file)) {
-      rejected.push([row.file, title, 'no such file']);
-      continue;
-    }
-    if (!haystack.includes(title.replace(/\s+/g, ''))) {
-      rejected.push([row.file, title, 'not verbatim in description']);
-      continue;
-    }
-    accepted[row.file] = title;
-  }
-
-  return { accepted, rejected };
-}
-
 // Without a terminal there is no one to answer, so a piped run stays a dry run.
 async function confirm(question) {
   if (!process.stdin.isTTY) return false;
@@ -342,7 +99,7 @@ async function confirm(question) {
 }
 
 async function run() {
-  if (!BASE_URL || !MODEL) {
+  if (!isLlmConfigured()) {
     console.error('Set KIKO_LLM_BASE_URL and KIKO_LLM_MODEL (KIKO_LLM_API_KEY if your endpoint needs one).');
     process.exit(1);
   }
@@ -389,9 +146,17 @@ async function run() {
   const audio = tracks.filter(t => AUDIO_EXT.includes(t.ext));
   if (!audio.length) throw new Error(`Work ${workId} has no audio files on disk.`);
 
+  // One entry per distinct file name, not per file: a NO_SE folder or a wav
+  // copy repeats the same tracks under the same names, and counting the raw
+  // files doubles every total below and stops the structured fast path from
+  // ever lining up. The title chosen for a name fans back out to every file
+  // carrying it, at the write step.
+  const trackNames = distinctTrackNames(audio);
+
   console.log(`[${work.id}] ${work.title}`);
-  const blank = audio.filter(t => isUninformative(t.title));
-  console.log(`  ${audio.length} audio files, ${blank.length} with uninformative names`);
+  const blank = trackNames.filter(isUninformative);
+  const variants = audio.length === trackNames.length ? '' : ` across ${audio.length} files`;
+  console.log(`  ${trackNames.length} tracks${variants}, ${blank.length} with uninformative names`);
   // Advisory, not a filter: the caller picked this work on purpose.
   if (!blank.length) {
     console.log('  note: every filename already carries a title — you may not need this');
@@ -399,23 +164,22 @@ async function run() {
 
   const parts = work.description_parts ? JSON.parse(work.description_parts) : [];
   const structured = structuredTitles(parts);
-  const fileNames = audio.map(t => t.title);
   const haystack = buildHaystack(description, parts);
 
   let accepted;
   let rejected = [];
 
-  if (structured.length && structured.length === audio.length) {
+  if (structured.length && structured.length === trackNames.length) {
     // DLsite published the list itself and it lines up one-for-one with the
-    // files on disk. Nothing to infer -- pair them in disk order.
-    console.log(`  ${structured.length} structured titles match ${audio.length} files, no LLM needed`);
-    accepted = Object.fromEntries(fileNames.map((f, i) => [f, structured[i]]));
+    // tracks on disk. Nothing to infer -- pair them in disk order.
+    console.log(`  ${structured.length} structured titles match ${trackNames.length} tracks, no LLM needed`);
+    accepted = Object.fromEntries(trackNames.map((name, i) => [name, structured[i]]));
   } else {
     if (structured.length) {
-      console.log(`  ${structured.length} structured titles vs ${audio.length} files, asking the model to align`);
+      console.log(`  ${structured.length} structured titles vs ${trackNames.length} tracks, asking the model to align`);
     }
-    const parsed = await callModel(buildPrompt(description, structured), fileNames);
-    ({ accepted, rejected } = validate(parsed, haystack, fileNames));
+    const parsed = await callModel(buildPrompt(description, structured), trackNames, { verbose: true });
+    ({ accepted, rejected } = validate(parsed, haystack, trackNames));
   }
 
   for (const [file, title, why] of rejected) console.log(`  reject ${file}: ${title}  (${why})`);
@@ -432,7 +196,8 @@ async function run() {
     return;
   }
 
-  // Keyed by relPath, which is what t_work_file rows key on.
+  // Keyed by relPath, which is what t_work_file rows key on. This is where one
+  // title per name becomes one title per file, so every variant folder gets it.
   const byRelPath = {};
   for (const t of audio) {
     if (accepted[t.title]) byRelPath[t.shortFilePath] = accepted[t.title];

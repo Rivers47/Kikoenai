@@ -12,7 +12,7 @@
     </div>
     <div v-if="isInFullScreen" class="current-playing-info">
       <div class="text-h6 text-weight-bolder non-selectable">
-        {{ title }}
+        {{ currentPlayingTitle }}
       </div>
     </div>
   </div>
@@ -92,13 +92,8 @@ export default {
     ]),
 
     ...mapGetters('AudioPlayer', [
-      'currentPlayingFile'
+      'currentPlayingTitle'
     ]),
-
-    title() {
-      const org = this.currentPlayingFile.title;
-      return org.substring(0, org.lastIndexOf("."));
-    }
   },
 
   watch: {

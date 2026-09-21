@@ -16,4 +16,5 @@ export default {
   selectSeries: '选择系列 (可清空)',
   noSeriesMatch: '无匹配系列',
   saveSuccess: '元数据更新成功',
+  editTrackTitles: '编辑音轨标题',
 }

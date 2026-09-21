@@ -108,7 +108,11 @@ export default {
     getWorkHistoryInfo(work) {
       const state = work.state;
       const lastPlayItem = state.queue[state.index]
-      return lastPlayItem.title;
+      // Same rule as the player and the file tree: the filled-in display name
+      // when the work has one. Queues stored before track titles existed carry
+      // no trackTitle and keep showing the filename until the queue is rebuilt
+      // from the tree (i.e. the next time it is played from the work page).
+      return lastPlayItem.trackTitle || lastPlayItem.title;
     },
 
     async resumeThisHistory(work) {

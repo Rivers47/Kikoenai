@@ -194,7 +194,7 @@
         <!-- 标题 -->
         <div class="column text-center non-selectable ">
           <Scrollable class="full-width" :stop="hide" name="audioTitle">
-            <span class="audio-name relative-position q-px-md">{{ currentPlayingFile.title }}</span>
+            <span class="audio-name relative-position q-px-md">{{ currentPlayingTitle }}</span>
           </Scrollable>
           <Scrollable class="full-width" :stop="hide" name="workTitle">
             <span class="work-name relative-position q-px-md">{{ currentPlayingFile.workTitle }}</span>
@@ -567,6 +567,7 @@ export default {
     
     ...mapGetters('AudioPlayer', [
       'currentPlayingFile',
+      'currentPlayingTitle',
     ])
   },
 

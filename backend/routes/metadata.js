@@ -337,6 +337,68 @@ router.put('/work/:id',
   }
 );
 
+// Per-file fields an admin may set. `duration` and `mtime` are on t_work_file
+// too but are deliberately absent: both are derived by scanning, so a hand-set
+// value only survives until the next scan re-probes the file.
+//
+// This list is what keeps the route from drifting into a write-anything
+// endpoint -- it addresses one table, with an explicit set of columns.
+const EDITABLE_FILE_FIELDS = ['trackTitle'];
+
+// PUT - set editable per-file fields on a work's files (admin only)
+//
+// Named for the resource rather than for the one field it writes today:
+// t_work_file is its own table, keyed by relPath, and PUT /api/work/:id
+// addresses t_work -- a different row and a different cardinality, which is
+// why this cannot just be another key in that payload.
+//
+// Not '/files': a PUT there reads as "replace the listing", which is what
+// replaceWorkFiles does and what POST /api/scan/:id triggers.
+//
+// Only the relPaths named in the body are touched, and a title that trims to
+// empty is stored as NULL, which shows the filename again.
+router.put('/work/:id/file-metadata',
+  workIdParam(),
+  body('files').isObject(),
+  async (req, res) => {
+    if (!isValidRequest(req, res)) return;
+
+    if (config.auth && req.user.name !== 'admin') {
+      return res.status(403).send({ error: '只有 admin 账号能编辑文件信息.' });
+    }
+
+    const titles = {};
+    for (const [relPath, fields] of Object.entries(req.body.files)) {
+      if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
+        return res.status(400).send({ error: `${relPath} 的字段必须是对象` });
+      }
+
+      const unknown = Object.keys(fields).filter(key => !EDITABLE_FILE_FIELDS.includes(key));
+      if (unknown.length) {
+        return res.status(400).send({ error: `不可编辑的字段: ${unknown.join(', ')}` });
+      }
+
+      if ('trackTitle' in fields) {
+        const title = fields.trackTitle;
+        if (title !== null && typeof title !== 'string') {
+          return res.status(400).send({ error: `音轨标题必须是字符串: ${relPath}` });
+        }
+        titles[relPath] = (title || '').trim() || null;
+      }
+    }
+
+    try {
+      // setTrackTitles scopes its update by work_id, so a relPath belonging to
+      // another work simply matches no row.
+      const updated = await db.setTrackTitles(req.params.id, titles);
+      res.send({ message: '文件信息更新成功', updated });
+    } catch (err) {
+      console.error(err);
+      res.status(500).send({ error: '更新文件信息失败' });
+    }
+  }
+);
+
 // 刷新单个作品文件夹中的文件信息记录，例如音频文件发生变动后，通过这个请求重新扫描音频文件时长
 router.post('/scan/:id',
   workIdParam(),
