@@ -1,0 +1,17 @@
+export default {
+  title: 'Edit track titles',
+  hint: 'Leave a field empty to show the filename instead.',
+  noAudio: 'This work has no audio files.',
+  rootFolder: 'ROOT',
+  saveSuccess: 'Track titles updated',
+  fillFromList: 'Fill from a track list',
+  trackListLabel: 'One track title per line',
+  applyTo: 'Apply to folders',
+  apply: 'Fill',
+  filled: 'Filled {count} tracks (not saved yet)',
+  suggest: 'Extract from description',
+  suggestEmpty: 'No usable titles came back (nothing matched the description verbatim)',
+  suggestPartial: 'Only {count} of {total} tracks came back — check the order before filling',
+  suggestDisconnected: 'Lost the connection to the server; extraction cancelled',
+  suggestUnverified: '{count} of them were not found in the description — the model may have reworded or invented those, so check them.',
+}

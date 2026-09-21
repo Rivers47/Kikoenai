@@ -150,6 +150,18 @@
             <q-toggle v-model="config.skipCleanup" dense />
           </q-item-section>
         </q-item>
+        <q-item>
+          <q-item-section>
+            <q-item-label>{{ $t('advanced.workExtras') }}</q-item-label>
+            <q-item-label caption>{{ $t('advanced.workExtrasCaption') }}</q-item-label>
+          </q-item-section>
+
+          <q-item-section side>
+            <!-- Inverted: the stored flag is skipWorkExtras, but a switch reads
+                 better as the thing it turns on than as the thing it skips. -->
+            <q-toggle v-model="downloadWorkExtras" dense />
+          </q-item-section>
+        </q-item>
       </q-list>
     </q-card>
 
@@ -345,6 +357,20 @@ export default {
     return {
       config: {},
       loading: false,
+    }
+  },
+
+  computed: {
+    // config.skipWorkExtras is the stored key; the toggle is its opposite so
+    // the label can say what switching it on does. A config that predates the
+    // key has it undefined, which the backend reads as "skip".
+    downloadWorkExtras: {
+      get () {
+        return this.config.skipWorkExtras === false
+      },
+      set (value) {
+        this.config.skipWorkExtras = !value
+      }
     }
   },
 

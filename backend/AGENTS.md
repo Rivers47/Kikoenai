@@ -282,7 +282,7 @@ All routes mounted under `/api`:
 | `version.js` | `/api/version/*` | App version, changelog |
 | `config.js` | `/api/config/*` | Get/set server config |
 | `media.js` | `/api/media/*` | Stream audio (range requests), download, lyric sidecar lookup |
-| `metadata.js` | `/api/*` | List works, search, sort, filter; work metadata, tracks, covers, images; label lists; `PUT /api/work/:id` admin metadata edit |
+| `metadata.js` | `/api/*` | List works, search, sort, filter; work metadata, tracks, covers, images; label lists; `PUT /api/work/:id` admin metadata edit; `PUT /api/work/:id/file-metadata` admin per-file edit |
 | `review.js` | `/api/review/*` | Create/update/delete reviews, ratings, progress |
 | `play_history.js` | `/api/history/*` | Save/load playback state |
 | `track_progress.js` | `/api/track-progress/*` | Per-track playback position, keyed by relPath |
@@ -370,13 +370,43 @@ Works whose audio files are named `01.mp3` / `#2.wav` show only the filename. `t
 - `filesystem/workFiles.js` exposes it on a track as **`trackTitle`**, alongside `duration`. `toTree` carries it onto the audio node.
 - **`trackTitle` is a separate field, never a replacement for `title`.** `title` is the real filename and `toTree` builds the offload stream/download URLs from it — overwriting it breaks playback.
 - Frontend renders `item.trackTitle || item.title`, with the filename demoted to a caption when a title exists (`WorkTree.vue`).
-- No new route: `GET /api/tracks/:id` reads the rows the title lives on.
+- `GET /api/tracks/:id` reads the rows the title lives on; `PUT /api/work/:id/file-metadata` writes them.
 
-**Populating it is out-of-band.** `scripts/extract-track-titles.js <workId>` is a standalone CLI, not a server feature — nothing in the server imports it, and there is no `defaultConfig` key. It handles **exactly one work per run** (deliberately: the output is a judgement call worth eyeballing before it lands in the DB, and the works needing it are a few circles, not a library sweep). It reads `description` + `description_parts`, and:
+**Editing by hand: `PUT /api/work/:id/file-metadata`** (`routes/metadata.js`), admin-gated exactly like `PUT /api/work/:id`. Body is `{ files: { <relPath>: { trackTitle } } }`; a title that trims to empty is stored as `NULL`, which shows the filename again. Only the relPaths in the body are touched, and `setTrackTitles` scopes its update by `work_id`, so a relPath belonging to another work matches no row.
 
-1. **Structured fast path** — if `description_parts[].tracks[]` has as many titles as the work has audio files, it pairs them in disk order with no model call. That covers ~16% of works.
+> **Named for the table, not the field.** `t_work_file` is a different table and cardinality from `t_work`, so track titles could not be another key in `PUT /api/work/:id` — its validators require the whole metadata object and `editWorkMetadata` *replaces* every label relationship, so a stale dialog would revert scraped tags. `/files` was rejected as ambiguous with replacing the listing. `EDITABLE_FILE_FIELDS` is the whitelist; `duration`/`mtime` are excluded because a scan re-derives them.
+
+**Proposing titles: the `SUGGEST_TRACK_TITLES` socket event** (`socket.js` → `suggest-track-titles.js`), not a route. Answers `SUGGEST_TRACK_TITLES_RESULT {workId, titles, trackCount, source, unverified}` or `SUGGEST_TRACK_TITLES_ERROR {workId, error}`. `titles` is an **ordered list**, not a per-file mapping — placement is the dialog's job. `source` is `structured` when DLsite's own list lines up, `llm` otherwise. It writes nothing; the dialog applies it via `PUT /api/work/:id/file-metadata`. `GET /api/config/shared` carries `llmConfigured` (a boolean, never the settings) so the button only appears where it works.
+
+> **Why a socket, not a route.** A local model routinely outruns a proxy's request timeout (nginx 60s, Cloudflare 100s). `emit` returns immediately and the answer arrives as its own event, so no request has a duration to cap — the same reason scanning works this way (§2.5).
+>
+> **It borrows the transport, not the scanner's concurrency model.** No forked child, no global guard, no replay: this is per-work and in-process, so the reply goes back with **`socket.emit`, never `io.emit`** — broadcasting would drop one admin's suggestion into another's dialog. The echoed `workId` lets a dialog ignore an answer it no longer wants.
+>
+> **The handshake is already admin-only** (`socket.js` rejects any account but `admin` when `config.auth` is on), so the handler needs no gate — but the client must not connect app-wide, or every ordinary user gets an error notification. `EditTrackTitles.vue` connects lazily on first use.
+>
+> **A socket handler has no `workIdParam()`**, so the id is checked against `WORK_ID_RE`/`normalizeWorkId`, now exported from `routes/utils/validate.js`. A second copy of that regex would drift from the contract in §6.
+
+**The extraction pipeline lives in `track-titles.js`**, shared by the socket handler and the CLI. **It touches no database** — `suggest-track-titles.js` is the orchestration layer — which is what lets `test/track-titles.js` run without one. `callModel` takes `{verbose}`; the CLI dumps the exchange to stdout, printing `messages` as text since `JSON.stringify` escapes the newlines that carry the prompt's structure.
+
+> **Count tracks, not files — `distinctTrackNames`.** A work usually ships its tracks more than once (`NO_SE/`, a wav copy) under identical names. Keying on the distinct file name is what keeps the totals honest and the structured fast path reachable; the chosen title fans back out to every file with that name at the write step. Two genuinely different tracks sharing a basename collapse into one — use `--dry-run` on an unfamiliar layout.
+
+> **The LLM call owns its own HTTP timeouts.** Node's global `fetch` defaults `headersTimeout` and `bodyTimeout` to 300s, and `bodyTimeout` covers the gap *before the first token* — prompt evaluation, which a large `num_ctx` on CPU can exceed, killing the request while the model still worked. `llmAgent` sets both to `0` (undici: no timer), leaving `AbortSignal.timeout(KIKO_LLM_TIMEOUT_MS)` as the only ceiling. `undiciFetch` rather than the global, because a dispatcher must come from the same copy of undici. `callModel` also streams (keeping generation off that clock, `readModelStream`) and unwraps `err.cause`, since every transport failure is otherwise the same opaque `TypeError: fetch failed`.
+
+
+> **The `htmlToText` sentinel must not be U+0000.** Cheerio parses an appended string as HTML and the tokenizer drops NUL, so the original sentinel never reached the tree: every block ran together and a `<br />` with no trailing source newline lost its break. It is U+E000 now, stripped from the input first.
+
+**Populating it in bulk is out-of-band.** `scripts/extract-track-titles.js <workId>` is a standalone CLI, not a server feature — it writes straight to the database with no review step, which is right for a terminal and wrong for a web request. It handles **exactly one work per run** (deliberately: the output is a judgement call worth eyeballing before it lands in the DB, and the works needing it are a few circles, not a library sweep). It reads `description` + `description_parts`, and:
+
+1. **Structured fast path** — if `description_parts[].tracks[]` has as many titles as the work has **distinct track names** (not audio files — see above), it pairs them in disk order with no model call. That covers ~16% of works.
 2. **Model path** — otherwise it asks an OpenAI-compatible endpoint (`KIKO_LLM_BASE_URL` / `KIKO_LLM_API_KEY` / `KIKO_LLM_MODEL`, env only) to align titles to filenames.
 3. **Verbatim validation** — every returned title must appear, whitespace-insensitively, in the description *or* the structured track titles. This is the guard that makes unattended runs safe; a paraphrased Japanese title is indistinguishable from a real one once stored.
+
+> **Two prompts, one set of rules.** `SYSTEM_PROMPT_MAPPING` (`{tracks:[{file,title}]}`) is the CLI's, which validates a per-file mapping. `SYSTEM_PROMPT_LIST` (`{titles:[…]}`) is the dialog's, which places by position and never reads a mapping — echoing filenames back was ~44% of the model's output for nothing, on the phase that dominates a run. `SHARED_RULES` holds the wording that governs quality; only the shape and the skip rule differ (the list variant must **not** skip, or a gap shifts every later title). Selected by `callModel(..., { mapping })`.
+>
+
+> **Two guards, same reason.** `validate` is strict and belongs to the CLI, which writes unattended. `collectTitles` is lenient and belongs to the dialog, where the admin reviewing the textarea is the check — and where dropping a title would leave a *gap* that shifts every later one onto the wrong file. It reports `unverified` instead, so a refusal arrives flagged rather than vanishing.
+
+> **`isVerbatim` retries with the track marker stripped.** Small models copy the title but rewrite the numbering (`①　はじまり` → `1. はじまり`), and rejecting that threw away good answers. The stripped form must keep two non-space characters, or `01.` reduces to `''` and matches anything; there is deliberately no length floor on the exact match, since a short title (`朝`) must still pass.
 
 > **The haystack must include the structured titles.** `descriptionToText` strips `ul.work_tracklist` out of `description` so titles are not duplicated in the prose — validating against prose alone rejects every structured work. `buildHaystack` joins both.
 
@@ -438,7 +468,7 @@ The JSON fallback (`scrapeStaticWorkMetadataFromDLsiteJson`) fills the same fiel
 
 **Images on disk** — `config.imageFolderDir` (default `images/`, sibling of `covers/`, with the same relative-path and `imageUseDefaultPath` handling). `collectWorkImages(metadata)` in `filesystem/utils.js` is the single source for *which* images a work has and *in what order* — slider first, then description images, deduplicated by url — shared by the downloader and by the refresh merge in `queries.js`. Named by position, not by remote basename: `RJ<id>_img_smp<N>.<ext>` for slider images and `RJ<id>_img_part<N>.<ext>` for images embedded in description blocks — description images are served under opaque hash names that collide across works. `deleteWorkImagesFromDisk(id, [keep])` matches that exact pattern rather than a bare prefix, so pointing `imageFolderDir` at the cover folder cannot delete covers; the optional `keep` set is what turns it into the post-download prune (below) instead of a full wipe.
 
-**`config.skipWorkExtras` (default `true`) switches off the two expensive halves** — the image downloads and the review scrape — on every **implicit** path: library scans, `refreshAll` (the Scanner page's update button), and `POST /api/refresh/:id`. Together they are what makes a scan expensive (N image downloads plus paginated review requests per work) and what gets it rate-limited by DLsite. It does **not** gate the explicit `updater.js --images` / `--reviews` flags — naming one on the command line is already opting in. A missing config key counts as "skip".
+**Editable from the admin panel** (Dashboard → Advanced → scanner settings) as an inverted "download work extras" toggle — the stored key is the skip, the switch reads as the thing it enables. **`config.skipWorkExtras` (default `true`) switches off the two expensive halves** — the image downloads and the review scrape — on every **implicit** path: library scans, `refreshAll` (the Scanner page's update button), and `POST /api/refresh/:id`. Together they are what makes a scan expensive (N image downloads plus paginated review requests per work) and what gets it rate-limited by DLsite. It does **not** gate the explicit `updater.js --images` / `--reviews` flags — naming one on the command line is already opting in. A missing config key counts as "skip".
 
 **Description, `description_parts` and the sample-image URL list are never gated.** They are parsed from the work page the scanner already fetches, so they cost no extra request, and `scripts/extract-track-titles.js` needs the description to work at all. The switch controls network cost, not what gets parsed.
 
@@ -504,6 +534,7 @@ Both are non-fatal in the route: `db.updateWorkMetadata` has already committed b
 | `socket.io` | Real-time events (scan progress) |
 | `jschardet` | Text encoding detection for LRC files |
 | `natural-orderby` | Natural sorting of filenames |
+| `undici` | The LLM call only, so both of its 300s timeouts can be switched off — see §2.9b. Everything else uses the global `fetch` or `axios` |
 | `compare-versions` | Version comparison for config migration |
 
 ---
@@ -567,6 +598,7 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 | `/api/search` | GET | Filter search — `filter` is the advanced filter syntax (§2.3b), e.g. `va:"name$" -tag:NTR`. Same response shape as `/api/works` |
 | `/api/work/:id` | GET | Work metadata + playback state |
 | `/api/work/:id` | PUT | Manually edit metadata — title, nsfw, release, circle, tags[], vas[], illustrators[], scriptWriters[], series (admin only) |
+| `/api/work/:id/file-metadata` | PUT | Set editable fields on the work's `t_work_file` rows. Body `{files: {<relPath>: {trackTitle}}}`; an empty title clears to NULL. Only the named rows and whitelisted fields are touched (admin only) |
 | `/api/work/:id/extras` | GET | Scraped work-page extras: `{description, descriptionHtml, descriptionParts, sampleImages}`. The stored `description` column goes out as **one or the other**: markup is **sanitized here, per request** (`routes/utils/description-html.js`) and returned as `descriptionHtml` with `description: ''`; a plain-text row (older scrape, or the JSON fallback) is returned as `description` with `descriptionHtml: ''`. Kept off `/api/work/:id` because that row is assembled by `assembleWorks`, shared with every list endpoint, and a description dwarfs the rest of a work's metadata. 404 when the work is unknown; a work with nothing scraped returns empty values, not a 404 |
 | `/api/tracks/:id` | GET | `{tree, trackProgress}` — see the note below |
 | `/api/cover/:id` | GET | Cover image. Query `type` (`main`\|`sam`\|`240x240`\|`360x360`). 30-day `public` cache; the `no-image.jpg` fallback gets 5 minutes |
@@ -606,6 +638,10 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 > client needs no second field. Express 5 hands a `*path` back as an array of
 > already-decoded segments, so `relPath = req.params.path.join('/')`.
 >
+> **A trackId must be percent-encoded into a URL** (`encodeTrackId`, `routes/utils/url.js`, mirrored in `frontend/src/base-path.js`). A relPath is a file name, so it contains URL *syntax*: a work whose tracks are named `#1.序章♡….opus` (RJ01639521) truncated the path at the fragment marker and 404'd on files that existed. `?` and `%` are the same class. Per segment so `/` survives; `encodeURI` is **not** enough, since it leaves `#` and `?` alone by design. Both ends must encode identically or `toQueueItem`'s mediaStreamUrl comparison stops matching. Covered by `test/urljoin.js`.
+>
+> **The offload path still has the defect.** `joinFragments`'s relative branch is unencoded and pinned that way by `test/urljoin.js`, so a `#`-prefixed work will 404 under `config.offloadMedia`. Left alone because that URL addresses the reverse proxy's own virtual directory and is untestable from here — and `offloadMedia` is not a supported deployment today (defaults off, undocumented). Encode it and update those tests if the feature is revived.
+>
 > `routes/utils/track.js` (`resolveTrack`) is the single resolver for all four
 > routes. It matches the joined path against `getTrackList`'s `shortFilePath`,
 > i.e. against a directory walk the server did itself — **caller input is never
@@ -641,7 +677,7 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/config/shared` | GET | Public config subset (seek times) |
+| `/api/config/shared` | GET | Public config subset (seek times, `enableTranscoding`, `llmConfigured`) |
 | `/api/config/admin` | GET | Full config minus `md5secret`/`jwtsecret` (admin only) |
 | `/api/config/admin` | PUT | Write config; `production`/`md5secret`/`jwtsecret` are never writable (admin only) |
 | `/api/version` | GET | `{current, lockFileExists, lockReason}`. Local only — no GitHub call |
@@ -687,6 +723,7 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 - **Workspace scripts:** `npm run dev:backend` / `npm start` from root.
 - **Socket.IO events (scanning):**
   - Client → server: `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_WORK_FILE_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE` (sent on mount **and on every reconnect** — it is the resync point)
+  - Client → server, unrelated to scanning: `SUGGEST_TRACK_TITLES` `{workId}` — propose a track list for one work (§2.9b). Per-work and in-process, not a forked child
   - Server → client (relayed from the scanner child process), each carrying one entry:
 
     | Event | Payload |
@@ -700,6 +737,13 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
     | `SCAN_INIT_STATE` | `{tasks, failedTasks, mainLogs, results}` — the **only** accumulated payload, and capped; answers `ON_SCANNER_PAGE` |
     | `SCAN_FINISHED` | `{message}` — replayed from `lastScanEvent` after a reconnect |
     | `SCAN_ERROR` | none |
+
+  - Server → **the asking socket only** (`socket.emit`, not `io.emit`):
+
+    | Event | Payload |
+    |-------|---------|
+    | `SUGGEST_TRACK_TITLES_RESULT` | `{workId, titles, trackCount, source, unverified}` |
+    | `SUGGEST_TRACK_TITLES_ERROR` | `{workId, error}` |
 
   - **Gone:** the plural `SCAN_MAIN_LOGS` / `SCAN_TASKS` / `SCAN_RESULTS` / `SCAN_FAILED_TASKS`, which re-sent the whole accumulated array on every line. See §2.5.
   - Scanning is **not** exposed over REST; there is no `/api/scanner` endpoint.
@@ -745,6 +789,7 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
   - `track-identity.js` — relPath as the one file identity: `trackId` construction, non-ASCII and subdirectory paths, forward-slash normalization, `relPath` on every node type, the legacy positional-index branch, migration `20260912000000`, and `scripts/rekey-track-progress.js` (the only place CRC32 survives)
   - `work-files.js` — `probeAudioDurations`: reuses a known duration on an unchanged mtime, re-probes when the mtime moved, re-probes a known mtime with no duration (the case a naive guard would skip forever), leaves non-audio alone, and keeps what was known when a file vanishes mid-scan. Also asserts `getTrackList` is a pure walker with no duration or trackTitle of its own
   - `history-seconds.js` — `applyTrackProgressSeconds` overriding stale history positions, and the compound `(work_id, track_key)` lookup that keeps two works with an identically named file apart
+  - `track-titles.js` — the shared extraction pipeline: `distinctTrackNames`, the verbatim guards, the `htmlToText` sentinel, and `readModelStream`
   - `benchmark.js` — DB query benchmark; Skips if `backend/sqlite/db.sqlite3` is missing/empty;
 - **Run:** `npm test` (sets `NODE_ENV=test`)
 

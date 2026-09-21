@@ -7,7 +7,7 @@ const recursiveReaddir = (dir) => {
   return fs.globSync('**/*', { cwd: dir }).map(f => path.resolve(dir, f));
 };
 const { orderBy } = require('natural-orderby');
-const { joinFragments } = require('../routes/utils/url');
+const { joinFragments, encodeTrackId } = require('../routes/utils/url');
 const { config } = require('../config');
 const { workno } = require('../work-id');
 
@@ -252,10 +252,13 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
     const textBaseUrl = `${config.basePath}/api/media/stream/`;
     const mediaStreamBaseUrl = `${config.basePath}/api/media/stream/`;
     const mediaDownloadBaseUrl = `${config.basePath}/api/media/download/`;
-    const textStreamBaseUrl = textBaseUrl + track.trackId;    // Handle charset detection internally with jschardet
-    const textDownloadBaseUrl = config.offloadMedia ? offloadDownloadUrl : mediaDownloadBaseUrl + track.trackId;
-    const mediaStreamUrl = config.offloadMedia ? offloadStreamUrl : mediaStreamBaseUrl + track.trackId;
-    const mediaDownloadUrl = config.offloadMedia ? offloadDownloadUrl : mediaDownloadBaseUrl + track.trackId;
+    // Encoded: a relPath is a file name, so it can contain '#', '?' or '%',
+    // which are URL syntax. See encodeTrackId.
+    const encodedTrackId = encodeTrackId(track.trackId);
+    const textStreamBaseUrl = textBaseUrl + encodedTrackId;    // Handle charset detection internally with jschardet
+    const textDownloadBaseUrl = config.offloadMedia ? offloadDownloadUrl : mediaDownloadBaseUrl + encodedTrackId;
+    const mediaStreamUrl = config.offloadMedia ? offloadStreamUrl : mediaStreamBaseUrl + encodedTrackId;
+    const mediaDownloadUrl = config.offloadMedia ? offloadDownloadUrl : mediaDownloadBaseUrl + encodedTrackId;
 
     if (track.ext === '.txt' || track.ext === '.lrc' || track.ext === '.srt' || track.ext === '.ass' || track.ext === '.vtt') {
       fatherFolder.push({

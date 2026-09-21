@@ -107,7 +107,7 @@ import { formatSeconds } from '../utils'
 import { cacheFile, uncacheFile } from '../utils/downloads'
 import NotifyMixin from '../mixins/Notification.js'
 import ImageViewer from './ImageViewer'
-import { apiUrl } from 'src/base-path'
+import { apiUrl, encodeTrackId } from 'src/base-path'
 
 export default {
   name: 'WorkTree',
@@ -332,7 +332,7 @@ export default {
 
     download (file) {
       // Fallback to old API for an old backend
-      const url = file.mediaDownloadUrl ? `${file.mediaDownloadUrl}` : apiUrl(`/api/media/download/${file.trackId}`);
+      const url = file.mediaDownloadUrl ? `${file.mediaDownloadUrl}` : apiUrl(`/api/media/download/${encodeTrackId(file.trackId)}`);
       const link = document.createElement('a');
       link.href = url;
       link.target="_blank";
@@ -341,7 +341,7 @@ export default {
 
     async toggleOfflineDownload (item) {
       const trackId = item.trackId;
-      const url = `/api/media/offline/${trackId}`;
+      const url = `/api/media/offline/${encodeTrackId(trackId)}`;
 
       if (this.isDownloaded(trackId)) {
         await uncacheFile(url);
@@ -369,7 +369,7 @@ export default {
 
     setVisualPlayerCover (imgFile) {
       if (!imgFile) return;
-      const urlWithoutToken = imgFile.mediaDownloadUrl ? `${imgFile.mediaDownloadUrl}` : apiUrl(`/api/media/download/${imgFile.trackId}`);
+      const urlWithoutToken = imgFile.mediaDownloadUrl ? `${imgFile.mediaDownloadUrl}` : apiUrl(`/api/media/download/${encodeTrackId(imgFile.trackId)}`);
       this.$store.commit('AudioPlayer/SET_VISUAL_PLAYER_COVER_URL', urlWithoutToken);
       this.$q.notify({
         message: this.$t('worktree.coverSetSuccess'),
@@ -398,7 +398,7 @@ export default {
 
     originalImgSrc (file) {
       // Fallback to old API for an old backend
-      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}` : apiUrl(`/api/media/stream/${file.trackId}`);
+      const url = file.mediaStreamUrl ? `${file.mediaStreamUrl}` : apiUrl(`/api/media/stream/${encodeTrackId(file.trackId)}`);
       return url
     },
 

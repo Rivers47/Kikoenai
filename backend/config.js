@@ -47,7 +47,7 @@ const defaultConfig = {
     //   path: ''
     // }
   ],
-  skipWorkExtras: true, // Skip downloading all sample images, the desciption, and reviews
+  skipWorkExtras: true, // Skip downloading sample/description images and scraping reviews. NOT the description itself, which is parsed from the page the scanner already fetches and is never gated.
   coverFolderDir: path.join(dataRoot, 'covers'),
   imageFolderDir: path.join(dataRoot, 'images'), // Scraped sample/description images, kept out of the cover cache
   databaseFolderDir: path.join(dataRoot, 'sqlite'),
@@ -228,11 +228,18 @@ class publicConfig {
   get enableTranscoding() {
     return config.enableTranscoding;
   }
+  // Whether the track-title suggester has an endpoint to call. A boolean, never
+  // the settings themselves: the LLM config is env-only (see track-titles.js)
+  // precisely so no key can reach a browser, and this must not undo that.
+  get llmConfigured() {
+    return Boolean(process.env.KIKO_LLM_BASE_URL && process.env.KIKO_LLM_MODEL);
+  }
   export() {
     return {
       rewindSeekTime: this.rewindSeekTime,
       forwardSeekTime: this.forwardSeekTime,
       enableTranscoding: this.enableTranscoding,
+      llmConfigured: this.llmConfigured,
     };
   }
 }

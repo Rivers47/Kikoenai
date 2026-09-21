@@ -19,6 +19,8 @@
 </template>
 
 <script>
+import { encodeTrackId } from 'src/base-path'
+
 export default {
   name: 'TextViewer',
 
@@ -56,7 +58,7 @@ export default {
         // The backend detects the charset (jschardet) and puts it in
         // Content-Type, so the browser decodes Shift-JIS files correctly.
         // transformResponse is neutered so axios never JSON-parses the body.
-        const response = await this.$axios.get(`/api/media/stream/${this.trackId}`, {
+        const response = await this.$axios.get(`/api/media/stream/${encodeTrackId(this.trackId)}`, {
           responseType: 'text',
           transformResponse: [data => data]
         });

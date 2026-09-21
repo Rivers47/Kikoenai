@@ -16,4 +16,5 @@ export default {
   selectSeries: 'シリーズを選択（クリア可能）',
   noSeriesMatch: '該当するシリーズがありません',
   saveSuccess: 'メタデータを更新しました',
+  editTrackTitles: 'トラック名を編集',
 }

@@ -136,6 +136,29 @@ describe('work file listing (t_work_file)', () => {
     expect(rows.map((r) => r.rel_path)).to.deep.equal(['01.mp3']);
   });
 
+  // The write path behind PUT /api/work/:id/file-metadata.
+  it('sets and clears track titles by relPath', async () => {
+    write('01.mp3'); write('02.mp3');
+    await listWorkTracks('000001', workDir, { dbApi });
+
+    expect(await dbApi.setTrackTitles('000001', { '01.mp3': 'Opening', '02.mp3': 'Ending' })).to.equal(2);
+    // An empty field in the editor arrives as null and shows the filename again.
+    expect(await dbApi.setTrackTitles('000001', { '02.mp3': null })).to.equal(1);
+
+    const byPath = new Map((await dbApi.getWorkFiles('000001')).map((r) => [r.rel_path, r]));
+    expect(byPath.get('01.mp3').track_title).to.equal('Opening');
+    expect(byPath.get('02.mp3').track_title).to.equal(null);
+  });
+
+  it('leaves another work\'s rows alone', async () => {
+    write('01.mp3');
+    await listWorkTracks('000001', workDir, { dbApi });
+
+    expect(await dbApi.setTrackTitles('000002', { '01.mp3': 'Wrong work' })).to.equal(0);
+    const [row] = await dbApi.getWorkFiles('000001');
+    expect(row.track_title).to.equal(null);
+  });
+
   it('only attaches duration to audio, matching the walk', async () => {
     write('01.mp3'); write('cover.jpg');
     await dbApi.replaceWorkFiles('000001', [

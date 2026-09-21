@@ -8,7 +8,7 @@
 //                   resumes across network drops, completes in the service
 //                   worker. Chromium only -- canBackgroundFetch() picks the
 //                   foreground path everywhere else.
-import { apiUrl, appUrl } from '../base-path'
+import { apiUrl, appUrl, encodeTrackId } from '../base-path'
 import { activeRegistration } from './service-worker'
 
 const CACHE_NAME = 'offline-tracks'
@@ -64,6 +64,10 @@ export function collectDownloadableFiles (tree) {
         files.push({
           trackId: node.trackId,
           title: node.title,
+          // The display name, when the work has one. `title` stays the
+          // filename -- the offline URL is built from trackId, and the
+          // Downloads page needs something to show offline.
+          trackTitle: node.trackTitle,
           type: node.type === 'audio' ? 'audio' : 'lyric',
           duration: node.duration,
         })
@@ -90,10 +94,11 @@ export async function canBackgroundFetch () {
 export function buildWorkDownloadPlan (workId, tree) {
   const files = collectDownloadableFiles(tree)
   const rows = files.map(file => ({
-    url: apiUrl(`/api/media/offline/${file.trackId}`),
+    url: apiUrl(`/api/media/offline/${encodeTrackId(file.trackId)}`),
     trackId: file.trackId,
     type: file.type,
     title: file.title,
+    trackTitle: file.trackTitle,
     duration: file.duration,
   }))
 
@@ -112,7 +117,7 @@ export function buildWorkDownloadPlan (workId, tree) {
   ]
 
   for (const file of files) {
-    if (file.type === 'audio') metadataUrls.push(apiUrl(`/api/media/check-lrc/${file.trackId}`))
+    if (file.type === 'audio') metadataUrls.push(apiUrl(`/api/media/check-lrc/${encodeTrackId(file.trackId)}`))
   }
 
   for (const url of metadataUrls) {

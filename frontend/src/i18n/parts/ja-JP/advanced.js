@@ -56,4 +56,6 @@ export default {
   dbDefaultPathCaption: 'プログラム横のsqliteフォルダを使用しdatabaseFolderDirを無視（不要なら変更しないでください。再起動が必要です）。',
   coverDefaultPath: 'カバーデフォルトパス',
   coverDefaultPathCaption: 'プログラム横のcoversフォルダを使用しカバーフォルダ設定を無視',
+  workExtras: '作品の追加コンテンツを取得',
+  workExtrasCaption: 'スキャン時にサンプル画像・説明文の画像・DLsite のレビューも取得します。リクエストが大幅に増えます',
 }

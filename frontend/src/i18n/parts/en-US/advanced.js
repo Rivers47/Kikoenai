@@ -56,4 +56,6 @@ export default {
   dbDefaultPathCaption: 'Use the sqlite folder next to the program and ignore databaseFolderDir (avoid changing unless needed; requires a restart).',
   coverDefaultPath: 'Cover default path',
   coverDefaultPathCaption: 'Use the covers folder next to the program and ignore the cover folder setting',
+  workExtras: 'Download work extras',
+  workExtrasCaption: 'Fetch sample images, description images and DLsite reviews while scanning.',
 }

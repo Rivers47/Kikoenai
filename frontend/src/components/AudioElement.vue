@@ -34,7 +34,7 @@ import { sendOrQueue } from '../utils/outbox'
 import { savePosition } from '../utils/positions'
 import { debounce } from 'quasar';
 import Plyr from 'plyr'
-import { apiUrl } from 'src/base-path'
+import { apiUrl, encodeTrackId } from 'src/base-path'
 
 // Every media session action this component registers; teardown walks this
 // list to unregister them one by one.
@@ -75,9 +75,9 @@ export default {
         return `${this.currentPlayingFile.mediaStreamUrl}`
       } else if (trackId && this.isDownloaded(trackId)) {
         // Once downloaded, always play from the offline copy
-        return apiUrl(`/api/media/offline/${trackId}`)
+        return apiUrl(`/api/media/offline/${encodeTrackId(trackId)}`)
       } else if (trackId) {
-        return apiUrl(`/api/media/stream/${trackId}`)
+        return apiUrl(`/api/media/stream/${encodeTrackId(trackId)}`)
       } else {
         return ""
       }
@@ -115,6 +115,7 @@ export default {
 
     ...mapGetters('AudioPlayer', [
       'currentPlayingFile',
+      'currentPlayingTitle',
     ]),
 
     displayCurrentTime() {
@@ -555,7 +556,7 @@ export default {
 
     async loadLrcFile () {
       const trackId = this.queue[this.queueIndex].trackId;
-      const url = `/api/media/check-lrc/${trackId}`;
+      const url = `/api/media/check-lrc/${encodeTrackId(trackId)}`;
       const loadId = ++this._lrcLoadId;
 
       try {
@@ -581,8 +582,8 @@ export default {
           // downloaded, its lyric files are downloaded too (see downloadWork in
           // WorkDetails.vue), so prefer serving them from the offline copy.
           const lrcUrl = this.isFileDownloaded(source.trackId)
-            ? `/api/media/offline/${source.trackId}`
-            : `/api/media/stream/${source.trackId}`;
+            ? `/api/media/offline/${encodeTrackId(source.trackId)}`
+            : `/api/media/stream/${encodeTrackId(source.trackId)}`;
           const response = await this.$axios.get(lrcUrl);
           const lyricExtension = (source.lyricExtension || '').toLowerCase();
           if (lyricExtension === '.srt' || lyricExtension === '.vtt') {
@@ -655,7 +656,7 @@ export default {
 
       try {
         navigator.mediaSession.metadata = new window.MediaMetadata({
-          title: this.currentPlayingFile.title,
+          title: this.currentPlayingTitle,
           artist: this.playWorkVas.length ? this.playWorkVas[0].name : "",
           album: this.currentPlayingFile.workTitle,
           artwork: [

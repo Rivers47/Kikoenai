@@ -1,0 +1,17 @@
+export default {
+  title: '编辑音轨标题',
+  hint: '留空则显示文件名。',
+  noAudio: '该作品没有音频文件。',
+  rootFolder: '根目录',
+  saveSuccess: '音轨标题已更新',
+  fillFromList: '从曲目列表填充',
+  trackListLabel: '每行一个曲目标题',
+  applyTo: '应用到文件夹',
+  apply: '填充',
+  filled: '已填充 {count} 个曲目（尚未保存）',
+  suggest: '从简介提取',
+  suggestEmpty: '没有提取到可用的标题（模型输出未能在简介中逐字匹配）',
+  suggestPartial: '只提取到 {count} / {total} 个曲目，请核对后再填充',
+  suggestDisconnected: '与服务器的连接中断，提取已取消',
+  suggestUnverified: '其中 {count} 条在简介中找不到原文，可能是模型改写或编造的，请核对。',
+}

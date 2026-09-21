@@ -50,12 +50,22 @@ jobs:
             type=semver,pattern={{version}},suffix=-debug
             type=raw,value=latest-debug,enable={{is_default_branch}}
 
+      - name: Lowercase the image name and tags
+        id: names
+        run: |
+          echo "image=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          {
+            echo 'tags<<TAGS_EOF'
+            echo "${{ steps.meta.outputs.tags }}" | tr '[:upper:]' '[:lower:]'
+            echo 'TAGS_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build container image
         id: build-image
         uses: redhat-actions/buildah-build@v3
         with:
-          image: ${{ env.IMAGE_NAME }}
-          tags: ${{ steps.meta.outputs.tags }}
+          image: ${{ steps.names.outputs.image }}
+          tags: ${{ steps.names.outputs.tags }}
           context: ./
           containerfiles: |
             ./Containerfile
@@ -65,7 +75,7 @@ jobs:
         uses: redhat-actions/push-to-registry@v3
         with:
           image: ${{ steps.build-image.outputs.image }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.names.outputs.tags }}
           registry: ${{ env.IMAGE_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}

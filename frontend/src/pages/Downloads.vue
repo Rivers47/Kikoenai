@@ -105,7 +105,10 @@
                     <q-icon name="play_arrow" size="xs" />
                   </q-item-section>
                   <q-item-section>
-                    <q-item-label lines="1">{{ file.title }}</q-item-label>
+                    <!-- Same rule as WorkTree: the filled-in display name
+                         when there is one, the filename otherwise. -->
+                    <q-item-label lines="1">{{ file.trackTitle || file.title }}</q-item-label>
+                    <q-item-label v-if="file.trackTitle" caption lines="1">{{ file.title }}</q-item-label>
                   </q-item-section>
                   <q-item-section side>
                     <div class="row items-center no-wrap">
@@ -344,6 +347,7 @@ export default {
       const queue = work.tracks.map(file => ({
         trackId: file.trackId,
         title: file.title,
+        trackTitle: file.trackTitle,
         workTitle: work.workTitle,
         duration: file.duration,
       }))

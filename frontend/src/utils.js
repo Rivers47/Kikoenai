@@ -1,5 +1,5 @@
 import axios from "axios";
-import { apiUrl } from './base-path';
+import { apiUrl, encodeTrackId } from './base-path';
 // Single implementation of the search grammar — see FilterTerms.vue.
 import { parseSearchQuery, formatSearchTerm, formatSearchQuery } from '../../backend/database/search-query';
 
@@ -108,8 +108,14 @@ export function toQueueItem(node) {
     duration: node.duration,
     workTitle: node.workTitle,
   };
-  if (node.mediaStreamUrl && node.mediaStreamUrl !== apiUrl(`/api/media/stream/${trackId}`)) {
+  if (node.mediaStreamUrl && node.mediaStreamUrl !== apiUrl(`/api/media/stream/${encodeTrackId(trackId)}`)) {
     item.mediaStreamUrl = node.mediaStreamUrl;
+  }
+  // Only when the work actually has one. `title` stays the filename -- it is
+  // what media URLs are built from -- so this rides alongside rather than
+  // replacing it, and the absent case costs a stored queue nothing.
+  if (node.trackTitle) {
+    item.trackTitle = node.trackTitle;
   }
   return item;
 }

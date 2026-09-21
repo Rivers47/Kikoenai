@@ -1,0 +1,17 @@
+export default {
+  title: '編輯音軌標題',
+  hint: '留空則顯示檔案名稱。',
+  noAudio: '該作品沒有音訊檔案。',
+  rootFolder: '根目錄',
+  saveSuccess: '音軌標題已更新',
+  fillFromList: '從曲目清單填入',
+  trackListLabel: '每行一個曲目標題',
+  applyTo: '套用到資料夾',
+  apply: '填入',
+  filled: '已填入 {count} 個曲目（尚未儲存）',
+  suggest: '從簡介擷取',
+  suggestEmpty: '沒有擷取到可用的標題（模型輸出未能在簡介中逐字比對）',
+  suggestPartial: '只擷取到 {count} / {total} 個曲目，請核對後再填入',
+  suggestDisconnected: '與伺服器的連線中斷，擷取已取消',
+  suggestUnverified: '其中 {count} 條在簡介中找不到原文，可能是模型改寫或編造的，請核對。',
+}

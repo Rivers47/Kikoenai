@@ -1,0 +1,17 @@
+export default {
+  title: 'トラック名を編集',
+  hint: '空欄のままにするとファイル名を表示します。',
+  noAudio: 'この作品には音声ファイルがありません。',
+  rootFolder: 'ルート',
+  saveSuccess: 'トラック名を更新しました',
+  fillFromList: 'トラックリストから入力',
+  trackListLabel: '1行に1トラック名',
+  applyTo: '適用するフォルダ',
+  apply: '入力',
+  filled: '{count} 件に入力しました（未保存）',
+  suggest: '説明文から抽出',
+  suggestEmpty: '使用できるタイトルが得られませんでした（説明文と一致しません）',
+  suggestPartial: '{total} 件中 {count} 件のみ抽出されました。順序を確認してください',
+  suggestDisconnected: 'サーバーとの接続が切断され、抽出は中止されました',
+  suggestUnverified: 'うち {count} 件は説明文に見つかりませんでした。モデルが書き換えた可能性があるので確認してください。',
+}

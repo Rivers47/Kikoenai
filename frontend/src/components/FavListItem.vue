@@ -84,7 +84,7 @@
             <q-badge color="tertiary-container" text-color="on-tertiary-container">{{ metadata.state.index+1 }} / {{ metadata.state.queue.length }}</q-badge>
             <q-badge color="primary-container" text-color="on-primary-container">{{ humanReadableSeconds(resumeSeconds ?? metadata.state.seconds) }}</q-badge>
             <span class="text-muted">
-              {{ metadata.state.queue[metadata.state.index].title }}
+              {{ parkedTrackTitle }}
             </span>
           </div>
         </div>
@@ -155,6 +155,16 @@ export default {
   },
 
   computed: {
+    // The track this work is parked on, by the same rule as the player and the
+    // file tree. A queue stored before track titles existed carries no
+    // trackTitle and keeps showing the filename until it is rebuilt from the
+    // tree -- i.e. the next time the work is played from its own page.
+    parkedTrackTitle() {
+      const state = this.metadata.state;
+      const item = state && state.queue && state.queue[state.index];
+      return item ? (item.trackTitle || item.title) : '';
+    },
+
     progressOptions() {
       return [
         { label: this.$t('favlistitem.marked'), value: 'marked' },
