@@ -47,7 +47,7 @@ const defaultConfig = {
     //   path: ''
     // }
   ],
-  skipWorkExtras: true, // Skip downloading all sample images, the desciption, and reviews
+  skipWorkExtras: true, // Skip downloading sample/description images and scraping reviews. NOT the description itself, which is parsed from the page the scanner already fetches and is never gated.
   coverFolderDir: path.join(dataRoot, 'covers'),
   imageFolderDir: path.join(dataRoot, 'images'), // Scraped sample/description images, kept out of the cover cache
   databaseFolderDir: path.join(dataRoot, 'sqlite'),

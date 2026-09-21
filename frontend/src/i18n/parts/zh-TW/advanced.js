@@ -56,4 +56,6 @@ export default {
   dbDefaultPathCaption: '使用程式所在位置下的sqlite資料夾，並忽略databaseFolderDir設定（如無必要請勿修改，更改此設定需要重新啟動程式）',
   coverDefaultPath: '封面使用預設路徑',
   coverDefaultPathCaption: '使用程式所在位置下的covers資料夾，並忽略封面資料夾路徑設定',
+  workExtras: '下載作品附加內容',
+  workExtrasCaption: '掃描時一併下載範例圖、簡介插圖和 DLsite 評論',
 }
