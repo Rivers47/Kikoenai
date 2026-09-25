@@ -5,6 +5,7 @@ const child_process = require('child_process'); // 子进程
 const { config } = require('./config');
 const { SESSION_COOKIE, getSession } = require('./auth/session');
 const { suggestTrackTitles, SuggestError } = require('./suggest-track-titles');
+const { transcribeWork, AsrError } = require('./transcribe-work');
 
 const initSocket = (server) => {
   const io = socket(server, { path: `${config.basePath}/socket.io` });
@@ -131,6 +132,61 @@ const initSocket = (server) => {
         if (!(err instanceof SuggestError)) console.error(err);
         socket.emit('SUGGEST_TRACK_TITLES_ERROR', { workId, error: err.message });
       }
+    });
+
+    // Transcribe one work's audio through the ASR server (transcribe-work.js).
+    //
+    // Per-socket, like SUGGEST_TRACK_TITLES and for the same reasons: it is
+    // per-work and in-process, so the answer goes back to the asking socket
+    // and `workId` is echoed on every reply so a dialog can ignore one meant
+    // for a work it has since moved off.
+    //
+    // A run lasts minutes to hours, so unlike the suggester it needs to be
+    // stoppable. One per socket: the controller doubles as the "already
+    // running" flag, and a second run from the same dialog would only queue
+    // behind the first on a server that transcribes serially anyway.
+    let transcribing = null;
+
+    socket.on('TRANSCRIBE_WORK', async (payload) => {
+      const workId = payload && payload.workId;
+
+      if (transcribing) {
+        socket.emit('TRANSCRIBE_ERROR', { workId, error: '转录任务已在进行中.' });
+        return;
+      }
+
+      transcribing = new AbortController();
+      try {
+        const result = await transcribeWork(workId, {
+          only: payload && payload.relPaths,
+          // Trusted no further than any other socket input: it is placed in
+          // the URL's query component, never its path or host, and asr.js
+          // percent-encodes it on the way in. Length-capped because the whole
+          // URL still has to be a URL.
+          query: typeof (payload && payload.query) === 'string'
+            ? payload.query.slice(0, 2048)
+            : undefined,
+          signal: transcribing.signal,
+          onProgress: (progress) => socket.emit('TRANSCRIBE_PROGRESS', { workId, ...progress }),
+        });
+        socket.emit('TRANSCRIBE_RESULT', { workId, ...result });
+      } catch (err) {
+        if (!(err instanceof AsrError)) console.error(err);
+        socket.emit('TRANSCRIBE_ERROR', { workId, error: err.message });
+      } finally {
+        transcribing = null;
+      }
+    });
+
+    socket.on('TRANSCRIBE_CANCEL', () => {
+      if (transcribing) transcribing.abort();
+    });
+
+    // Closing the page ends the run. Nothing would consume the progress
+    // events, and the work already written is indexed by the loop on its way
+    // out -- so this loses a partial track, not a finished one.
+    socket.on('disconnect', () => {
+      if (transcribing) transcribing.abort();
     });
 
     // 发生错误时触发

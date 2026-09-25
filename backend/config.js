@@ -3,7 +3,20 @@ const path = require('path');
 const crypto = require('crypto');
 
 const appDir = __dirname;
-const dataRoot = process.env.KIKO_DATA_DIR || appDir;
+
+// path.resolve, never the raw value. A *relative* KIKO_DATA_DIR used verbatim
+// leaves every path derived from it relative, and two things then go wrong:
+// `res.sendFile` rejects a relative path outright ("path must be absolute"),
+// and resolveDataFolder re-joins the still-relative value onto dataRoot on
+// every startup -- `covers` -> `data/covers` -> `data/data/covers` -- while
+// setConfig persists each round, so the nesting grows without bound. Resolving
+// here makes defaultConfig's paths absolute, which sends them down
+// resolveDataFolder's stable branch instead. The base is process.cwd(), which
+// under `npm run dev` is backend/, not the directory npm was invoked from.
+const dataRoot = path.resolve(process.env.KIKO_DATA_DIR || appDir);
+if (process.env.KIKO_DATA_DIR && !path.isAbsolute(process.env.KIKO_DATA_DIR)) {
+  console.log(`KIKO_DATA_DIR 是相对路径，已解析为: ${dataRoot}`);
+}
 
 if (process.env.IS_DOCKER && dataRoot !== appDir) {
   const legacyDb = path.join(appDir, 'sqlite', 'db.sqlite3');
@@ -89,6 +102,11 @@ const defaultConfig = {
   transcodeMaxConcurrent: 1,
   transcodeCacheDir: path.join(dataRoot, 'transcodes'),
   transcodeUseDefaultPath: false, // Ignores transcodeCacheDir if set to true
+  // Where a generated subtitle goes when the library folder cannot take it.
+  // The library is written to first, so this stays empty on a writable mount;
+  // see filesystem/workFiles.js for how the two are read back as one listing.
+  lyricFolderDir: path.join(dataRoot, 'lyrics'),
+  lyricUseDefaultPath: false, // Ignores lyricFolderDir if set to true
 };
 const initConfig = (writeConfigToFile = !process.env.FREEZE_CONFIG_FILE) => {
   config = Object.assign(config, defaultConfig);
@@ -114,15 +132,30 @@ const setConfig = (newConfig, writeConfigToFile = !process.env.FREEZE_CONFIG_FIL
   }
 };
 
+// True when `dir` is at or below `base`. A '..' prefix or an absolute result
+// (another Windows drive) means it is somewhere else entirely.
+const isWithin = (base, dir) => {
+  const relative = path.relative(base, dir);
+  return !relative.startsWith('..') && !path.isAbsolute(relative);
+};
+
 // Re-root a data folder that an earlier run pinned inside the application
 // directory.
 const rerootFromAppDir = (dir) => {
   if (dataRoot === appDir) return dir;
 
+  // Already under the data root, so there is nothing to migrate -- and
+  // checking this FIRST is what makes a data root *inside* the app directory
+  // work at all. `KIKO_DATA_DIR=backend/data` makes every correct path
+  // (`<appDir>/data/covers`) look like a legacy app-dir path to the test
+  // below, which re-roots it onto the data root and yields
+  // `<appDir>/data/data/covers`. setConfig persists that, so the next startup
+  // nests again, without bound, and the growing path eventually surfaces
+  // somewhere unrelated -- res.sendFile refusing to serve a cover.
+  if (isWithin(dataRoot, dir)) return dir;
+
   const relative = path.relative(appDir, dir);
-  // '..' prefix or an absolute result (another Windows drive) means the path
-  // is not inside the app directory.
-  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return dir;
+  if (!relative || !isWithin(appDir, dir)) return dir;
 
   const rerooted = path.join(dataRoot, relative);
   console.log(`数据目录已迁移: ${dir} -> ${rerooted}`);
@@ -153,6 +186,7 @@ const resolveDataFolders = () => {
   config.imageFolderDir = resolveDataFolder(config.imageFolderDir, 'images', config.imageUseDefaultPath);
   config.databaseFolderDir = resolveDataFolder(config.databaseFolderDir, 'sqlite', config.dbUseDefaultPath);
   config.transcodeCacheDir = resolveDataFolder(config.transcodeCacheDir, 'transcodes', config.transcodeUseDefaultPath);
+  config.lyricFolderDir = resolveDataFolder(config.lyricFolderDir, 'lyrics', config.lyricUseDefaultPath);
 };
 
 /**
@@ -234,12 +268,18 @@ class publicConfig {
   get llmConfigured() {
     return Boolean(process.env.KIKO_LLM_BASE_URL && process.env.KIKO_LLM_MODEL);
   }
+  // Same deal for the transcription server (see asr.js): a boolean only, so no
+  // endpoint or key can reach a browser.
+  get asrConfigured() {
+    return Boolean(process.env.KIKO_ASR_BASE_URL);
+  }
   export() {
     return {
       rewindSeekTime: this.rewindSeekTime,
       forwardSeekTime: this.forwardSeekTime,
       enableTranscoding: this.enableTranscoding,
       llmConfigured: this.llmConfigured,
+      asrConfigured: this.asrConfigured,
     };
   }
 }

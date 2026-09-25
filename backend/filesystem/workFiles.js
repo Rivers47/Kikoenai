@@ -2,10 +2,42 @@
  * A work's file listing, read from the database rather than the disk.
  */
 
+const fs = require('fs');
 const path = require('path');
 const { orderBy } = require('natural-orderby');
 const db = require('../database/db');
+const { config } = require('../config');
 const { getTrackList, probeAudioDurations, supportedMediaExtList } = require('./utils');
+
+/**
+ * Where a work's generated subtitles live when they could not be written next
+ * to the audio -- a read-only library mount, or a folder the server cannot
+ * write. Mirrors the work folder's own layout, so one relPath addresses a file
+ * in either place.
+ */
+const overlayDir = (workId) => path.join(config.lyricFolderDir, String(workId));
+
+/**
+ * Fold the overlay's files into a walk of the work folder.
+ *
+ * Merged here, at index time, rather than checked per request: the whole point
+ * of t_work_file is that serving a work never walks a directory. Once the rows
+ * are written the overlay is invisible to every reader except the one place
+ * that turns a row back into a path (routes/utils/track.js).
+ *
+ * A file present in both places collapses to the library's copy. rel_path is
+ * the primary key so it has to collapse to something, and the library is the
+ * right winner: a hand-made sidecar the user dropped in should always beat a
+ * generated one left over from when the mount was read-only.
+ */
+const mergeOverlay = async (workId, walked) => {
+  const dir = overlayDir(workId);
+  if (!fs.existsSync(dir)) return walked;
+
+  const overlaid = await getTrackList(workId, dir);
+  const inLibrary = new Set(walked.map((track) => track.shortFilePath));
+  return walked.concat(overlaid.filter((track) => !inLibrary.has(track.shortFilePath)));
+};
 
 /**
  * Shape stored rows exactly the way getTrackList shapes a walk, including the
@@ -49,7 +81,7 @@ const shapeRows = (workId, workDir, rows) => {
  * @returns {Promise<Array>} the shaped track list, as listWorkTracks returns.
  */
 async function indexWorkFiles (workId, workDir, tracks, dbApi = db) {
-  const walked = tracks || await getTrackList(workId, workDir);
+  const walked = await mergeOverlay(workId, tracks || await getTrackList(workId, workDir));
   const existing = await dbApi.getWorkFiles(workId);
   const byRelPath = new Map(existing.map((row) => [row.rel_path, row]));
 
@@ -101,4 +133,4 @@ async function rescanWorkFiles (workId, workDir, dbApi = db) {
   return indexWorkFiles(workId, workDir, tracks, dbApi);
 }
 
-module.exports = { listWorkTracks, indexWorkFiles, rescanWorkFiles, shapeRows };
+module.exports = { listWorkTracks, indexWorkFiles, rescanWorkFiles, shapeRows, overlayDir };

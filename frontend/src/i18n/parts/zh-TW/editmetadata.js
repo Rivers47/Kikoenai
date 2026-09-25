@@ -17,4 +17,5 @@ export default {
   noSeriesMatch: '無相符系列',
   saveSuccess: '中繼資料更新成功',
   editTrackTitles: '編輯音軌標題',
+  transcribe: '轉錄音訊',
 }

@@ -22,12 +22,17 @@ const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * Find every lyric file belonging to `track`, among its siblings in `tracks`.
  * Returns an array of { trackId, lyricExtension }, ordered by speaker number;
  * empty when the track has no lyrics.
+ *
+ * `extensions` widens the search beyond what the player can render, for
+ * callers asking "does this track already have a sidecar?" rather than "what
+ * should I draw?" -- the transcriber uses it so a .txt it wrote last time
+ * still counts as done. Order is preference order, as in the default.
  */
-const findLyricTracks = (track, tracks) => {
+const findLyricTracks = (track, tracks, extensions = supportedLyricExtensions) => {
   const title = track.title;
   const dotIndex = title.lastIndexOf('.');
   const stem = dotIndex > 0 ? title.substring(0, dotIndex) : title;
-  const extAlternation = supportedLyricExtensions.map(ext => escapeRegExp(ext.slice(1))).join('|');
+  const extAlternation = extensions.map(ext => escapeRegExp(ext.slice(1))).join('|');
   // Group 1 marks the stem form ("01 Track.lrc"), group 2 the speaker number,
   // group 3 the extension. The stem alternative is listed first so that it wins
   // the backtrack for names the two forms could both explain.
@@ -63,7 +68,7 @@ const findLyricTracks = (track, tracks) => {
       // Sort keys: the stem form beats the full-filename form, and the
       // extensions rank in the order listed above.
       isStemForm: match[1] !== undefined,
-      extRank: supportedLyricExtensions.indexOf(`.${match[3].toLowerCase()}`),
+      extRank: extensions.indexOf(`.${match[3].toLowerCase()}`),
     });
   });
 

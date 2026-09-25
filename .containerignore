@@ -40,14 +40,17 @@ frontend
 # `config/*` / `covers/* `/ `sqlite/*` patterns matched nothing at all, which is
 # how a local build came to bake in a developer's config and database.
 # config/config.json holds md5secret and jwtsecret; sqlite/ is the whole
-# database; covers/ and images/ are the scraped image caches. None are tracked
-# in git, so CI never sees them -- but a fresh named volume mounted over a path
-# that has content in the image is seeded from that content, so an operator's
-# volume would come pre-populated with someone else's data.
+# database; covers/ and images/ are the scraped image caches; transcodes/ and
+# lyrics/ are the Opus cache and the generated-subtitle overlay. None are
+# tracked in git, so CI never sees them -- but a fresh named volume mounted
+# over a path that has content in the image is seeded from that content, so an
+# operator's volume would come pre-populated with someone else's data.
 backend/config
 backend/sqlite
 backend/covers
 backend/images
+backend/transcodes
+backend/lyrics
 backend/logs
 
 # Media: the default library mount point.

@@ -1,7 +1,27 @@
+const fs = require('fs');
 const path = require('path');
 const { config } = require('../../config');
 const db = require('../../database/db');
-const { listWorkTracks } = require('../../filesystem/workFiles');
+const { listWorkTracks, overlayDir } = require('../../filesystem/workFiles');
+const { supportedSubtitleExtList } = require('../../filesystem/utils');
+
+// Extensions a generated subtitle can carry, i.e. the only rows whose bytes
+// might live in the overlay rather than the work folder. '.txt' is in the list
+// because an ASR server answering text/plain is saved as one (see asr.js).
+const OVERLAY_EXT = [...supportedSubtitleExtList, '.txt'];
+
+/**
+ * Where a track's bytes actually are.
+ *
+ * The work folder first, the overlay second -- which is both the common case
+ * and the "library copy wins" rule, without either needing to be stated
+ * anywhere else. Only subtitle rows can miss, so audio pays no extra stat.
+ */
+const trackPath = (workId, workDir, track) => {
+  const inLibrary = path.join(workDir, track.shortFilePath);
+  if (!OVERLAY_EXT.includes(track.ext) || fs.existsSync(inLibrary)) return inLibrary;
+  return path.join(overlayDir(workId), track.shortFilePath);
+};
 
 /**
  * Legacy positional-index handle.
@@ -19,7 +39,7 @@ const legacyIndex = (segments) => (
 /**
  * Resolve the `*path` of a media route to one track of a work.
  *
- * @returns {Promise<{work, rootFolder, workDir, tracks, track}|null>}
+ * @returns {Promise<{work, rootFolder, workDir, tracks, track, fullPath}|null>}
  */
 const resolveTrack = async (req, res) => {
   const workId = req.params.id;
@@ -52,7 +72,7 @@ const resolveTrack = async (req, res) => {
     return null;
   }
 
-  return { work, rootFolder, workDir, tracks, track };
+  return { work, rootFolder, workDir, tracks, track, fullPath: trackPath(workId, workDir, track) };
 };
 
 module.exports = { resolveTrack, legacyIndex };
