@@ -1,16 +1,7 @@
 /* eslint-disable n/no-unpublished-require */
-// Transcribing a work through an external ASR server. Three things here would
-// break silently rather than loudly, so they get pinned:
-//
-//   - the upload must carry a Content-Length. A stream body is chunked by
-//     default and the reference server rejects that outright, which is why the
-//     client uses undici's request() rather than fetch().
-//   - the response Content-Type decides the extension, and anything that is
-//     not a subtitle has to be refused. Without that check a forgotten
-//     `format=` writes a JSON document into a .srt and nothing notices until
-//     someone opens the file.
-//   - a subtitle sitting in the overlay folder has to appear in the work's
-//     listing exactly as if it were in the work folder.
+// Transcribing a work through an external ASR server. The three things that
+// would break silently: the upload's Content-Length, the Content-Type that
+// picks the extension, and an overlay subtitle appearing in the listing.
 
 process.env.FREEZE_CONFIG_FILE = '1';
 
@@ -34,9 +25,7 @@ const ASR_ORIGIN = 'http://127.0.0.1:8000';
 describe('ASR client', () => {
   let realDispatcher, mockAgent, pool, seen;
 
-  // undici's own mock dispatcher rather than a stub HTTP server: it needs no
-  // socket, so the suite stays runnable where loopback is closed off, and the
-  // interceptor sees the request options directly.
+  // undici's mock dispatcher, so the suite needs no socket.
   const serve = (status, contentType, body, query = 'format=vtt') => {
     seen = null;
     pool.intercept({ path: `/transcribe?${query}`, method: 'POST' })
@@ -82,14 +71,12 @@ describe('ASR client', () => {
       ext: '.srt',
       body: '1\n00:00:00,000 --> 00:00:01,000\nはい\n',
     });
-    // Content-Length is the header the reference server requires, and a stream
-    // body would otherwise go out chunked and be refused. Its value is the
-    // real file size, i.e. it was stat'd rather than guessed.
+    // Required by the reference server; a stream body goes out chunked
+    // without it.
     expect(seen.headers['content-length']).to.equal(String(fs.statSync(audio).size));
-    // Streamed, not buffered: a lossless track is comfortably over a gigabyte.
+    // Streamed, not buffered.
     expect(typeof seen.body.pipe).to.equal('function');
-    // Only the extension matters on the far side, and the real filename would
-    // put non-ASCII bytes in a header for no gain.
+    // Only the extension matters on the far side.
     expect(seen.headers['x-filename']).to.equal('x.mp3');
   });
 
@@ -102,10 +89,7 @@ describe('ASR client', () => {
     delete process.env.KIKO_ASR_QUERY;
   });
 
-  // The reference server defaults to JSON, which is unusable here, so an
-  // unconfigured install would otherwise fail on its very first run. WebVTT
-  // rather than SubRip because it is the only one of the three that can name a
-  // speaker -- see the asrConfig comment.
+  // The reference server defaults to JSON, which is unusable here.
   it('defaults to asking for WebVTT', async () => {
     serve(200, 'application/x-subrip', 'x');
     await transcribe(audio);
@@ -123,10 +107,8 @@ describe('ASR client', () => {
     delete process.env.KIKO_ASR_QUERY;
   });
 
-  // The dialog takes a query string typed by a human, so the escaping is the
-  // app's job, not theirs -- and it is merged onto the configured value rather
-  // than replacing it, or adding hotwords to one work would drop format=vtt
-  // and every track would fail on the content-type check.
+  // Typed by a human, so the app escapes it; merged rather than replacing, or
+  // adding hotwords would drop format=vtt.
   describe('a per-run query override', () => {
     const sent = async (query, expected) => {
       pool.intercept({ path: `/transcribe?${expected}`, method: 'POST' })
@@ -151,8 +133,7 @@ describe('ASR client', () => {
       await sent('hotwords=a b', 'format=vtt&hotwords=a+b');
     });
 
-    // The one that silently loses data: everything after '#' would otherwise
-    // be parsed as a fragment and never leave the client.
+    // Everything after an unescaped '#' never leaves the client.
     it('encodes "#" instead of truncating the query there', async () => {
       await sent('hotwords=a#b&beam_size=5', 'format=vtt&hotwords=a%23b&beam_size=5');
     });
@@ -174,9 +155,7 @@ describe('ASR client', () => {
     delete process.env.KIKO_ASR_API_KEY;
   });
 
-  // The reference server sends text/plain for both `format=lrc` and
-  // `format=txt`, so the header cannot say which it is. .txt is the honest
-  // reading; it is saved but will not be picked up as lyrics.
+  // text/plain covers both `format=lrc` and `format=txt`, so .txt it is.
   it('saves a text/plain answer as .txt', async () => {
     serve(200, 'text/plain; charset=utf-8', '[00:00.00]はい\n');
     expect((await transcribe(audio)).ext).to.equal('.txt');
@@ -217,16 +196,14 @@ describe('ASR client', () => {
     }
   });
 
-  // A silent track. Writing the empty sidecar would make it look done and
-  // block a retry after the VAD settings are fixed.
+  // An empty sidecar would look done and block a retry.
   it('returns null for an empty transcript rather than writing nothing', async () => {
     serve(200, 'application/x-subrip', '\n  \n');
     expect(await transcribe(audio)).to.equal(null);
   });
 
-  // The two ways a request stops early. transcribe-work.js tells them apart by
-  // name -- a cancel ends the run, a timeout fails one track -- so the shapes
-  // matter, not just that something threw.
+  // transcribe-work.js tells these apart by name: a cancel ends the run, a
+  // timeout fails one track.
   it('propagates a caller cancel as an AbortError', async () => {
     pool.intercept({ path: '/transcribe?format=vtt', method: 'POST' })
       .reply(200, 'x', { headers: { 'content-type': 'application/x-subrip' } })
@@ -335,9 +312,7 @@ describe('subtitle overlay', () => {
     expect(tracks[1].subtitle).to.equal('CD1');
   });
 
-  // rel_path is the primary key, so a file in both places has to collapse to
-  // one row. The library wins: a sidecar the user put there by hand should
-  // beat a generated one left over from when the mount was read-only.
+  // rel_path is the primary key, so one of the two has to win.
   it('lets the library copy win over an overlay of the same name', async () => {
     write(workDir, '01 Track.mp3');
     fs.writeFileSync(path.join(workDir, '01 Track.srt'), 'from the library');
@@ -411,8 +386,7 @@ describe('writeSidecar', () => {
     expect(fs.existsSync(path.join(workDir, 'CD1/01 Track.vtt'))).to.equal(true);
   });
 
-  // The whole reason the overlay exists: a library mounted read-only must not
-  // make transcription fail, it must make it land somewhere else.
+  // Why the overlay exists.
   it('falls back to the overlay when the library folder refuses the write', async function () {
     fs.chmodSync(workDir, 0o555);
     // Root ignores the mode bits, so on a root test runner this proves
@@ -435,9 +409,7 @@ describe('writeSidecar', () => {
   });
 });
 
-// The whole loop, with an in-memory database and a mocked ASR server. The
-// selection is the part worth pinning: the dialog sends relPaths, and sending
-// the wrong ones means transcribing hours of audio nobody asked for.
+// The whole loop, against in-memory knex and a mocked ASR server.
 describe('transcribeWork', () => {
   let knex, dbApi, mockAgent, realDispatcher, pool, root, workDir, savedLyricDir, savedRootFolders;
 
@@ -524,7 +496,7 @@ describe('transcribeWork', () => {
     const tally = await transcribeWork('000001', { dbApi });
 
     expect(tally).to.include({ written: 1, skipped: 1 });
-    // Not overwritten -- a hand-made sidecar is never replaced.
+    // Never overwritten.
     expect(fs.readFileSync(path.join(workDir, '01.srt'), 'utf8')).to.equal('mine');
   });
 
@@ -537,8 +509,7 @@ describe('transcribeWork', () => {
     expect(rows.map(r => r.rel_path).sort()).to.deep.equal(['01.mp3', '01.srt']);
   });
 
-  // A stale dialog listing files a rescan has since renamed. Distinct from
-  // "this work has no audio", which is a different thing to tell the admin.
+  // A stale dialog naming files a rescan has renamed.
   it('reports a selection that matches nothing', async () => {
     write('01.mp3');
     try {
@@ -546,7 +517,7 @@ describe('transcribeWork', () => {
       expect.fail('should have thrown');
     } catch (err) {
       expect(err).to.be.instanceOf(AsrError);
-      expect(err.message).to.include('不存在');
+      expect(err.message).to.include('None of the selected tracks exist');
     }
   });
 });

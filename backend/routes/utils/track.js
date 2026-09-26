@@ -5,17 +5,13 @@ const db = require('../../database/db');
 const { listWorkTracks, overlayDir } = require('../../filesystem/workFiles');
 const { supportedSubtitleExtList } = require('../../filesystem/utils');
 
-// Extensions a generated subtitle can carry, i.e. the only rows whose bytes
-// might live in the overlay rather than the work folder. '.txt' is in the list
-// because an ASR server answering text/plain is saved as one (see asr.js).
+// The only rows whose bytes might live in the overlay. '.txt' is included
+// because a text/plain ASR answer is saved as one (asr.js).
 const OVERLAY_EXT = [...supportedSubtitleExtList, '.txt'];
 
 /**
- * Where a track's bytes actually are.
- *
- * The work folder first, the overlay second -- which is both the common case
- * and the "library copy wins" rule, without either needing to be stated
- * anywhere else. Only subtitle rows can miss, so audio pays no extra stat.
+ * The work folder first, the overlay second -- which is also the "library copy
+ * wins" rule. Only subtitle rows can miss, so audio pays no extra stat.
  */
 const trackPath = (workId, workDir, track) => {
   const inLibrary = path.join(workDir, track.shortFilePath);

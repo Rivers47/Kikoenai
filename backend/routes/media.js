@@ -103,7 +103,7 @@ router.get('/offline/:id/*path',
       }
 
       if (!config.enableTranscoding) {
-        res.status(503).send({error: '转码功能已禁用'});
+        res.status(503).send({error: 'Transcoding is disabled on this server.'});
         return;
       }
 

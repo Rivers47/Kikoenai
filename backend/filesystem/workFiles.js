@@ -10,25 +10,18 @@ const { config } = require('../config');
 const { getTrackList, probeAudioDurations, supportedMediaExtList } = require('./utils');
 
 /**
- * Where a work's generated subtitles live when they could not be written next
- * to the audio -- a read-only library mount, or a folder the server cannot
- * write. Mirrors the work folder's own layout, so one relPath addresses a file
- * in either place.
+ * Generated subtitles that could not be written next to the audio. Mirrors the
+ * work folder's layout, so one relPath addresses a file in either place.
  */
 const overlayDir = (workId) => path.join(config.lyricFolderDir, String(workId));
 
 /**
- * Fold the overlay's files into a walk of the work folder.
+ * Fold the overlay into a walk of the work folder, at index time rather than
+ * per request -- t_work_file exists so serving a work walks no directory. The
+ * only reader that knows the overlay exists is routes/utils/track.js.
  *
- * Merged here, at index time, rather than checked per request: the whole point
- * of t_work_file is that serving a work never walks a directory. Once the rows
- * are written the overlay is invisible to every reader except the one place
- * that turns a row back into a path (routes/utils/track.js).
- *
- * A file present in both places collapses to the library's copy. rel_path is
- * the primary key so it has to collapse to something, and the library is the
- * right winner: a hand-made sidecar the user dropped in should always beat a
- * generated one left over from when the mount was read-only.
+ * A file in both places collapses to the library's copy: rel_path is the
+ * primary key, and a hand-made sidecar should beat a generated one.
  */
 const mergeOverlay = async (workId, walked) => {
   const dir = overlayDir(workId);

@@ -99,10 +99,8 @@
 <script>
 import NotifyMixin from '../mixins/Notification.js'
 
-// A row with no status yet draws nothing here. The slot keeps its width so
-// rows do not shift as results come in -- but it must stay empty: a
-// placeholder circle reads as an unselected radio button next to the real
-// checkbox, which is exactly the control it would be mistaken for.
+// A row with no status draws nothing: a placeholder circle reads as an
+// unselected radio button next to the real checkbox.
 const STATUS_ICON = {
   written: { icon: 'check_circle', color: 'positive' },
   skipped: { icon: 'remove_circle_outline', color: 'grey' },
@@ -129,16 +127,15 @@ export default {
       running: false,
       rows: [],
       selected: [],
-      // Blank means "whatever the server is configured with". The default is
-      // deliberately not shown: KIKO_ASR_QUERY is env-only so that no endpoint
-      // or key reaches a browser, and publicConfig exposes a boolean alone.
+      // Blank means the server's configured value, which is never sent to
+      // the browser -- publicConfig exposes a boolean alone.
       query: '',
       note: ''
     }
   },
 
   computed: {
-    // Tri-state: null renders the indeterminate dash for a partial selection.
+    // null renders the indeterminate dash.
     allSelected: {
       get() {
         if (!this.selected.length) return false
@@ -184,9 +181,7 @@ export default {
       this.$axios.get(`/api/tracks/${this.metadata.id}`)
         .then((response) => {
           this.rows = this.flattenAudio(response.data.tree || response.data, [])
-          // Everything, matching what the button did before selection existed.
-          // The server still skips tracks that already have a subtitle, so the
-          // default costs nothing on a work that is partly done.
+          // The server skips tracks that already have a subtitle anyway.
           this.selected = this.rows.map(row => row.relPath)
         })
         .catch((error) => {
@@ -214,12 +209,9 @@ export default {
     },
 
     /**
-     * Connect the shared Socket.IO client if nothing has yet.
-     *
-     * Lazily, on the first run rather than on mount: the handshake in
-     * backend/socket.js rejects any account but admin when auth is on, so
-     * connecting app-wide would throw an error notification at every ordinary
-     * user. Same reasoning as EditTrackTitles.
+     * Lazily, on first run: the handshake rejects any account but admin, so
+     * connecting app-wide would error for every ordinary user. As in
+     * EditTrackTitles.
      */
     ensureSocket() {
       if (this.$socket.connected) return Promise.resolve()
@@ -239,9 +231,8 @@ export default {
     },
 
     /**
-     * Over Socket.IO, not a request: a work runs for minutes to hours, well
-     * past what a reverse proxy holds a request open for. Progress arrives one
-     * track at a time in onProgress; the server transcribes them in order.
+     * Over Socket.IO, not a request: a work runs for minutes to hours.
+     * Progress arrives per track in onProgress.
      */
     start() {
       this.running = true
@@ -253,9 +244,7 @@ export default {
           this.$socket.emit('TRANSCRIBE_WORK', {
             workId: this.metadata.id,
             relPaths: this.selected,
-            // Sent raw. Percent-encoding is the server's job -- it assigns the
-            // string to a URL's `search`, which escapes non-ASCII, spaces and
-            // '#' correctly, so Japanese hotwords can be typed as-is.
+            // Raw; asr.js escapes it, so hotwords can be typed as-is.
             query: (this.query || '').trim()
           })
         })
@@ -269,8 +258,7 @@ export default {
       this.$socket.emit('TRANSCRIBE_CANCEL')
     },
 
-    // The work id is echoed back so a reply meant for another open dialog is
-    // ignored.
+    // Echoed back, so a reply for another open dialog is ignored.
     onProgress({ workId, relPath, status, error }) {
       if (workId !== this.metadata.id) return
       const row = this.rows.find(candidate => candidate.relPath === relPath)
@@ -285,9 +273,8 @@ export default {
 
       const notes = []
       if (cancelled) notes.push(this.$t('transcribetracks.cancelled'))
-      // Where the files went is worth saying out loud: the whole point of
-      // writing next to the audio is that they are findable for a typo fix,
-      // and a fallback to the server's own folder changes that answer.
+      // Where the files landed: the point of writing beside the audio is that
+      // they are findable for a typo fix.
       if (overlay) notes.push(this.$t('transcribetracks.wroteOverlay', { count: overlay }))
       if (failed) notes.push(this.$t('transcribetracks.someFailed', { count: failed }))
       this.note = notes.join(' ')
@@ -302,8 +289,7 @@ export default {
       this.showErrNotif(error)
     },
 
-    // A dropped socket also aborts the run server-side, so the dialog must not
-    // keep claiming it is going.
+    // A dropped socket aborts the run server-side too.
     onSocketDisconnect() {
       if (!this.running) return
       this.running = false

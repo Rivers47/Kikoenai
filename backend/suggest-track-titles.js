@@ -61,7 +61,7 @@ class SuggestError extends Error {
  */
 async function suggestTrackTitles(rawWorkId) {
   if (typeof rawWorkId !== 'string' || !WORK_ID_RE.test(rawWorkId)) {
-    throw new SuggestError(`"${rawWorkId}" 不是有效的作品 id.`);
+    throw new SuggestError(`"${rawWorkId}" is not a valid work id.`);
   }
   const workId = normalizeWorkId(rawWorkId);
 
@@ -70,7 +70,7 @@ async function suggestTrackTitles(rawWorkId) {
     .where('id', workId)
     .first();
   if (!work) {
-    throw new SuggestError(`没有 id 为 "${workId}" 的作品`);
+    throw new SuggestError(`No work with id "${workId}".`);
   }
 
   const description = htmlToText(work.description);
@@ -78,19 +78,19 @@ async function suggestTrackTitles(rawWorkId) {
     // Fanza is a dead end rather than a "refresh it" case: scraper/fanza.js
     // extracts no description at all, so POST /api/refresh changes nothing.
     throw new SuggestError(isFanzaId(workId)
-      ? 'Fanza 作品没有抓取到简介，无法提取音轨标题（仅支持 DLsite 作品）.'
-      : `作品 ${workId} 没有简介，请先刷新元数据.`);
+      ? 'No description was scraped for this Fanza work, so there is nothing to extract track titles from (DLsite works only).'
+      : `Work ${workId} has no description. Refresh its metadata first.`);
   }
 
   const rootFolder = config.rootFolders.find(rf => rf.name === work.root_folder);
   if (!rootFolder) {
-    throw new SuggestError(`找不到文件夹: "${work.root_folder}"`);
+    throw new SuggestError(`Root folder "${work.root_folder}" not found. Check the library paths in settings.`);
   }
 
   const tracks = await listWorkTracks(workId, path.join(rootFolder.path, work.dir));
   const audio = tracks.filter(t => AUDIO_EXT.includes(t.ext));
   if (!audio.length) {
-    throw new SuggestError(`作品 ${workId} 没有音频文件.`);
+    throw new SuggestError(`Work ${workId} has no audio files.`);
   }
 
   // Distinct names, not files: variant folders repeat the same tracks, and the
@@ -106,7 +106,7 @@ async function suggestTrackTitles(rawWorkId) {
   }
 
   if (!isLlmConfigured()) {
-    throw new SuggestError('服务器未配置 LLM (KIKO_LLM_BASE_URL / KIKO_LLM_MODEL).');
+    throw new SuggestError('No LLM is configured on the server (KIKO_LLM_BASE_URL / KIKO_LLM_MODEL).');
   }
 
   // mapping:false -- collectTitles places titles by position and never reads a

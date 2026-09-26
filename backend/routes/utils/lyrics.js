@@ -23,10 +23,8 @@ const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * Returns an array of { trackId, lyricExtension }, ordered by speaker number;
  * empty when the track has no lyrics.
  *
- * `extensions` widens the search beyond what the player can render, for
- * callers asking "does this track already have a sidecar?" rather than "what
- * should I draw?" -- the transcriber uses it so a .txt it wrote last time
- * still counts as done. Order is preference order, as in the default.
+ * `extensions` widens the search beyond what the player renders, for callers
+ * asking whether a sidecar exists at all. Order is preference order.
  */
 const findLyricTracks = (track, tracks, extensions = supportedLyricExtensions) => {
   const title = track.title;

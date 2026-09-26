@@ -307,9 +307,8 @@ export default {
   },
 
   mounted() {
-    // Only offer transcription when the server has somewhere to send the
-    // audio. A boolean, not the endpoint: the ASR settings are env-only so
-    // that no URL or key reaches a browser (backend/asr.js).
+    // A boolean, not the endpoint: the ASR settings are env-only so no URL
+    // or key reaches a browser (backend/asr.js).
     this.$axios.get('/api/config/shared')
       .then((response) => {
         this.asrConfigured = Boolean(response.data.sharedConfig.asrConfigured);

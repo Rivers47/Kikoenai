@@ -1,14 +1,11 @@
 /* eslint-disable n/no-unpublished-require */
-// KIKO_DATA_DIR resolution. A *relative* value used to be taken verbatim, and
-// the failure was not "it points somewhere odd" but a path that grew a level
-// on every single startup: defaultConfig wrote `data/covers` (relative),
-// resolveDataFolder re-joined it onto dataRoot to get `data/data/covers`, and
-// setConfig persisted that for the next boot to nest again. The visible
-// symptom was `res.sendFile` refusing a relative path, several restarts later.
+// KIKO_DATA_DIR resolution. The failure these pin is a data folder that grows
+// a level on every startup, because setConfig persists each round: `covers` ->
+// `data/covers` -> `data/data/covers`, surfacing much later as res.sendFile
+// refusing a relative path.
 //
-// Run in a subprocess rather than by juggling require.cache: config.js has
-// module-init side effects and a cached `config` object that every other test
-// in this suite already holds a reference to.
+// Run in a subprocess: config.js has module-init side effects and a cached
+// `config` object the rest of the suite already holds.
 
 process.env.FREEZE_CONFIG_FILE = '1';
 
@@ -76,9 +73,7 @@ describe('KIKO_DATA_DIR', () => {
     }
   });
 
-  // The part that actually made it dangerous: the nesting was persisted, so
-  // every restart compounded it. Feeding one boot's answer back in must be a
-  // no-op, whatever the data root looked like on the command line.
+  // Feeding one boot's answer back in must be a no-op.
   it('is idempotent across restarts', () => {
     fs.mkdirSync(path.join(root, 'test_data_root'));
     const first = bootConfig('test_data_root', root).config;
@@ -95,11 +90,8 @@ describe('KIKO_DATA_DIR', () => {
     }
   });
 
-  // The case that actually bit: a data root *under* the application directory.
-  // Every correct path then looks like a legacy app-dir path to
-  // rerootFromAppDir, which re-roots it onto the data root and nests it one
-  // level deeper per startup -- with an absolute KIKO_DATA_DIR too, so the
-  // path.resolve above does not cover this.
+  // A data root under the app directory: every correct path looks like a
+  // legacy app-dir path to rerootFromAppDir. Absolute values hit this too.
   describe('with the data root inside the application directory', () => {
     const appDir = path.join(__dirname, '..');
     let inside;
@@ -132,10 +124,7 @@ describe('KIKO_DATA_DIR', () => {
       }
     });
 
-    // The behaviour rerootFromAppDir exists for must survive: a folder pinned
-    // in the app directory by a run from before KIKO_DATA_DIR was set still
-    // moves onto the data root, or a container upgrade silently leaves the
-    // covers and the database behind.
+    // What rerootFromAppDir exists for, still working.
     it('still re-roots a legacy path pinned in the app directory', () => {
       const legacy = path.join(appDir, 'covers');
       const configDir = path.join(inside, 'config');

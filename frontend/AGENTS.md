@@ -644,37 +644,31 @@ Downloaded playback needs the same field carried through three more places, sinc
 
 ### Transcribing a work's audio
 
-**Reached from the same place as the title editor** — a button in
-`EditMetadata.vue`, so the work page grows no permanent control — and rendered
-only when `GET /api/config/shared` reports `asrConfigured` (a boolean; the ASR
-settings are env-only server-side, exactly like `llmConfigured`).
+A button in `EditMetadata.vue`, rendered only when `GET /api/config/shared`
+reports `asrConfigured` (a boolean; the ASR settings are env-only server-side,
+like `llmConfigured`).
 
-`TranscribeTracks.vue` fetches its own tree from `GET /api/tracks/:id` and lists
-every audio node as a **selectable** row — checkbox plus status icon, with a
-tri-state select-all above — then drives the run over **Socket.IO**:
-`TRANSCRIBE_WORK {workId, relPaths}` to start, `TRANSCRIBE_CANCEL` to stop, with
-`TRANSCRIBE_PROGRESS` arriving per track and matched to a row by `relPath`.
-Not a request — a work runs minutes to hours. The socket connects lazily on
-first use for the same admin-handshake reason as `EditTrackTitles.vue`, and
-every reply echoes `workId` so one socket can carry several dialogs.
+`TranscribeTracks.vue` fetches its own tree from `GET /api/tracks/:id` and
+lists every audio node as a selectable row — checkbox plus status icon, with a
+tri-state select-all and an optional query-string field above — then drives the
+run over **Socket.IO**: `TRANSCRIBE_WORK {workId, relPaths, query}` to start,
+`TRANSCRIBE_CANCEL` to stop, with `TRANSCRIBE_PROGRESS` arriving per track and
+matched to a row by `relPath`. Not a request — a work runs minutes to hours.
+The socket connects lazily on first use, as in `EditTrackTitles.vue`, and every
+reply echoes `workId`.
 
-Everything is selected on load, which is what the button did before selection
-existed; the server still skips tracks that already have a subtitle, so the
-default costs nothing on a partly-done work. Selection is what makes retrying a
-single failed track possible without re-running the whole work — a real
-consideration when one track is an hour of GPU time. Rows and checkboxes are
-disabled while a run is going, since the server has already been told what to
-do.
+Everything is selected on load; the server skips tracks that already have a
+subtitle. Rows are disabled while a run is going, and a `disconnect` clears the
+spinner — the server aborts on disconnect too.
 
-The dialog is `persistent` while a run is going, and a `disconnect` clears the
-spinner — the server aborts the run on disconnect too, so the two agree.
+The query field is sent raw and escaped server-side (`backend/AGENTS.md`
+§2.9d), so hotwords can be typed in Japanese directly. Blank means the server's
+configured value, which is never sent to the browser.
 
-> **`TRANSCRIBE_RESULT` carries an `overlay` count, and it is worth surfacing.**
-> The server writes each subtitle next to its audio when the library will take
-> it and into its own `lyrics/` folder when it will not (`backend/AGENTS.md`
-> §2.9d). Since the whole point of writing beside the audio is that the file is
-> findable for a typo fix, a fallback changes that answer and the dialog says so
-> rather than reporting a plain success.
+> **`TRANSCRIBE_RESULT` carries an `overlay` count**, the number of subtitles
+> that went to the server's `lyrics/` folder because the library folder would
+> not take them. The dialog surfaces it: the point of writing beside the audio
+> is that the file is findable for a typo fix.
 
 ## 6. API Contract (Consumed from Backend)
 
