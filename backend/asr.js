@@ -55,11 +55,6 @@ const isAsrConfigured = () => Boolean(process.env.KIKO_ASR_BASE_URL);
 /**
  * Fold a per-run query string onto the configured one, key by key, so adding
  * `hotwords` for one work keeps `format=vtt`. A key in the override wins.
- *
- * URLSearchParams also does the escaping, which is what makes this safe to
- * accept from a human: non-ASCII becomes percent-escapes (`hotwords=柚姫` is
- * typed literally) and `#` becomes %23 instead of truncating the query into a
- * fragment. `&` and `=` stay structural. url.search does not re-encode it.
  */
 const mergeQuery = (configured, override) => {
   if (!override) return configured;

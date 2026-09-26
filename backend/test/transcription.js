@@ -117,8 +117,8 @@ describe('ASR client', () => {
     };
 
     it('keeps the configured keys alongside the new one', async () => {
-      await sent('hotwords=柚姫,父さま',
-        'format=vtt&hotwords=%E6%9F%9A%E5%A7%AB%2C%E7%88%B6%E3%81%95%E3%81%BE');
+      await sent('hotwords=神奈,朝',
+        'format=vtt&hotwords=%E7%A5%9E%E5%A5%88%2C%E6%9C%9D');
     });
 
     it('lets an overridden key win outright', async () => {
