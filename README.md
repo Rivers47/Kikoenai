@@ -43,12 +43,25 @@ kikoenai/
 Download the zip from the release page.  Double click `Kikoenai.bat`. Put your works in `VoiceWork\`.
 When upgrading, copy the exe to the old folder.
 
+### First Login
+
+On first run, a default administrator account is created: username `admin`,
+password `admin`. 
+
+### Library Organization
+
+First add a library in Settings -> Library -> Add new folder. Than go to Scan -> Scan For New Works.
+
+The server scans for folder names containing `RJxxxxxxx` for DLsite works; 
+or `d_xxxxxx` or `dxxxxxx` for Fanza(DMM) works.
+You can configure the search depth in settings.
+
 ### Container
 
 An OCI container image is built at [here](https://github.com/Rivers47/Kikoenai/pkgs/container/kikoenai)
 
-All persistent data — `config/`, `sqlite/`, `covers/`, `images/` — lives under
-`/appdata`, so one volume holds everything:
+All persistent data lives under
+`/appdata`, mount it to a volume or a persistent path.
 
 ```
 podman run \
@@ -88,15 +101,9 @@ Edit `/path/to/your/voiceworks` to your folder that contains the voice work file
 The server will be up on port `4545` on the host.
 
 
-### Library Organization
-
-The server scans for folder names containing `RJxxxxxxx` for DLsite works; 
-or `d_xxxxxx` or `dxxxxxx` for Fanza(DMM) works.
-You can configure the search depth in settings.
-
 #### Firefox LNA issue
 Due to a bug in Firefox. If you use a local DNS with a public looking hostname
-that points at a LAN IP, axio could occur. The frontend will silently retry to
+that points at a LAN IP, axio error could occur. The frontend will silently retry to
 fix it. Or you can add the domain to `network.lna.skip-domains` in `about:config`
 
 ### Change base URL
@@ -122,11 +129,6 @@ In Caddy, use `handle`, not `handle_path`.
 If you change the config, restart the server,
 and you might need to unregister the service worker
 in browser, or just reinstall the app.
-
-### First Login
-
-On first run, a default administrator account is created: username `admin`,
-password `admin`. 
 
 ### Advanced configuration
 
