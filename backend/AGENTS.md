@@ -495,7 +495,14 @@ merge time, since `rel_path` is the primary key.
 **Driven over Socket.IO** (§7): a work runs minutes to hours. One track at a
 time — the reference server transcribes serially and returns `503` past its
 queue depth. A track with a sidecar is skipped, a silent track writes nothing,
-and the run re-indexes once at the end. `transcribeWork` takes an optional
+and the run re-indexes once at the end.
+
+`overwrite` (off by default, so a re-run costs nothing for tracks already done)
+transcribes those tracks anyway; the write then replaces whatever is at that
+path. It is the only way to replace an overlay file, which lives under the data
+root out of the user's reach. `writeSidecar` refuses when the work folder
+already holds that sidecar and cannot be written to — the existing copy would
+shadow anything put in the overlay, so the write would be a silent no-op. `transcribeWork` takes an optional
 `dbApi`, as in `filesystem/workFiles.js`.
 
 Covered by `test/transcription.js`, which uses undici's `MockAgent` so the

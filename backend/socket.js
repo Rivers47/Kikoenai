@@ -152,6 +152,7 @@ const initSocket = (server) => {
       try {
         const result = await transcribeWork(workId, {
           only: payload && payload.relPaths,
+          overwrite: Boolean(payload && payload.overwrite),
           // Goes in the URL's query component only; asr.js escapes it.
           query: typeof (payload && payload.query) === 'string'
             ? payload.query.slice(0, 2048)

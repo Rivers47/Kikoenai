@@ -19,6 +19,12 @@
               :hint="$t('transcribetracks.queryHint')"
               class="q-mb-sm"
             />
+            <q-checkbox
+              v-model="overwrite"
+              dense
+              :disable="running"
+              :label="$t('transcribetracks.overwrite')"
+            />
           </q-expansion-item>
         </q-card-section>
 
@@ -130,6 +136,7 @@ export default {
       // Blank means the server's configured value, which is never sent to
       // the browser -- publicConfig exposes a boolean alone.
       query: '',
+      overwrite: false,
       note: ''
     }
   },
@@ -245,7 +252,8 @@ export default {
             workId: this.metadata.id,
             relPaths: this.selected,
             // Raw; asr.js escapes it, so hotwords can be typed as-is.
-            query: (this.query || '').trim()
+            query: (this.query || '').trim(),
+            overwrite: this.overwrite
           })
         })
         .catch((error) => {

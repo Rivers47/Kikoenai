@@ -403,6 +403,26 @@ describe('writeSidecar', () => {
     expect(fs.readFileSync(path.join(lyricDir, '000001/01 Track.srt'), 'utf8')).to.equal('subtitle');
   });
 
+  // An overlay write would be shadowed by the copy already sitting in the
+  // unwritable work folder, so it must fail rather than look like it worked.
+  it('refuses when an unwritable work folder already holds the sidecar', async function () {
+    fs.writeFileSync(path.join(workDir, '01 Track.srt'), 'theirs');
+    fs.chmodSync(workDir, 0o555);
+    try {
+      fs.writeFileSync(path.join(workDir, '.probe'), 'x');
+      fs.unlinkSync(path.join(workDir, '.probe'));
+      this.skip();
+    } catch { /* good: the folder really is unwritable */ }
+
+    try {
+      await writeSidecar('000001', workDir, track('01 Track.mp3'), '.srt', 'mine');
+      expect.fail('should have thrown');
+    } catch (err) {
+      expect(err.message).to.include('Delete it there');
+    }
+    expect(fs.existsSync(path.join(lyricDir, '000001/01 Track.srt'))).to.equal(false);
+  });
+
   it('leaves no temp file behind', async () => {
     await writeSidecar('000001', workDir, track('01 Track.mp3'), '.srt', 'subtitle');
     expect(fs.readdirSync(workDir)).to.deep.equal(['01 Track.srt']);
@@ -507,6 +527,24 @@ describe('transcribeWork', () => {
 
     const rows = await dbApi.getWorkFiles('000001');
     expect(rows.map(r => r.rel_path).sort()).to.deep.equal(['01.mp3', '01.srt']);
+  });
+
+  describe('overwrite', () => {
+    it('replaces an existing subtitle instead of skipping', async () => {
+      write('01.mp3'); write('01.srt', 'old');
+      reply(1);
+
+      const tally = await transcribeWork('000001', { overwrite: true, dbApi });
+
+      expect(tally).to.include({ written: 1, skipped: 0 });
+      expect(fs.readFileSync(path.join(workDir, '01.srt'), 'utf8')).to.not.equal('old');
+    });
+
+    it('still skips when it is off', async () => {
+      write('01.mp3'); write('01.srt', 'old');
+      const tally = await transcribeWork('000001', { dbApi });
+      expect(tally).to.include({ written: 0, skipped: 1 });
+    });
   });
 
   // A stale dialog naming files a rescan has renamed.

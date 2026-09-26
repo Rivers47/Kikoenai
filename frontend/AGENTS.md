@@ -658,8 +658,10 @@ The socket connects lazily on first use, as in `EditTrackTitles.vue`, and every
 reply echoes `workId`.
 
 Everything is selected on load; the server skips tracks that already have a
-subtitle. Rows are disabled while a run is going, and a `disconnect` clears the
-spinner — the server aborts on disconnect too.
+subtitle unless the Options expander's overwrite box is ticked — the only way
+to replace an overlay file, which lives under the server's data root out of the
+user's reach. Rows are disabled while a run is going, and a `disconnect`
+clears the spinner — the server aborts on disconnect too.
 
 The query field is sent raw and escaped server-side (`backend/AGENTS.md`
 §2.9d), so hotwords can be typed in Japanese directly. Blank means the server's

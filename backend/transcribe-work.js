@@ -44,6 +44,10 @@ async function writeAtomic(filePath, body) {
   }
 }
 
+const sidecarPath = (track, ext) => (
+  [track.subtitle, `${track.title.replace(/\.[^.]+$/, '')}${ext}`].filter(Boolean).join('/')
+);
+
 /**
  * Next to the audio if the library takes it, in the overlay if not. Attempted
  * rather than probed: fs.access(W_OK) is a TOCTOU, and root passes it on a
@@ -52,14 +56,19 @@ async function writeAtomic(filePath, body) {
  * @returns {Promise<{relPath: String, overlay: Boolean}>}
  */
 async function writeSidecar(workId, workDir, track, ext, body) {
-  const stem = track.title.replace(/\.[^.]+$/, '');
-  const relPath = [track.subtitle, `${stem}${ext}`].filter(Boolean).join('/');
+  const relPath = sidecarPath(track, ext);
 
   try {
     await writeAtomic(path.join(workDir, relPath), body);
     return { relPath, overlay: false };
   } catch (err) {
     if (!UNWRITABLE.includes(err.code)) throw err;
+  }
+
+  // A copy in the unwritable work folder would shadow whatever lands in the
+  // overlay (routes/utils/track.js), so the write would be a silent no-op.
+  if (fs.existsSync(path.join(workDir, relPath))) {
+    throw new AsrError(`"${relPath}" already exists in the work folder, which cannot be written to. Delete it there to replace it.`);
   }
 
   await writeAtomic(path.join(overlayDir(workId), relPath), body);
@@ -75,11 +84,13 @@ async function writeSidecar(workId, workDir, track, ext, body) {
  * @param {String[]} [only] relPaths to limit the run to, matched against the
  *   work's listing and never joined onto a path. Empty means all.
  * @param {String} [query] merged onto KIKO_ASR_QUERY for this run
+ * @param {Boolean} [overwrite] transcribe tracks that already have a subtitle.
+ *   Off by default so a re-run costs nothing for the tracks already done.
  * @param {Object} [dbApi] injected database, as in filesystem/workFiles.js
  * @returns {Promise<{written: Number, skipped: Number, failed: Number,
  *   empty: Number, overlay: Number, cancelled: Boolean}>}
  */
-async function transcribeWork(rawWorkId, { onProgress = () => {}, signal, only, query, dbApi = db } = {}) {
+async function transcribeWork(rawWorkId, { onProgress = () => {}, signal, only, query, overwrite = false, dbApi = db } = {}) {
   if (!isAsrConfigured()) {
     throw new AsrError('No transcription server is configured (KIKO_ASR_BASE_URL).');
   }
@@ -125,7 +136,7 @@ async function transcribeWork(rawWorkId, { onProgress = () => {}, signal, only, 
     }
 
     // The listing already holds both the work folder and the overlay.
-    if (findLyricTracks(track, tracks, SIDECAR_EXT).length) {
+    if (!overwrite && findLyricTracks(track, tracks, SIDECAR_EXT).length) {
       tally.skipped += 1;
       onProgress({ relPath: track.shortFilePath, status: 'skipped' });
       continue;
