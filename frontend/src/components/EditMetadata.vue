@@ -223,6 +223,13 @@
           <q-card-actions align="left">
             <q-btn flat :label="$t('common.cancel')" @click="closeDialog()" />
             <q-btn flat icon="edit_note" :label="$t('editmetadata.editTrackTitles')" @click="showTrackTitlesDialog = true" />
+            <q-btn
+              v-if="asrConfigured"
+              flat
+              icon="record_voice_over"
+              :label="$t('editmetadata.transcribe')"
+              @click="showTranscribeDialog = true"
+            />
           </q-card-actions>
           <q-card-actions align="right" class="text-primary">
             <q-btn flat :label="$t('common.save')" :loading="saving" @click="submitEdit()" />
@@ -237,12 +244,20 @@
       @saved="onTrackTitlesSaved"
       @closed="showTrackTitlesDialog = false"
     />
+
+    <TranscribeTracks
+      v-if="showTranscribeDialog"
+      :metadata="metadata"
+      @saved="$emit('saved')"
+      @closed="showTranscribeDialog = false"
+    />
   </div>
 </template>
 
 <script>
 import NotifyMixin from '../mixins/Notification.js'
 import EditTrackTitles from './EditTrackTitles'
+import TranscribeTracks from './TranscribeTracks'
 
 export default {
   name: 'EditMetadata',
@@ -251,6 +266,7 @@ export default {
 
   components: {
     EditTrackTitles,
+    TranscribeTracks,
   },
 
   props: {
@@ -264,6 +280,8 @@ export default {
     return {
       showEditDialog: true,
       showTrackTitlesDialog: false,
+      showTranscribeDialog: false,
+      asrConfigured: false,
       saving: false,
       editable: {
         title: '',
@@ -289,6 +307,14 @@ export default {
   },
 
   mounted() {
+    // A boolean, not the endpoint: the ASR settings are env-only so no URL
+    // or key reaches a browser (backend/asr.js).
+    this.$axios.get('/api/config/shared')
+      .then((response) => {
+        this.asrConfigured = Boolean(response.data.sharedConfig.asrConfigured);
+      })
+      .catch(() => {});
+
     if (this.metadata) {
       this.editable.title = this.metadata.title || '';
       this.editable.nsfw = Boolean(this.metadata.nsfw);

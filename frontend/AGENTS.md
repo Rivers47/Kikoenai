@@ -85,6 +85,7 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 │   │   ├── WorkDetails.vue               # Work detail panel (metadata, review, rating; opens EditMetadata for admins)
 │   │   ├── EditMetadata.vue             # Admin-only metadata edit dialog (PUT /api/work/:id)
 │   │   ├── EditTrackTitles.vue          # Admin-only track-title edit dialog, opened from EditMetadata (PUT /api/work/:id/file-metadata)
+│   │   ├── TranscribeTracks.vue         # Admin-only ASR dialog, opened from EditMetadata (TRANSCRIBE_WORK over Socket.IO)
 │   │   ├── WorkTree.vue                  # Track tree view for a work
 │   │   ├── WorkDescription.vue           # Scraped DLsite description, sanitized markup via v-html (Description tab of Work.vue)
 │   │   ├── WorkGallery.vue               # Work-page cover carousel: cover + scraped images
@@ -280,7 +281,7 @@ MainLayout
 - **REST API:** All data operations via Axios (`/api/*` endpoints). **The frontend stores no credential of any kind.** Auth is a server-side session in an `HttpOnly` cookie (`kikoeru_sid`) that the browser attaches automatically, including to `<audio>`, `<img>`, and download URLs.
 - **Never append `?token=` to an API URL.** That pattern was removed when auth moved to cookies; media and cover URLs are now built bare, e.g. `/api/media/stream/${trackId}` and `/api/cover/${workId}?type=sam`.
 - `<audio crossorigin="anonymous">` in `AudioElement.vue` sets credentials mode `same-origin`, so the cookie *is* sent on same-origin media requests. Do not change this to `use-credentials` without testing playback.
-- **WebSocket (Socket.IO):** Used for real-time scan progress updates. The client connects after auth and **both emits and listens**: it emits `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_WORK_FILE_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`, and listens for `SCAN_MAIN_LOG`, `SCAN_TASK_ADD`, `SCAN_TASK_LOG`, `SCAN_TASK_REMOVE`, `SCAN_FAILED_TASK`, `SCAN_RESULT`, `SCAN_INIT_STATE`, `SCAN_FINISHED`, `SCAN_ERROR` (all handled in `pages/Dashboard/Scanner.vue`). **Scanning is no longer its only use:** `EditTrackTitles.vue` emits `SUGGEST_TRACK_TITLES` and listens for `SUGGEST_TRACK_TITLES_RESULT`/`SUGGEST_TRACK_TITLES_ERROR`, which the server sends back to that socket alone rather than broadcasting. Anything that can outrun a proxy's request timeout belongs here rather than on a route. Payloads are in `backend/AGENTS.md` §7 — keep the two tables in sync.
+- **WebSocket (Socket.IO):** Used for real-time scan progress updates. The client connects after auth and **both emits and listens**: it emits `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_WORK_FILE_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE`, and listens for `SCAN_MAIN_LOG`, `SCAN_TASK_ADD`, `SCAN_TASK_LOG`, `SCAN_TASK_REMOVE`, `SCAN_FAILED_TASK`, `SCAN_RESULT`, `SCAN_INIT_STATE`, `SCAN_FINISHED`, `SCAN_ERROR` (all handled in `pages/Dashboard/Scanner.vue`). **Scanning is no longer its only use:** `EditTrackTitles.vue` emits `SUGGEST_TRACK_TITLES` and listens for `SUGGEST_TRACK_TITLES_RESULT`/`SUGGEST_TRACK_TITLES_ERROR`, and `TranscribeTracks.vue` emits `TRANSCRIBE_WORK`/`TRANSCRIBE_CANCEL` and listens for `TRANSCRIBE_PROGRESS`/`TRANSCRIBE_RESULT`/`TRANSCRIBE_ERROR` — all sent back to that socket alone rather than broadcast. Anything that can outrun a proxy's request timeout belongs here rather than on a route. Payloads are in `backend/AGENTS.md` §7 — keep the two tables in sync.
 - **Seek times are client-side:** `rewindSeekTime` / `forwardSeekTime` are read from `LocalStorage` in `module-AudioPlayer/state.js` (defaults 5s / 30s), not fetched from the server.
 
 ### 2.6b Deploy Path Prefix (`src/base-path.js`)
@@ -641,6 +642,36 @@ Downloaded playback needs the same field carried through three more places, sinc
 >
 > **Both replies echo `workId`** and the handlers drop anything that is not this work's, since one socket carries every dialog's traffic. Listeners are added in `mounted`, removed in `beforeUnmount`; a `disconnect` mid-flight clears the spinner.
 
+### Transcribing a work's audio
+
+A button in `EditMetadata.vue`, rendered only when `GET /api/config/shared`
+reports `asrConfigured` (a boolean; the ASR settings are env-only server-side,
+like `llmConfigured`).
+
+`TranscribeTracks.vue` fetches its own tree from `GET /api/tracks/:id` and
+lists every audio node as a selectable row — checkbox plus status icon, with a
+tri-state select-all and an optional query-string field above — then drives the
+run over **Socket.IO**: `TRANSCRIBE_WORK {workId, relPaths, query}` to start,
+`TRANSCRIBE_CANCEL` to stop, with `TRANSCRIBE_PROGRESS` arriving per track and
+matched to a row by `relPath`. Not a request — a work runs minutes to hours.
+The socket connects lazily on first use, as in `EditTrackTitles.vue`, and every
+reply echoes `workId`.
+
+Everything is selected on load; the server skips tracks that already have a
+subtitle unless the Options expander's overwrite box is ticked — the only way
+to replace an overlay file, which lives under the server's data root out of the
+user's reach. Rows are disabled while a run is going, and a `disconnect`
+clears the spinner — the server aborts on disconnect too.
+
+The query field is sent raw and escaped server-side (`backend/AGENTS.md`
+§2.9d), so hotwords can be typed in Japanese directly. Blank means the server's
+configured value, which is never sent to the browser.
+
+> **`TRANSCRIBE_RESULT` carries an `overlay` count**, the number of subtitles
+> that went to the server's `lyrics/` folder because the library folder would
+> not take them. The dialog surfaces it: the point of writing beside the audio
+> is that the file is findable for a typo fix.
+
 ## 6. API Contract (Consumed from Backend)
 
 | Endpoint | Method | Used In | Purpose |
@@ -672,7 +703,7 @@ Downloaded playback needs the same field carried through three more places, sinc
 | `/api/credentials/users` | GET/POST/PUT/DELETE | `UserManage.vue` | List / create / update / delete users (admin). Was `/user` for the three write verbs |
 | `/api/refresh/:id` | POST | `WorkDetails.vue` | Re-fetch metadata for one work |
 | `/api/scan/:id` | POST | `WorkDetails.vue` | Re-walk one work and rewrite its file listing. Returns `{files}`, the re-listed track count — `WorkDetails.scanWorkFile` reloads the page when it is a number. Was `{memo}`, which no longer exists |
-| `/api/tracks/:id` | GET | `EditTrackTitles.vue` | Also read here, to list a work's audio files for the title editor (`trackProgress` ignored) |
+| `/api/tracks/:id` | GET | `EditTrackTitles.vue`, `TranscribeTracks.vue` | Also read here, to list a work's audio files for the title editor and the transcription dialog (`trackProgress` ignored) |
 | `/api/work/:id/file-metadata` | PUT | `EditTrackTitles.vue` | Set editable fields on a work's `t_work_file` rows (admin only). Body `{files: {<relPath>: {trackTitle}}}` — only the rows being changed; an empty title clears back to the filename. Returns `{message, updated}`, the row count actually written |
 | `/api/work/:id` | PUT | `EditMetadata.vue` | Manually edit work metadata (admin only). Work id is a string: DLsite doujin RJ-padded (`\d{6,8}`), DLsite books (`BJ\d{6,8}`, prefix kept) or Fanza (`d\d+`, underscore-free). `src/utils.js` mirrors backend `work-id.js`: `isFanzaId`/`isBooksId`/`fanzaCid`, plus `workno` (the code as its store spells it — use it for any `RJ`/`BJ` prefix in a template) and `dlsiteWorkUrl` (books works link to the `/books/` floor, doujin to `/home/`). |
 | `/api/illustrators` | GET | `EditMetadata.vue` | List illustrators (autocomplete) |

@@ -530,6 +530,7 @@ function formatID(id) {
 
 module.exports = {
   supportedMediaExtList,
+  supportedSubtitleExtList,
   getTrackList,
   toTree,
   getFolderList,

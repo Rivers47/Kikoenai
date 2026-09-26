@@ -2,10 +2,35 @@
  * A work's file listing, read from the database rather than the disk.
  */
 
+const fs = require('fs');
 const path = require('path');
 const { orderBy } = require('natural-orderby');
 const db = require('../database/db');
+const { config } = require('../config');
 const { getTrackList, probeAudioDurations, supportedMediaExtList } = require('./utils');
+
+/**
+ * Generated subtitles that could not be written next to the audio. Mirrors the
+ * work folder's layout, so one relPath addresses a file in either place.
+ */
+const overlayDir = (workId) => path.join(config.lyricFolderDir, String(workId));
+
+/**
+ * Fold the overlay into a walk of the work folder, at index time rather than
+ * per request -- t_work_file exists so serving a work walks no directory. The
+ * only reader that knows the overlay exists is routes/utils/track.js.
+ *
+ * A file in both places collapses to the library's copy: rel_path is the
+ * primary key, and a hand-made sidecar should beat a generated one.
+ */
+const mergeOverlay = async (workId, walked) => {
+  const dir = overlayDir(workId);
+  if (!fs.existsSync(dir)) return walked;
+
+  const overlaid = await getTrackList(workId, dir);
+  const inLibrary = new Set(walked.map((track) => track.shortFilePath));
+  return walked.concat(overlaid.filter((track) => !inLibrary.has(track.shortFilePath)));
+};
 
 /**
  * Shape stored rows exactly the way getTrackList shapes a walk, including the
@@ -49,7 +74,7 @@ const shapeRows = (workId, workDir, rows) => {
  * @returns {Promise<Array>} the shaped track list, as listWorkTracks returns.
  */
 async function indexWorkFiles (workId, workDir, tracks, dbApi = db) {
-  const walked = tracks || await getTrackList(workId, workDir);
+  const walked = await mergeOverlay(workId, tracks || await getTrackList(workId, workDir));
   const existing = await dbApi.getWorkFiles(workId);
   const byRelPath = new Map(existing.map((row) => [row.rel_path, row]));
 
@@ -101,4 +126,4 @@ async function rescanWorkFiles (workId, workDir, dbApi = db) {
   return indexWorkFiles(workId, workDir, tracks, dbApi);
 }
 
-module.exports = { listWorkTracks, indexWorkFiles, rescanWorkFiles, shapeRows };
+module.exports = { listWorkTracks, indexWorkFiles, rescanWorkFiles, shapeRows, overlayDir };

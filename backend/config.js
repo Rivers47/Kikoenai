@@ -3,13 +3,20 @@ const path = require('path');
 const crypto = require('crypto');
 
 const appDir = __dirname;
-const dataRoot = process.env.KIKO_DATA_DIR || appDir;
+
+// path.resolve, never the raw value: a relative KIKO_DATA_DIR leaves every
+// derived path relative, which res.sendFile rejects and which resolveDataFolder
+// re-joins onto dataRoot on every startup (`data/data/covers`, then deeper,
+// since setConfig persists each round). The base is process.cwd().
+const dataRoot = path.resolve(process.env.KIKO_DATA_DIR || appDir);
+if (process.env.KIKO_DATA_DIR && !path.isAbsolute(process.env.KIKO_DATA_DIR)) {
+  console.log(`KIKO_DATA_DIR is relative, resolved to: ${dataRoot}`);
+}
 
 if (process.env.IS_DOCKER && dataRoot !== appDir) {
   const legacyDb = path.join(appDir, 'sqlite', 'db.sqlite3');
   const currentDb = path.join(dataRoot, 'sqlite', 'db.sqlite3');
   if (fs.existsSync(legacyDb) && !fs.existsSync(currentDb)) {
-    console.warn(` !!! 检测到旧版数据目录: ${legacyDb} 存在，但当前数据目录 ${dataRoot} 为空。`);
     console.warn(` !!! Found a database at ${legacyDb}, but the current data root ${dataRoot} is empty.`);
     console.warn(` !!! Either mount your data into ${dataRoot} (config/ sqlite/ covers/ images/),`);
     console.warn(` !!! or set KIKO_DATA_DIR=${appDir} to keep the previous layout. See README.md.`);
@@ -89,6 +96,9 @@ const defaultConfig = {
   transcodeMaxConcurrent: 1,
   transcodeCacheDir: path.join(dataRoot, 'transcodes'),
   transcodeUseDefaultPath: false, // Ignores transcodeCacheDir if set to true
+  // Generated subtitles the library folder would not take (transcribe-work.js).
+  lyricFolderDir: path.join(dataRoot, 'lyrics'),
+  lyricUseDefaultPath: false, // Ignores lyricFolderDir if set to true
 };
 const initConfig = (writeConfigToFile = !process.env.FREEZE_CONFIG_FILE) => {
   config = Object.assign(config, defaultConfig);
@@ -114,18 +124,29 @@ const setConfig = (newConfig, writeConfigToFile = !process.env.FREEZE_CONFIG_FIL
   }
 };
 
+// True when `dir` is at or below `base`. An absolute result means another
+// Windows drive.
+const isWithin = (base, dir) => {
+  const relative = path.relative(base, dir);
+  return !relative.startsWith('..') && !path.isAbsolute(relative);
+};
+
 // Re-root a data folder that an earlier run pinned inside the application
 // directory.
 const rerootFromAppDir = (dir) => {
   if (dataRoot === appDir) return dir;
 
+  // Checked FIRST, or a data root inside the app directory never settles:
+  // `<appDir>/data/covers` looks like a legacy app-dir path to the test below,
+  // gets re-rooted to `<appDir>/data/data/covers`, and nests one level deeper
+  // on every startup because setConfig persists it.
+  if (isWithin(dataRoot, dir)) return dir;
+
   const relative = path.relative(appDir, dir);
-  // '..' prefix or an absolute result (another Windows drive) means the path
-  // is not inside the app directory.
-  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return dir;
+  if (!relative || !isWithin(appDir, dir)) return dir;
 
   const rerooted = path.join(dataRoot, relative);
-  console.log(`数据目录已迁移: ${dir} -> ${rerooted}`);
+  console.log(`Data folder re-rooted: ${dir} -> ${rerooted}`);
   return rerooted;
 };
 
@@ -153,6 +174,7 @@ const resolveDataFolders = () => {
   config.imageFolderDir = resolveDataFolder(config.imageFolderDir, 'images', config.imageUseDefaultPath);
   config.databaseFolderDir = resolveDataFolder(config.databaseFolderDir, 'sqlite', config.dbUseDefaultPath);
   config.transcodeCacheDir = resolveDataFolder(config.transcodeCacheDir, 'transcodes', config.transcodeUseDefaultPath);
+  config.lyricFolderDir = resolveDataFolder(config.lyricFolderDir, 'lyrics', config.lyricUseDefaultPath);
 };
 
 /**
@@ -181,7 +203,7 @@ const readConfig = () => {
   // Ignored, not dropped.
   const unknownKeys = Object.keys(config).filter(key => !(key in defaultConfig));
   if (unknownKeys.length) {
-    console.log('配置项未被使用，已忽略:', unknownKeys.join(', '));
+    console.log('Unused config keys, ignored:', unknownKeys.join(', '));
   }
 
   // Data folder paths: relative to dataRoot, or absolute, or forced to the
@@ -200,15 +222,15 @@ const updateConfig = (writeConfigToFile = !process.env.FREEZE_CONFIG_FILE) => {
   let countChanged = 0;
   for (let key in defaultConfig) {
     if (!cfg.hasOwnProperty(key)) {
-      console.log('写入设置', key);
+      console.log('Adding missing config key:', key);
       cfg[key] = defaultConfig[key];
       countChanged += 1;
     }
   }
 
   if (compareVersions.compare(cfg.version, versionDbRelativePath, '<')) {
-    console.log('数据库位置已设置为程序目录下的sqlite文件夹');
-    console.log('如需指定其它位置，请阅读0.6.0-rc.0更新说明');
+    console.log('The database location is now the sqlite folder under the data root.');
+    console.log('To put it elsewhere, see the 0.6.0-rc.0 release notes.');
   }
 
 
@@ -234,12 +256,17 @@ class publicConfig {
   get llmConfigured() {
     return Boolean(process.env.KIKO_LLM_BASE_URL && process.env.KIKO_LLM_MODEL);
   }
+  // A boolean only, so no endpoint or key reaches a browser (see asr.js).
+  get asrConfigured() {
+    return Boolean(process.env.KIKO_ASR_BASE_URL);
+  }
   export() {
     return {
       rewindSeekTime: this.rewindSeekTime,
       forwardSeekTime: this.forwardSeekTime,
       enableTranscoding: this.enableTranscoding,
       llmConfigured: this.llmConfigured,
+      asrConfigured: this.asrConfigured,
     };
   }
 }
@@ -253,7 +280,7 @@ if (!fs.existsSync(configPath)) {
     try {
       fs.mkdirSync(configFolderDir, { recursive: true });
     } catch(err) {
-      console.error(` ! 在创建存放配置文件的文件夹时出错: ${err.message}`);
+      console.error(` ! Failed to create the config folder: ${err.message}`);
     }
   }
   const writeConfigToFile = !process.env.FREEZE_CONFIG_FILE;

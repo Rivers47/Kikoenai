@@ -1,10 +1,11 @@
 const path = require('path');
 const socket = require('socket.io');
 const cookie = require('cookie');
-const child_process = require('child_process'); // 子进程
+const child_process = require('child_process');
 const { config } = require('./config');
 const { SESSION_COOKIE, getSession } = require('./auth/session');
 const { suggestTrackTitles, SuggestError } = require('./suggest-track-titles');
+const { transcribeWork, AsrError } = require('./transcribe-work');
 
 const initSocket = (server) => {
   const io = socket(server, { path: `${config.basePath}/socket.io` });
@@ -16,24 +17,24 @@ const initSocket = (server) => {
       const secret = cookies[SESSION_COOKIE];
 
       if (!secret) {
-        return next(new Error('未登录'));
+        return next(new Error('Not logged in'));
       }
 
       getSession(secret)
         .then((user) => {
           if (!user) {
-            return next(new Error('认证失败: 登录状态已失效'));
+            return next(new Error('Authentication failed: the session has expired'));
           }
 
           if (user.name !== 'admin') {
-            return next(new Error('只有 admin 账号能登录管理后台.'));
+            return next(new Error('Only the admin account can open the dashboard.'));
           }
 
-          // 兼容代码中 socket.request.user 的引用
+          // Kept for the code that reads socket.request.user
           socket.request.user = user;
           next();
         })
-        .catch((err) => next(new Error('认证失败: ' + err.message)));
+        .catch((err) => next(new Error('Authentication failed: ' + err.message)));
     });
   }
 
@@ -44,7 +45,7 @@ const initSocket = (server) => {
     if (scanner) return; // one at a time; see backend/AGENTS.md §3
 
     lastScanEvent = null;
-    scanner = child_process.fork(path.join(__dirname, script), args, { silent: false }); // 子进程
+    scanner = child_process.fork(path.join(__dirname, script), args, { silent: false });
 
     scanner.on('exit', (code) => {
       scanner = null;
@@ -54,7 +55,7 @@ const initSocket = (server) => {
       } else if (!lastScanEvent) {
         // A clean exit whose SCAN_FINISHED never made it out (see LOG.finish in
         // scannerModules.js). The page still has to leave 'running'.
-        lastScanEvent = { event: 'SCAN_FINISHED', payload: { message: '扫描进程已结束.' } };
+        lastScanEvent = { event: 'SCAN_FINISHED', payload: { message: 'The scan process has ended.' } };
         io.emit(lastScanEvent.event, lastScanEvent.payload);
       }
     });
@@ -67,11 +68,11 @@ const initSocket = (server) => {
     });
   };
 
-  // 有新的客户端连接时触发
+  // Fired when a new client connects
   io.on('connection', function (socket) {
     // console.log('connection');
     socket.emit('success', {
-      message: '成功登录管理后台.',
+      message: 'Connected to the dashboard.',
       user: socket.request.user,
       auth: config.auth
     });
@@ -83,7 +84,7 @@ const initSocket = (server) => {
     // Sent on mount *and* on every reconnect, so this is the resync point.
     socket.on('ON_SCANNER_PAGE', () => {
       if (scanner) {
-        // 防止用户在扫描过程中刷新页面
+        // Covers the user refreshing the page mid-scan
         scanner.send({
           emit: 'SCAN_INIT_STATE'
         });
@@ -105,7 +106,7 @@ const initSocket = (server) => {
       if (scanner) {
         scanner.send({ exit: 1 });
       } else {
-        socket.emit('SCAN_FINISHED', { message: '扫描进程已结束.' });
+        socket.emit('SCAN_FINISHED', { message: 'The scan process has ended.' });
       }
     });
 
@@ -133,7 +134,51 @@ const initSocket = (server) => {
       }
     });
 
-    // 发生错误时触发
+    // Transcribe one work's audio (transcribe-work.js). Per-socket like
+    // SUGGEST_TRACK_TITLES, with `workId` echoed so a dialog can ignore a
+    // reply for a work it has moved off. One run per socket; the controller
+    // doubles as the "already running" flag.
+    let transcribing = null;
+
+    socket.on('TRANSCRIBE_WORK', async (payload) => {
+      const workId = payload && payload.workId;
+
+      if (transcribing) {
+        socket.emit('TRANSCRIBE_ERROR', { workId, error: 'A transcription run is already in progress.' });
+        return;
+      }
+
+      transcribing = new AbortController();
+      try {
+        const result = await transcribeWork(workId, {
+          only: payload && payload.relPaths,
+          overwrite: Boolean(payload && payload.overwrite),
+          // Goes in the URL's query component only; asr.js escapes it.
+          query: typeof (payload && payload.query) === 'string'
+            ? payload.query.slice(0, 2048)
+            : undefined,
+          signal: transcribing.signal,
+          onProgress: (progress) => socket.emit('TRANSCRIBE_PROGRESS', { workId, ...progress }),
+        });
+        socket.emit('TRANSCRIBE_RESULT', { workId, ...result });
+      } catch (err) {
+        if (!(err instanceof AsrError)) console.error(err);
+        socket.emit('TRANSCRIBE_ERROR', { workId, error: err.message });
+      } finally {
+        transcribing = null;
+      }
+    });
+
+    socket.on('TRANSCRIBE_CANCEL', () => {
+      if (transcribing) transcribing.abort();
+    });
+
+    // Closing the page ends the run; the loop indexes what it wrote.
+    socket.on('disconnect', () => {
+      if (transcribing) transcribing.abort();
+    });
+
+    // Fired on a socket error
     socket.on('error', (err) => {
       console.error(err);
     });

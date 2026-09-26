@@ -17,4 +17,5 @@ export default {
   noSeriesMatch: '該当するシリーズがありません',
   saveSuccess: 'メタデータを更新しました',
   editTrackTitles: 'トラック名を編集',
+  transcribe: '文字起こし',
 }

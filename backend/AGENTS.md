@@ -60,6 +60,8 @@
 ├── sqlite/
 │   └── db.sqlite3           # SQLite database file
 ├── static/                  # Static assets
+├── asr.js                   # ASR server client: env config, upload, Content-Type -> extension
+├── transcribe-work.js       # Transcribe one work: skip/write/fallback/re-index (TRANSCRIBE_WORK)
 ├── work-id.js               # Work-id helpers: isFanzaId / isBooksId / canonicalizeWorkId / fanzaCid / workno
 ├── api.js                   # API setup: session middleware + route mounting
 ├── app.js                   # Entry point: Express app, HTTP/HTTPS, Socket.IO
@@ -172,15 +174,18 @@ value     := '"' anything '"' | bare       # bare: '_' stands for a space
 - `setConfig()` merges new values but **protects** these fields: `production`, `md5secret`, `jwtsecret` (cannot be changed at runtime).
 - `updateConfig()` adds missing keys with defaults on version upgrades.
 - `publicConfig` class exposes a subset to the frontend (e.g., `rewindSeekTime`, `forwardSeekTime`).
+- `lyricFolderDir` (default `lyrics/`) holds generated subtitles that could not be written next to the audio — see §2.9d. Same resolution rules as the folders below; empty on a writable library.
 - `imageFolderDir` (default `images/`) holds scraped sample/description images, separate from `coverFolderDir`. It gets the same treatment as the cover path: relative values resolve against `dataRoot`, and `imageUseDefaultPath: true` forces `dataRoot/images`. Deployments that mount `covers/` as a volume should mount `images/` too.
 
-**Data root and the four data folders.** All persistent state lives in `config/`, `sqlite/`, `covers/`, `images/`, each hanging off `dataRoot`. `dataRoot` is `KIKO_DATA_DIR || __dirname`. The **container image sets `KIKO_DATA_DIR=/data`** so one volume covers everything; the fallback (`__dirname`, the application directory) cannot take a single volume without shadowing `app.js`, `node_modules/` and `dist/`. `scripts/launchers/Kikoenai.bat` sets it to the archive root for the Windows portable build. `-e KIKO_DATA_DIR=/usr/src/kikoeru` restores the pre-`/data` container layout exactly. See `Containerfile` and `README.md`.
+**Data root and the four data folders.** All persistent state lives in `config/`, `sqlite/`, `covers/`, `images/`, each hanging off `dataRoot`. `dataRoot` is `path.resolve(KIKO_DATA_DIR || __dirname)`. The **container image sets `KIKO_DATA_DIR=/data`** so one volume covers everything; the fallback (`__dirname`, the application directory) cannot take a single volume without shadowing `app.js`, `node_modules/` and `dist/`. `scripts/launchers/Kikoenai.bat` sets it to the archive root for the Windows portable build. `-e KIKO_DATA_DIR=/usr/src/kikoeru` restores the pre-`/data` container layout exactly. See `Containerfile` and `README.md`.
 
+- **`path.resolve` on the data root is load-bearing.** A relative `KIKO_DATA_DIR` leaves every derived path relative, which `res.sendFile` rejects and which `resolveDataFolder` re-joins onto `dataRoot` on every startup, nesting without bound. The base for a relative value is `process.cwd()` — `backend/` under `npm run dev` — and a notice is logged.
 - The three configurable folders resolve through **`resolveDataFolder(dir, defaultName, useDefault)`** in `config.js`: `useDefault` wins, then a relative path (joined to `dataRoot`), then an absolute path.
+- **A data root *inside* the application directory** — `KIKO_DATA_DIR=backend/data`, or a test root under `backend/` — makes every *correct* path satisfy the appDir test below, so it gets re-rooted to `<appDir>/data/data/covers` and nests one level deeper per startup, since `setConfig` persists each round. `rerootFromAppDir` therefore returns early when `dir` is already within `dataRoot`; that ordering is the fix. A `config.json` already holding a nested path is not self-healing — delete it. Covered by `test/data-root.js`.
 - **`rerootFromAppDir` is the non-obvious part.** The admin panel saves folder paths as *absolute*, so a `config.json` written before `KIKO_DATA_DIR` was set holds e.g. `/usr/src/kikoeru/covers`. Without re-rooting, setting `KIKO_DATA_DIR` moves only the folders `config.json` does not mention (in practice just the newest key) and silently leaves the covers and database behind — a half-migrated state with no error. So an absolute path *inside the app directory* is re-rooted onto `dataRoot` and logged; a path outside it is a deliberate user choice (big disk, network share) and is left alone.
 - **Never applied to `rootFolders` or `voiceWorkDefaultPath`.** Those are the user's media mounts, not app state; rewriting them would break a working library. The container keeps `VoiceWork` at `/usr/src/kikoeru/VoiceWork` regardless of `KIKO_DATA_DIR`.
 - **The `Containerfile` declares no `VOLUME`, deliberately.** `VOLUME` only does anything when the operator mounts nothing at that path, and then it creates *anonymous* volumes — unnamed, easy to orphan, silently removed by `podman rm -v`, and impossible to undo in a derived image. Explicit mounts are unaffected either way.
-- **Legacy-layout startup warning.** When `IS_DOCKER` is set, `dataRoot !== appDir`, the app directory holds a `sqlite/db.sqlite3` and the current data root does not, `config.js` prints a four-line `!!!` warning naming both paths and both remedies. It is **advisory only** — it changes no behaviour. It exists because the alternative failure mode is silent: an empty data root looks like a fresh install, and a rescan then rebuilds the library without ratings, reviews, progress or play history, none of which scanning can recover.
+- **Legacy-layout startup warning.** When `IS_DOCKER` is set, `dataRoot !== appDir`, the app directory holds a `sqlite/db.sqlite3` and the current data root does not, `config.js` prints a three-line `!!!` warning naming both paths and both remedies. It is **advisory only** — it changes no behaviour. It exists because the alternative failure mode is silent: an empty data root looks like a fresh install, and a rescan then rebuilds the library without ratings, reviews, progress or play history, none of which scanning can recover.
 - **Removed:** the legacy `tagLanguage` config key (was non-functional — scrapers always fetch Japanese). It is no longer in `defaultConfig`; a stale `tagLanguage` left in a pre-existing `config.json` is harmless and ignored. UI language is now per-user in the browser (see `frontend/AGENTS.md` i18n).
 
 ### 2.4b Sub-path Deployment (`base-path.js`, `config.basePath`)
@@ -432,6 +437,77 @@ DO UPDATE SET ... WHERE excluded.updated_at >= t_track_progress.updated_at
 
 Client clock skew is accepted rather than defended against: comparisons are client-to-client, and for the single-device case that is the *same* clock, so ordinary drift cancels out. There is no clamp against a deliberately wrong clock.
 
+### 2.9d Transcription (`asr.js`, `transcribe-work.js`)
+
+An external ASR server turns a work's audio into subtitle sidecars. One
+endpoint is required, `POST <KIKO_ASR_BASE_URL>/transcribe` — audio in,
+subtitle out — so the model behind it is swappable.
+
+**Env only, never `config.json`**, as with the LLM settings (§2.9b): `GET /api/config/admin` strips only `md5secret`/`jwtsecret`.
+
+| Variable | Meaning |
+|----------|---------|
+| `KIKO_ASR_BASE_URL` | e.g. `http://127.0.0.1:8000`. Its presence is what `asrConfigured` reports |
+| `KIKO_ASR_QUERY` | query string, appended untouched. Default `format=vtt` |
+| `KIKO_ASR_API_KEY` | optional bearer token |
+| `KIKO_ASR_TIMEOUT_MS` | per track, default 30 min |
+
+**The query string is opaque**, so a server's own knobs stay reachable and the
+app cannot infer the format from it — the **response Content-Type decides the
+extension**: `application/x-subrip`→`.srt`, `text/vtt`→`.vtt`,
+`text/plain`→`.txt`, anything else refused. That check is what stops a
+forgotten `format=` writing JSON into a `.srt`. `.txt` is not a lyric extension
+(§2.8b), and the reference server sends `text/plain` for both `format=lrc` and
+`format=txt`, so the header cannot say which arrived.
+
+`TRANSCRIBE_WORK` may carry `relPaths` (limits the run; matched against the
+work's listing, never joined onto a path) and `query`, which `mergeQuery` folds
+onto `KIKO_ASR_QUERY` **key by key** — `hotwords` is per-work by nature, and
+replacing would drop `format=vtt` with it. `URLSearchParams` does the escaping
+and the result is assigned to `url.search`, which does not re-encode: non-ASCII
+becomes percent-escapes, and `#` becomes `%23` rather than truncating the query
+into a fragment.
+
+**`undici.request()`, not `fetch()`, and both timers off.** The upload needs a
+`Content-Length` — a stream body goes out chunked otherwise, which the
+reference server rejects, and `fetch()` drops the header as forbidden. The raw
+body carries no filename, so `X-Filename: x.<ext>` names the container.
+`headersTimeout` defaults to 300s and this endpoint sends no headers until the
+whole file is transcribed, so both timers are `0` with
+`AbortSignal.timeout(KIKO_ASR_TIMEOUT_MS)` as the only ceiling — the trap
+`callModel` hit from the other side (§2.9b).
+
+**The library first, an overlay second.** `writeSidecar` attempts the write
+next to the audio and falls back to `config.lyricFolderDir/<workId>/<relPath>`
+on `EROFS`/`EACCES`/`EPERM` — attempted rather than probed, since
+`fs.access(W_OK)` is a TOCTOU and root passes it on a directory it cannot
+write. Both go through a temp file and a rename. The overlay is a sixth data
+folder (§2.4) so a read-only library mount stays supported.
+
+**Reading it back costs nothing per request.** `mergeOverlay` in
+`filesystem/workFiles.js` folds the overlay into the walk at index time, so
+readers see one listing and `findLyricTracks` needs no changes. There is no
+`overlay` column: `trackPath` in `routes/utils/track.js` joins `workDir` first
+and the overlay second, only for a subtitle extension. That ordering is the
+"library copy wins" rule; a file in both places collapses to the library's at
+merge time, since `rel_path` is the primary key.
+
+**Driven over Socket.IO** (§7): a work runs minutes to hours. One track at a
+time — the reference server transcribes serially and returns `503` past its
+queue depth. A track with a sidecar is skipped, a silent track writes nothing,
+and the run re-indexes once at the end.
+
+`overwrite` (off by default, so a re-run costs nothing for tracks already done)
+transcribes those tracks anyway; the write then replaces whatever is at that
+path. It is the only way to replace an overlay file, which lives under the data
+root out of the user's reach. `writeSidecar` refuses when the work folder
+already holds that sidecar and cannot be written to — the existing copy would
+shadow anything put in the overlay, so the write would be a silent no-op. `transcribeWork` takes an optional
+`dbApi`, as in `filesystem/workFiles.js`.
+
+Covered by `test/transcription.js`, which uses undici's `MockAgent` so the
+suite needs no socket.
+
 ### 2.9 Work-Page Extras (description, images, author, reviews)
 
 The DLsite scraper reads more than the `#work_outline` spec table. The description and the images are served by `GET /api/work/:id/extras` and `GET /api/image/:id/:name` and rendered on the work page (`WorkDescription.vue`, `WorkGallery.vue`); **the scraped DLsite reviews and `authors[]` are still unexposed** — scaffolding for later features. Everything below is DLsite-only; `fanza.js` is unchanged and Fanza works get none of it, so a Fanza work shows no description tab.
@@ -534,7 +610,7 @@ Both are non-fatal in the route: `db.updateWorkMetadata` has already committed b
 | `socket.io` | Real-time events (scan progress) |
 | `jschardet` | Text encoding detection for LRC files |
 | `natural-orderby` | Natural sorting of filenames |
-| `undici` | The LLM call only, so both of its 300s timeouts can be switched off — see §2.9b. Everything else uses the global `fetch` or `axios` |
+| `undici` | The LLM call (§2.9b) and the ASR upload (§2.9d), so both of its 300s timeouts can be switched off — and, for the upload, so a `Content-Length` survives beside a stream body. Everything else uses the global `fetch` or `axios` |
 | `compare-versions` | Version comparison for config migration |
 
 ---
@@ -677,7 +753,7 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/config/shared` | GET | Public config subset (seek times, `enableTranscoding`, `llmConfigured`) |
+| `/api/config/shared` | GET | Public config subset (seek times, `enableTranscoding`, `llmConfigured`, `asrConfigured`) |
 | `/api/config/admin` | GET | Full config minus `md5secret`/`jwtsecret` (admin only) |
 | `/api/config/admin` | PUT | Write config; `production`/`md5secret`/`jwtsecret` are never writable (admin only) |
 | `/api/version` | GET | `{current, lockFileExists, lockReason}`. Local only — no GitHub call |
@@ -724,6 +800,7 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
 - **Socket.IO events (scanning):**
   - Client → server: `PERFORM_SCAN`, `PERFORM_UPDATE`, `PERFORM_WORK_FILE_SCAN`, `KILL_SCAN_PROCESS`, `ON_SCANNER_PAGE` (sent on mount **and on every reconnect** — it is the resync point)
   - Client → server, unrelated to scanning: `SUGGEST_TRACK_TITLES` `{workId}` — propose a track list for one work (§2.9b). Per-work and in-process, not a forked child
+  - Client → server, likewise: `TRANSCRIBE_WORK` `{workId}` and `TRANSCRIBE_CANCEL` — transcribe one work's audio (§2.9d). One run per socket; a disconnect aborts it
   - Server → client (relayed from the scanner child process), each carrying one entry:
 
     | Event | Payload |
@@ -744,6 +821,9 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
     |-------|---------|
     | `SUGGEST_TRACK_TITLES_RESULT` | `{workId, titles, trackCount, source, unverified}` |
     | `SUGGEST_TRACK_TITLES_ERROR` | `{workId, error}` |
+    | `TRANSCRIBE_PROGRESS` | `{workId, relPath, status, overlay?, error?}` — one per track, `status` ∈ `running`/`written`/`skipped`/`empty`/`failed` |
+    | `TRANSCRIBE_RESULT` | `{workId, written, skipped, failed, empty, overlay, cancelled}` |
+    | `TRANSCRIBE_ERROR` | `{workId, error}` |
 
   - **Gone:** the plural `SCAN_MAIN_LOGS` / `SCAN_TASKS` / `SCAN_RESULTS` / `SCAN_FAILED_TASKS`, which re-sent the whole accumulated array on every line. See §2.5.
   - Scanning is **not** exposed over REST; there is no `/api/scanner` endpoint.
@@ -789,6 +869,8 @@ The frontend builds directly into `backend/dist/` (configured via `distDir` in `
   - `track-identity.js` — relPath as the one file identity: `trackId` construction, non-ASCII and subdirectory paths, forward-slash normalization, `relPath` on every node type, the legacy positional-index branch, migration `20260912000000`, and `scripts/rekey-track-progress.js` (the only place CRC32 survives)
   - `work-files.js` — `probeAudioDurations`: reuses a known duration on an unchanged mtime, re-probes when the mtime moved, re-probes a known mtime with no duration (the case a naive guard would skip forever), leaves non-audio alone, and keeps what was known when a file vanishes mid-scan. Also asserts `getTrackList` is a pure walker with no duration or trackTitle of its own
   - `history-seconds.js` — `applyTrackProgressSeconds` overriding stale history positions, and the compound `(work_id, track_key)` lookup that keeps two works with an identically named file apart
+  - `data-root.js` — `KIKO_DATA_DIR` resolution in a subprocess: relative becomes absolute, each folder nests its name once, and a restart is a no-op
+  - `transcription.js` — the ASR client (Content-Length, `X-Filename`, query merge and escaping, Content-Type → extension, abort vs timeout) against undici's `MockAgent`; the overlay merge into `t_work_file`; `writeSidecar`'s library-then-overlay fallback; and the `transcribeWork` loop
   - `track-titles.js` — the shared extraction pipeline: `distinctTrackNames`, the verbatim guards, the `htmlToText` sentinel, and `readModelStream`
   - `benchmark.js` — DB query benchmark; Skips if `backend/sqlite/db.sqlite3` is missing/empty;
 - **Run:** `npm test` (sets `NODE_ENV=test`)

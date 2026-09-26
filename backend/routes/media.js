@@ -27,9 +27,8 @@ router.get('/stream/:id/*path',
     try {
       const resolved = await resolveTrack(req, res);
       if (!resolved) return;
-      const { work, rootFolder, workDir, track } = resolved;
+      const { work, rootFolder, fullPath: fileName, track } = resolved;
 
-      const fileName = path.join(workDir, track.subtitle || '', track.title);
       const extName = path.extname(fileName).toLocaleLowerCase();
       if (extName === '.txt' || extName === '.lrc') {
         const fileBuffer = fs.readFileSync(fileName);
@@ -62,13 +61,13 @@ router.get('/download/:id/*path',
     try {
       const resolved = await resolveTrack(req, res);
       if (!resolved) return;
-      const { work, rootFolder, workDir, track } = resolved;
+      const { work, rootFolder, fullPath, track } = resolved;
 
       if (config.offloadMedia) {
         res.redirect(offloadUrlFor(config.offloadDownloadPath, rootFolder, work, track));
       } else {
         // By default, serve file through express
-        res.download(path.join(workDir, track.subtitle || '', track.title));
+        res.download(fullPath);
       }
     } catch (err) {
       next(err);
@@ -84,9 +83,8 @@ router.get('/offline/:id/*path',
     try {
       const resolved = await resolveTrack(req, res);
       if (!resolved) return;
-      const { workDir, track } = resolved;
+      const { fullPath: fileName, track } = resolved;
 
-      const fileName = path.join(workDir, track.subtitle || '', track.title);
       const extName = path.extname(fileName).toLocaleLowerCase();
 
       if (TEXT_EXT_LIST.includes(extName)) {
@@ -105,7 +103,7 @@ router.get('/offline/:id/*path',
       }
 
       if (!config.enableTranscoding) {
-        res.status(503).send({error: '转码功能已禁用'});
+        res.status(503).send({error: 'Transcoding is disabled on this server.'});
         return;
       }
 

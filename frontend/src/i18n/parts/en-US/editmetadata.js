@@ -17,4 +17,5 @@ export default {
   noSeriesMatch: 'No matching series',
   saveSuccess: 'Metadata updated successfully',
   editTrackTitles: 'Edit track titles',
+  transcribe: 'Transcribe',
 }
