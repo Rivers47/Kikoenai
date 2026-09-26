@@ -128,6 +128,10 @@ in browser, or just reinstall the app.
 On first run, a default administrator account is created: username `admin`,
 password `admin`. 
 
+### Advanced configuration
+
+For more advanced usage please see the Github Wiki page
+
 ## Development
 
 ```bash
