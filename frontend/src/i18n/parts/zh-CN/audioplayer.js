@@ -1,6 +1,5 @@
 export default {
   switchTrack: '切换曲目',
-  desktopLyrics: '桌面歌词',
   fullscreen: '网页全屏',
   moreSettings: '更多播放设置',
   openWorkDetail: '打开作品详情（或双击封面）',
@@ -24,5 +23,4 @@ export default {
   remeasureOffset: '重新计量偏移量',
   applyOffset: '应用偏移量 {delta}',
   lyricOffsetApplied: '歌词偏移量({delta}s)已应用',
-  creatingPIPLyrics: '创建桌面歌词组件中，请稍等...',
 }

@@ -182,6 +182,7 @@ export default {
      line; the 2-line clamp is per speaker rather than for the bar as a whole. */
   .lyric-line {
     display: block;
+    white-space: pre-line;
   }
 
   /* Inline rather than on its own row: the name must not cost a line of height,

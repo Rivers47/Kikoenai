@@ -49,22 +49,6 @@
               </q-tooltip>
             </q-btn>
 
-            <!--画中画歌词-->
-            <q-btn 
-              v-if="hasLyric || enablePIPLyrics" 
-              dense 
-              size="md" 
-              padding="none sm"
-              :flat="!enablePIPLyrics"
-              :outline="enablePIPLyrics"
-              icon="picture_in_picture" 
-              @click="setPIPLyrics" 
-            >
-              <q-tooltip anchor="top middle" self="bottom middle">
-                {{ $t('audioplayer.desktopLyrics') }}
-              </q-tooltip>
-            </q-btn>
-
             <!--播放顺序切换-->
             <q-btn 
               flat 
@@ -555,7 +539,6 @@ export default {
       'sleepTracksLeft',
       'rewindSeekTime',
       'forwardSeekTime',
-      'enablePIPLyrics',
       'playWorkId',
       'rewindSeekMode',
       'forwardSeekMode',
@@ -601,7 +584,6 @@ export default {
       setVolume: 'SET_VOLUME',
       rewind: 'SET_REWIND_SEEK_MODE',
       forward: 'SET_FORWARD_SEEK_MODE',
-      setEnablePIPLyrics: 'SET_ENABLE_PIP_LYRICS',
       setLyricOffsetSeconds: 'SET_LYRIC_OFFSET_SECONDS',
     }),
     ...mapMutations('AudioPlayer', [
@@ -643,13 +625,6 @@ export default {
       }
     },
 
-    setPIPLyrics() {
-      if (!this.enablePIPLyrics) {
-        this.$q.notify({message: this.$t('audioplayer.creatingPIPLyrics'), timeout: 500})
-      }
-      this.setEnablePIPLyrics(!this.enablePIPLyrics)
-    },
-    
     isSameTwoHistory(ha, hb) {
       // 如果有任意一个是null，则认为两者不一样
       if (!(ha && hb)) return false;

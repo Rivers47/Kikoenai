@@ -1,6 +1,5 @@
 export default {
   switchTrack: 'Switch track',
-  desktopLyrics: 'Desktop lyrics',
   fullscreen: 'Fullscreen',
   moreSettings: 'More playback settings',
   openWorkDetail: 'Open work details (or double-click cover)',
@@ -24,5 +23,4 @@ export default {
   remeasureOffset: 'Remeasure offset',
   applyOffset: 'Apply offset {delta}',
   lyricOffsetApplied: 'Lyric offset ({delta}s) applied',
-  creatingPIPLyrics: 'Creating desktop lyrics component, please wait...',
 }

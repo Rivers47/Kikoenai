@@ -1,6 +1,5 @@
 export default {
   switchTrack: 'トラックを切り替え',
-  desktopLyrics: 'デスクトップ歌詞',
   fullscreen: '全画面表示',
   moreSettings: 'その他の再生設定',
   openWorkDetail: '作品詳細を開く（カバーをダブルクリック）',
@@ -24,5 +23,4 @@ export default {
   remeasureOffset: 'オフセットを再計測',
   applyOffset: 'オフセットを適用 {delta}',
   lyricOffsetApplied: '歌詞オフセット（{delta}s）を適用しました',
-  creatingPIPLyrics: 'デスクトップ歌詞コンポーネントを作成中、お待ちください...',
 }

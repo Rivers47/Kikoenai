@@ -1,6 +1,6 @@
 import { LocalStorage, SessionStorage } from 'quasar'
 import getters from './getters'
-import state, { SWAP_SEEK_BUTTON_KEY, FLIP_LR_CHANNEL_KEY, ENABLE_PIP_LYRICS, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, AUTO_MARK_LISTENED_KEY, REWIND_SEEK_TIME_KEY, FORWARD_SEEK_TIME_KEY, SLEEP_TIMER_KEY } from './state'
+import state, { SWAP_SEEK_BUTTON_KEY, FLIP_LR_CHANNEL_KEY, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, AUTO_MARK_LISTENED_KEY, REWIND_SEEK_TIME_KEY, FORWARD_SEEK_TIME_KEY, SLEEP_TIMER_KEY } from './state'
 import { apiUrl } from 'src/base-path'
 
 const selectTrack = (state, index, seconds = 0) => {
@@ -224,11 +224,6 @@ const mutations = {
   SET_FLIP_LR_CHANNEL: (state, value) => {
     state.flipLRChannel = value
     LocalStorage.set(FLIP_LR_CHANNEL_KEY, state.flipLRChannel)
-  },
-
-  SET_ENABLE_PIP_LYRICS: (state, value) => {
-    state.enablePIPLyrics = value
-    LocalStorage.set(ENABLE_PIP_LYRICS, state.enablePIPLyrics)
   },
 
   SET_OLD_WORK_CARD_UI_STYLE: (state, value) => {

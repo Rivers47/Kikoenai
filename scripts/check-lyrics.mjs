@@ -12,8 +12,7 @@
 import { createRequire } from 'node:module';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import Lyric from 'lrc-file-parser';
-import { parseSubtitleCues, formatLrcTime } from '../frontend/src/utils/subtitles.js';
+import { parseSubtitleCues, parseLrcCues, formatLrcMs } from '../frontend/src/utils/subtitles.js';
 
 // The discovery rules live in the backend and are CommonJS. Freeze the config
 // file first: requiring them pulls in config.js, which otherwise writes one.
@@ -53,13 +52,6 @@ function trackList(root) {
   });
 }
 
-const cueMs = ([h, m, s, ms]) => h * 3600000 + m * 60000 + s * 1000 + ms;
-
-const timeLabel = (ms) => formatLrcTime([
-  Math.floor(ms / 3600000), Math.floor(ms / 60000) % 60,
-  Math.floor(ms / 1000) % 60, ms % 1000,
-]);
-
 /**
  * Parse one lyric file the way the player will, and report anything that looks
  * like a formatting mistake. The strongest signal is a timestamp line the
@@ -81,15 +73,15 @@ function inspect(file) {
     problems.push('a .vtt file must start with a "WEBVTT" line');
   }
 
-  // LRC never carries a speaker and has no cue timings to cross-check, so it
-  // goes through the real parser only, for a line count.
+  // LRC never carries a speaker and has no end times to cross-check, so it
+  // goes through the parser only, for a line count. A timestamped line with no
+  // text is an end marker rather than a lyric, so it is not counted as one.
   if (file.ext === '.lrc') {
-    const parser = new Lyric({ lyric: raw });
-    if (!parser.lines.length) {
+    const times = parseLrcCues(raw).filter(cue => cue.text !== '').map(cue => cue.start);
+    if (!times.length) {
       problems.push('parsed to zero lines; timestamps must look like "[00:01.00]text"');
       return { problems, streams: [] };
     }
-    const times = parser.lines.map(line => line.time);
     return {
       problems,
       streams: [{
@@ -108,14 +100,15 @@ function inspect(file) {
     .filter(entry => entry.line.includes('-->'));
 
   const { header, cues } = parseSubtitleCues(raw);
-  const parsedTimes = new Set(cues.map(cue => cueMs(cue.time)));
+  const parsedTimes = new Set(cues.map(cue => cue.start));
 
   // A timing line the parser skipped is the usual symptom of a broken file.
   // The parser requires the line before a cue timing to be blank or a cue
   // number, so a missing separator swallows the cue -- including the very
   // first cue of a .vtt that is missing its WEBVTT line.
   for (const entry of timingLines) {
-    const match = /(\d+):(\d+):(\d+)[.,](\d+)\s*-->/.exec(entry.line);
+    // Hours are optional, as in WebVTT's "01:23.456".
+    const match = /(?:(\d+):)?(\d+):(\d+)[.,](\d+)\s*-->/.exec(entry.line);
     if (!match) {
       problems.push(`line ${entry.number}: timestamp not understood -- ${JSON.stringify(entry.line)}`);
       continue;
@@ -123,7 +116,8 @@ function inspect(file) {
     if (/\d+[.,]\d{1,2}\s*-->/.test(entry.line)) {
       problems.push(`line ${entry.number}: fraction must be 3 digits (.500, not .5)`);
     }
-    if (!parsedTimes.has(cueMs(match.slice(1).map(Number)))) {
+    const [h, m, sec, frac] = match.slice(1).map(part => Number(part || 0));
+    if (!parsedTimes.has(h * 3600000 + m * 60000 + sec * 1000 + frac)) {
       problems.push(`line ${entry.number}: cue not read -- the line before it must be blank or a cue number (${JSON.stringify(entry.line)})`);
     }
   }
@@ -138,7 +132,7 @@ function inspect(file) {
   const voices = [];
   cues.forEach(cue => { if (!voices.includes(cue.voice)) voices.push(cue.voice); });
   const streams = voices.map((voice) => {
-    const own = cues.filter(cue => cue.voice === voice).map(cue => cueMs(cue.time));
+    const own = cues.filter(cue => cue.voice === voice).map(cue => cue.start);
     return {
       name: voice || header || null,
       count: own.length,
@@ -211,7 +205,7 @@ function checkFolder(root) {
       for (const stream of streams) {
         const name = stream.name || `${DIM}(unnamed)${RESET}`;
         const cues = `${stream.count} cue${stream.count === 1 ? '' : 's'}`;
-        console.log(`         ${name}  ${cues}  ${timeLabel(stream.first)} - ${timeLabel(stream.last)}`);
+        console.log(`         ${name}  ${cues}  ${formatLrcMs(stream.first)} - ${formatLrcMs(stream.last)}`);
       }
       for (const problem of problems) console.log(`         ${bad(problem)}`);
       failures += problems.length ? 1 : 0;

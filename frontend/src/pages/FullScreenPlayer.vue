@@ -8,7 +8,7 @@
     />
     <div v-if="isInFullScreen" class="simple-progress" :style="progressBarStyle"></div>
     <div class="footer">
-      <LyricsBar v-if="isInFullScreen && !enablePIPLyrics" />
+      <LyricsBar v-if="isInFullScreen" />
     </div>
     <div v-if="isInFullScreen" class="current-playing-info">
       <div class="text-h6 text-weight-bolder non-selectable">
@@ -88,7 +88,6 @@ export default {
       'queueIndex',
       'playWorkId',
       'playing',
-      'enablePIPLyrics',
     ]),
 
     ...mapGetters('AudioPlayer', [

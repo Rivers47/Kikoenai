@@ -24,15 +24,13 @@
 </template>
 
 <script>
-import Lyric from 'lrc-file-parser'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import NotifyMixin from '../mixins/Notification.js'
 import { formatSeconds } from '../utils'
 import { MAX_LYRIC_STREAMS } from 'src/utils/lyrics'
-import { convert_srt_vtt_to_lrc_streams, mergeLyricStreams } from 'src/utils/subtitles'
+import { parseLyricStreams, cueTextAt } from 'src/utils/subtitles'
 import { sendOrQueue } from '../utils/outbox'
 import { savePosition } from '../utils/positions'
-import { debounce } from 'quasar';
 import Plyr from 'plyr'
 import { apiUrl, encodeTrackId } from 'src/base-path'
 
@@ -51,9 +49,6 @@ export default {
 
   data() {
     return {
-      lrcContent: "",
-      // A single parser for all streams at once — see mergeLyricStreams.
-      lrcObj: null,
       plyr: null,
 
       isChangingCurrentTime: false,
@@ -65,10 +60,6 @@ export default {
   },
 
   computed: {
-    lrcAvailable () {
-      return this.lrcObj !== null
-    },
-
     source () {
       const trackId = this.currentPlayingFile.trackId
       if (this.currentPlayingFile.mediaStreamUrl) {
@@ -107,7 +98,6 @@ export default {
       'currentTime',
       'newCurrentTime',
       'lyricOffsetSeconds',
-      'enablePIPLyrics',
       'workLastTrackId',
       'autoMarkListened',
       'flipLRChannel',
@@ -204,34 +194,29 @@ export default {
       this.SET_NEW_CURRENT_TIME(-1);
     },
     lyricOffsetSeconds() {
-      this.playLrc(this.playing);
-    },
-    enablePIPLyrics(enablePIP) {
-      if (enablePIP) {
-        this.playLrc(false)
-      } else {
-        this.playLrc(this.playing)
-      }
+      this.sampleLyrics();
     }
   },
 
   created() {
-    this.debouncedPlayLrc = debounce(this.playLrc, 100, true);
     this._pendingStart = null;
     this._lrcLoadId = 0;
-    this._lyricFrames = [];
+    this._lyricStreams = null;
+    this._lyricFrame = [];
+    this._lyricRaf = null;
   },
 
   methods: {
     formatSeconds,
 
     onPause() {
-      this.playLrc(false)
+      this.stopLyricTicker()
+      this.sampleLyrics()
       this.PAUSE()
     },
     onPlaying() {
       this.resumeAudioContext()
-      this.playLrc(true)
+      this.startLyricTicker()
       this.PLAY()
     },
 
@@ -241,7 +226,7 @@ export default {
       }
     },
     onWaiting() {
-      this.playLrc(false)
+      this.stopLyricTicker()
       this.PLAY()
     },
     ...mapMutations('AudioPlayer', [
@@ -287,7 +272,10 @@ export default {
       if (this._pendingStart === null && this.plyr.media.readyState >= HTMLMediaElement.HAVE_METADATA) {
         this.SET_CURRENT_TIME(this.plyr.currentTime)
       }
-      if (this.enablePIPLyrics) this.debouncedPlayLrc(false)
+      // Also sampled here, not only from the ticker: 'timeupdate' keeps
+      // firing when the tab is hidden or picture-in-picture has the lyrics,
+      // where requestAnimationFrame is throttled to a standstill.
+      this.sampleLyrics()
 
       if (this.sleepMode && this.sleepModeType === 'minutes' && this.sleepStopAt && Date.now() >= this.sleepStopAt) {
         this._stopBySleepTimer()
@@ -517,41 +505,45 @@ export default {
     },
 
     onSeeked() {
-      this.playLrc(this.playing);
+      this.sampleLyrics();
     },
 
-    playLrc (playStatus) {
-      if (!this.lrcAvailable) return;
-      // All speakers ride one parser, so they cannot drift apart under seeking
-      // or the offset slider.
-      this.lrcObj.play((this.plyr.currentTime + this.lyricOffsetSeconds) * 1000);
-      if (!playStatus) this.lrcObj.pause();
+    // Read what every speaker is saying at the playhead and publish it as one
+    // frame, so a line arriving for one speaker never drops the line another
+    // is still holding on screen. Driven by the clock rather than by scheduled
+    // events, which is what makes seeking and the offset slider need no
+    // handling beyond calling this again.
+    sampleLyrics () {
+      if (!this._lyricStreams) return;
+      const timeMs = (this.plyr.currentTime + this.lyricOffsetSeconds) * 1000;
+      const frame = this._lyricStreams.map(stream => cueTextAt(stream.cues, timeMs));
+      if (frame.every((text, index) => text === this._lyricFrame[index])) return;
+      this._lyricFrame = frame;
+      this.SET_CURRENT_LYRICS(frame.slice());
     },
 
-    // Interleave the speakers into one parser and publish a whole frame — every
-    // speaker's current line — on each tick, so a line arriving for one speaker
-    // never drops the line another is still holding on screen. Speaker names
-    // are fixed for the track, so they go out once here, not on every line.
+    startLyricTicker () {
+      if (this._lyricRaf !== null) return;
+      const tick = () => {
+        this._lyricRaf = requestAnimationFrame(tick);
+        this.sampleLyrics();
+      };
+      this._lyricRaf = requestAnimationFrame(tick);
+    },
+
+    stopLyricTicker () {
+      if (this._lyricRaf === null) return;
+      cancelAnimationFrame(this._lyricRaf);
+      this._lyricRaf = null;
+    },
+
     setLyricStreams (streams) {
-      this.stopLrcObj();
-      const { lyric, frames } = mergeLyricStreams(streams, Lyric);
-      this._lyricFrames = frames;
-      this.lrcObj = new Lyric({
-        onPlay: (line, text) => {
-          const frame = this._lyricFrames[parseInt(text, 10)];
-          if (frame) this.SET_CURRENT_LYRICS(frame.slice());
-        },
-      });
-      this.lrcObj.setLyric(lyric);
-      this.lrcContent = streams.map(stream => stream.content).join('\n');
+      this._lyricStreams = streams;
+      this._lyricFrame = streams.map(() => '');
+      // Speaker names are fixed for the track, so they go out once here rather
+      // than on every frame.
       this.SET_LYRIC_SPEAKERS(streams.map(stream => stream.name));
       this.SET_CURRENT_LYRICS(streams.map(() => ''));
-    },
-
-    stopLrcObj () {
-      if (!this.lrcObj) return;
-      this.lrcObj.pause();
-      this.lrcObj.setLyric('');
     },
 
     async loadLrcFile () {
@@ -585,21 +577,16 @@ export default {
             ? `/api/media/offline/${encodeTrackId(source.trackId)}`
             : `/api/media/stream/${encodeTrackId(source.trackId)}`;
           const response = await this.$axios.get(lrcUrl);
-          const lyricExtension = (source.lyricExtension || '').toLowerCase();
-          if (lyricExtension === '.srt' || lyricExtension === '.vtt') {
-            console.log('srt convert to lrc');
-            // A single .vtt carrying voice spans expands to several named
-            // streams; SRT has no voice span, so it yields one unnamed stream.
-            return convert_srt_vtt_to_lrc_streams(response.data);
-          }
-          // LRC has no speaker field at all, so it is always one unnamed stream.
-          return [{ name: null, content: String(response.data) }];
+          // A single .vtt carrying voice spans expands to several named
+          // streams; SRT and LRC have no speaker field, so they yield one
+          // unnamed stream each.
+          return parseLyricStreams(response.data, (source.lyricExtension || '').toLowerCase());
         }));
         if (loadId !== this._lrcLoadId) return;
         console.log('歌词读入成功');
 
         const streams = fetched.flat()
-          .filter(stream => stream.content.trim() !== '')
+          .filter(stream => stream.cues.length > 0)
           .slice(0, MAX_LYRIC_STREAMS);
         if (!streams.length) {
           this.resetToNoLyricStatus();
@@ -607,7 +594,8 @@ export default {
         }
 
         this.setLyricStreams(streams);
-        this.playLrc(this.playing);
+        this.sampleLyrics();
+        if (this.playing) this.startLyricTicker();
         this.SET_HAS_LYRIC(true);
       } catch(error) {
         if (error.response) {
@@ -624,10 +612,9 @@ export default {
     },
 
     resetToNoLyricStatus() {
-      this.stopLrcObj();
-      this.lrcObj = null;
-      this._lyricFrames = [];
-      this.lrcContent = '';
+      this.stopLyricTicker();
+      this._lyricStreams = null;
+      this._lyricFrame = [];
       this.SET_LYRIC_SPEAKERS([]);
       this.SET_CURRENT_LYRICS([]);
       this.SET_HAS_LYRIC(false);
@@ -825,6 +812,7 @@ export default {
   },
 
   beforeUnmount() {
+    this.stopLyricTicker();
     const container = this.$refs.plyrContainer;
     if (container) {
       const media = container.querySelector('video') || container.querySelector('audio');

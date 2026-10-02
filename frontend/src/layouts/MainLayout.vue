@@ -172,12 +172,8 @@
     <div :style="{'z-index': miniState ? 3001 : 0}" style="position: fixed; bottom: 0;"> <!-- z-index must be greater than header z-index -->
       <PlayerBar />
       <AudioPlayer />
-      <LyricsBar v-if="! enablePIPLyrics"/>
-      <PIPLyrics />
+      <LyricsBar />
     </div>
-    <q-footer class="q-pa-none">
-      <!--<PIPLyrics v-if="enablePIPLyrics && !isQueueEmpty" />-->
-    </q-footer>
   </q-layout>
 </template>
 
@@ -185,9 +181,8 @@
 import PlayerBar from 'components/PlayerBar'
 import AudioPlayer from 'components/AudioPlayer'
 import LyricsBar from 'components/LyricsBar'
-import PIPLyrics from 'src/components/PIPLyrics'
 import NotifyMixin from '../mixins/Notification.js'
-import { mapMutations, mapState, mapGetters } from 'vuex'
+import { mapMutations, mapState } from 'vuex'
 import { Dark } from 'quasar'
 import { CONTRAST_MODES, getContrastMode, setContrastMode } from 'src/utils/contrast'
 import { onDownloadMessage, reconcileDownloads } from 'src/utils/downloads'
@@ -202,7 +197,6 @@ export default {
     PlayerBar,
     AudioPlayer,
     LyricsBar,
-    PIPLyrics,
 },
 
   data () {
@@ -279,12 +273,7 @@ export default {
     
     ...mapState('AudioPlayer', [
       'playWorkId',
-      'enablePIPLyrics',
     ]),
-
-    ...mapGetters('AudioPlayer', [
-      'isQueueEmpty',
-    ])
   },
 
   methods: {

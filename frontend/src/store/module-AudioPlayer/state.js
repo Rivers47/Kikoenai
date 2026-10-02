@@ -2,7 +2,6 @@ import { LocalStorage } from 'quasar'
 
 export const SWAP_SEEK_BUTTON_KEY = 'swap_seek_button'
 export const FLIP_LR_CHANNEL_KEY = 'flip_lr_channel'
-export const ENABLE_PIP_LYRICS = 'enable_pip_lyrics'
 export const AI_SERVER_URL_KEY = 'ai_server_url'
 export const OLD_WORK_CARD_UI_STYLE_KEY = 'old_work_card_ui_style_key'
 export const AUTO_MARK_LISTENED_KEY = 'auto_mark_listened'
@@ -59,9 +58,6 @@ export default function () {
     // swap L/R; graph stays for the session once built, off = passthrough
     flipLRChannel: LocalStorage.has(FLIP_LR_CHANNEL_KEY) && LocalStorage.getItem(FLIP_LR_CHANNEL_KEY),
 
-    // 是否启用画中画歌词（桌面歌词）
-    // 注意android chrome不支持画中画，firefox估计也不支持，因此在android设备上禁用这一功能
-    enablePIPLyrics: LocalStorage.has(ENABLE_PIP_LYRICS) && LocalStorage.getItem(ENABLE_PIP_LYRICS) && !(navigator.userAgent.toLowerCase().indexOf('android') > -1), 
 
     // 是否切换回旧式的作品卡片，某些人需要直接展示所有tag，保留旧式UI的选项
     oldWorkCardUIStyle: LocalStorage.has(OLD_WORK_CARD_UI_STYLE_KEY) && LocalStorage.getItem(OLD_WORK_CARD_UI_STYLE_KEY),
