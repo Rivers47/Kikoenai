@@ -273,8 +273,8 @@ export default {
         this.SET_CURRENT_TIME(this.plyr.currentTime)
       }
       // Also sampled here, not only from the ticker: 'timeupdate' keeps
-      // firing when the tab is hidden or picture-in-picture has the lyrics,
-      // where requestAnimationFrame is throttled to a standstill.
+      // firing when the tab is hidden, where requestAnimationFrame is
+      // throttled to a standstill.
       this.sampleLyrics()
 
       if (this.sleepMode && this.sleepModeType === 'minutes' && this.sleepStopAt && Date.now() >= this.sleepStopAt) {

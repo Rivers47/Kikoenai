@@ -21,7 +21,7 @@
               v-for="(line, index) in currentLyrics"
               v-show="line !== ''"
               :key="index"
-              class="lyric-line ellipsis-2-lines"
+              class="lyric-line"
               :style="{'font-size': `${fontSize}rem`, color: lyricStreamColor(index, currentLyrics.length)}">
               <!-- Only WebVTT voice spans name their speaker; the other
                    formats have no such field and render text alone. -->
@@ -179,14 +179,13 @@ export default {
   }
 
   /* Block-level so several speakers stack instead of running together on one
-     line; the 2-line clamp is per speaker rather than for the bar as a whole. */
+     line. */
   .lyric-line {
     display: block;
     white-space: pre-line;
   }
 
-  /* Inline rather than on its own row: the name must not cost a line of height,
-     which the picture-in-picture window (a couple of lines tall) cannot spare.
+  /* Inline rather than on its own row, so the name costs no line of height.
      It inherits the speaker's colour and is toned down so the words still lead. */
   .lyric-speaker {
     font-size: 0.7em;
