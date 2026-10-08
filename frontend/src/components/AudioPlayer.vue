@@ -661,6 +661,8 @@ export default {
           method: 'PUT',
           url: `/api/history/${this.playWorkId}`,
           body: { state: data.state }
+        }).then((settled) => {
+          if (settled) this.latestUpdatedHistory = data
         })
       }
 

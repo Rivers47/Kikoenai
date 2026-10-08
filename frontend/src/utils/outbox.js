@@ -62,10 +62,11 @@ export async function sendOrQueue (http, { method, url, body }) {
   if (!canSync()) {
     try {
       await http({ method, url, data: body, __outboxed: true })
+      return true
     } catch (err) {
       console.error(err)
+      return false
     }
-    return
   }
 
   const key = await enqueue({ method, url, body })
@@ -76,6 +77,7 @@ export async function sendOrQueue (http, { method, url, body }) {
     console.error('deferred to outbox:', url, err.message || err)
     await requestSync()
   }
+  return true
 }
 
 export async function drain () {
