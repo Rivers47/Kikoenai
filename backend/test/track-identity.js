@@ -82,6 +82,31 @@ describe('track identity: relPath', function () {
     }
   });
 
+  // subtitle is forward-slash on every platform, so toTree must split on '/'
+  // rather than path.sep -- on a Windows server path.sep is '\', which left a
+  // nested folder as one flat node titled "A/B/C".
+  it('nests folders regardless of the platform separator', async function () {
+    write('A/B/C/01.mp3');
+    const tracks = await getTrackList('000001', dir);
+
+    const sep = path.sep;
+    path.sep = '\\';
+    let tree;
+    try {
+      tree = toTree(tracks, 'Work', 'w1', { name: 'root', path: dir });
+    } finally {
+      path.sep = sep;
+    }
+
+    const [a] = tree.filter(n => n.type === 'folder');
+    expect(a.title).to.equal('A');
+    const [b] = a.children.filter(n => n.type === 'folder');
+    expect(b.title).to.equal('B');
+    const [c] = b.children.filter(n => n.type === 'folder');
+    expect(c.title).to.equal('C');
+    expect(c.children.map(n => n.title)).to.deep.equal(['01.mp3']);
+  });
+
   describe('the legacy positional handle', function () {
     it('reads a lone run of digits as an index', function () {
       expect(legacyIndex(['7'])).to.equal(7);

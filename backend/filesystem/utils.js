@@ -208,7 +208,9 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
   // 插入文件夹
   tracks.forEach(track => {
     let fatherFolder = tree;
-    const pathParts = track.subtitle ? track.subtitle.split(path.sep) : [];
+    // subtitle is forward-slash on every platform (getTrackList and shapeRows
+    // normalize it), so split on '/' -- path.sep left a Windows tree flat.
+    const pathParts = track.subtitle ? track.subtitle.split('/') : [];
     pathParts.forEach(folderName => {
       const index = fatherFolder.findIndex(item => item.type === 'folder' && item.title === folderName);
       if (index === -1) {
@@ -225,7 +227,7 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
   // 插入文件
   tracks.forEach(track => {
     let fatherFolder = tree;
-    const pathParts = track.subtitle ? track.subtitle.split(path.sep) : [];
+    const pathParts = track.subtitle ? track.subtitle.split('/') : [];
     pathParts.forEach(folderName => {
       fatherFolder = fatherFolder.find(item => item.type === 'folder' && item.title === folderName).children;
     });
