@@ -328,7 +328,7 @@ export default {
 
       sendOrQueue(this.$axios, {
         method: 'PUT',
-        url: `/api/track-progress/${file.trackId}`,
+        url: `/api/track-progress/${encodeTrackId(file.trackId)}`,
         body: {
           seconds: seconds,
           completed: completed,

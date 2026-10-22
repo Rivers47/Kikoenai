@@ -43,6 +43,7 @@ import WorkDetails from 'components/WorkDetails'
 import WorkTree from 'components/WorkTree'
 import WorkDescription from 'components/WorkDescription'
 import NotifyMixin from '../mixins/Notification.js'
+import { encodeTrackId } from '../base-path'
 import { sendOrQueue } from '../utils/outbox'
 import { positionsForWork, mergePositions, resumeSecondsFor } from '../utils/positions'
 
@@ -149,7 +150,7 @@ export default {
         if (!row) continue;
         sendOrQueue(this.$axios, {
           method: 'PUT',
-          url: `/api/track-progress/${trackId}`,
+          url: `/api/track-progress/${encodeTrackId(trackId)}`,
           body: {
             seconds: row.seconds,
             completed: !!row.completed,

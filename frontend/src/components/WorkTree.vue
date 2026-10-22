@@ -391,7 +391,7 @@ export default {
     // Android's back button closes the app.
     openTextPage (file) {
       this.$router.push({
-        path: `/text/${file.trackId}`,
+        path: `/text/${encodeTrackId(file.trackId)}`,
         query: { title: file.title }
       });
     },

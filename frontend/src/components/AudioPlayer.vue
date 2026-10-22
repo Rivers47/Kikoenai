@@ -293,7 +293,7 @@ import { savePosition } from '../utils/positions'
 
 const SERVER_PUSH_MS = 60 * 1000 //update progress to server at least every 60s
 import { debounce } from 'quasar'
-import { apiUrl } from 'src/base-path'
+import { apiUrl, encodeTrackId } from 'src/base-path'
 
 export default {
   name: 'AudioPlayer',
@@ -730,7 +730,7 @@ export default {
       this._lastServerPush = observedAt
       sendOrQueue(this.$axios, {
         method: 'PUT',
-        url: `/api/track-progress/${file.trackId}`,
+        url: `/api/track-progress/${encodeTrackId(file.trackId)}`,
         body: {
           seconds: seconds,
           completed: completed,
