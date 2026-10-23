@@ -123,6 +123,7 @@ describe('getWorksByFilter() advanced filtering', function () {
     { id: '100001', title: '夏の思い出', circle: 'Sound Factory', nsfw: false, va: ['山田 太郎'], tag: ['癒し'] },
     { id: '100002', title: '冬の記憶', circle: 'Under Score', nsfw: true, va: ['山田 太郎ちゃん'], tag: ['NTR'] },
     { id: 'd100001', title: 'Fanza Work', circle: 'Other Circle', nsfw: true, va: ['他の人'], tag: ['癒し'] },
+    { id: 'BJ01288313', title: 'Books Work', circle: 'Sound Factory', nsfw: false, va: [], tag: [] },
   ];
 
   const search = async (filter, opts = {}) => {
@@ -219,7 +220,7 @@ describe('getWorksByFilter() advanced filtering', function () {
   it('mixes free text, namespaced and negated terms in one query', async function () {
     expect(await search('癒し circle:Other_Circle')).to.deep.equal(['d100001']);
     expect(await search('癒し -circle:Other_Circle')).to.deep.equal(['100001']);
-    expect(await search('-癒し')).to.deep.equal(['100002']); // negated bare word
+    expect(await search('-癒し')).to.deep.equal(['100002', 'BJ01288313']); // negated bare word
     expect(await search('RJ100001 tag:癒し')).to.deep.equal(['100001']);
     expect(await search('RJ100001 tag:NTR')).to.deep.equal([]);
   });
@@ -227,6 +228,12 @@ describe('getWorksByFilter() advanced filtering', function () {
   it('still resolves work codes', async function () {
     expect(await search('RJ100001')).to.deep.equal(['100001']);
     expect(await search('id:100002')).to.deep.equal(['100002']);
+  });
+
+  it('resolves DLsite books ids without dropping the BJ prefix', async function () {
+    expect(await search('BJ01288313')).to.deep.equal(['BJ01288313']);
+    expect(await search('bj01288313')).to.deep.equal(['BJ01288313']);
+    expect(await search('id:BJ01288313')).to.deep.equal(['BJ01288313']);
   });
 
   it('takes a Fanza id with or without the underscore', async function () {
@@ -248,6 +255,6 @@ describe('getWorksByFilter() advanced filtering', function () {
   });
 
   it('returns the whole library for an empty filter', async function () {
-    expect(await search('')).to.deep.equal(['100001', '100002', 'd100001']);
+    expect(await search('')).to.deep.equal(['100001', '100002', 'BJ01288313', 'd100001']);
   });
 });

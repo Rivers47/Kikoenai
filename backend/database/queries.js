@@ -843,21 +843,26 @@ const makeQueries = (knex) => {
 
   /**
    * Restrict to one work id when the text looks like a Fanza cid or a DLsite
-   * code (RJ123456 / bare digits).
+   * code (RJ123456 / BJ123456 / bare digits).
    *
    * A Fanza cid may be typed with or without the underscore — `d215444` is the
    * form to prefer in a search, since an unquoted `_` stands for a space (see
    * search-query.js) — and both canonicalize to the stored `d_215444`. The
    * underscore-free spelling is only recognised as a whole term, or a title
    * token such as `CD2` would be read as a work code; the underscore form
-   * still matches as a substring, the way it always did (`d_215444.zip`).
+   * still matches as a substring, the way it always did (`d_215444.zip`). BJ
+   * is checked before the bare-digit RJ fallback: the prefix is part of the
+   * stored id and must not be discarded.
    * @returns {Boolean} whether a code was recognised (and a clause applied).
    */
   const applyWorkIdText = (qb, text) => {
     const fanzaMatch = text.match(/^d_?(\d+)$/i) || text.match(/d_(\d+)/i);
+    const booksMatch = text.match(/bj(\d{6,8})/i);
     const rjMatch = text.match(/(?:rj)?(\d{6,8})/i);
     if (fanzaMatch) {
       qb.where('t_work.id', '=', `d${fanzaMatch[1]}`);
+    } else if (booksMatch) {
+      qb.where('t_work.id', '=', `BJ${formatID(parseInt(booksMatch[1], 10))}`);
     } else if (rjMatch) {
       qb.where('t_work.id', '=', formatID(parseInt(rjMatch[1], 10)));
     } else {
