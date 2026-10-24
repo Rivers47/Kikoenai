@@ -33,7 +33,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.0",
-    "concurrently": "^8.0.0"
+    "concurrently": "^10.0.6"
   },
   "engines": {
     "node": ">=24.0.0"
