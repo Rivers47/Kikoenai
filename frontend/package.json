@@ -30,7 +30,7 @@
     "@quasar/extras": "^1.18.0",
     "axios": "^1.18.1",
     "plyr": "^3.7.8",
-    "quasar": "^2.23.1",
+    "quasar": "^2.32.2",
     "register-service-worker": "^1.7.2",
     "socket.io-client": "^4.8.1",
     "vue": "^3.4.0",
