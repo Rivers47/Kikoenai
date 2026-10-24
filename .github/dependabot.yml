@@ -1,0 +1,21 @@
+version: 2
+updates:
+  # npm workspaces: the single root lockfile covers backend/ and frontend/
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  # Tracks the node:24-alpine tags in the Containerfile
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
