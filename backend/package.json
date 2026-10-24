@@ -55,7 +55,7 @@
     "axios": "^1.18.1",
     "cheerio": "^1.0.0-rc.6",
     "compare-versions": "^3.6.0",
-    "compression": "^1.7.4",
+    "compression": "^1.8.2",
     "connect-history-api-fallback": "^1.6.0",
     "cookie": "^1.0.2",
     "cookie-parser": "^1.4.7",
