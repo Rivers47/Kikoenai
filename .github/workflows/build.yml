@@ -70,7 +70,7 @@ jobs:
           oci: true
 
       - name: Push image to GitHub Container Registry
-        if: ${{ github.event_name != 'pull_request' }}
+        if: ${{ github.event_name != 'pull_request' && github.actor != 'dependabot[bot]' }}
         uses: redhat-actions/push-to-registry@v3
         with:
           image: ${{ steps.build-image.outputs.image }}
