@@ -34,7 +34,7 @@
     "register-service-worker": "^1.7.2",
     "socket.io-client": "^4.8.1",
     "vue": "^3.4.0",
-    "vue-i18n": "^11.4.8",
+    "vue-i18n": "^11.4.14",
     "vue-router": "^5.2.0",
     "vuex": "^4.1.0"
   },
