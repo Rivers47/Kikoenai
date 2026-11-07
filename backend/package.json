@@ -54,7 +54,7 @@
   "dependencies": {
     "axios": "^1.18.1",
     "cheerio": "^1.0.0-rc.6",
-    "compare-versions": "^3.6.0",
+    "compare-versions": "^6.1.1",
     "compression": "^1.7.4",
     "connect-history-api-fallback": "^1.6.0",
     "cookie": "^1.0.2",
