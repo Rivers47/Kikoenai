@@ -21,9 +21,12 @@ const FALLBACK_LOCALE = 'zh-CN'
 export const FOLLOW_UI = 'follow'
 export const SUPPORTED_TAG_LOCALES = [FOLLOW_UI, ...SUPPORTED_LOCALES]
 
-// BCP-47 codes for the HTML `lang` attribute. Browsers pick the CJK font
-// fallback from this, which is what keeps Han characters out of the wrong
-// glyph variants (Japanese kanji drawn with Simplified-Chinese shapes).
+// BCP-47 *script* codes for the `lang` attribute on elements that render a tag
+// name (never for <html> — Quasar's lang pack owns that attribute, writing its
+// own `isoName`). Browsers pick the CJK font fallback from the nearest `lang`,
+// so this is what keeps a tag name out of the wrong glyph variants (Japanese
+// kanji drawn with Simplified-Chinese shapes), even when the tag locale differs
+// from the UI locale.
 const HTML_LANG = {
   'zh-CN': 'zh-Hans',
   'zh-TW': 'zh-Hant',
@@ -125,7 +128,7 @@ export function getInitialTagLocale() {
   return FOLLOW_UI
 }
 
-/** BCP-47 code for a locale, for use in an HTML `lang` attribute. */
+/** BCP-47 script code for the tag layer's per-element `lang` attribute. */
 export function htmlLang(locale) {
   return HTML_LANG[locale] || 'en'
 }

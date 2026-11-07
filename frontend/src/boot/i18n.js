@@ -1,4 +1,4 @@
-// Registers vue-i18n, syncs the Quasar lang pack to the current locale, and
+// Registers vue-i18n, applies the Quasar lang pack for the current locale, and
 // owns the runtime language switchers.
 //
 // The UI locale and the tag display locale are independent; see src/i18n/index.js.
@@ -12,7 +12,6 @@ import i18n, {
   getCurrentLocale,
   getCurrentTagLocale,
   getTagLocalePref,
-  htmlLang,
   FOLLOW_UI,
   SUPPORTED_TAG_LOCALES,
   STORAGE_KEY,
@@ -41,25 +40,13 @@ async function loadQuasarLang(locale) {
   }
 }
 
-// The document has no `lang` of its own (index.template.html ships a bare
-// <html>), so without this the browser picks its CJK font fallback from its
-// own language setting rather than ours — which is how Japanese kanji end up
-// drawn with Simplified-Chinese glyph shapes. Tag elements carry their own
-// `lang` via `tagLang` from useTagTranslate(), since the tag locale can differ
-// from the UI locale.
-function syncDocumentLang(locale) {
-  if (typeof document !== 'undefined') {
-    document.documentElement.lang = htmlLang(locale)
-  }
-}
-
 /**
- * Switch the UI locale at runtime. Updates vue-i18n, the Quasar lang pack,
- * the document language, and persists the choice. Call from the language switcher.
+ * Switch the UI locale at runtime. Updates vue-i18n, the Quasar lang pack
+ * (which also owns `<html lang>` / `dir`), and persists the choice. Call from
+ * the language switcher.
  */
 export async function changeLanguage(locale) {
   setLocale(locale, i18n)
-  syncDocumentLang(locale)
   await loadQuasarLang(locale)
 }
 
@@ -71,12 +58,15 @@ export function changeTagLanguage(locale) {
   setTagLocale(locale)
 }
 
-export default boot(({ app }) => {
+export default boot(async ({ app }) => {
   app.use(i18n)
-  // Apply the initial Quasar lang pack and document language.
-  const initial = getInitialLocale()
-  syncDocumentLang(initial)
-  loadQuasarLang(initial)
+  // Awaited on purpose: Quasar.lang.set() is what puts `lang`/`dir` on <html>
+  // (from the pack's `isoName`), and Quasar waits for async boot files before
+  // mounting. Without the await the first paint would carry no `lang` at all,
+  // leaving the browser to pick CJK glyph variants from its own language
+  // setting — the bug this whole path exists to prevent. `loadQuasarLang()`
+  // always settles (it falls back to the en-US pack), so it cannot hang boot.
+  await loadQuasarLang(getInitialLocale())
 })
 
 export {
