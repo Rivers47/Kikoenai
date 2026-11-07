@@ -4,7 +4,7 @@
 
       <!-- Header: title + current timer status -->
       <q-card-section class="row items-center q-pb-sm">
-        <div class="text-h6">{{ $t('sleepmode.title') }}</div>
+        <div class="text-h6">{{ t('sleepmode.title') }}</div>
         <div v-if="sleepMode" class="text-subtitle2 q-ml-auto">
           {{ timerStatusText }}
         </div>
@@ -49,7 +49,7 @@
         <!-- Tracks mode -->
         <div v-else class="q-mt-md">
           <div class="text-center q-mb-sm">
-            <span class="text-body1 slider-label-value">{{ $t('sleepmode.tracks', { n: trackValue }) }}</span>
+            <span class="text-body1 slider-label-value">{{ t('sleepmode.tracks', { n: trackValue }) }}</span>
           </div>
           <q-slider
             v-model="trackValue"
@@ -70,20 +70,20 @@
       <div class="row justify-between items-center q-px-lg q-pb-md">
         <q-btn
           flat
-          :label="$t('sleepmode.clearTimer')"
+          :label="t('sleepmode.clearTimer')"
           color="primary"
           @click="clearSleepTimer"
           :disable="!sleepMode"
         />
         <q-btn
           flat
-          :label="$t('common.cancel')"
+          :label="t('common.cancel')"
           color="primary"
           @click="close"
         />
         <q-btn
           flat
-          :label="$t('common.ok')"
+          :label="t('common.ok')"
           color="primary"
           @click="confirm"
         />
@@ -94,9 +94,14 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import { mapState, mapMutations } from 'vuex'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'SleepMode',
 
   props: ['modelValue'],
@@ -130,14 +135,14 @@ export default {
 
     modeOptions() {
       return [
-        { label: this.$t('sleepmode.stopByMinutes'), value: 'minutes' },
-        { label: this.$t('sleepmode.stopByTracks'), value: 'tracks' }
+        { label: this.t('sleepmode.stopByMinutes'), value: 'minutes' },
+        { label: this.t('sleepmode.stopByTracks'), value: 'tracks' }
       ]
     },
 
     sliderLabel() {
       const mins = Math.round(this.sliderValue)
-      return this.$t('sleepmode.minutesLabel', { n: mins })
+      return this.t('sleepmode.minutesLabel', { n: mins })
     },
 
     minutesHint() {
@@ -162,16 +167,16 @@ export default {
         const m = stopAt.getMinutes().toString().padStart(2, '0')
         const remaining = this.remainingMinutes
         if (remaining > 0) {
-          return this.$t('sleepmode.timerStatusMinutes', { h, m, remaining })
+          return this.t('sleepmode.timerStatusMinutes', { h, m, remaining })
         }
-        return this.$t('sleepmode.timerStatusMinutesShort', { h, m })
+        return this.t('sleepmode.timerStatusMinutesShort', { h, m })
       }
       if (this.sleepModeType === 'tracks') {
         const left = Math.max(0, this.sleepTracksLeft)
         if (left === 0) {
-          return this.$t('sleepmode.timerStatusTracksCurrent')
+          return this.t('sleepmode.timerStatusTracksCurrent')
         }
-        return this.$t('sleepmode.timerStatusTracks', { n: left })
+        return this.t('sleepmode.timerStatusTracks', { n: left })
       }
       return ''
     },
@@ -228,11 +233,11 @@ export default {
     confirmMsg() {
       if (this.currentMode === 'minutes') {
         const mins = Math.round(this.sliderValue)
-        return this.$t('sleepmode.confirmMinutes', { n: mins })
+        return this.t('sleepmode.confirmMinutes', { n: mins })
       } else if (this.trackValue === 0) {
-        return this.$t('sleepmode.confirmTrackCurrent')
+        return this.t('sleepmode.confirmTrackCurrent')
       }
-      return this.$t('sleepmode.confirmTracks', { n: this.trackValue })
+      return this.t('sleepmode.confirmTracks', { n: this.trackValue })
     },
 
     close() {
@@ -241,7 +246,7 @@ export default {
 
     clearSleepTimer() {
       this.CLEAR_SLEEP_MODE()
-      this.showSuccNotif(this.$t('sleepmode.timerCleared'))
+      this.showSuccNotif(this.t('sleepmode.timerCleared'))
     },
 
     fnMarkerLabel(val) {

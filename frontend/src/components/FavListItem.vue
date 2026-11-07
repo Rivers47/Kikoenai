@@ -67,7 +67,7 @@
 
         <div v-if="mode === 'history'" class="full-width">
           <div class="full-width">
-            <q-btn color="primary" :label="$t('favlistitem.playFromHistory')"  class="full-width" @click="playHistory(metadata.id, metadata.state)"/>
+            <q-btn color="primary" :label="t('favlistitem.playFromHistory')"  class="full-width" @click="playHistory(metadata.id, metadata.state)"/>
           </div>
 
           <!--
@@ -80,7 +80,7 @@
           -->
 
           <div>
-            <span class="text-accent">{{ $t('favlistitem.progress') }}：</span>
+            <span class="text-accent">{{ t('favlistitem.progress') }}：</span>
             <q-badge color="tertiary-container" text-color="on-tertiary-container">{{ metadata.state.index+1 }} / {{ metadata.state.queue.length }}</q-badge>
             <q-badge color="primary-container" text-color="on-primary-container">{{ humanReadableSeconds(resumeSeconds ?? metadata.state.seconds) }}</q-badge>
             <span class="text-muted">
@@ -112,6 +112,7 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import WriteReview from './WriteReview'
 import NotifyMixin from '../mixins/Notification.js'
 import { apiUrl } from 'src/base-path'
@@ -120,6 +121,10 @@ import { resumeSecondsFor } from '../utils/positions'
 import SearchableLabel from './SearchableLabel'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'FavListItem',
 
   mixins: [NotifyMixin],
@@ -167,11 +172,11 @@ export default {
 
     progressOptions() {
       return [
-        { label: this.$t('favlistitem.marked'), value: 'marked' },
-        { label: this.$t('favlistitem.listening'), value: 'listening' },
-        { label: this.$t('favlistitem.listened'), value: 'listened' },
-        { label: this.$t('favlistitem.replay'), value: 'replay' },
-        { label: this.$t('favlistitem.postponed'), value: 'postponed' }
+        { label: this.t('favlistitem.marked'), value: 'marked' },
+        { label: this.t('favlistitem.listening'), value: 'listening' },
+        { label: this.t('favlistitem.listened'), value: 'listened' },
+        { label: this.t('favlistitem.replay'), value: 'replay' },
+        { label: this.t('favlistitem.postponed'), value: 'postponed' }
       ]
     },
 
@@ -203,9 +208,9 @@ export default {
       const m = Math.floor(seconds / 60) % 60
       const s = Math.floor(seconds) % 60
       let out = ''
-      if (h) out += this.$t('favlistitem.hourUnit', { h })
-      if (m) out += this.$t('favlistitem.minuteUnit', { m })
-      return (out + this.$t('favlistitem.secondUnit', { s })).trim()
+      if (h) out += this.t('favlistitem.hourUnit', { h })
+      if (m) out += this.t('favlistitem.minuteUnit', { m })
+      return (out + this.t('favlistitem.secondUnit', { s })).trim()
     },
 
     setMetadata () {

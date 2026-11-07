@@ -45,7 +45,7 @@
               @click="showCurrentPlayList = !showCurrentPlayList" 
             >
               <q-tooltip anchor="top middle" self="bottom middle">
-                {{ $t('audioplayer.switchTrack') }}
+                {{ t('audioplayer.switchTrack') }}
               </q-tooltip>
             </q-btn>
 
@@ -88,7 +88,7 @@
               @click="gotoFullScreenPlayer"
             >
               <q-tooltip anchor="top middle" self="bottom middle">
-                {{ $t('audioplayer.fullscreen') }}
+                {{ t('audioplayer.fullscreen') }}
               </q-tooltip>
             </q-btn>
 
@@ -101,7 +101,7 @@
               icon="more_horiz"
             >
               <q-tooltip anchor="top middle" self="bottom middle">
-                {{ $t('audioplayer.moreSettings') }}
+                {{ t('audioplayer.moreSettings') }}
               </q-tooltip>
               <q-menu anchor="bottom right" self="top right">
                 <q-item clickable v-ripple @click="openWorkDetail()" v-close-popup>
@@ -109,7 +109,7 @@
                     <!-- placeholder -->
                   </q-item-section>
                   <q-item-section>
-                    {{ $t('audioplayer.openWorkDetail') }}
+                    {{ t('audioplayer.openWorkDetail') }}
                   </q-item-section>
                 </q-item>
 
@@ -120,7 +120,7 @@
                       :model-value="lyricOffsetSeconds"
                       @update:model-value="lyricOffsetChange"
                       type="number"
-                      :prefix="$t('audioplayer.lyricOffset')"
+                      :prefix="t('audioplayer.lyricOffset')"
                       suffix="s"
                       style="max-width: 100%;"
                       outlined
@@ -150,8 +150,8 @@
 
                 <q-item>
                   <q-item-section>
-                    <q-item-label>{{ $t('audioplayer.flipLRChannel') }}</q-item-label>
-                    <q-item-label caption>{{ $t('audioplayer.flipLRChannelCaption') }}</q-item-label>
+                    <q-item-label>{{ t('audioplayer.flipLRChannel') }}</q-item-label>
+                    <q-item-label caption>{{ t('audioplayer.flipLRChannelCaption') }}</q-item-label>
                   </q-item-section>
                   <q-item-section avatar>
                     <q-toggle
@@ -256,26 +256,26 @@
     <q-dialog v-model="lyricSyncDialog"  seamless position="top">
       <q-card class="bg-primary text-white">
         <q-card-section>
-          <div class="text-h6">{{ $t('audioplayer.lyricSyncTitle') }}</div>
+          <div class="text-h6">{{ t('audioplayer.lyricSyncTitle') }}</div>
         </q-card-section>
 
         <q-card-section class="q-pt-none">
-          {{ $t('audioplayer.lyricSyncDesc') }}
+          {{ t('audioplayer.lyricSyncDesc') }}
         </q-card-section>
 
         <q-card-section v-if="fixState === 'ready'">
-          <q-btn @click="startFixLyricSync('lyric')">{{ $t('audioplayer.lyricFirst') }}</q-btn>
-          <q-btn @click="startFixLyricSync('audio')">{{ $t('audioplayer.audioFirst') }}</q-btn>
+          <q-btn @click="startFixLyricSync('lyric')">{{ t('audioplayer.lyricFirst') }}</q-btn>
+          <q-btn @click="startFixLyricSync('audio')">{{ t('audioplayer.audioFirst') }}</q-btn>
         </q-card-section>
 
         <q-card-section v-if="fixState === 'measure'">
-          <q-btn @click="stopFixLyricSync">{{ fixWhoStartFirst == 'audio' ? $t('audioplayer.lyricAppeared') : $t('audioplayer.audioHeard') }}</q-btn>
+          <q-btn @click="stopFixLyricSync">{{ fixWhoStartFirst == 'audio' ? t('audioplayer.lyricAppeared') : t('audioplayer.audioHeard') }}</q-btn>
         </q-card-section>
 
         <q-card-actions align="right">
-          <q-btn @click="lyricSyncDialog = false">{{ $t('common.close') }}</q-btn>
-          <q-btn v-if="fixState !== 'ready'" @click="fixState = 'ready'" >{{ $t('audioplayer.remeasureOffset') }}</q-btn>
-          <q-btn v-if="fixState === 'done'" @click="fixApply">{{ $t('audioplayer.applyOffset', { delta: showDeltaSeconds }) }}</q-btn>
+          <q-btn @click="lyricSyncDialog = false">{{ t('common.close') }}</q-btn>
+          <q-btn v-if="fixState !== 'ready'" @click="fixState = 'ready'" >{{ t('audioplayer.remeasureOffset') }}</q-btn>
+          <q-btn v-if="fixState === 'done'" @click="fixApply">{{ t('audioplayer.applyOffset', { delta: showDeltaSeconds }) }}</q-btn>
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -283,6 +283,7 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import AudioElement from 'components/AudioElement'
 import Scrollable from 'components/Scrollable'
 import SleepMode from 'components/SleepMode'
@@ -296,6 +297,10 @@ import { debounce } from 'quasar'
 import { apiUrl, encodeTrackId } from 'src/base-path'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'AudioPlayer',
 
   components: {
@@ -457,13 +462,13 @@ export default {
     playModeString () {
       switch (this.playMode.name) {
         case "all repeat":
-          return this.$t('audioplayer.playModeAllRepeat')
+          return this.t('audioplayer.playModeAllRepeat')
         case "repeat once":
-          return this.$t('audioplayer.playModeRepeatOnce')
+          return this.t('audioplayer.playModeRepeatOnce')
         case "shuffle":
-          return this.$t('audioplayer.playModeShuffle')
+          return this.t('audioplayer.playModeShuffle')
         default:
-          return this.$t('audioplayer.playModeOrder')
+          return this.t('audioplayer.playModeOrder')
       }
     },
 
@@ -473,20 +478,20 @@ export default {
 
     sleepTimerTooltip () {
       if (!this.sleepMode) {
-        return this.$t('audioplayer.sleepTimer')
+        return this.t('audioplayer.sleepTimer')
       }
       if (this.sleepModeType === 'minutes' && this.sleepStopAt) {
         const stopAt = new Date(this.sleepStopAt)
         const h = stopAt.getHours().toString().padStart(2, '0')
         const m = stopAt.getMinutes().toString().padStart(2, '0')
-        return this.$t('audioplayer.sleepTimerStopAt', { hour: h, min: m })
+        return this.t('audioplayer.sleepTimerStopAt', { hour: h, min: m })
       }
       if (this.sleepModeType === 'tracks') {
         return this.sleepTracksLeft > 0
-          ? this.$t('audioplayer.sleepTimerTracksLeft', { count: this.sleepTracksLeft })
-          : this.$t('audioplayer.sleepTimerTrackEnd')
+          ? this.t('audioplayer.sleepTimerTracksLeft', { count: this.sleepTracksLeft })
+          : this.t('audioplayer.sleepTimerTrackEnd')
       }
-      return this.$t('audioplayer.sleepTimer')
+      return this.t('audioplayer.sleepTimer')
     },
 
     rewindIcon () {
@@ -572,7 +577,7 @@ export default {
       this.lyricOffsetChange(this.fixDeltaMills / 1000);
       this.lyricSyncDialog = false;
       this.fixState = "ready";
-      this.$q.notify({message: this.$t('audioplayer.lyricOffsetApplied', { delta: (this.fixDeltaMills/1000).toFixed(2) }), timeout: 500})
+      this.$q.notify({message: this.t('audioplayer.lyricOffsetApplied', { delta: (this.fixDeltaMills/1000).toFixed(2) }), timeout: 500})
     },
 
     ...mapMutations('AudioPlayer', {

@@ -20,7 +20,8 @@
     "kikoeru"
   ],
   "scripts": {
-    "test": "eslint .",
+    "test": "node scripts/check-i18n.mjs && eslint .",
+    "check:i18n": "node scripts/check-i18n.mjs",
     "dev": "quasar dev -m pwa",
     "build": "quasar build -m pwa --debug",
     "build:prod": "quasar build -m pwa",

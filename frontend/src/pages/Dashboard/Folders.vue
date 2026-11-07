@@ -3,7 +3,7 @@
     <q-card class="q-ma-md">
       <q-form @submit="onSubmitRootFolder">
         <q-toolbar>
-          <q-toolbar-title>{{ $t('folders.addNewFolder') }}</q-toolbar-title>
+          <q-toolbar-title>{{ t('folders.addNewFolder') }}</q-toolbar-title>
         </q-toolbar>
 
         <div class="q-pa-sm">
@@ -13,8 +13,8 @@
             v-model="rootFolder.name"
             required
             lazy-rules
-            :rules="[val => !config.rootFolders.find(rootFolder => rootFolder.name === val) || $t('folders.aliasAlreadyExists')]"
-            :label="$t('folders.folderAlias')"
+            :rules="[val => !config.rootFolders.find(rootFolder => rootFolder.name === val) || t('folders.aliasAlreadyExists')]"
+            :label="t('folders.folderAlias')"
           />
 
           <q-input
@@ -23,12 +23,12 @@
             v-model="rootFolder.path"
             required
             lazy-rules
-            :rules="[val => !config.rootFolders.find(rootFolder => rootFolder.path === val) || $t('folders.pathAlreadyExists')]"
-            :label="$t('folders.absolutePath')"
+            :rules="[val => !config.rootFolders.find(rootFolder => rootFolder.path === val) || t('folders.pathAlreadyExists')]"
+            :label="t('folders.absolutePath')"
           />
 
           <div class="row justify-end">
-            <q-btn type="submit" color="primary" :label="$t('common.add')" />
+            <q-btn type="submit" color="primary" :label="t('common.add')" />
           </div>
         </div>
       </q-form>
@@ -37,7 +37,7 @@
     <q-form @submit="onSubmit">
       <q-card class="q-ma-md" v-show="config.rootFolders.length">
         <q-toolbar>
-          <q-toolbar-title>{{ $t('folders.folderList') }}</q-toolbar-title>
+          <q-toolbar-title>{{ t('folders.folderList') }}</q-toolbar-title>
         </q-toolbar>
 
         <q-list>
@@ -60,24 +60,29 @@
 
       <q-card class="q-ma-md">
         <q-toolbar>
-          <q-toolbar-title>{{ $t('folders.coverFolderPath') }}</q-toolbar-title>
+          <q-toolbar-title>{{ t('folders.coverFolderPath') }}</q-toolbar-title>
         </q-toolbar>
 
-        <div v-if="config.coverUseDefaultPath" class="q-pa-md">{{ $t('folders.usingDefaultCoverPath') }}</div>
+        <div v-if="config.coverUseDefaultPath" class="q-pa-md">{{ t('folders.usingDefaultCoverPath') }}</div>
         <q-input v-else outlined dense required v-model="config.coverFolderDir" class="q-pa-sm" />
       </q-card>
 
       <div class="q-ma-lg row justify-end">
-        <q-btn :loading="loading" :label="$t('common.save')" type="submit" color="primary" />
+        <q-btn :loading="loading" :label="t('common.save')" type="submit" color="primary" />
       </div>
     </q-form>
   </div>
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import NotifyMixin from '../../mixins/Notification.js'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'Folders',
 
   mixins: [NotifyMixin],

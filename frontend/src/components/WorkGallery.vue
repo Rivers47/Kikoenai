@@ -37,7 +37,7 @@
               color="surface-container"
               text-color="on-surface"
               class="gallery-btn shadow-4"
-              :aria-label="$t('common.previous')"
+              :aria-label="t('common.previous')"
               @click="step(-1)"
             />
           </q-carousel-control>
@@ -50,7 +50,7 @@
               color="surface-container"
               text-color="on-surface"
               class="gallery-btn shadow-4"
-              :aria-label="$t('common.next')"
+              :aria-label="t('common.next')"
               @click="step(1)"
             />
           </q-carousel-control>
@@ -74,11 +74,16 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import { apiUrl } from 'src/base-path'
 import { workImageUrl, workno } from 'src/utils'
 import ImageViewer from './ImageViewer'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'WorkGallery',
 
   components: {

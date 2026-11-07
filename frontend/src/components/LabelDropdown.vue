@@ -6,21 +6,21 @@
     v-touch-hold="onHold"
     @click.capture="onClick"
     @contextmenu="suppressTouchCallout"
-    :toggle-aria-label="$t('searchablelabel.refineWith', { name })"
+    :toggle-aria-label="t('searchablelabel.refineWith', { name })"
   >
     <q-list dense style="min-width: 160px">
       <q-item clickable v-close-popup @click="apply(false)">
         <q-item-section avatar class="label-dropdown__avatar">
           <q-icon name="add" size="xs" />
         </q-item-section>
-        <q-item-section>{{ $t('searchablelabel.include') }}</q-item-section>
+        <q-item-section>{{ t('searchablelabel.include') }}</q-item-section>
       </q-item>
 
       <q-item clickable v-close-popup @click="apply(true)">
         <q-item-section avatar class="label-dropdown__avatar">
           <q-icon name="remove" size="xs" />
         </q-item-section>
-        <q-item-section>{{ $t('searchablelabel.exclude') }}</q-item-section>
+        <q-item-section>{{ t('searchablelabel.exclude') }}</q-item-section>
       </q-item>
     </q-list>
   </q-btn-dropdown>
@@ -66,9 +66,14 @@
 </style>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import { filterWithLabel, suppressTouchCallout } from 'src/utils'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'LabelDropdown',
 
   props: {

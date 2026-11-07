@@ -3,7 +3,7 @@
     <!-- Title & Storage used -->
     <div class="row items-center q-mb-sm">
       <span class="text-h5 text-weight-regular q-pa-xs relative-position">
-        {{ $t('downloads.title') }}
+        {{ t('downloads.title') }}
         <q-badge color="secondary" floating>{{ downloadedWorks.length }}</q-badge>
       </span>
     </div>
@@ -17,14 +17,14 @@
     />
     <div class="text-caption text-on-surface-variant q-mb-md">
       <span v-if="storageQuota > 0">
-        {{ $t('downloads.storageUsed', { used: formatBytes(storageUsage), quota: formatBytes(storageQuota) }) }}
+        {{ t('downloads.storageUsed', { used: formatBytes(storageUsage), quota: formatBytes(storageQuota) }) }}
         &middot;
       </span>
-      {{ $t('downloads.totalDownloaded', { size: formatBytes(totalDownloadedBytes) }) }}
+      {{ t('downloads.totalDownloaded', { size: formatBytes(totalDownloadedBytes) }) }}
     </div>
 
     <div v-if="downloadedWorks.length === 0" class="text-center text-on-surface-variant q-pa-xl">
-      {{ $t('downloads.empty') }}
+      {{ t('downloads.empty') }}
     </div>
 
     <template v-else>
@@ -39,7 +39,7 @@
           v-model="sortBy"
           :options="sortOptions"
           :option-label="humanReadableLabel"
-          :label="$t('downloads.sortBy')"
+          :label="t('downloads.sortBy')"
           class="col-auto"
         />
 
@@ -74,7 +74,7 @@
               <div class="row items-center no-wrap">
                 <span class="text-caption text-on-surface-variant q-mr-sm gt-xs">{{ workSummary(work) }}</span>
                 <q-btn flat round dense icon="play_arrow" color="primary" @click.stop.prevent="playWork(work)">
-                  <q-tooltip>{{ $t('downloads.playAll') }}</q-tooltip>
+                  <q-tooltip>{{ t('downloads.playAll') }}</q-tooltip>
                 </q-btn>
                 <q-btn
                   flat
@@ -83,10 +83,10 @@
                   :icon="isExpanded(work) ? 'expand_less' : 'expand_more'"
                   @click.stop.prevent="toggleExpand(work)"
                 >
-                  <q-tooltip>{{ isExpanded(work) ? $t('downloads.hideTracks') : $t('downloads.showTracks') }}</q-tooltip>
+                  <q-tooltip>{{ isExpanded(work) ? t('downloads.hideTracks') : t('downloads.showTracks') }}</q-tooltip>
                 </q-btn>
                 <q-btn flat round dense icon="delete" color="negative" @click.stop.prevent="removeWork(work)">
-                  <q-tooltip>{{ $t('downloads.removeWork') }}</q-tooltip>
+                  <q-tooltip>{{ t('downloads.removeWork') }}</q-tooltip>
                 </q-btn>
               </div>
             </template>
@@ -138,7 +138,7 @@
             <span class="col-auto text-caption text-on-surface-variant">{{ workSummary(work) }}</span>
             <div class="col-auto row items-center no-wrap">
               <q-btn flat round dense icon="delete" color="negative" @click="removeWork(work)">
-                <q-tooltip>{{ $t('downloads.removeWork') }}</q-tooltip>
+                <q-tooltip>{{ t('downloads.removeWork') }}</q-tooltip>
               </q-btn>
             </div>
           </div>
@@ -149,6 +149,7 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import { mapGetters, mapState } from 'vuex'
 import WorkCard from 'components/WorkCard'
 import WorkListItem from 'components/WorkListItem'
@@ -172,6 +173,10 @@ function formatBytes (bytes) {
 }
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'Downloads',
 
   components: {
@@ -301,9 +306,9 @@ export default {
     },
 
     workSummary (work) {
-      const parts = [this.$t('downloads.trackCount', { count: work.tracks.length })]
+      const parts = [this.t('downloads.trackCount', { count: work.tracks.length })]
       if (work.lyricCount > 0) {
-        parts.push(this.$t('downloads.lyricCount', { count: work.lyricCount }))
+        parts.push(this.t('downloads.lyricCount', { count: work.lyricCount }))
       }
       parts.push(formatBytes(work.bytes))
       return parts.join(' · ')
@@ -368,10 +373,10 @@ export default {
 
     removeWork (work) {
       this.$q.dialog({
-        title: this.$t('downloads.removeWork'),
-        message: this.$t('downloads.removeWorkConfirm', { title: this.workTitleOf(work) }),
-        cancel: this.$t('common.cancel'),
-        ok: this.$t('common.delete'),
+        title: this.t('downloads.removeWork'),
+        message: this.t('downloads.removeWorkConfirm', { title: this.workTitleOf(work) }),
+        cancel: this.t('common.cancel'),
+        ok: this.t('common.delete'),
         persistent: true,
       }).onOk(async () => {
         const filesToRemove = this.downloadedFiles.filter(f => f.workId === work.workId)
@@ -391,9 +396,9 @@ export default {
 
     humanReadableLabel (label) {
       switch (label) {
-        case 'downloadedAt': return this.$t('downloads.sortDownloadedAt')
-        case 'title': return this.$t('downloads.sortTitle')
-        case 'size': return this.$t('downloads.sortSize')
+        case 'downloadedAt': return this.t('downloads.sortDownloadedAt')
+        case 'title': return this.t('downloads.sortTitle')
+        case 'size': return this.t('downloads.sortSize')
         default: return label
       }
     },

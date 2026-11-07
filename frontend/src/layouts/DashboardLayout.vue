@@ -3,7 +3,7 @@
     <q-header elevated class="bg-black">
       <q-toolbar>
         <q-btn flat @click="drawer = !drawer" round dense icon="menu" />
-        <q-toolbar-title>{{ $t('dashboardlayout.dashboard') }}</q-toolbar-title>
+        <q-toolbar-title>{{ t('dashboardlayout.dashboard') }}</q-toolbar-title>
       </q-toolbar>
     </q-header>
 
@@ -52,9 +52,14 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import NotifyMixin from '../mixins/Notification.js'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'DashboardLayout',
 
   mixins: [NotifyMixin],
@@ -70,33 +75,33 @@ export default {
     links () {
       return [
         {
-          title: this.$t('dashboardlayout.library'),
+          title: this.t('dashboardlayout.library'),
           icon: 'folder',
           path: '/admin'
         },
         {
-          title: this.$t('dashboardlayout.scan'),
+          title: this.t('dashboardlayout.scan'),
           icon: 'youtube_searched_for',
           path: '/admin/scanner'
         },
         {
-          title: this.$t('dashboardlayout.userManage'),
+          title: this.t('dashboardlayout.userManage'),
           icon: 'person',
           path: '/admin/usermanage'
         },
         {
-          title: this.$t('dashboardlayout.generalSettings'),
+          title: this.t('dashboardlayout.generalSettings'),
           icon: 'tune',
           path: '/admin/settings'
         },
         {
-          title: this.$t('dashboardlayout.advancedSettings'),
+          title: this.t('dashboardlayout.advancedSettings'),
           icon: 'settings',
           path: '/admin/advanced'
         },
 
         {
-          title: this.$t('dashboardlayout.backToHome'),
+          title: this.t('dashboardlayout.backToHome'),
           icon: 'home',
           path: '/'
         }

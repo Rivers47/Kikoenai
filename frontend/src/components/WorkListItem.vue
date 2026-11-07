@@ -51,9 +51,9 @@
             :key=index
             link-class="text-muted"
             class="col-auto"
-            :lang="$tagLang"
+            :lang="tagLang"
           >
-            {{ $tTag(tag.name) }}
+            {{ tTag(tag.name) }}
           </SearchableLabel>
         </div>
       </q-item-label>
@@ -69,11 +69,16 @@
 </template>
 
 <script>
+import { useTagTranslate } from '../i18n'
 import { apiUrl } from 'src/base-path'
 import { labelRoute } from 'src/utils'
 import SearchableLabel from './SearchableLabel'
 
 export default {
+  setup () {
+    const { tTag, tagLang } = useTagTranslate()
+    return { tTag, tagLang }
+  },
   name: 'WorkListItem',
 
   components: {

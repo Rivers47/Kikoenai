@@ -26,13 +26,13 @@
         :to="labelRoute('tag', tag.name)"
         field="tag"
         :name="tag.name"
-        :label="$tTag(tag.name)"
+        :label="tTag(tag.name)"
         dense
         size="md"
         color="surface-container"
         text-color="on-surface"
         class="shadow-3 q-ma-xs"
-        :lang="$tagLang"
+        :lang="tagLang"
       />
     </div>
 
@@ -42,12 +42,17 @@
 </template>
 
 <script>
+import { useTagTranslate } from '../i18n'
 
 import { workno, labelRoute } from 'src/utils'
 import LabelDropdown from './LabelDropdown'
 import { apiUrl } from 'src/base-path'
 
 export default {
+  setup () {
+    const { tTag, tagLang } = useTagTranslate()
+    return { tTag, tagLang }
+  },
   name: 'Cover',
 
   components: {

@@ -3,12 +3,12 @@
     <q-dialog v-model="showDialog" @hide="closeDialog">
       <q-card style="width: 600px; max-width: 90vw">
         <q-card-section class="q-pb-none">
-          <div class="text-body1">{{ $t('edittracktitles.title') }}</div>
-          <div class="text-caption text-grey">{{ $t('edittracktitles.hint') }}</div>
+          <div class="text-body1">{{ t('edittracktitles.title') }}</div>
+          <div class="text-caption text-grey">{{ t('edittracktitles.hint') }}</div>
         </q-card-section>
 
         <q-card-section v-if="rows.length" class="q-py-none">
-          <q-expansion-item dense icon="playlist_add" :label="$t('edittracktitles.fillFromList')">
+          <q-expansion-item dense icon="playlist_add" :label="t('edittracktitles.fillFromList')">
             <q-input
               v-model="trackList"
               type="textarea"
@@ -16,14 +16,14 @@
               dense
               autogrow
               input-style="max-height: 20vh"
-              :label="$t('edittracktitles.trackListLabel')"
+              :label="t('edittracktitles.trackListLabel')"
               class="q-mb-sm"
             />
             <q-select
               v-if="folders.length > 1"
               v-model="selectedFolders"
               :options="folderOptions"
-              :label="$t('edittracktitles.applyTo')"
+              :label="t('edittracktitles.applyTo')"
               filled
               dense
               multiple
@@ -37,7 +37,7 @@
               flat
               dense
               icon="auto_awesome"
-              :label="$t('edittracktitles.suggest')"
+              :label="t('edittracktitles.suggest')"
               :loading="suggesting"
               @click="suggest()"
             />
@@ -45,7 +45,7 @@
               flat
               dense
               color="primary"
-              :label="$t('edittracktitles.apply')"
+              :label="t('edittracktitles.apply')"
               :disable="!trackList.trim() || !selectedFolders.length"
               @click="applyTrackList()"
             />
@@ -54,11 +54,11 @@
 
         <q-card-section class="scroll" style="max-height: 50vh">
           <div v-if="loading" class="text-center q-pa-md"><q-spinner size="2em" color="primary" /></div>
-          <div v-else-if="!rows.length" class="text-grey">{{ $t('edittracktitles.noAudio') }}</div>
+          <div v-else-if="!rows.length" class="text-grey">{{ t('edittracktitles.noAudio') }}</div>
 
           <div v-for="group in folders" :key="group.folder">
             <div class="text-subtitle2 q-mb-sm ellipsis">
-              <q-icon name="folder" color="info" class="q-mr-xs" />{{ group.folder || $t('edittracktitles.rootFolder') }}
+              <q-icon name="folder" color="info" class="q-mr-xs" />{{ group.folder || t('edittracktitles.rootFolder') }}
             </div>
             <q-input
               v-for="row in group.rows"
@@ -75,10 +75,10 @@
 
         <div class="row justify-between">
           <q-card-actions align="left">
-            <q-btn flat :label="$t('common.cancel')" @click="closeDialog()" />
+            <q-btn flat :label="t('common.cancel')" @click="closeDialog()" />
           </q-card-actions>
           <q-card-actions align="right" class="text-primary">
-            <q-btn flat :label="$t('common.save')" :loading="saving" @click="submit()" />
+            <q-btn flat :label="t('common.save')" :loading="saving" @click="submit()" />
           </q-card-actions>
         </div>
       </q-card>
@@ -87,9 +87,14 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import NotifyMixin from '../mixins/Notification.js'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'EditTrackTitles',
 
   mixins: [NotifyMixin],
@@ -138,7 +143,7 @@ export default {
 
     folderOptions() {
       return this.folders.map(group => ({
-        label: group.folder || this.$t('edittracktitles.rootFolder'),
+        label: group.folder || this.t('edittracktitles.rootFolder'),
         value: group.folder
       }))
     }
@@ -264,7 +269,7 @@ export default {
       this.trackList = titles.join('\n')
 
       if (!titles.length) {
-        this.showWarnNotif(this.$t('edittracktitles.suggestEmpty'))
+        this.showWarnNotif(this.t('edittracktitles.suggestEmpty'))
         return
       }
 
@@ -274,13 +279,13 @@ export default {
       // usual failing of a small local model.
       const notes = []
       if (titles.length !== trackCount) {
-        notes.push(this.$t('edittracktitles.suggestPartial', {
+        notes.push(this.t('edittracktitles.suggestPartial', {
           count: titles.length,
           total: trackCount
         }))
       }
       if (unverified) {
-        notes.push(this.$t('edittracktitles.suggestUnverified', { count: unverified }))
+        notes.push(this.t('edittracktitles.suggestUnverified', { count: unverified }))
       }
       this.suggestNote = notes.join(' ')
     },
@@ -294,7 +299,7 @@ export default {
     onSocketDisconnect() {
       if (!this.suggesting) return
       this.suggesting = false
-      this.showErrNotif(this.$t('edittracktitles.suggestDisconnected'))
+      this.showErrNotif(this.t('edittracktitles.suggestDisconnected'))
     },
 
     /**
@@ -324,7 +329,7 @@ export default {
         })
       }
 
-      this.showSuccNotif(this.$t('edittracktitles.filled', { count: filled }))
+      this.showSuccNotif(this.t('edittracktitles.filled', { count: filled }))
     },
 
     closeDialog() {
@@ -350,7 +355,7 @@ export default {
       this.saving = true
       this.$axios.put(`/api/work/${this.metadata.id}/file-metadata`, { files })
         .then(() => {
-          this.showSuccNotif(this.$t('edittracktitles.saveSuccess'))
+          this.showSuccNotif(this.t('edittracktitles.saveSuccess'))
           this.$emit('saved')
         })
         .catch((error) => {

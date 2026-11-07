@@ -45,9 +45,9 @@
 
           <!-- 评价分布明细 -->
           <q-tooltip content-class="text-subtitle1" v-if=metadata.rate_count_detail>
-            <div>{{ $t('workcard.average', { avg: metadata.rate_average_2dp }) }}</div>
+            <div>{{ t('workcard.average', { avg: metadata.rate_average_2dp }) }}</div>
             <div v-for="(rate, index) in sortedRatings" :key=index class="row items-center">
-              <div class="col">{{ $t('workcard.stars', { n: rate.review_point }) }}</div>
+              <div class="col">{{ t('workcard.stars', { n: rate.review_point }) }}</div>
 
               <!-- 评价占比 -->
               <q-linear-progress
@@ -83,16 +83,16 @@
 
       <!-- 价格&售出数 -->
       <div v-show="metadata.title" v-if="oldStyle">
-        <span class="q-mx-sm text-weight-medium text-h6 text-negative">{{ $t('workcard.priceYen', { price: metadata.price }) }}</span>
-        <span>{{ $t('workcard.dlCount', { count: metadata.dl_count }) }}</span>
-        <span v-if="!metadata.nsfw" class="q-mx-sm sfw-badge">{{ $t('workcard.allAges') }}</span>
+        <span class="q-mx-sm text-weight-medium text-h6 text-negative">{{ t('workcard.priceYen', { price: metadata.price }) }}</span>
+        <span>{{ t('workcard.dlCount', { count: metadata.dl_count }) }}</span>
+        <span v-if="!metadata.nsfw" class="q-mx-sm sfw-badge">{{ t('workcard.allAges') }}</span>
       </div>
       <div v-show="metadata.title" v-else class="row items-center">
         <span class="q-ml-sm text-weight-medium text-h6 text-negative">
           {{ metadata.price }}¥
         </span>
         <q-chip size="sm" icon="sell">{{ metadata.dl_count }}</q-chip>
-        <q-chip v-if="!metadata.nsfw" class="q-mx-sm sfw-badge" dense>{{ $t('workcard.allAges') }}</q-chip>
+        <q-chip v-if="!metadata.nsfw" class="q-mx-sm sfw-badge" dense>{{ t('workcard.allAges') }}</q-chip>
       </div>
 
       <!-- 标签，新版样式下改在封面上显示 -->
@@ -102,7 +102,7 @@
           :to="labelRoute('tag', tag.name)"
           field="tag"
           :name="tag.name"
-          :label="$tTag(tag.name)"
+          :label="tTag(tag.name)"
           :key=index
           dense
           size="md"
@@ -110,7 +110,7 @@
           color="surface-container"
           text-color="on-surface"
           class="shadow-2 q-ma-xs"
-          :lang="$tagLang"
+          :lang="tagLang"
         />
       </div>
 
@@ -139,6 +139,8 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
+import { useTagTranslate } from '../i18n'
 import Cover from 'components/Cover'
 import NotifyMixin from '../mixins/Notification.js'
 import { isFanzaId, fanzaCid, dlsiteWorkUrl, labelRoute } from 'src/utils'
@@ -146,6 +148,11 @@ import SearchableLabel from './SearchableLabel'
 import LabelDropdown from './LabelDropdown'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    const { tTag, tagLang } = useTagTranslate()
+    return { t, tTag, tagLang }
+  },
   name: 'WorkCard',
 
   mixins: [NotifyMixin],

@@ -2,7 +2,7 @@
   <div id="work-tree" class="q-ma-md " style="">
     <q-breadcrumbs gutter="xs" v-if="path.length">
       <q-breadcrumbs-el   >
-        <q-btn no-caps flat dense size="md" icon="folder" @click="goToPath([])">{{ $t('worktree.root') }}</q-btn>
+        <q-btn no-caps flat dense size="md" icon="folder" @click="goToPath([])">{{ t('worktree.root') }}</q-btn>
       </q-breadcrumbs-el>
       
       <q-breadcrumbs-el v-for="(folderName, index) in path"  :key="index"  class="cursor-pointer" >
@@ -22,7 +22,7 @@
           outline
           dense
           @click="setVisualPlayerCover(preview_img_list[preview_img_idx])"
-        >{{ $t('worktree.setAsCover') }}</q-btn>
+        >{{ t('worktree.setAsCover') }}</q-btn>
       </template>
     </ImageViewer>
 
@@ -52,7 +52,7 @@
                  whose titles have been filled in; title is always the filename. -->
             <q-item-label class="text-subtitle1">{{ item.trackTitle || item.title }}</q-item-label>
             <q-item-label v-if="item.trackTitle" caption lines="1">{{ item.title }}</q-item-label>
-            <q-item-label v-if="item.children" caption lines="1">{{ $t('worktree.items', { count: item.children.length }) }}</q-item-label>
+            <q-item-label v-if="item.children" caption lines="1">{{ t('worktree.items', { count: item.children.length }) }}</q-item-label>
           </q-item-section>
 
           <!--音频文件时长 + 已保存的播放进度-->
@@ -77,19 +77,19 @@
           >
             <q-list separator>
               <q-item clickable @click="addToQueue(item)" v-if="item.type === 'audio'">
-                <q-item-section>{{ $t('worktree.addToQueue') }}</q-item-section>
+                <q-item-section>{{ t('worktree.addToQueue') }}</q-item-section>
               </q-item>
 
               <q-item clickable @click="playNext(item)" v-if="item.type === 'audio'">
-                <q-item-section>{{ $t('worktree.playNext') }}</q-item-section>
+                <q-item-section>{{ t('worktree.playNext') }}</q-item-section>
               </q-item>
 
               <q-item clickable @click="download(item)">
-                <q-item-section>{{ $t('worktree.download') }}</q-item-section>
+                <q-item-section>{{ t('worktree.download') }}</q-item-section>
               </q-item>
 
               <q-item clickable @click="toggleOfflineDownload(item)" v-if="item.type === 'audio' && enableTranscoding">
-                <q-item-section>{{ isDownloaded(item.trackId) ? $t('worktree.removeOfflineDownload') : $t('worktree.downloadOffline') }}</q-item-section>
+                <q-item-section>{{ isDownloaded(item.trackId) ? t('worktree.removeOfflineDownload') : t('worktree.downloadOffline') }}</q-item-section>
               </q-item>
 
             </q-list>
@@ -101,6 +101,7 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import { mapState, mapGetters } from 'vuex'
 import { basenameWithoutExt, toQueueItem } from 'src/utils'
 import { formatSeconds } from '../utils'
@@ -110,6 +111,10 @@ import ImageViewer from './ImageViewer'
 import { apiUrl, encodeTrackId } from 'src/base-path'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'WorkTree',
   mixins: [NotifyMixin],
 
@@ -372,9 +377,9 @@ export default {
       const urlWithoutToken = imgFile.mediaDownloadUrl ? `${imgFile.mediaDownloadUrl}` : apiUrl(`/api/media/download/${encodeTrackId(imgFile.trackId)}`);
       this.$store.commit('AudioPlayer/SET_VISUAL_PLAYER_COVER_URL', urlWithoutToken);
       this.$q.notify({
-        message: this.$t('worktree.coverSetSuccess'),
+        message: this.t('worktree.coverSetSuccess'),
         actions: [
-          { label: this.$t('worktree.goToFullScreen'),
+          { label: this.t('worktree.goToFullScreen'),
             handler: () => {
               // this.$router.push(`/fullScreenPlayer/${this.playWorkId}`)
               this.$router.push(`/fullScreenPlayer`)

@@ -17,13 +17,20 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 // The search grammar has exactly one implementation. This page renders the same
 // terms the backend matches on, so it parses with the backend's own module
 // rather than a copy that could drift from it. Kept dependency-free on that
 // side so it bundles for the browser.
 import { parseSearchQuery, formatSearchQuery } from '../../../backend/database/search-query'
+import { useTagTranslate } from '../i18n'
 
 export default {
+  setup () {
+    const { t, te } = useI18n() // global scope
+    const { tTag, tagLang } = useTagTranslate()
+    return { t, te, tTag, tagLang }
+  },
   name: 'FilterTerms',
 
   props: {
@@ -46,13 +53,13 @@ export default {
     fieldLabel (field) {
       // Falls back to the namespace itself for any field without a label.
       const key = `filterterms.${field}`
-      return this.$te(key) ? this.$t(key) : field
+      return this.te(key) ? this.t(key) : field
     },
 
     // Tag names are stored canonically and translated only for display, the
     // same way the chips on a work page do it.
     displayValue (term) {
-      return term.field === 'tag' ? this.$tTag(term.value) : term.value
+      return term.field === 'tag' ? this.tTag(term.value) : term.value
     },
 
     removeTerm (index) {

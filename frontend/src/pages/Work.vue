@@ -13,8 +13,8 @@
       narrow-indicator
       class="q-mx-md text-primary"
     >
-      <q-tab name="files" :label="$t('work.tabFiles')" />
-      <q-tab name="description" :label="$t('work.tabDescription')" />
+      <q-tab name="files" :label="t('work.tabFiles')" />
+      <q-tab name="description" :label="t('work.tabDescription')" />
     </q-tabs>
 
     <!-- keep-alive so the tree keeps whichever folder the user had opened,
@@ -38,6 +38,7 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import WorkDetails from 'components/WorkDetails'
 // import WorkQueue from 'components/WorkQueue'
 import WorkTree from 'components/WorkTree'
@@ -48,6 +49,10 @@ import { sendOrQueue } from '../utils/outbox'
 import { positionsForWork, mergePositions, resumeSecondsFor } from '../utils/positions'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'Work',
 
   mixins: [NotifyMixin],

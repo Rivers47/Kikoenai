@@ -2,14 +2,14 @@
   <q-form @submit="onSubmit">
     <q-card class="q-ma-md">
       <q-toolbar>
-        <q-toolbar-title>{{ $t('advanced.scraperSettings') }}</q-toolbar-title>
+        <q-toolbar-title>{{ t('advanced.scraperSettings') }}</q-toolbar-title>
       </q-toolbar>
 
       <q-list>
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.dlsiteTimeout') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.dlsiteTimeoutCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.dlsiteTimeout') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.dlsiteTimeoutCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -24,8 +24,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.hvdbTimeout') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.hvdbTimeoutCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.hvdbTimeout') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.hvdbTimeoutCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -40,8 +40,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.retryDelay') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.retryDelayCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.retryDelay') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.retryDelayCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -56,8 +56,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.maxRetry') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.maxRetryCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.maxRetry') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.maxRetryCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -72,8 +72,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.parallelism') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.parallelismCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.parallelism') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.parallelismCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -88,8 +88,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.proxyHost') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.proxyHostCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.proxyHost') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.proxyHostCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -103,8 +103,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.proxyPort') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.proxyPortCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.proxyPort') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.proxyPortCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -121,14 +121,14 @@
 
     <q-card class="q-ma-md">
       <q-toolbar>
-        <q-toolbar-title>{{ $t('advanced.scannerSettings') }}</q-toolbar-title>
+        <q-toolbar-title>{{ t('advanced.scannerSettings') }}</q-toolbar-title>
       </q-toolbar>
 
       <q-list>
         <q-item style="height: 70px;">
           <q-item-section>
-            <q-item-label>{{ $t('advanced.maxDepth') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.maxDepthCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.maxDepth') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.maxDepthCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -142,8 +142,8 @@
         </q-item>
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.skipCleanup') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.skipCleanupCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.skipCleanup') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.skipCleanupCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section side>
@@ -152,8 +152,8 @@
         </q-item>
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.workExtras') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.workExtrasCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.workExtras') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.workExtrasCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section side>
@@ -167,15 +167,15 @@
 
     <q-card class="q-ma-md">
       <q-toolbar>
-        <q-toolbar-title>{{ $t('advanced.webServerSettings') }}</q-toolbar-title>
-        <div class="q-pr-xs">{{ $t('advanced.restartNotice') }}</div>
+        <q-toolbar-title>{{ t('advanced.webServerSettings') }}</q-toolbar-title>
+        <div class="q-pr-xs">{{ t('advanced.restartNotice') }}</div>
       </q-toolbar>
 
       <q-list>
         <q-item style="height: 70px;">
           <q-item-section>
-            <q-item-label>{{ $t('advanced.auth') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.authCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.auth') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.authCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -185,8 +185,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.gzip') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.gzipCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.gzip') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.gzipCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -196,8 +196,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.port') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.portCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.port') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.portCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -212,14 +212,14 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.basePath') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.basePathCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.basePath') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.basePathCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
             <q-input
               v-model="config.basePath"
-              :placeholder="$t('advanced.basePathPlaceholder')"
+              :placeholder="t('advanced.basePathPlaceholder')"
               input-class="text-right"
               style="max-width: 180px;"
             />
@@ -228,8 +228,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.blockRemote') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.blockRemoteCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.blockRemote') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.blockRemoteCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -239,8 +239,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.tokenExpiry') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.tokenExpiryCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.tokenExpiry') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.tokenExpiryCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -255,8 +255,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.pageSize') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.pageSizeCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.pageSize') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.pageSizeCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -273,14 +273,14 @@
 
     <q-card class="q-ma-md">
       <q-toolbar>
-        <q-toolbar-title>{{ $t('advanced.securitySettings') }}</q-toolbar-title>
+        <q-toolbar-title>{{ t('advanced.securitySettings') }}</q-toolbar-title>
       </q-toolbar>
 
       <q-list>
         <q-item style="height: 70px;">
           <q-item-section>
-            <q-item-label>{{ $t('advanced.production') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.productionCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.production') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.productionCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -290,8 +290,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.allowedHosts') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.allowedHostsCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.allowedHosts') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.allowedHostsCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section>
@@ -302,7 +302,7 @@
               use-chips
               hide-dropdown-icon
               new-value-mode="add-unique"
-              :placeholder="$t('advanced.allowedHostsPlaceholder')"
+              :placeholder="t('advanced.allowedHostsPlaceholder')"
             />
           </q-item-section>
         </q-item>
@@ -311,14 +311,14 @@
 
     <q-card class="q-ma-md">
       <q-toolbar>
-        <q-toolbar-title>{{ $t('advanced.otherSettings') }}</q-toolbar-title>
+        <q-toolbar-title>{{ t('advanced.otherSettings') }}</q-toolbar-title>
       </q-toolbar>
 
       <q-list>
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.dbDefaultPath') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.dbDefaultPathCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.dbDefaultPath') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.dbDefaultPathCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -328,8 +328,8 @@
 
         <q-item>
           <q-item-section>
-            <q-item-label>{{ $t('advanced.coverDefaultPath') }}</q-item-label>
-            <q-item-label caption>{{ $t('advanced.coverDefaultPathCaption') }}</q-item-label>
+            <q-item-label>{{ t('advanced.coverDefaultPath') }}</q-item-label>
+            <q-item-label caption>{{ t('advanced.coverDefaultPathCaption') }}</q-item-label>
           </q-item-section>
 
           <q-item-section avatar>
@@ -340,15 +340,20 @@
     </q-card>
 
     <div class="q-ma-lg row justify-end">
-      <q-btn :loading="loading" :label="$t('common.save')" type="submit" color="primary" />
+      <q-btn :loading="loading" :label="t('common.save')" type="submit" color="primary" />
     </div>
   </q-form>
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import NotifyMixin from '../../mixins/Notification.js'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'Advanced',
 
   mixins: [NotifyMixin],

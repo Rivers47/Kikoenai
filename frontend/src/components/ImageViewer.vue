@@ -36,19 +36,24 @@
       </div>
 
       <q-card-actions align="around">
-        <q-btn flat :label="$t('common.previous')" color="primary" @click="step(-1)" />
-        <q-btn flat :label="$t('common.close')" color="negative" v-close-popup />
-        <q-btn flat :label="$t('common.next')" color="primary" @click="step(1)" />
+        <q-btn flat :label="t('common.previous')" color="primary" @click="step(-1)" />
+        <q-btn flat :label="t('common.close')" color="negative" v-close-popup />
+        <q-btn flat :label="t('common.next')" color="primary" @click="step(1)" />
       </q-card-actions>
     </q-card>
   </q-dialog>
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 const MAX_ZOOM = 8
 const DOUBLE_TAP_ZOOM = 2.5
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'ImageViewer',
 
   props: {

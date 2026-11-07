@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="row justify-between q-mt-lg q-ml-md">
-      <div class="col text-h5 text-weight-regular">{{ $t('recentworks.recentPlayed') }}</div>
+      <div class="col text-h5 text-weight-regular">{{ t('recentworks.recentPlayed') }}</div>
       <q-btn flat icon="navigate_next" @click="$router.push('/favourites/history')"></q-btn>
     </div>
     <q-virtual-scroll
@@ -42,11 +42,16 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 
 import Cover from './Cover.vue';
 import { resumeSecondsFor } from '../utils/positions';
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'RecentWorks',
 
   components: {

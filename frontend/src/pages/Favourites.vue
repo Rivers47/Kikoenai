@@ -61,7 +61,7 @@
     <div>
       <div class="q-px-sm q-pt-md">
         <q-infinite-scroll @load="onLoad" :offset="500" :disable="stopLoad" ref="scroll">
-          <div class="row justify-center text-muted" v-if="works.length === 0">{{ $t('favourites.emptyHint') }}</div>
+          <div class="row justify-center text-muted" v-if="works.length === 0">{{ t('favourites.emptyHint') }}</div>
           <q-list bordered separator class="shadow-2" v-if="works.length">
              <FavListItem v-for="work in works" :key="work.id" :workid="work.id" :metadata="work" @reset="reset()" :mode="mode"></FavListItem> 
           </q-list>
@@ -77,10 +77,15 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import FavListItem from 'components/FavListItem'
 import NotifyMixin from '../mixins/Notification.js'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'Favourites',
 
   mixins: [NotifyMixin],
@@ -111,36 +116,36 @@ export default {
 
     modeOptions () {
       return [
-        { label: this.$t('favourites.playHistory'), value: 'history' },
-        { label: this.$t('favourites.myReviews'), value: 'review' },
-        { label: this.$t('favourites.myProgress'), value: 'progress' },
+        { label: this.t('favourites.playHistory'), value: 'history' },
+        { label: this.t('favourites.myReviews'), value: 'review' },
+        { label: this.t('favourites.myProgress'), value: 'progress' },
       ]
     },
 
     hideFinishedOptions () {
       return [
-        { label: this.$t('favourites.hideFinished'), value: 'listened' },
-        { label: this.$t('favourites.all'), value: 'all' },
+        { label: this.t('favourites.hideFinished'), value: 'listened' },
+        { label: this.t('favourites.all'), value: 'all' },
       ]
     },
 
     progressOptions () {
       return [
-        { label: this.$t('favourites.marked'), value: 'marked' },
-        { label: this.$t('favourites.listening'), value: 'listening' },
-        { label: this.$t('favourites.listened'), value: 'listened' },
-        { label: this.$t('favourites.replay'), value: 'replay' },
-        { label: this.$t('favourites.postponed'), value: 'postponed' },
+        { label: this.t('favourites.marked'), value: 'marked' },
+        { label: this.t('favourites.listening'), value: 'listening' },
+        { label: this.t('favourites.listened'), value: 'listened' },
+        { label: this.t('favourites.replay'), value: 'replay' },
+        { label: this.t('favourites.postponed'), value: 'postponed' },
       ]
     },
 
     sortOptionsWithLabels () {
       const labels = {
-        updated_at: this.$t('favourites.sortByUpdatedAt'),
-        userRating: this.$t('favourites.sortByRating'),
-        release: this.$t('favourites.sortByRelease'),
-        allage: this.$t('favourites.sortByAllAge'),
-        nsfw: this.$t('favourites.sortByNsfw'),
+        updated_at: this.t('favourites.sortByUpdatedAt'),
+        userRating: this.t('favourites.sortByRating'),
+        release: this.t('favourites.sortByRelease'),
+        allage: this.t('favourites.sortByAllAge'),
+        nsfw: this.t('favourites.sortByNsfw'),
       }
       return Object.keys(labels).map(order => ({ label: labels[order], order }))
     },

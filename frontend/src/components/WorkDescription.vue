@@ -1,6 +1,6 @@
 <template>
   <q-card class="q-pa-md">
-    <div v-if="!hasContent" class="text-muted">{{ $t('workdescription.empty') }}</div>
+    <div v-if="!hasContent" class="text-muted">{{ t('workdescription.empty') }}</div>
 
     <!-- The seller's own markup, sanitized by the backend
          (routes/utils/description-html.js): every tag and attribute comes off
@@ -41,9 +41,14 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import { workImageUrl } from 'src/utils'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'WorkDescription',
 
   props: {

@@ -19,6 +19,7 @@
 </template>
    
 <script>
+import { useI18n } from 'vue-i18n'
 import { mapState, mapGetters } from 'vuex'
 import LyricsBar from 'components/LyricsBar'
 
@@ -26,6 +27,10 @@ import LyricsBar from 'components/LyricsBar'
 
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: "FullScreenPlayer",
 
   components: {
@@ -114,7 +119,7 @@ export default {
       this.$router.push(`/work/${this.workid}`);
     } else if (this.workid === undefined && this.playWorkId === 0) {
       this.$q.notify({
-        message: this.$t('fullscreenplayer.noWorkPlaying'),
+        message: this.t('fullscreenplayer.noWorkPlaying'),
         color: "negative",
       });
       this.$router.push(`/works`);

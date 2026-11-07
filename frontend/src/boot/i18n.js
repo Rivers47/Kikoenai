@@ -1,6 +1,5 @@
 // Registers vue-i18n, syncs the Quasar lang pack to the current locale, and
-// exposes the tag-translation helpers ($tTag, $tagLang). Locale resolution
-// happens once here on boot (LocalStorage → browser → zh-CN).
+// owns the runtime language switchers.
 //
 // The UI locale and the tag display locale are independent; see src/i18n/index.js.
 
@@ -19,7 +18,6 @@ import i18n, {
   STORAGE_KEY,
   TAG_STORAGE_KEY,
 } from '../i18n'
-import { translateTag } from '../i18n/tags'
 
 // Map our locale → Quasar lang pack import. Dynamic import per locale; guard
 // load failure by falling back to en-US.
@@ -47,7 +45,8 @@ async function loadQuasarLang(locale) {
 // <html>), so without this the browser picks its CJK font fallback from its
 // own language setting rather than ours — which is how Japanese kanji end up
 // drawn with Simplified-Chinese glyph shapes. Tag elements carry their own
-// `lang` via $tagLang, since the tag locale can differ from the UI locale.
+// `lang` via `tagLang` from useTagTranslate(), since the tag locale can differ
+// from the UI locale.
 function syncDocumentLang(locale) {
   if (typeof document !== 'undefined') {
     document.documentElement.lang = htmlLang(locale)
@@ -74,13 +73,6 @@ export function changeTagLanguage(locale) {
 
 export default boot(({ app }) => {
   app.use(i18n)
-  // Expose $tTag globally in templates (Options API). Resolves against the tag
-  // locale, which is independent of the UI locale.
-  app.config.globalProperties.$tTag = (name) => translateTag(name, getCurrentTagLocale())
-  // BCP-47 code for the tag locale, for `lang` on elements rendering tag names.
-  Object.defineProperty(app.config.globalProperties, '$tagLang', {
-    get: () => htmlLang(getCurrentTagLocale()),
-  })
   // Apply the initial Quasar lang pack and document language.
   const initial = getInitialLocale()
   syncDocumentLang(initial)

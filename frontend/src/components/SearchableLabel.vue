@@ -13,7 +13,7 @@
     <button
       type="button"
       class="searchable-label__caret"
-      :aria-label="$t('searchablelabel.refineWith', { name })"
+      :aria-label="t('searchablelabel.refineWith', { name })"
       @click.stop.prevent
     >
       <q-icon name="expand_more" size="16px" />
@@ -24,14 +24,14 @@
             <q-item-section avatar class="searchable-label__avatar">
               <q-icon name="add" size="xs" />
             </q-item-section>
-            <q-item-section>{{ $t('searchablelabel.include') }}</q-item-section>
+            <q-item-section>{{ t('searchablelabel.include') }}</q-item-section>
           </q-item>
 
           <q-item clickable v-close-popup @click="apply(true)">
             <q-item-section avatar class="searchable-label__avatar">
               <q-icon name="remove" size="xs" />
             </q-item-section>
-            <q-item-section>{{ $t('searchablelabel.exclude') }}</q-item-section>
+            <q-item-section>{{ t('searchablelabel.exclude') }}</q-item-section>
           </q-item>
         </q-list>
       </q-menu>
@@ -95,9 +95,14 @@
 </style>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import { filterWithLabel, suppressTouchCallout } from 'src/utils'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'SearchableLabel',
 
   props: {

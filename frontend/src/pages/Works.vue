@@ -32,7 +32,7 @@
         v-model="sortCategoryOption"
         :options="sortCategoryOptions"
         :option-label="humanReadableLabel"
-        :label="$t('works.sortBy')"
+        :label="t('works.sortBy')"
         class="col-auto"
       />
 
@@ -47,12 +47,12 @@
         v-model="nsfwOption"
         :options="nsfwOptions"
         :option-label="humanReadableLabel"
-        :label="$t('works.nsfw')"
+        :label="t('works.nsfw')"
         class="col-auto"
       />
 
       <!-- 排序顺序 -->
-      <q-toggle v-model="sortInDesc" :label="sortInDesc ? $t('works.desc') : $t('works.asc')" />
+      <q-toggle v-model="sortInDesc" :label="sortInDesc ? t('works.desc') : t('works.asc')" />
 
       <!-- 切换显示模式按钮 -->
       <q-btn-toggle
@@ -136,7 +136,7 @@
           </div>
         </div>
 
-        <div v-show="stopLoad" class="q-mt-lg q-mb-xl text-h6 text-bold text-center">{{ $t('works.noMoreWorks') }}</div>
+        <div v-show="stopLoad" class="q-mt-lg q-mb-xl text-h6 text-bold text-center">{{ t('works.noMoreWorks') }}</div>
 
         <template v-slot:loading>
           <div class="row justify-center q-my-md">
@@ -149,6 +149,7 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import WorkCard from 'components/WorkCard'
 import WorkListItem from 'components/WorkListItem'
 import NotifyMixin from '../mixins/Notification.js'
@@ -157,6 +158,10 @@ import { mapState } from 'vuex'
 import FilterTerms from 'components/FilterTerms'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'Works',
 
   mixins: [NotifyMixin],
@@ -345,10 +350,10 @@ export default {
 
     refreshPageTitle () {
       if (this.filter) {
-        this.pageTitle = this.$t('works.searchKeyword');
+        this.pageTitle = this.t('works.searchKeyword');
         this.searchMetas = [this.filter];
       } else {
-        this.pageTitle = this.$t('works.allWorks')
+        this.pageTitle = this.t('works.allWorks')
         this.searchMetas = [];
       }
     },
@@ -371,13 +376,13 @@ export default {
     // 通过这个函数可以将release转换成更加可阅读的文字标签“发售日期”
     humanReadableLabel(label) {
       switch(label) {
-        case "release": return this.$t('works.release');
-        case "rating": return this.$t('works.rating');
-        case "created_at": return this.$t('works.createdAt');
-        case "random": return this.$t('works.random');
-        case "nsfw_0": return this.$t('works.nsfwAll');
-        case "nsfw_1": return this.$t('works.nsfwAllAges');
-        case "nsfw_2": return this.$t('works.nsfwAdult');
+        case "release": return this.t('works.release');
+        case "rating": return this.t('works.rating');
+        case "created_at": return this.t('works.createdAt');
+        case "random": return this.t('works.random');
+        case "nsfw_0": return this.t('works.nsfwAll');
+        case "nsfw_1": return this.t('works.nsfwAllAges');
+        case "nsfw_2": return this.t('works.nsfwAdult');
         default: return label;
       }
     },

@@ -1,7 +1,7 @@
 <template>
   <div class="q-pa-md">
     <div class="row items-center no-wrap q-mb-sm">
-      <q-btn flat round dense icon="arrow_back" :aria-label="$t('common.back')" @click="goBack" />
+      <q-btn flat round dense icon="arrow_back" :aria-label="t('common.back')" @click="goBack" />
       <div class="text-h6 q-ml-sm ellipsis">{{ title }}</div>
     </div>
 
@@ -11,7 +11,7 @@
           <q-spinner size="32px" color="primary" />
         </div>
         <div v-else-if="error" class="text-negative">{{ error }}</div>
-        <div v-else-if="!content" class="text-grey">{{ $t('textviewer.emptyFile') }}</div>
+        <div v-else-if="!content" class="text-grey">{{ t('textviewer.emptyFile') }}</div>
         <pre v-else class="text-file-content">{{ content }}</pre>
       </q-card-section>
     </q-card>
@@ -19,9 +19,14 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import { encodeTrackId } from 'src/base-path'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'TextViewer',
 
   data () {

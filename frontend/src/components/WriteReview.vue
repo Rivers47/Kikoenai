@@ -3,7 +3,7 @@
       <q-dialog v-model="showReviewDialog" @hide="closeDialog">
         <q-card>
           <q-card-section class="q-pb-sm">
-            <div class="text-body1">{{ $t('writereview.myReview') }}</div>
+            <div class="text-body1">{{ t('writereview.myReview') }}</div>
           </q-card-section>
 
           <q-card-section class="q-pt-none">
@@ -42,12 +42,12 @@
           
           <div class="row justify-between">
             <q-card-actions  class="text-negative">
-              <q-btn flat :label="$t('writereview.deleteMark')" v-close-popup @click="deleteConfirm = true" />
+              <q-btn flat :label="t('writereview.deleteMark')" v-close-popup @click="deleteConfirm = true" />
             </q-card-actions>
 
             <q-card-actions align="right" class="text-primary">
-              <q-btn flat :label="$t('common.ok')" v-close-popup @click="submitReview()" />
-              <q-btn flat :label="$t('common.cancel')" v-close-popup @click="closeDialog()" />
+              <q-btn flat :label="t('common.ok')" v-close-popup @click="submitReview()" />
+              <q-btn flat :label="t('common.cancel')" v-close-popup @click="closeDialog()" />
             </q-card-actions>
           </div>
         </q-card>
@@ -56,12 +56,12 @@
       <q-dialog v-model="deleteConfirm" persistent transition-show="scale" transition-hide="scale">
         <q-card class="bg-error-container text-on-error-container" style="width: 300px">
           <q-card-section>
-            <div class="text-h6">{{ $t('writereview.confirmDeleteMark') }}</div>
+            <div class="text-h6">{{ t('writereview.confirmDeleteMark') }}</div>
           </q-card-section>
 
           <q-card-actions align="right" class="text-on-error-container">
-              <q-btn flat :label="$t('common.ok')" v-close-popup @click="deleteReview()" />
-              <q-btn flat :label="$t('common.cancel')" v-close-popup @click="closeDialog()"/>
+              <q-btn flat :label="t('common.ok')" v-close-popup @click="deleteReview()" />
+              <q-btn flat :label="t('common.cancel')" v-close-popup @click="closeDialog()"/>
           </q-card-actions>
         </q-card>
       </q-dialog>
@@ -69,9 +69,14 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import NotifyMixin from '../mixins/Notification.js'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'WriteReview',
 
   mixins: [NotifyMixin],
@@ -101,11 +106,11 @@ export default {
   computed: {
     progressOptions() {
       return [
-        {label: this.$t('workdetails.marked'), value: 'marked'},
-        {label: this.$t('workdetails.listening'), value: 'listening'},
-        {label: this.$t('workdetails.listened'), value: 'listened'},
-        {label: this.$t('workdetails.replay'), value: 'replay'},
-        {label: this.$t('workdetails.postponed'), value: 'postponed'}
+        {label: this.t('workdetails.marked'), value: 'marked'},
+        {label: this.t('workdetails.listening'), value: 'listening'},
+        {label: this.t('workdetails.listened'), value: 'listened'},
+        {label: this.t('workdetails.replay'), value: 'replay'},
+        {label: this.t('workdetails.postponed'), value: 'postponed'}
       ]
     }
   },

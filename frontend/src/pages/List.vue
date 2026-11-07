@@ -15,7 +15,7 @@
 
         <div class="row justify-center q-gutter-sm">
           <div class="col-auto" v-for="item in (keyword ? filteredItems : items)" :key="item.id">
-            <q-btn no-caps rounded color="primary" :label="itemLabel(item)" :lang="restrict === 'tags' ? $tagLang : null" :to="labelRoute(searchField, item.name)" />
+            <q-btn no-caps rounded color="primary" :label="itemLabel(item)" :lang="restrict === 'tags' ? tagLang : null" :to="labelRoute(searchField, item.name)" />
           </div>
         </div>
       </div>
@@ -24,10 +24,15 @@
 </template>
 
 <script>
+import { useTagTranslate } from '../i18n'
 import NotifyMixin from '../mixins/Notification.js'
 import { labelRoute } from 'src/utils'
 
 export default {
+  setup () {
+    const { tTag, tagLang } = useTagTranslate()
+    return { tTag, tagLang }
+  },
   name: 'List',
 
   mixins: [NotifyMixin],
@@ -80,7 +85,7 @@ export default {
   methods: {
     labelRoute,
     itemLabel (item) {
-      const name = this.restrict === 'tags' ? this.$tTag(item.name) : item.name
+      const name = this.restrict === 'tags' ? this.tTag(item.name) : item.name
       return `${name} (${item.count})`
     },
     requestList () { 

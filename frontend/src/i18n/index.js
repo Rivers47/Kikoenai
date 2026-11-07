@@ -10,6 +10,7 @@
 
 import { createI18n } from 'vue-i18n'
 import { LocalStorage } from 'quasar'
+import { translateTag } from './tags'
 
 export const SUPPORTED_LOCALES = ['zh-CN', 'en-US', 'ja-JP', 'zh-TW']
 const STORAGE_KEY = 'app_language'
@@ -31,7 +32,7 @@ const HTML_LANG = {
 }
 
 // Current locales, readable by non-Vue code (translateTag). Plain variables,
-// not refs: $tTag has no reactive dependency on them, so a switch does not
+// not refs: useTagTranslate() snapshots them at setup time, so a switch does not
 // repaint anything already on screen. That is safe only because both switchers
 // live in Settings.vue under DashboardLayout, and reaching it unmounts
 // MainLayout — and with it the <keep-alive> holding Works/Favourites — so every
@@ -98,7 +99,7 @@ export function getCurrentLocale() {
 export function setLocale(locale, i18n) {
   if (!SUPPORTED_LOCALES.includes(locale)) locale = FALLBACK_LOCALE
   currentLocale = locale
-  if (i18n) i18n.global.locale = locale
+  if (i18n) i18n.global.locale.value = locale
   LocalStorage.set(STORAGE_KEY, locale)
 }
 
@@ -129,12 +130,20 @@ export function htmlLang(locale) {
   return HTML_LANG[locale] || 'en'
 }
 
+export function useTagTranslate() {
+  return {
+    tTag: (name) => translateTag(name, getCurrentTagLocale()),
+    tagLang: htmlLang(getCurrentTagLocale()),
+  }
+}
+
 const initialLocale = getInitialLocale()
 currentLocale = initialLocale
 tagLocalePref = getInitialTagLocale()
 
 const i18n = createI18n({
-  legacy: true, // Options API: this.$t
+  legacy: false,
+  globalInjection: false,
   locale: initialLocale,
   fallbackLocale: FALLBACK_LOCALE,
   messages: buildAllMessages(),

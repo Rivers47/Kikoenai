@@ -1,15 +1,15 @@
 <template>
   <q-card class="q-ma-md">
     <q-toolbar>
-      <q-toolbar-title>{{ $t('settings.generalTitle') }}</q-toolbar-title>
-      <q-item-label caption>{{ $t('settings.generalCaption') }}</q-item-label>
+      <q-toolbar-title>{{ t('settings.generalTitle') }}</q-toolbar-title>
+      <q-item-label caption>{{ t('settings.generalCaption') }}</q-item-label>
     </q-toolbar>
 
     <q-list>
       <q-item style="height: 70px;">
         <q-item-section>
-          <q-item-label>{{ $t('settings.language') }}</q-item-label>
-          <q-item-label caption>{{ $t('settings.languageCaption') }}</q-item-label>
+          <q-item-label>{{ t('settings.language') }}</q-item-label>
+          <q-item-label caption>{{ t('settings.languageCaption') }}</q-item-label>
         </q-item-section>
 
         <q-item-section avatar>
@@ -28,8 +28,8 @@
 
       <q-item style="height: 70px;">
         <q-item-section>
-          <q-item-label>{{ $t('settings.tagLanguage') }}</q-item-label>
-          <q-item-label caption>{{ $t('settings.tagLanguageCaption') }}</q-item-label>
+          <q-item-label>{{ t('settings.tagLanguage') }}</q-item-label>
+          <q-item-label caption>{{ t('settings.tagLanguageCaption') }}</q-item-label>
         </q-item-section>
 
         <q-item-section avatar>
@@ -48,8 +48,8 @@
 
       <q-item style="height: 70px;">
         <q-item-section>
-          <q-item-label>{{ $t('settings.autoMarkListened') }}</q-item-label>
-          <q-item-label caption>{{ $t('settings.autoMarkListenedCaption') }}</q-item-label>
+          <q-item-label>{{ t('settings.autoMarkListened') }}</q-item-label>
+          <q-item-label caption>{{ t('settings.autoMarkListenedCaption') }}</q-item-label>
         </q-item-section>
 
         <q-item-section avatar>
@@ -63,8 +63,8 @@
 
       <q-item style="height: 70px;">
         <q-item-section>
-          <q-item-label>{{ $t('advanced.legacyCardUi') }}</q-item-label>
-          <q-item-label caption>{{ $t('advanced.legacyCardUiCaption') }}</q-item-label>
+          <q-item-label>{{ t('advanced.legacyCardUi') }}</q-item-label>
+          <q-item-label caption>{{ t('advanced.legacyCardUiCaption') }}</q-item-label>
         </q-item-section>
 
         <q-item-section avatar>
@@ -78,8 +78,8 @@
 
       <q-item style="height: 70px;">
         <q-item-section>
-          <q-item-label>{{ $t('settings.swapSeekButton') }}</q-item-label>
-          <q-item-label caption>{{ $t('settings.swapSeekButtonCaption') }}</q-item-label>
+          <q-item-label>{{ t('settings.swapSeekButton') }}</q-item-label>
+          <q-item-label caption>{{ t('settings.swapSeekButtonCaption') }}</q-item-label>
         </q-item-section>
 
         <q-item-section avatar>
@@ -95,30 +95,30 @@
 
       <q-item style="height: 70px;">
         <q-item-section>
-          <q-item-label>{{ $t('advanced.rewindSeconds') }}</q-item-label>
-          <q-item-label caption>{{ $t('advanced.rewindSecondsCaption') }}</q-item-label>
+          <q-item-label>{{ t('advanced.rewindSeconds') }}</q-item-label>
+          <q-item-label caption>{{ t('advanced.rewindSecondsCaption') }}</q-item-label>
         </q-item-section>
 
         <q-item-section avatar>
           <div class="q-gutter-sm">
-            <q-radio dense :model-value="rewindSeekTime" @update:model-value="onRewindChange" :val="5" :label="`5 ${$t('advanced.secondsUnit')}`" />
-            <q-radio dense :model-value="rewindSeekTime" @update:model-value="onRewindChange" :val="10" :label="`10 ${$t('advanced.secondsUnit')}`" />
-            <q-radio dense :model-value="rewindSeekTime" @update:model-value="onRewindChange" :val="30" :label="`30 ${$t('advanced.secondsUnit')}`" />
+            <q-radio dense :model-value="rewindSeekTime" @update:model-value="onRewindChange" :val="5" :label="`5 ${t('advanced.secondsUnit')}`" />
+            <q-radio dense :model-value="rewindSeekTime" @update:model-value="onRewindChange" :val="10" :label="`10 ${t('advanced.secondsUnit')}`" />
+            <q-radio dense :model-value="rewindSeekTime" @update:model-value="onRewindChange" :val="30" :label="`30 ${t('advanced.secondsUnit')}`" />
           </div>
         </q-item-section>
       </q-item>
 
       <q-item style="height: 70px;">
         <q-item-section>
-          <q-item-label>{{ $t('advanced.forwardSeconds') }}</q-item-label>
-          <q-item-label caption>{{ $t('advanced.forwardSecondsCaption') }}</q-item-label>
+          <q-item-label>{{ t('advanced.forwardSeconds') }}</q-item-label>
+          <q-item-label caption>{{ t('advanced.forwardSecondsCaption') }}</q-item-label>
         </q-item-section>
 
         <q-item-section avatar>
           <div class="q-gutter-sm">
-            <q-radio dense :model-value="forwardSeekTime" @update:model-value="onForwardChange" :val="5" :label="`5 ${$t('advanced.secondsUnit')}`" />
-            <q-radio dense :model-value="forwardSeekTime" @update:model-value="onForwardChange" :val="10" :label="`10 ${$t('advanced.secondsUnit')}`" />
-            <q-radio dense :model-value="forwardSeekTime" @update:model-value="onForwardChange" :val="30" :label="`30 ${$t('advanced.secondsUnit')}`" />
+            <q-radio dense :model-value="forwardSeekTime" @update:model-value="onForwardChange" :val="5" :label="`5 ${t('advanced.secondsUnit')}`" />
+            <q-radio dense :model-value="forwardSeekTime" @update:model-value="onForwardChange" :val="10" :label="`10 ${t('advanced.secondsUnit')}`" />
+            <q-radio dense :model-value="forwardSeekTime" @update:model-value="onForwardChange" :val="30" :label="`30 ${t('advanced.secondsUnit')}`" />
           </div>
         </q-item-section>
       </q-item>
@@ -127,11 +127,16 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import { mapState } from 'vuex'
 import NotifyMixin from '../../mixins/Notification.js'
 import { changeLanguage, changeTagLanguage, getCurrentLocale, getTagLocalePref, FOLLOW_UI } from 'src/boot/i18n.js'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'Settings',
 
   mixins: [NotifyMixin],
@@ -154,17 +159,17 @@ export default {
 
     languageOptions () {
       return [
-        { value: 'zh-CN', label: this.$t('mainlayout.langZhCN') },
-        { value: 'en-US', label: this.$t('mainlayout.langEnUS') },
-        { value: 'ja-JP', label: this.$t('mainlayout.langJaJP') },
-        { value: 'zh-TW', label: this.$t('mainlayout.langZhTW') },
+        { value: 'zh-CN', label: this.t('mainlayout.langZhCN') },
+        { value: 'en-US', label: this.t('mainlayout.langEnUS') },
+        { value: 'ja-JP', label: this.t('mainlayout.langJaJP') },
+        { value: 'zh-TW', label: this.t('mainlayout.langZhTW') },
       ]
     },
 
     // Same locales as the UI, plus a sentinel that tracks the UI language.
     tagLanguageOptions () {
       return [
-        { value: FOLLOW_UI, label: this.$t('settings.tagLanguageFollow') },
+        { value: FOLLOW_UI, label: this.t('settings.tagLanguageFollow') },
         ...this.languageOptions,
       ]
     },
@@ -178,19 +183,19 @@ export default {
   methods: {
     async onLanguageChange (locale) {
       await changeLanguage(locale)
-      this.showSuccNotif(this.$t('settings.languageSaved'))
+      this.showSuccNotif(this.t('settings.languageSaved'))
     },
 
     onTagLanguageChange (locale) {
       changeTagLanguage(locale)
-      this.showSuccNotif(this.$t('settings.tagLanguageSaved'))
+      this.showSuccNotif(this.t('settings.tagLanguageSaved'))
     },
 
     onAutoMarkChange (value) {
       this.$store.commit('AudioPlayer/SET_AUTO_MARK_LISTENED', value)
       this.showSuccNotif(value
-        ? this.$t('settings.autoMarkEnabled')
-        : this.$t('settings.autoMarkDisabled'))
+        ? this.t('settings.autoMarkEnabled')
+        : this.t('settings.autoMarkDisabled'))
     },
 
     onLegacyCardChange (value) {

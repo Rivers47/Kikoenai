@@ -3,34 +3,34 @@
     <q-dialog v-model="showEditDialog" @hide="closeDialog">
       <q-card style="width: 600px; max-width: 90vw">
         <q-card-section class="q-pb-sm">
-          <div class="text-body1">{{ $t('editmetadata.title') }}</div>
+          <div class="text-body1">{{ t('editmetadata.title') }}</div>
         </q-card-section>
 
         <q-card-section class="q-pt-none scroll" style="max-height: 60vh">
           <!-- Title -->
           <q-input
             v-model="editable.title"
-            :label="$t('editmetadata.titleLabel')"
+            :label="t('editmetadata.titleLabel')"
             filled
             class="q-mb-md"
           />
 
           <!-- NSFW toggle -->
           <div class="q-mb-md">
-            <q-toggle v-model="editable.nsfw" :label="$t('editmetadata.nsfw')" />
+            <q-toggle v-model="editable.nsfw" :label="t('editmetadata.nsfw')" />
           </div>
 
           <!-- Circle -->
           <q-input
             v-model="editable.circle"
-            :label="$t('editmetadata.circleLabel')"
+            :label="t('editmetadata.circleLabel')"
             filled
             class="q-mb-md"
           />
 
           <!-- Tags -->
           <div class="q-mb-md">
-            <div class="text-subtitle2 q-mb-xs">{{ $t('editmetadata.tags') }}</div>
+            <div class="text-subtitle2 q-mb-xs">{{ t('editmetadata.tags') }}</div>
             <div class="q-gutter-xs q-mb-xs">
               <q-chip
                 v-for="(tag, idx) in editable.tags"
@@ -46,7 +46,7 @@
               v-model="tagInput"
               use-input
               input-debounce="300"
-              :label="$t('editmetadata.addTag')"
+              :label="t('editmetadata.addTag')"
               filled
               dense
               clearable
@@ -56,13 +56,13 @@
               :options="tagOptions"
               emit-value
               map-options
-              :lang="$tagLang"
+              :lang="tagLang"
               style="max-width: 400px"
             >
               <template v-slot:no-option>
                 <q-item>
                   <q-item-section class="text-grey">
-                    {{ $t('editmetadata.createOnEnter') }}
+                    {{ t('editmetadata.createOnEnter') }}
                   </q-item-section>
                 </q-item>
               </template>
@@ -71,7 +71,7 @@
 
           <!-- VAs -->
           <div class="q-mb-md">
-            <div class="text-subtitle2 q-mb-xs">{{ $t('editmetadata.vas') }}</div>
+            <div class="text-subtitle2 q-mb-xs">{{ t('editmetadata.vas') }}</div>
             <div class="q-gutter-xs q-mb-xs">
               <q-chip
                 v-for="(va, idx) in editable.vas"
@@ -86,7 +86,7 @@
               v-model="vaInput"
               use-input
               input-debounce="300"
-              :label="$t('editmetadata.addVa')"
+              :label="t('editmetadata.addVa')"
               filled
               dense
               clearable
@@ -103,7 +103,7 @@
               <template v-slot:no-option>
                 <q-item>
                   <q-item-section class="text-grey">
-                    {{ $t('editmetadata.createOnEnter') }}
+                    {{ t('editmetadata.createOnEnter') }}
                   </q-item-section>
                 </q-item>
               </template>
@@ -112,7 +112,7 @@
 
           <!-- Illustrators -->
           <div class="q-mb-md">
-            <div class="text-subtitle2 q-mb-xs">{{ $t('editmetadata.illustrators') }}</div>
+            <div class="text-subtitle2 q-mb-xs">{{ t('editmetadata.illustrators') }}</div>
             <div class="q-gutter-xs q-mb-xs">
               <q-chip
                 v-for="(illus, idx) in editable.illustrators"
@@ -127,7 +127,7 @@
               v-model="illustratorInput"
               use-input
               input-debounce="300"
-              :label="$t('editmetadata.addIllustrator')"
+              :label="t('editmetadata.addIllustrator')"
               filled
               dense
               clearable
@@ -144,7 +144,7 @@
               <template v-slot:no-option>
                 <q-item>
                   <q-item-section class="text-grey">
-                    {{ $t('editmetadata.createOnEnter') }}
+                    {{ t('editmetadata.createOnEnter') }}
                   </q-item-section>
                 </q-item>
               </template>
@@ -153,7 +153,7 @@
 
           <!-- Script Writers -->
           <div class="q-mb-md">
-            <div class="text-subtitle2 q-mb-xs">{{ $t('editmetadata.scriptWriters') }}</div>
+            <div class="text-subtitle2 q-mb-xs">{{ t('editmetadata.scriptWriters') }}</div>
             <div class="q-gutter-xs q-mb-xs">
               <q-chip
                 v-for="(sw, idx) in editable.scriptWriters"
@@ -168,7 +168,7 @@
               v-model="scriptWriterInput"
               use-input
               input-debounce="300"
-              :label="$t('editmetadata.addScriptWriter')"
+              :label="t('editmetadata.addScriptWriter')"
               filled
               dense
               clearable
@@ -185,7 +185,7 @@
               <template v-slot:no-option>
                 <q-item>
                   <q-item-section class="text-grey">
-                    {{ $t('editmetadata.createOnEnter') }}
+                    {{ t('editmetadata.createOnEnter') }}
                   </q-item-section>
                 </q-item>
               </template>
@@ -194,12 +194,12 @@
 
           <!-- Series -->
           <div class="q-mb-md">
-            <div class="text-subtitle2 q-mb-xs">{{ $t('editmetadata.series') }}</div>
+            <div class="text-subtitle2 q-mb-xs">{{ t('editmetadata.series') }}</div>
             <q-select
               v-model="editable.series"
               use-input
               input-debounce="300"
-              :label="$t('editmetadata.selectSeries')"
+              :label="t('editmetadata.selectSeries')"
               filled
               dense
               clearable
@@ -211,7 +211,7 @@
               <template v-slot:no-option>
                 <q-item>
                   <q-item-section class="text-grey">
-                    {{ $t('editmetadata.noSeriesMatch') }}
+                    {{ t('editmetadata.noSeriesMatch') }}
                   </q-item-section>
                 </q-item>
               </template>
@@ -221,18 +221,18 @@
 
         <div class="row justify-between">
           <q-card-actions align="left">
-            <q-btn flat :label="$t('common.cancel')" @click="closeDialog()" />
-            <q-btn flat icon="edit_note" :label="$t('editmetadata.editTrackTitles')" @click="showTrackTitlesDialog = true" />
+            <q-btn flat :label="t('common.cancel')" @click="closeDialog()" />
+            <q-btn flat icon="edit_note" :label="t('editmetadata.editTrackTitles')" @click="showTrackTitlesDialog = true" />
             <q-btn
               v-if="asrConfigured"
               flat
               icon="record_voice_over"
-              :label="$t('editmetadata.transcribe')"
+              :label="t('editmetadata.transcribe')"
               @click="showTranscribeDialog = true"
             />
           </q-card-actions>
           <q-card-actions align="right" class="text-primary">
-            <q-btn flat :label="$t('common.save')" :loading="saving" @click="submitEdit()" />
+            <q-btn flat :label="t('common.save')" :loading="saving" @click="submitEdit()" />
           </q-card-actions>
         </div>
       </q-card>
@@ -255,11 +255,18 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
+import { useTagTranslate } from '../i18n'
 import NotifyMixin from '../mixins/Notification.js'
 import EditTrackTitles from './EditTrackTitles'
 import TranscribeTracks from './TranscribeTracks'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    const { tTag, tagLang } = useTagTranslate()
+    return { t, tTag, tagLang }
+  },
   name: 'EditMetadata',
 
   mixins: [NotifyMixin],
@@ -353,7 +360,7 @@ export default {
       const options = await this.fetchOptions('/api/tags');
       update(() => {
         const filtered = val ? options.filter(o => o.name.toLowerCase().includes(val.toLowerCase())) : options;
-        this.tagOptions = filtered.map(o => ({ value: o.name, label: this.$tTag(o.name) }));
+        this.tagOptions = filtered.map(o => ({ value: o.name, label: this.tTag(o.name) }));
       });
     },
 
@@ -449,7 +456,7 @@ export default {
       this.saving = true;
       this.$axios.put(`/api/work/${this.metadata.id}`, payload)
         .then((response) => {
-          this.showSuccNotif(response.data.message || this.$t('editmetadata.saveSuccess'));
+          this.showSuccNotif(response.data.message || this.t('editmetadata.saveSuccess'));
           this.$emit('saved');
         })
         .catch((error) => {

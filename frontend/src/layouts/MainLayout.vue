@@ -72,7 +72,7 @@
 
             <q-item-section>
               <q-item-label class="text-subtitle1">
-                {{ $t('mainlayout.randomPlay') }}
+                {{ t('mainlayout.randomPlay') }}
               </q-item-label>
             </q-item-section>
           </q-item>
@@ -90,7 +90,7 @@
 
             <q-item-section>
               <q-item-label class="text-subtitle1">
-                {{ $t('mainlayout.darkMode') }}
+                {{ t('mainlayout.darkMode') }}
               </q-item-label>
             </q-item-section>
           </q-item>
@@ -107,7 +107,7 @@
 
             <q-item-section>
               <q-item-label class="text-subtitle1">
-                {{ $t('mainlayout.contrastMode', { mode: contrastModeLabel }) }}
+                {{ t('mainlayout.contrastMode', { mode: contrastModeLabel }) }}
               </q-item-label>
             </q-item-section>
           </q-item> -->
@@ -129,7 +129,7 @@
 
             <q-item-section>
               <q-item-label class="text-subtitle1">
-                {{ $t('mainlayout.logout') }}
+                {{ t('mainlayout.logout') }}
               </q-item-label>
               <q-item-label caption lines="2">{{ userName }}</q-item-label>
             </q-item-section>
@@ -146,12 +146,12 @@
       <q-card>
         <q-card-section class="row items-center">
           <q-avatar icon="power_settings_new" color="primary" text-color="white" />
-          <span class="q-ml-sm">{{ $t('mainlayout.logoutConfirm') }}</span>
+          <span class="q-ml-sm">{{ t('mainlayout.logoutConfirm') }}</span>
         </q-card-section>
 
         <q-card-actions align="right">
-          <q-btn flat :label="$t('common.cancel')" color="primary" v-close-popup />
-          <q-btn flat :label="$t('mainlayout.logoutButton')" color="primary" @click="logout()" v-close-popup />
+          <q-btn flat :label="t('common.cancel')" color="primary" v-close-popup />
+          <q-btn flat :label="t('mainlayout.logoutButton')" color="primary" @click="logout()" v-close-popup />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -178,6 +178,7 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import PlayerBar from 'components/PlayerBar'
 import AudioPlayer from 'components/AudioPlayer'
 import LyricsBar from 'components/LyricsBar'
@@ -189,6 +190,10 @@ import { onDownloadMessage, reconcileDownloads } from 'src/utils/downloads'
 import { requestSync } from 'src/utils/outbox'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'MainLayout',
 
   mixins: [NotifyMixin],
@@ -249,9 +254,9 @@ export default {
   computed: {
     contrastModeLabel () {
       const labels = {
-        '': this.$t('mainlayout.systemDefault'),
-        'contrast-medium': this.$t('mainlayout.contrastMedium'),
-        'contrast-high': this.$t('mainlayout.contrastHigh'),
+        '': this.t('mainlayout.systemDefault'),
+        'contrast-medium': this.t('mainlayout.contrastMedium'),
+        'contrast-high': this.t('mainlayout.contrastHigh'),
       }
       return labels[this.contrastMode] || ''
     },
@@ -293,11 +298,11 @@ export default {
         onSuccess: (workId, stored) => {
           this.$store.commit('Downloads/PROMOTE_DOWNLOADED_FILES', stored);
           const work = this.$store.state.Downloads.downloadedFiles.find(f => f.workId === workId);
-          this.showSuccNotif(this.$t('mainlayout.downloadComplete', { title: work?.workTitle || workId }));
+          this.showSuccNotif(this.t('mainlayout.downloadComplete', { title: work?.workTitle || workId }));
         },
         onFail: (workId) => {
           this.discardPendingDownload(workId);
-          this.showErrNotif(this.$t('mainlayout.downloadFailed', { title: workId }));
+          this.showErrNotif(this.t('mainlayout.downloadFailed', { title: workId }));
         },
         onAbort: (workId) => this.discardPendingDownload(workId),
       });
@@ -364,8 +369,8 @@ export default {
               type: 'warning',
               timeout: 60000,
               actions: [
-                { label: this.$t('mainlayout.remindLater'), color: 'black' },
-                { label: this.$t('mainlayout.goToScanner'), color: 'black', handler: () => this.$router.push('/admin/scanner')}
+                { label: this.t('mainlayout.remindLater'), color: 'black' },
+                { label: this.t('mainlayout.goToScanner'), color: 'black', handler: () => this.$router.push('/admin/scanner')}
               ],
             })
           }
@@ -429,7 +434,7 @@ export default {
           return false;
         return true;
       }).map(link => {
-        const copy = { ...link, title: this.$t('mainlayout.' + link.titleKey) }
+        const copy = { ...link, title: this.t('mainlayout.' + link.titleKey) }
         if (link.path === '/fullScreenPlayer') {
           copy.path += `/${this.playWorkId}`
         }

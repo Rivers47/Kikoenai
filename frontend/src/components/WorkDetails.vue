@@ -46,9 +46,9 @@
 
             <!-- 评价分布明细 -->
             <q-tooltip v-if=metadata.rate_count_detail content-class="text-subtitle1">
-              <div>{{ $t('workdetails.average') }}: {{metadata.rate_average_2dp}}</div>
+              <div>{{ t('workdetails.average') }}: {{metadata.rate_average_2dp}}</div>
               <div v-for="(rate, index) in sortedRatings" :key=index class="row items-center">
-                <div class="col"> {{ $t('workdetails.stars', { n: rate.review_point }) }} </div>
+                <div class="col"> {{ t('workdetails.stars', { n: rate.review_point }) }} </div>
 
                 <!-- 评价占比 -->
                 <q-linear-progress
@@ -82,7 +82,7 @@
 
       <!-- 价格&售出数 -->
       <div class="q-pt-sm q-pb-none">
-        <span class="q-mx-sm text-weight-medium text-h6 text-negative">{{ $t('workdetails.priceYen', { price: metadata.price }) }}</span> {{ $t('workdetails.dlCount', { count: metadata.dl_count }) }}
+        <span class="q-mx-sm text-weight-medium text-h6 text-negative">{{ t('workdetails.priceYen', { price: metadata.price }) }}</span> {{ t('workdetails.dlCount', { count: metadata.dl_count }) }}
       </div>
 
       <!-- 标签 -->
@@ -92,7 +92,7 @@
           :to="labelRoute('tag', tag.name)"
           field="tag"
           :name="tag.name"
-          :label="$tTag(tag.name)"
+          :label="tTag(tag.name)"
           :key=index
           dense
           size="md"
@@ -100,7 +100,7 @@
           color="surface-container"
           text-color="on-surface"
           class="shadow-4 q-ma-xs"
-          :lang="$tagLang"
+          :lang="tagLang"
         />
       </div>
 
@@ -182,7 +182,7 @@
               <q-icon name="headset" v-show="progress === 'marked'" />
             </q-item-section>
             <q-item-section>
-              <q-item-label>{{ $t('workdetails.marked') }}</q-item-label>
+              <q-item-label>{{ t('workdetails.marked') }}</q-item-label>
             </q-item-section>
           </q-item>
 
@@ -191,7 +191,7 @@
               <q-icon name="headset" v-show="progress === 'listening'" />
             </q-item-section>
             <q-item-section>
-              <q-item-label>{{ $t('workdetails.listening') }}</q-item-label>
+              <q-item-label>{{ t('workdetails.listening') }}</q-item-label>
             </q-item-section>
           </q-item>
           <q-item clickable @click="setProgress('listened')">
@@ -199,7 +199,7 @@
               <q-icon name="headset" v-show="progress === 'listened'" />
             </q-item-section>
             <q-item-section>
-              <q-item-label>{{ $t('workdetails.listened') }}</q-item-label>
+              <q-item-label>{{ t('workdetails.listened') }}</q-item-label>
             </q-item-section>
           </q-item>
           <q-item clickable @click="setProgress('replay')">
@@ -207,7 +207,7 @@
               <q-icon name="headset" v-show="progress === 'replay'" />
             </q-item-section>
             <q-item-section>
-              <q-item-label>{{ $t('workdetails.replay') }}</q-item-label>
+              <q-item-label>{{ t('workdetails.replay') }}</q-item-label>
             </q-item-section>
           </q-item>
           <q-item clickable @click="setProgress('postponed')">
@@ -215,7 +215,7 @@
               <q-icon name="headset" v-show="progress === 'postponed'" />
             </q-item-section>
             <q-item-section>
-              <q-item-label>{{ $t('workdetails.postponed') }}</q-item-label>
+              <q-item-label>{{ t('workdetails.postponed') }}</q-item-label>
             </q-item-section>
           </q-item>
 
@@ -226,38 +226,38 @@
               <q-icon  name="remove_circle_outline" />
             </q-item-section>
             <q-item-section>
-              <q-item-label>{{ $t('workdetails.clearProgress') }}</q-item-label>
+              <q-item-label>{{ t('workdetails.clearProgress') }}</q-item-label>
             </q-item-section>
           </q-item>
         </q-list>
       </q-btn-dropdown>
 
-      <q-btn dense @click="showReviewDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.writeReview')" />
+      <q-btn dense @click="showReviewDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="t('workdetails.writeReview')" />
 
       <div v-if="metadata.state" class="q-mt-sm q-px-sm">
-        <div class="text-caption text-weight-medium text-on-surface-variant">{{ $t('workdetails.lastPlayback') }}</div>
+        <div class="text-caption text-weight-medium text-on-surface-variant">{{ t('workdetails.lastPlayback') }}</div>
         <div class="text-body2 text-secondary">
           <q-icon name="music_note" size="xs" class="q-mr-xs" />
           {{ currentHistoryTrack }}
         </div>
         <div class="text-caption text-on-surface0-variant">
-          {{ $t('workdetails.playedTo', { time: formatSeconds(historySeconds) }) }}
+          {{ t('workdetails.playedTo', { time: formatSeconds(historySeconds) }) }}
         </div>
       </div>
 
-      <q-btn v-if="metadata.state && playWorkId !== metadata.id" dense @click="resumeThisHistory" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" :label="$t('workdetails.resumeHistory')" />
-      <q-btn v-if="metadata.state" dense @click="clearThisHistory" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.deleteHistory')">
-        <q-tooltip>{{ $t('workdetails.deleteHistoryTooltip') }}</q-tooltip>
+      <q-btn v-if="metadata.state && playWorkId !== metadata.id" dense @click="resumeThisHistory" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" :label="t('workdetails.resumeHistory')" />
+      <q-btn v-if="metadata.state" dense @click="clearThisHistory" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="t('workdetails.deleteHistory')">
+        <q-tooltip>{{ t('workdetails.deleteHistoryTooltip') }}</q-tooltip>
       </q-btn>
 
 
-      <q-btn dense @click="scanWorkFile" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.scanFiles')" />
+      <q-btn dense @click="scanWorkFile" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="t('workdetails.scanFiles')" />
 
       <q-btn v-if="enableTranscoding" dense :loading="downloadOfflineLoading" @click="toggleWorkOfflineDownload" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="offlineDownloadLabel" />
 
-      <q-btn v-if="isAdmin" dense @click="showEditDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.editMetadata')" />
+      <q-btn v-if="isAdmin" dense @click="showEditDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="t('workdetails.editMetadata')" />
 
-      <q-btn dense :loading="refreshMetadataLoading" @click="refreshMetadata" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="$t('workdetails.refreshMetadata')" />
+      <q-btn dense :loading="refreshMetadataLoading" @click="refreshMetadata" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="t('workdetails.refreshMetadata')" />
 
       <WriteReview v-if="showReviewDialog" @closed="processReview" :workid="metadata.id" :metadata="metadata"></WriteReview>
 
@@ -268,6 +268,8 @@
 
 
 <script>
+import { useI18n } from 'vue-i18n'
+import { useTagTranslate } from '../i18n'
 import WorkGallery from 'components/WorkGallery'
 import WriteReview from './WriteReview'
 import EditMetadata from './EditMetadata'
@@ -280,6 +282,11 @@ import { uncacheFile, buildWorkDownloadPlan, startWorkDownload, bgFetchIdFor, ca
 import { activeRegistration } from '../utils/service-worker'
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    const { tTag, tagLang } = useTagTranslate()
+    return { t, tTag, tagLang }
+  },
   name: 'WorkDetails',
 
   mixins: [NotifyMixin],
@@ -336,13 +343,13 @@ export default {
 
     progressLabel() {
       const labels = {
-        marked: this.$t('workdetails.marked'),
-        listening: this.$t('workdetails.listening'),
-        listened: this.$t('workdetails.listened'),
-        replay: this.$t('workdetails.replay'),
-        postponed: this.$t('workdetails.postponed')
+        marked: this.t('workdetails.marked'),
+        listening: this.t('workdetails.listening'),
+        listened: this.t('workdetails.listened'),
+        replay: this.t('workdetails.replay'),
+        postponed: this.t('workdetails.postponed')
       };
-      return labels[this.progress] || this.$t('workdetails.markProgress');
+      return labels[this.progress] || this.t('workdetails.markProgress');
     },
     
     isFanza() {
@@ -401,11 +408,11 @@ export default {
       // A foreground download is watched rather than backgrounded, so its
       // progress goes on the button -- there is no OS notification for it.
       if (this.downloadProgress) {
-        return this.$t('workdetails.downloadOfflineProgress', this.downloadProgress);
+        return this.t('workdetails.downloadOfflineProgress', this.downloadProgress);
       }
-      if (this.isWorkDownloading(this.metadata.id)) return this.$t('workdetails.downloadOfflineInProgress');
-      if (this.isWorkDownloaded(this.metadata.id)) return this.$t('workdetails.removeOfflineDownload');
-      return this.$t('workdetails.downloadOffline');
+      if (this.isWorkDownloading(this.metadata.id)) return this.t('workdetails.downloadOfflineInProgress');
+      if (this.isWorkDownloaded(this.metadata.id)) return this.t('workdetails.removeOfflineDownload');
+      return this.t('workdetails.downloadOffline');
     },
   },
 
@@ -462,10 +469,10 @@ export default {
     // 只清除进度，保留评分与评论。仅 progress 的行会被后端整行删除。
     clearProgress () {
       this.$q.dialog({
-        title: this.$t('workdetails.clearProgress'),
-        message: this.$t('workdetails.clearProgressMessage'),
-        cancel: this.$t('common.cancel'),
-        ok: this.$t('common.ok'),
+        title: this.t('workdetails.clearProgress'),
+        message: this.t('workdetails.clearProgressMessage'),
+        cancel: this.t('common.cancel'),
+        ok: this.t('common.ok'),
         persistent: true
       }).onOk(() => {
         this.$axios.delete(`/api/review/${this.metadata.id}/progress`)
@@ -522,17 +529,17 @@ export default {
 
     clearThisHistory() {
       this.$q.dialog({
-        title: this.$t('common.notice'),
-        message: this.$t('workdetails.deleteHistoryConfirm'),
-        cancel: this.$t('common.cancel'),
-        ok: this.$t('common.ok')
+        title: this.t('common.notice'),
+        message: this.t('workdetails.deleteHistoryConfirm'),
+        cancel: this.t('common.cancel'),
+        ok: this.t('common.ok')
       }).onOk(async () => {
         this.$axios.delete(`/api/history/${this.metadata.id}`)
           .then((_) => {
-            this.$q.notify(this.$t('workdetails.deleteHistorySuccess'))
+            this.$q.notify(this.t('workdetails.deleteHistorySuccess'))
           })
           .catch((err) => {
-            this.$q.notify(this.$t('workdetails.deleteHistoryFail') + err.message)
+            this.$q.notify(this.t('workdetails.deleteHistoryFail') + err.message)
             console.error(err)
           })
       })
@@ -556,7 +563,7 @@ export default {
       this.refreshMetadataLoading = true;
       try {
         await this.$axios.post(`/api/refresh/${this.metadata.id}`);
-        this.showSuccNotif(this.$t('workdetails.refreshMetadataSuccess'));
+        this.showSuccNotif(this.t('workdetails.refreshMetadataSuccess'));
         this.$emit('reset');
       } catch(err) {
         console.error(err);
@@ -612,7 +619,7 @@ export default {
         // abandons the download. Say so before starting rather than letting the
         // user discover it by navigating away.
         if (!(await canBackgroundFetch())) {
-          this.showSuccNotif(this.$t('workdetails.downloadOfflineForeground'));
+          this.showSuccNotif(this.t('workdetails.downloadOfflineForeground'));
         }
         const tracksResponse = await this.$axios.get(`/api/tracks/${workId}`);
         const tree = tracksResponse.data.tree || tracksResponse.data;
@@ -639,7 +646,7 @@ export default {
             workId,
             workTitle: this.metadata.title,
             rows,
-            title: this.$t('workdetails.downloadOfflineNotificationTitle', { title: this.metadata.title }),
+            title: this.t('workdetails.downloadOfflineNotificationTitle', { title: this.metadata.title }),
             // Only fires on the foreground path; the background one reports
             // progress through the browser's own notification instead.
             onProgress: ({ done, total }) => { this.downloadProgress = { done, total }; },
@@ -655,9 +662,9 @@ export default {
           // Already finished by the time we get here, and no service worker will
           // post a completion message -- so promote the rows directly.
           this.$store.commit('Downloads/PROMOTE_DOWNLOADED_FILES', result.stored);
-          this.showSuccNotif(this.$t('workdetails.downloadOfflineComplete', { title: this.metadata.title }));
+          this.showSuccNotif(this.t('workdetails.downloadOfflineComplete', { title: this.metadata.title }));
         } else {
-          this.showSuccNotif(this.$t('workdetails.downloadOfflineStarted'));
+          this.showSuccNotif(this.t('workdetails.downloadOfflineStarted'));
         }
       } catch(err) {
         console.error(err);

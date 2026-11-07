@@ -5,7 +5,7 @@
         <q-btn
           class="col"
           color="negative"
-          :label="$t('scanner.killScan')"
+          :label="t('scanner.killScan')"
           :disable="state !== 'running' || !(loggedIn || $socket.connected)"
           @click="killScanProceess()"
         />
@@ -15,7 +15,7 @@
         <q-btn
           class="col"
           color="primary"
-          :label="$t('scanner.scanLibrary')"
+          :label="t('scanner.scanLibrary')"
           :disable="state === 'running' || !(loggedIn || $socket.connected)"
           @click="performScan()"
         />
@@ -25,7 +25,7 @@
         <q-btn
           class="col"
           color="primary"
-          :label="$t('scanner.refreshLibrary')"
+          :label="t('scanner.refreshLibrary')"
           :disable="state === 'running' || !(loggedIn || $socket.connected)"
           @click="performUpdate()"
         />
@@ -35,7 +35,7 @@
         <q-btn
           class="col"
           color="secondary"
-          :label="$t('scanner.scanFileChanges')"
+          :label="t('scanner.scanFileChanges')"
           :disable="state === 'running' || !(loggedIn || $socket.connected)"
           @click="performWorkFileScan()"
         />
@@ -77,10 +77,10 @@
         align="justify"
         narrow-indicator
       >
-        <q-tab name="tasks" icon="hourglass_full" :label="$t('scanner.processing')">
+        <q-tab name="tasks" icon="hourglass_full" :label="t('scanner.processing')">
           <q-badge v-show="tasks.length > 0" color="primary" floating>{{tasks.length}}</q-badge>
         </q-tab>
-        <q-tab name="failedTasks" icon="error_outline" :label="$t('scanner.failed')">
+        <q-tab name="failedTasks" icon="error_outline" :label="t('scanner.failed')">
           <q-badge v-show="failedTasks.length > 0" color="negative" floating>{{failedTasks.length}}</q-badge>
         </q-tab>
       </q-tabs>
@@ -168,6 +168,7 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import NotifyMixin from '../../mixins/Notification.js'
 import { workno } from 'src/utils'
 
@@ -182,6 +183,10 @@ const push = (array, entry, max) => {
 }
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'Scanner',
 
   mixins: [NotifyMixin],
@@ -281,7 +286,7 @@ export default {
       this.loggedIn = true
     },
     onConnectError () {
-      this.showErrNotif(this.$t('scanner.socketConnectFail'))
+      this.showErrNotif(this.t('scanner.socketConnectFail'))
     },
   },
 
@@ -291,11 +296,11 @@ export default {
         const code = workno(res.rjcode)
         const count = res.count
         if (res.result === 'added') {
-          return { level: 'info', message: this.$t('scanner.addedSuccess', { code, count }) }
+          return { level: 'info', message: this.t('scanner.addedSuccess', { code, count }) }
         } else if (res.result === 'updated') {
-          return { level: 'info', message: this.$t('scanner.updatedSuccess', { code, count }) }
+          return { level: 'info', message: this.t('scanner.updatedSuccess', { code, count }) }
         } else {
-          return { level: 'error', message: this.$t('scanner.processFailed', { code, count }) }
+          return { level: 'error', message: this.t('scanner.processFailed', { code, count }) }
         }
       })
       return this.mainLogs.concat(resultLogs)

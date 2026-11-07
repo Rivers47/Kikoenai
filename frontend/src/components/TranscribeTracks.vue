@@ -3,27 +3,27 @@
     <q-dialog v-model="showDialog" persistent @hide="closeDialog">
       <q-card style="width: 600px; max-width: 90vw">
         <q-card-section class="q-pb-none">
-          <div class="text-body1">{{ $t('transcribetracks.title') }}</div>
-          <div class="text-caption text-grey">{{ $t('transcribetracks.hint') }}</div>
+          <div class="text-body1">{{ t('transcribetracks.title') }}</div>
+          <div class="text-caption text-grey">{{ t('transcribetracks.hint') }}</div>
         </q-card-section>
 
         <q-card-section v-if="rows.length" class="q-py-none">
-          <q-expansion-item dense icon="tune" :label="$t('transcribetracks.options')">
+          <q-expansion-item dense icon="tune" :label="t('transcribetracks.options')">
             <q-input
               v-model="query"
               filled
               dense
               clearable
               :disable="running"
-              :label="$t('transcribetracks.queryLabel')"
-              :hint="$t('transcribetracks.queryHint')"
+              :label="t('transcribetracks.queryLabel')"
+              :hint="t('transcribetracks.queryHint')"
               class="q-mb-sm"
             />
             <q-checkbox
               v-model="overwrite"
               dense
               :disable="running"
-              :label="$t('transcribetracks.overwrite')"
+              :label="t('transcribetracks.overwrite')"
             />
           </q-expansion-item>
         </q-card-section>
@@ -33,7 +33,7 @@
             v-model="allSelected"
             dense
             :disable="running"
-            :label="$t('transcribetracks.selectAll', { count: selected.length })"
+            :label="t('transcribetracks.selectAll', { count: selected.length })"
           />
         </q-card-section>
 
@@ -43,7 +43,7 @@
 
         <q-card-section class="scroll" style="max-height: 50vh">
           <div v-if="loading" class="text-center q-pa-md"><q-spinner size="2em" color="primary" /></div>
-          <div v-else-if="!rows.length" class="text-grey">{{ $t('transcribetracks.noAudio') }}</div>
+          <div v-else-if="!rows.length" class="text-grey">{{ t('transcribetracks.noAudio') }}</div>
 
           <q-item
             v-for="row in rows"
@@ -75,7 +75,7 @@
             <q-item-section>
               <q-item-label class="ellipsis">{{ row.relPath }}</q-item-label>
               <q-item-label v-if="row.status" caption :class="row.status === 'failed' ? 'text-negative' : ''">
-                {{ row.error || $t(`transcribetracks.status.${row.status}`) }}
+                {{ row.error || t(`transcribetracks.status.${row.status}`) }}
               </q-item-label>
             </q-item-section>
           </q-item>
@@ -83,15 +83,15 @@
 
         <div class="row justify-between">
           <q-card-actions align="left">
-            <q-btn flat :label="$t('common.close')" :disable="running" @click="closeDialog()" />
+            <q-btn flat :label="t('common.close')" :disable="running" @click="closeDialog()" />
           </q-card-actions>
           <q-card-actions align="right" class="text-primary">
-            <q-btn v-if="running" flat color="negative" :label="$t('common.cancel')" @click="cancel()" />
+            <q-btn v-if="running" flat color="negative" :label="t('common.cancel')" @click="cancel()" />
             <q-btn
               v-else
               flat
               icon="record_voice_over"
-              :label="$t('transcribetracks.start')"
+              :label="t('transcribetracks.start')"
               :disable="!selected.length"
               @click="start()"
             />
@@ -103,6 +103,7 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import NotifyMixin from '../mixins/Notification.js'
 
 // A row with no status draws nothing: a placeholder circle reads as an
@@ -115,6 +116,10 @@ const STATUS_ICON = {
 }
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'TranscribeTracks',
 
   mixins: [NotifyMixin],
@@ -280,14 +285,14 @@ export default {
       this.running = false
 
       const notes = []
-      if (cancelled) notes.push(this.$t('transcribetracks.cancelled'))
+      if (cancelled) notes.push(this.t('transcribetracks.cancelled'))
       // Where the files landed: the point of writing beside the audio is that
       // they are findable for a typo fix.
-      if (overlay) notes.push(this.$t('transcribetracks.wroteOverlay', { count: overlay }))
-      if (failed) notes.push(this.$t('transcribetracks.someFailed', { count: failed }))
+      if (overlay) notes.push(this.t('transcribetracks.wroteOverlay', { count: overlay }))
+      if (failed) notes.push(this.t('transcribetracks.someFailed', { count: failed }))
       this.note = notes.join(' ')
 
-      this.showSuccNotif(this.$t('transcribetracks.done', { written, skipped, empty }))
+      this.showSuccNotif(this.t('transcribetracks.done', { written, skipped, empty }))
       if (written) this.$emit('saved')
     },
 
@@ -301,7 +306,7 @@ export default {
     onSocketDisconnect() {
       if (!this.running) return
       this.running = false
-      this.showErrNotif(this.$t('transcribetracks.disconnected'))
+      this.showErrNotif(this.t('transcribetracks.disconnected'))
     },
 
     closeDialog() {

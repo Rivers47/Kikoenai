@@ -24,6 +24,7 @@
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import NotifyMixin from '../mixins/Notification.js'
 import { formatSeconds } from '../utils'
@@ -43,6 +44,10 @@ const MEDIA_SESSION_ACTIONS = [
 const FINISHED_EPSILON_SECONDS = 1
 
 export default {
+  setup () {
+    const { t } = useI18n() // global scope
+    return { t }
+  },
   name: 'AudioElement',
 
   mixins: [NotifyMixin],
@@ -297,7 +302,7 @@ export default {
       })
         .then(() => {
           this.$q.notify({
-            message: this.$t('audioelement.autoMarkedListened'),
+            message: this.t('audioelement.autoMarkedListened'),
             timeout: 1500,
             color: 'primary',
             icon: 'task_alt'
@@ -388,7 +393,7 @@ export default {
       this.PAUSE()
       this.CLEAR_SLEEP_MODE()
       this.$q.notify({
-        message: this.$t('audioelement.sleepTimerStopped'),
+        message: this.t('audioelement.sleepTimerStopped'),
         color: 'primary',
         icon: 'bedtime',
         timeout: 5000
@@ -484,7 +489,7 @@ export default {
       if (this.currentTime > 0) {
         media.currentTime = this.currentTime
         if (trackId !== this._loadedTrackId) {
-          this.$q.notify({message: this.$t('audioelement.resumeHistory'), timeout: 1000})
+          this.$q.notify({message: this.t('audioelement.resumeHistory'), timeout: 1000})
         }
       }
       this._loadedTrackId = trackId
