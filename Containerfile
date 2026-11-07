@@ -1,6 +1,6 @@
 # Backend Dockerfile
 # Build stage: install production dependencies
-FROM node:24-alpine AS build
+FROM node:25-alpine AS build
 
 WORKDIR /usr/src/kikoeru
 
@@ -19,7 +19,7 @@ RUN npm ci -w backend --omit=dev && npm cache clean --force \
     && rm -rf backend/node_modules/sqlite3/deps backend/node_modules/sqlite3/src backend/node_modules/sqlite3/binding.gyp
 
 # Final stage
-FROM node:24-alpine
+FROM node:25-alpine
 
 # NODE_ENV=production forces auth on (see backend/config.js) and cannot be
 # overridden via the admin config -- required so the shipped image is never
