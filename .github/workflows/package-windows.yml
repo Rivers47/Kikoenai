@@ -41,7 +41,7 @@ jobs:
         run: npm run package:windows
 
       - name: Upload staged folder artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Kikoenai-windows-x64
           path: package/windows-exe/Kikoenai
