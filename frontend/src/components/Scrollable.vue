@@ -1,6 +1,6 @@
 <template>
   <div ref="container" class="container">
-    <div class="scrolling" :style="scrollStyle">
+    <div class="scrolling" :class="{ animating }" :style="scrollStyle">
       <div ref="slot" class="one-line-expand">
         <slot name="default"></slot>
         <span v-if="needScroll" class="spacer" :style="{'width': `${spacerWidth}px`}"></span>
@@ -34,6 +34,7 @@ export default {
       slotWidth: 0,
       needScroll: false,
       spacerWidth: 80, // px
+      pageVisible: document.visibilityState !== 'hidden',
     }
   },
   computed: {
@@ -43,14 +44,14 @@ export default {
     slot() {
       return this.$refs.slot;
     },
-    animationDuration() {
-      return this.slotWidth / 30;
+    animating() {
+      return this.needScroll && !this.stop && this.pageVisible;
     },
+
     scrollStyle() {
+      if (!this.animating) return {};
       return {
-        // 'animation-duration': `${this.slotWidth / 90}s`,
         'animation-duration': `${this.slotWidth / 60}s`,
-        'animation-play-state': this.stop ? "paused" : "running",
         '--max-scroll': this.maxScroll,
       };
     }
@@ -67,8 +68,19 @@ export default {
     this.resizeObserver = new ResizeObserver(this.onSlotResize);
     this.resizeObserver.observe(this.slot);
     this.resizeObserver.observe(this.container);
+
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+  },
+  beforeUnmount() {
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    // The debounced resize callback can still fire after teardown otherwise.
+    if (this.resizeObserver) this.resizeObserver.disconnect();
   },
   methods: {
+    onVisibilityChange() {
+      this.pageVisible = document.visibilityState !== 'hidden';
+    },
+
     onSlotResize() {
       const containerWidth = Math.round(this.container.getBoundingClientRect().width);
 
@@ -123,14 +135,18 @@ export default {
   display: inline-block;
 }
 
-.scrolling {
+/* No animation is declared on the base class: the marquee only exists while
+   `animating` is true (see the computed of the same name). */
+.scrolling.animating {
   animation-name: scrollAnime;
-  animation-delay: 0s;
-  animation-direction: normal;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
   animation-fill-mode: forwards;
-  transition: transform 1s;
+
+  /* Keeps the scroll on its own compositor layer, so a moving title does not
+     re-resolve style and lay out the page on every frame. */
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 .spacer {

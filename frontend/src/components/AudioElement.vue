@@ -208,21 +208,25 @@ export default {
     this._lrcLoadId = 0;
     this._lyricStreams = null;
     this._lyricFrame = [];
-    this._lyricRaf = null;
+    // Sorted cue times at which the bar can change, and the single timer
+    // waiting for the next one. Both are per-track state, not reactive.
+    this._lyricBoundaries = [];
+    this._lyricTimer = null;
   },
 
   methods: {
     formatSeconds,
 
     onPause() {
-      this.stopLyricTicker()
+      // The element is already paused here, so this publishes the last line
+      // without arming a boundary timer.
       this.sampleLyrics()
       this.PAUSE()
     },
     onPlaying() {
       this.resumeAudioContext()
-      this.startLyricTicker()
       this.PLAY()
+      this.sampleLyrics()
     },
 
     resumeAudioContext () {
@@ -231,8 +235,24 @@ export default {
       }
     },
     onWaiting() {
-      this.stopLyricTicker()
       this.PLAY()
+      // The clock has stopped, so a pending boundary is no longer due when the
+      // timer says it is. `playing`/`timeupdate` re-arm this.
+      this._clearLyricTimer()
+    },
+
+    onRateChange() {
+      this.sampleLyrics()
+    },
+
+    onVisibilityChange() {
+      if (document.visibilityState === 'hidden') {
+        this._clearLyricTimer()
+        return
+      }
+      // Timers do not run while the document is hidden, so whatever is on
+      // screen is stale by now.
+      this.sampleLyrics()
     },
     ...mapMutations('AudioPlayer', [
       'SET_DURATION',
@@ -277,9 +297,10 @@ export default {
       if (this._pendingStart === null && this.plyr.media.readyState >= HTMLMediaElement.HAVE_METADATA) {
         this.SET_CURRENT_TIME(this.plyr.currentTime)
       }
-      // Also sampled here, not only from the ticker: 'timeupdate' keeps
-      // firing when the tab is hidden, where requestAnimationFrame is
-      // throttled to a standstill.
+      // Backstop for the boundary timer: a coalesced or swallowed timer costs
+      // at most this ~4x/s interval, and one that fired late is corrected from
+      // the clock it reads. Publishing is conditional, so when the text has not
+      // changed this does no work.
       this.sampleLyrics()
 
       if (this.sleepMode && this.sleepModeType === 'minutes' && this.sleepStopAt && Date.now() >= this.sleepStopAt) {
@@ -404,9 +425,8 @@ export default {
       // Firefox fires `ended` for a seek that lands at the end; nothing played.
       if (!this.plyr.media.played.length) return
       this.maybeMarkWorkComplete()
-      // Fire-and-forget per-track progress report (Phase 2).
-      // Must run before the switch below so currentPlayingFile still
-      // refers to the track that just ended.
+      // Fire-and-forget per-track progress report. Must run before the switch
+      // below so currentPlayingFile still refers to the track that just ended.
       this._reportTrackProgress()
       
       if (this.sleepMode && this.sleepModeType === 'tracks') {
@@ -476,6 +496,13 @@ export default {
       if (media.currentSrc === absUrl && !media.error) {
         return false
       }
+      // The cue table describes the outgoing track and the clock is about to
+      // belong to the new one, so the schedule is dropped rather than sampling
+      // new positions against old cues. The lines on screen stay until
+      // loadLrcFile installs this track's cues (or finds it has none).
+      this._clearLyricTimer()
+      this._lyricStreams = null
+      this._lyricBoundaries = []
       media.src = url
       media.load()
       // Start where the store says this track is. Setting it before metadata
@@ -515,35 +542,75 @@ export default {
 
     // Read what every speaker is saying at the playhead and publish it as one
     // frame, so a line arriving for one speaker never drops the line another
-    // is still holding on screen. Driven by the clock rather than by scheduled
-    // events, which is what makes seeking and the offset slider need no
-    // handling beyond calling this again.
+    // is still holding on screen. Then re-arm the timer for the next change:
+    // every call site -- seek, pause, offset change, `timeupdate` -- therefore
+    // leaves the schedule correct without handling it themselves.
     sampleLyrics () {
-      if (!this._lyricStreams) return;
-      const timeMs = (this.plyr.currentTime + this.lyricOffsetSeconds) * 1000;
-      const frame = this._lyricStreams.map(stream => cueTextAt(stream.cues, timeMs));
-      if (frame.every((text, index) => text === this._lyricFrame[index])) return;
-      this._lyricFrame = frame;
-      this.SET_CURRENT_LYRICS(frame.slice());
+      const media = this.plyr && this.plyr.media;
+      if (!media) return;
+      if (this._lyricStreams) {
+        const timeMs = (media.currentTime + this.lyricOffsetSeconds) * 1000;
+        const frame = this._lyricStreams.map(stream => cueTextAt(stream.cues, timeMs));
+        if (frame.some((text, index) => text !== this._lyricFrame[index])) {
+          this._lyricFrame = frame;
+          this.SET_CURRENT_LYRICS(frame.slice());
+        }
+      }
+      this._scheduleLyricSample(media);
     },
 
-    startLyricTicker () {
-      if (this._lyricRaf !== null) return;
-      const tick = () => {
-        this._lyricRaf = requestAnimationFrame(tick);
+    // Every instant at which the bar can change
+    _lyricBoundariesOf (streams) {
+      const points = new Set();
+      streams.forEach((stream) => {
+        stream.cues.forEach((cue) => {
+          points.add(cue.start);
+          if (Number.isFinite(cue.end)) points.add(cue.end);
+        });
+      });
+      return Array.from(points).sort((a, b) => a - b);
+    },
+
+    // First boundary strictly after `timeMs` (cue time, ms), or null when the
+    // track has nothing left to show.
+    _nextLyricBoundary (timeMs) {
+      const points = this._lyricBoundaries;
+      let low = 0, high = points.length - 1, found = -1;
+      while (low <= high) {
+        const mid = (low + high) >> 1;
+        if (points[mid] > timeMs) {
+          found = mid;
+          high = mid - 1;
+        } else {
+          low = mid + 1;
+        }
+      }
+      return found === -1 ? null : points[found];
+    },
+
+    _clearLyricTimer () {
+      if (this._lyricTimer === null) return;
+      clearTimeout(this._lyricTimer);
+      this._lyricTimer = null;
+    },
+
+    _scheduleLyricSample (media) {
+      this._clearLyricTimer();
+      if (!this._lyricStreams || !this._lyricBoundaries.length) return;
+      if (!media || media.paused || media.ended || document.hidden) return;
+      const nowMs = (media.currentTime + this.lyricOffsetSeconds) * 1000;
+      const nextMs = this._nextLyricBoundary(nowMs);
+      if (nextMs === null) return;
+      const rate = media.playbackRate > 0 ? media.playbackRate : 1;
+      this._lyricTimer = setTimeout(() => {
+        this._lyricTimer = null;
         this.sampleLyrics();
-      };
-      this._lyricRaf = requestAnimationFrame(tick);
-    },
-
-    stopLyricTicker () {
-      if (this._lyricRaf === null) return;
-      cancelAnimationFrame(this._lyricRaf);
-      this._lyricRaf = null;
+      }, Math.max(0, (nextMs - nowMs) / rate));
     },
 
     setLyricStreams (streams) {
       this._lyricStreams = streams;
+      this._lyricBoundaries = this._lyricBoundariesOf(streams);
       this._lyricFrame = streams.map(() => '');
       // Speaker names are fixed for the track, so they go out once here rather
       // than on every frame.
@@ -560,8 +627,8 @@ export default {
         const check_response = await this.$axios.get(url)
         if (loadId !== this._lrcLoadId) return;
         if (!check_response.data.result) {
-          //new track has no lyric — clear the previous track's lyric
-          // state so its onPlay callback stops firing SET_CURRENT_LYRICS.
+          // No lyric for this track: clear the previous track's lines rather
+          // than leaving them on screen.
           this.resetToNoLyricStatus();
           return;
         }
@@ -575,16 +642,10 @@ export default {
         }
 
         const fetched = await Promise.all(sources.map(async (source) => {
-          // Same mechanism as the audio source computed: once a work is
-          // downloaded, its lyric files are downloaded too (see downloadWork in
-          // WorkDetails.vue), so prefer serving them from the offline copy.
           const lrcUrl = this.isFileDownloaded(source.trackId)
             ? `/api/media/offline/${encodeTrackId(source.trackId)}`
             : `/api/media/stream/${encodeTrackId(source.trackId)}`;
           const response = await this.$axios.get(lrcUrl);
-          // A single .vtt carrying voice spans expands to several named
-          // streams; SRT and LRC have no speaker field, so they yield one
-          // unnamed stream each.
           return parseLyricStreams(response.data, (source.lyricExtension || '').toLowerCase());
         }));
         if (loadId !== this._lrcLoadId) return;
@@ -600,7 +661,6 @@ export default {
 
         this.setLyricStreams(streams);
         this.sampleLyrics();
-        if (this.playing) this.startLyricTicker();
         this.SET_HAS_LYRIC(true);
       } catch(error) {
         if (error.response) {
@@ -617,8 +677,9 @@ export default {
     },
 
     resetToNoLyricStatus() {
-      this.stopLyricTicker();
+      this._clearLyricTimer();
       this._lyricStreams = null;
+      this._lyricBoundaries = [];
       this._lyricFrame = [];
       this.SET_LYRIC_SPEAKERS([]);
       this.SET_CURRENT_LYRICS([]);
@@ -769,10 +830,9 @@ export default {
       // Native listener: 'durationchange' is absent from Plyr's bubble list
       // (config/defaults.js `events`), so player.on() would never fire.
       media.addEventListener('durationchange', this.onDurationChange);
-    },
 
-    initAudioAnalyzer () {
-      // retained as a no-op hook; flip is applied lazily via applyFlipLRChannel
+      media.addEventListener('ratechange', this.onRateChange);
+      document.addEventListener('visibilitychange', this.onVisibilityChange);
     },
 
     applyFlipLRChannel () {
@@ -808,7 +868,6 @@ export default {
 
   mounted () {
     this.initPlyr();
-    this.initAudioAnalyzer();
     if (this.flipLRChannel) this.applyFlipLRChannel();
     if (this.source) {
       this._loadSource(this.source);
@@ -817,13 +876,15 @@ export default {
   },
 
   beforeUnmount() {
-    this.stopLyricTicker();
+    this._clearLyricTimer();
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
     const container = this.$refs.plyrContainer;
     if (container) {
       const media = container.querySelector('video') || container.querySelector('audio');
       if (media) {
         media.removeEventListener('ended', this.onEnded);
         media.removeEventListener('durationchange', this.onDurationChange);
+        media.removeEventListener('ratechange', this.onRateChange);
       }
     }
     if (this._lrCtx) {
