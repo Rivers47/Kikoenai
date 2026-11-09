@@ -12,11 +12,11 @@
           </router-link>
         </q-toolbar-title>
 
-        <q-input :dark="!$q.dark.isActive" dense rounded standout v-model="filter" debounce="500" input-class="text-right" class="q-mr-sm"
+        <q-input dense rounded standout bg-color="surface-container" v-model="filter" debounce="500" input-class="text-right text-on-surface" class="q-mr-sm"
           @keyup.enter="search($event.target.value); $event.target.blur()">
           <template v-slot:append>
-            <q-icon v-if="filter === ''" name="search" />
-            <q-icon v-else name="clear" class="cursor-pointer" @click="filter = ''" />
+            <q-icon v-if="filter === ''" name="search" class="text-on-surface-variant" />
+            <q-icon v-else name="clear" class="cursor-pointer text-on-surface" @click="filter = ''" />
           </template>
         </q-input>
 
