@@ -1,4 +1,9 @@
 export default {
+  theme: 'Theme',
+  themeCaption: 'Colour scheme of the interface',
+  themeSystem: 'Follow system',
+  themeLight: 'Light',
+  themeDark: 'Dark',
   generalTitle: 'General Settings',
   generalCaption: 'Personal preferences for your account',
   language: 'Interface language',

@@ -1,6 +1,5 @@
 export default {
   randomPlay: '随心听',
-  darkMode: '夜间模式',
   contrastMode: '对比度：{mode}',
   language: '界面语言',
   autoMarkListened: '自动标记已听完',
@@ -16,6 +15,7 @@ export default {
   circles: '社团',
   tags: '标签',
   voiceActors: '声优',
+  admin: '后台管理',
   settings: '设定',
   systemDefault: '跟随系统',
   contrastMedium: '中',

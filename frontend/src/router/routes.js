@@ -9,12 +9,12 @@ import Favourites from 'pages/Favourites'
 import FullScreenPlayer from 'pages/FullScreenPlayer'
 import TextViewer from 'pages/TextViewer'
 import Downloads from 'pages/Downloads'
+import Settings from 'pages/Settings'
 
 import Folders from 'pages/Dashboard/Folders'
 import Scanner from 'pages/Dashboard/Scanner'
 import Advanced from 'pages/Dashboard/Advanced'
 import UserManage from 'pages/Dashboard/UserManage'
-import Settings from 'pages/Dashboard/Settings'
 
 function prefixRoutes(prefix, routes) {
   return routes.map((route) => {
@@ -46,7 +46,7 @@ const routes = [
       },
       {
         path: 'settings',
-        component: Settings
+        redirect: '/settings'
       }
     ]
   },
@@ -96,6 +96,10 @@ const routes = [
       {
         path: 'downloads',
         component: Downloads
+      },
+      {
+        path: 'settings',
+        component: Settings
       },
       ...prefixRoutes('favourites', [
         {

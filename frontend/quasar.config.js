@@ -23,7 +23,8 @@ module.exports = function (ctx) {
       'store',
       'plyr',
       'socket.io',
-      'contrast'
+      'contrast',
+      'theme'
     ],
 
     // https://quasar.dev/quasar-cli-webpack/quasar-config-js#css

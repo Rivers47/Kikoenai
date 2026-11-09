@@ -1,4 +1,9 @@
 export default {
+  theme: 'テーマ',
+  themeCaption: 'インターフェースの配色',
+  themeSystem: 'システムに合わせる',
+  themeLight: 'ライト',
+  themeDark: 'ダーク',
   generalTitle: '一般設定',
   generalCaption: 'アカウントの個人設定',
   language: 'インターフェース言語',

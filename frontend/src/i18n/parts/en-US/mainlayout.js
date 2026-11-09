@@ -1,6 +1,5 @@
 export default {
   randomPlay: 'Random Play',
-  darkMode: 'Dark Mode',
   contrastMode: 'Contrast: {mode}',
   language: 'Interface language',
   autoMarkListened: 'Auto-mark listened',
@@ -16,6 +15,7 @@ export default {
   circles: 'Circles',
   tags: 'Tags',
   voiceActors: 'Voice Actors',
+  admin: 'Admin',
   settings: 'Settings',
   systemDefault: 'System Default',
   contrastMedium: 'Medium',

@@ -8,6 +8,7 @@
 // tag display locale (translateTag). The tag locale defaults to FOLLOW_UI, so
 // it tracks the UI locale until the user pins it to something else.
 
+import { computed, ref } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { LocalStorage } from 'quasar'
 import { translateTag } from './tags'
@@ -34,16 +35,14 @@ const HTML_LANG = {
   'en-US': 'en',
 }
 
-// Current locales, readable by non-Vue code (translateTag). Plain variables,
-// not refs: useTagTranslate() snapshots them at setup time, so a switch does not
-// repaint anything already on screen. That is safe only because both switchers
-// live in Settings.vue under DashboardLayout, and reaching it unmounts
-// MainLayout — and with it the <keep-alive> holding Works/Favourites — so every
-// tag is re-rendered from scratch on the way back. Move a switcher into
-// MainLayout (a drawer item, a dialog) and this stops being true: make these
-// refs then, or the chips go stale.
-let currentLocale = FALLBACK_LOCALE
-let tagLocalePref = FOLLOW_UI
+// Current locales, readable by non-Vue code (translateTag). Refs: the tag names
+// in Cover/WorkCard/WorkListItem/List are rendered without any `t()` call, so
+// they only repaint on a locale switch if the render subscribed to these —
+// `tTag()` and `tagLang` in useTagTranslate() read them, which is what makes a
+// switch repaint already-mounted (keep-alive) pages. Do not go back to plain
+// variables.
+const currentLocale = ref(FALLBACK_LOCALE)
+const tagLocalePref = ref(FOLLOW_UI)
 
 // Webpack require.context auto-imports every partial per locale. Agents just
 // drop a new <scope>.js file into parts/<locale>/ and it's picked up here.
@@ -96,29 +95,33 @@ export function getInitialLocale() {
 }
 
 export function getCurrentLocale() {
-  return currentLocale
+  return currentLocale.value
 }
 
 export function setLocale(locale, i18n) {
   if (!SUPPORTED_LOCALES.includes(locale)) locale = FALLBACK_LOCALE
-  currentLocale = locale
+  currentLocale.value = locale
   if (i18n) i18n.global.locale.value = locale
   LocalStorage.set(STORAGE_KEY, locale)
 }
 
 /** The stored tag-locale preference, which may be the FOLLOW_UI sentinel. */
 export function getTagLocalePref() {
-  return tagLocalePref
+  return tagLocalePref.value
 }
+
+const currentTagLocale = computed(() =>
+  tagLocalePref.value === FOLLOW_UI ? currentLocale.value : tagLocalePref.value
+)
 
 /** The tag locale actually in effect (FOLLOW_UI resolved against the UI locale). */
 export function getCurrentTagLocale() {
-  return tagLocalePref === FOLLOW_UI ? currentLocale : tagLocalePref
+  return currentTagLocale.value
 }
 
 export function setTagLocale(locale) {
   if (!SUPPORTED_TAG_LOCALES.includes(locale)) locale = FOLLOW_UI
-  tagLocalePref = locale
+  tagLocalePref.value = locale
   LocalStorage.set(TAG_STORAGE_KEY, locale)
 }
 
@@ -135,14 +138,14 @@ export function htmlLang(locale) {
 
 export function useTagTranslate() {
   return {
-    tTag: (name) => translateTag(name, getCurrentTagLocale()),
-    tagLang: htmlLang(getCurrentTagLocale()),
+    tTag: (name) => translateTag(name, currentTagLocale.value),
+    tagLang: computed(() => htmlLang(currentTagLocale.value)),
   }
 }
 
 const initialLocale = getInitialLocale()
-currentLocale = initialLocale
-tagLocalePref = getInitialTagLocale()
+currentLocale.value = initialLocale
+tagLocalePref.value = getInitialTagLocale()
 
 const i18n = createI18n({
   legacy: false,

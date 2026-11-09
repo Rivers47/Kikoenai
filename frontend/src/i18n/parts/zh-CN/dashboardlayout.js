@@ -4,6 +4,5 @@ export default {
   scan: '扫描',
   userManage: '用户管理',
   advancedSettings: '高级设置',
-  generalSettings: '通用设置',
   backToHome: '回到主页',
 }

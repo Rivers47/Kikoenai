@@ -8,6 +8,26 @@
     <q-list>
       <q-item style="height: 70px;">
         <q-item-section>
+          <q-item-label>{{ t('settings.theme') }}</q-item-label>
+          <q-item-label caption>{{ t('settings.themeCaption') }}</q-item-label>
+        </q-item-section>
+
+        <q-item-section avatar>
+          <q-select
+            v-model="themeMode"
+            :options="themeOptions"
+            emit-value
+            map-options
+            dense
+            outlined
+            style="min-width: 180px;"
+            @update:model-value="onThemeChange"
+          />
+        </q-item-section>
+      </q-item>
+
+      <q-item style="height: 70px;">
+        <q-item-section>
           <q-item-label>{{ t('settings.language') }}</q-item-label>
           <q-item-label caption>{{ t('settings.languageCaption') }}</q-item-label>
         </q-item-section>
@@ -129,8 +149,9 @@
 <script>
 import { useI18n } from 'vue-i18n'
 import { mapState } from 'vuex'
-import NotifyMixin from '../../mixins/Notification.js'
+import NotifyMixin from '../mixins/Notification.js'
 import { changeLanguage, changeTagLanguage, getCurrentLocale, getTagLocalePref, FOLLOW_UI } from 'src/boot/i18n.js'
+import { getThemeMode, setThemeMode } from 'src/utils/theme'
 
 export default {
   setup () {
@@ -145,6 +166,7 @@ export default {
     return {
       currentLanguage: null,
       currentTagLanguage: null,
+      themeMode: getThemeMode(),
     }
   },
 
@@ -156,6 +178,14 @@ export default {
       'rewindSeekTime',
       'forwardSeekTime',
     ]),
+
+    themeOptions () {
+      return [
+        { value: 'auto', label: this.t('settings.themeSystem') },
+        { value: 'light', label: this.t('settings.themeLight') },
+        { value: 'dark', label: this.t('settings.themeDark') },
+      ]
+    },
 
     languageOptions () {
       return [
@@ -181,6 +211,10 @@ export default {
   },
 
   methods: {
+    onThemeChange (mode) {
+      setThemeMode(mode)
+    },
+
     async onLanguageChange (locale) {
       await changeLanguage(locale)
       this.showSuccNotif(this.t('settings.languageSaved'))

@@ -1,4 +1,9 @@
 export default {
+  theme: '主题',
+  themeCaption: '界面配色方案',
+  themeSystem: '跟随系统',
+  themeLight: '浅色',
+  themeDark: '深色',
   generalTitle: '通用设置',
   generalCaption: '你的个人偏好设置',
   language: '界面语言',

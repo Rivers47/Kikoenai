@@ -1,6 +1,5 @@
 export default {
   randomPlay: 'ランダム再生',
-  darkMode: 'ダークモード',
   contrastMode: 'コントラスト：{mode}',
   language: 'インターフェース言語',
   autoMarkListened: '視聴済みを自動マーク',
@@ -16,6 +15,7 @@ export default {
   circles: 'サークル',
   tags: 'タグ',
   voiceActors: '声優',
+  admin: '管理',
   settings: '設定',
   systemDefault: 'システムデフォルト',
   contrastMedium: '中',

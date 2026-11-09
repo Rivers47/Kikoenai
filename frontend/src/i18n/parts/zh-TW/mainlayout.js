@@ -1,6 +1,5 @@
 export default {
   randomPlay: '隨心聽',
-  darkMode: '夜間模式',
   contrastMode: '對比度：{mode}',
   language: '介面語言',
   autoMarkListened: '自動標記已聽完',
@@ -15,6 +14,7 @@ export default {
   circles: '社團',
   tags: '標籤',
   voiceActors: '聲優',
+  admin: '後台管理',
   settings: '設定',
   systemDefault: '跟隨系統',
   contrastMedium: '中',

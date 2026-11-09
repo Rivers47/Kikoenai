@@ -78,24 +78,6 @@
             </q-item-section>
           </q-item>
 
-          <q-item
-            clickable
-            v-ripple
-            exact
-            active-class="text-primary text-weight-medium"
-            @click="toggleDarkMode"
-          >
-            <q-item-section avatar>
-              <q-icon name="dark_mode" />
-            </q-item-section>
-
-            <q-item-section>
-              <q-item-label class="text-subtitle1">
-                {{ t('mainlayout.darkMode') }}
-              </q-item-label>
-            </q-item-section>
-          </q-item>
-
           <!-- <q-item
             clickable
             v-ripple
@@ -185,7 +167,6 @@ import AudioPlayer from 'components/AudioPlayer'
 import LyricsBar from 'components/LyricsBar'
 import NotifyMixin from '../mixins/Notification.js'
 import { mapMutations, mapState } from 'vuex'
-import { Dark } from 'quasar'
 import { CONTRAST_MODES, getContrastMode, setContrastMode } from 'src/utils/contrast'
 import { onDownloadMessage, reconcileDownloads } from 'src/utils/downloads'
 import { requestSync } from 'src/utils/outbox'
@@ -225,7 +206,8 @@ export default {
         { titleKey: 'circles', icon: 'group', path: '/circles' },
         { titleKey: 'tags', icon: 'label', path: '/tags' },
         { titleKey: 'voiceActors', icon: 'mic', path: '/vas' },
-        { titleKey: 'settings', icon: 'tune', path: '/admin' },
+        { titleKey: 'settings', icon: 'tune', path: '/settings' },
+        { titleKey: 'admin', icon: 'admin_panel_settings', path: '/admin', adminOnly: true },
       ],
     }
   },
@@ -274,8 +256,13 @@ export default {
 
     ...mapState('User', {
       userName: 'name',
-      authEnabled: 'auth'
+      authEnabled: 'auth',
+      userGroup: 'group',
     }),
+
+    isAdmin () {
+      return !this.authEnabled || this.userGroup === 'administrator' || this.userName === 'admin'
+    },
     
     ...mapState('AudioPlayer', [
       'playWorkId',
@@ -418,11 +405,6 @@ export default {
       this.$router.go(-1)
     },
 
-    toggleDarkMode() {
-      console.log("toggleDarkMode called")
-      Dark.toggle();
-    },
-
     cycleContrastMode() {
       const next = CONTRAST_MODES[(CONTRAST_MODES.indexOf(this.contrastMode) + 1) % CONTRAST_MODES.length]
       setContrastMode(next)
@@ -431,6 +413,8 @@ export default {
 
     getLinks() {
       return this.links.filter(link => {
+        if (link.adminOnly && !this.isAdmin)
+          return false;
         if (link.path === '/fullScreenPlayer' && this.playWorkId == 0)
           return false;
         return true;

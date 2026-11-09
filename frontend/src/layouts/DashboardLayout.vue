@@ -3,7 +3,11 @@
     <q-header elevated class="bg-black">
       <q-toolbar>
         <q-btn flat @click="drawer = !drawer" round dense icon="menu" />
-        <q-toolbar-title>{{ t('dashboardlayout.dashboard') }}</q-toolbar-title>
+        <q-toolbar-title>
+          <router-link to="/" class="text-white">
+            {{ t('dashboardlayout.dashboard') }}
+          </router-link>
+        </q-toolbar-title>
       </q-toolbar>
     </q-header>
 
@@ -88,11 +92,6 @@ export default {
           title: this.t('dashboardlayout.userManage'),
           icon: 'person',
           path: '/admin/usermanage'
-        },
-        {
-          title: this.t('dashboardlayout.generalSettings'),
-          icon: 'tune',
-          path: '/admin/settings'
         },
         {
           title: this.t('dashboardlayout.advancedSettings'),
