@@ -9,6 +9,25 @@ html body.body--dark {
   background: rgb(var(--surface-rgb));
 }
 
+.q-header {
+  padding-top: env(safe-area-inset-top);
+}
+
+aside.q-drawer {
+  top: env(safe-area-inset-top);
+  background: rgb(var(--surface-container-high-rgb));
+}
+
+.q-card{
+  background: rgb(var(--surface-container-rgb));
+}
+
+.q-menu,
+.q-tab-panels,
+.q-table__card {
+  background: rgb(var(--surface-container-highest-rgb));
+}
+
 // App-specific tokens (no Material role; adjust to taste)
 :root {
   --sfw-badge-bg: #E6F7D6;

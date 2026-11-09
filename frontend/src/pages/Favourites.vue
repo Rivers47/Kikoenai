@@ -62,7 +62,7 @@
       <div class="q-px-sm q-pt-md">
         <q-infinite-scroll @load="onLoad" :offset="500" :disable="stopLoad" ref="scroll">
           <div class="row justify-center text-muted" v-if="works.length === 0">{{ t('favourites.emptyHint') }}</div>
-          <q-list bordered separator class="shadow-2" v-if="works.length">
+          <q-list bordered separator v-if="works.length">
              <FavListItem v-for="work in works" :key="work.id" :workid="work.id" :metadata="work" @reset="reset()" :mode="mode"></FavListItem> 
           </q-list>
           <template v-slot:loading>

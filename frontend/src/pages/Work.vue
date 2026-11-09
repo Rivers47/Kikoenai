@@ -10,7 +10,6 @@
       v-model="tab"
       align="left"
       dense
-      narrow-indicator
       class="q-mx-md text-primary"
     >
       <q-tab name="files" :label="t('work.tabFiles')" />

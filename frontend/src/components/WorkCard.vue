@@ -273,7 +273,6 @@ export default {
 .card {
   overflow: hidden;
   border-radius: 8px;
-  box-shadow: 0 0px 8px rgba(0, 0, 0, 0.4);
 }
 
 .horize-scroll-va-list {

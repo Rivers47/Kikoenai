@@ -17,7 +17,7 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 ```
 ├── src/
 │   ├── App.vue                           # Root component
-│   ├── index.template.html               # HTML template
+│   ├── index.html                        # HTML template (this one, not src/index.template.html)
 │   ├── utils.js                          # Shared utility functions
 │   ├── material-theme.json               # Generated Material color tokens (see scripts/generate-theme.mjs)
 │   ├── utils/
@@ -490,11 +490,6 @@ Two separate translation layers, kept apart:
 - **Service Worker:** PWA mode uses Workbox in **InjectManifest** mode — the worker is hand-written at `src-pwa/custom-service-worker.js`, not generated. `quasar.config.js` now carries only *build-time* PWA options (`extendInjectManifestOptions` → the precache `exclude` list, and `extendPWACustomSWConf` → the esbuild target); all *runtime* behaviour (`skipWaiting`/`clientsClaim`, navigation fallback, caching routes) lives in the worker file. The switch from GenerateSW was required because a generated worker can only express routes, and the offline-download feature needs SW event handlers (Background Fetch).
   - The worker excludes `/api/*` and `/media/*` from navigation fallback, and registers three routes (all into a single `offline-tracks` Cache Storage bucket): `CacheFirst` + `RangeRequestsPlugin` on `/api/media/offline/*` (tracks/lyrics), `CacheFirst` on `/api/cover/*` (work covers), and `NetworkFirst` on `/api/work/:id`, `/api/tracks/:id`, `/api/review` (work-detail page JSON — live data when online, cached snapshot as offline fallback). The first two are populated only by the explicit download action (`src/utils/downloads.js`), never by ordinary streaming; the third also auto-populates on any successful browse, since JSON metadata is small and bounding it risks evicting a downloaded work's snapshot.
   - **Match routes on the pathname, never on an `^/api/...`-anchored RegExp — and strip the deploy prefix first.** The matchers call `appPath(url)` (`stripBasePath(url.pathname)`), because under a sub-path install every pathname arrives as `/prefix/api/...`; on a root-served install it is the identity. Workbox's `RegExpRoute` execs the pattern against the *absolute* URL (`url.href`, e.g. `https://host/api/...`), so a leading `^\/api\/` can never match. The original `runtimeCaching` config made exactly this mistake and all three routes were silently dead — downloads were written to Cache Storage by the page but never served back from it, so offline playback did not work. (`NavigationRoute`'s denylist is unaffected: it matches on `url.pathname + url.search`, which is why navigation exclusion always worked. **Keep those denylist patterns unanchored** — under a deploy path prefix the pathname is `/kikoeru/api/...`, and an anchored `^\/api\/` would miss it, silently handing API requests the SPA shell while offline.)
-- **Never drive a per-frame loop, and never leave an animation running.** This is a battery-first UI — people listen for hours with the screen on — and iOS Safari charges for every frame the page produces, not for the JS in it: a full-screen composite on a phone measures ~9 ms, so a page held at 60 frames/s spends more than half its wall clock in the compositor. Rules:
-  - Playback-derived state is **scheduled to its next change**, not sampled per frame: a `requestAnimationFrame` that early-returns still schedules a frame for every vsync, forever. Where a value must track the media clock more closely than `timeupdate` allows (~250 ms, its cadence on iOS), use one `setTimeout` for the next cue/transition, re-armed from the real clock so a late fire self-corrects.
-  - `Scrollable` animates only while it has something to scroll (`.animating`), and that class carries `will-change: transform` so the scroll stays on the compositor instead of re-resolving style and laying out the page every frame. A `transition` on the same property keeps a transform animation on the main thread.
-  - Gate anything that animates forever on `document.visibilityState` and on the player surface that is actually on screen.
-  - To re-check after a change: attach Web Inspector to the device, Timelines tab, record ~20 s hands-off, and look at the Frames view (should be mostly empty gaps) and the composite totals in Layout & Rendering.
 - **LocalStorage Keys (reserved):**
   | Key | Type | Purpose |
   |-----|------|---------|
@@ -551,11 +546,42 @@ npm run build      # quasar build -m pwa --debug  (NOTE: debug build)
 npm run build:prod # quasar build -m pwa          (use this for releases)
 
 npm test           # Run ESLint
-npm run theme      # Regenerate material-theme.json / .scss from the seed color
+npm run theme      # Regenerate quasar.variables.scss / material-theme.scss / theme-utilities.scss from material-theme.json
 ```
 
 Both build targets are **PWA**, not SPA, and output to `../backend/dist` (`distDir` in
 `quasar.config.js`) so the backend serves them as static content.
+
+**`npm run theme` does not run unmodified on current Node; use `npx --yes tsx
+scripts/generate-theme.mjs` instead.** `@material/material-color-utilities@0.4.0` (still the
+latest) ships ESM with extensionless relative specifiers (`from
+'../dynamiccolor/dynamic_scheme'`), which Node's resolver rejects and
+`--experimental-specifier-resolution=node` no longer covers. `tsx` resolves them the way a
+bundler does. This is why the script is run rarely and by hand; do not patch `node_modules`
+expecting it to survive the next install, and do not wire a workaround into the npm script.
+
+**Chrome colours are derived, not declared.** `quasar.config.js` reads
+`src/material-theme.json` and passes `themeColor` (light primary) / `themeColorDark` (dark
+surface) to `index.html` through `htmlVariables`, which renders the two
+`<meta name="theme-color">` tags; the same file's `extendManifestJson` sets the manifest's
+`theme_color` / `background_color`. Do not hardcode either in `src-pwa/manifest.json` or in
+the HTML template.
+
+**The HTML template is `index.html` at the app root, not `src/index.template.html`.**
+Quasar 2 reads `sourceFiles.indexHtmlTemplate`, which defaults to `index.html`. The
+`src/index.template.html` path is the pre-v2 location: a file left there is silently
+ignored, so edits to it never reach a build. The template's variables are
+`quasar.config.js > htmlVariables` (`productName`, `productDescription`, `themeColor`, …),
+*not* `htmlWebpackPlugin.options`.
+
+**Brand variables must take the tone of the variant they are emitted for.**
+`vars(scheme, brandVariant)` writes `--q-positive`/`--q-info`/`--q-warning` from
+`extended[<colour>][brandVariant]`, so a block's brand colour and its `--on-*` tokens come
+from the same tonal variant. Emitting the dark tone for a light contrast tier paired white
+`--on-warning` with a light amber `--q-warning` and measured **1.7:1** in
+`body.contrast-medium` / `body.contrast-high` — the two accessibility modes. The semantic
+colours are the part of the theme that is *not* Theme Builder output: they come from the
+hand-authored `TONES` table, so they are the part that can regress.
 
 ---
 

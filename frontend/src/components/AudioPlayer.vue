@@ -4,7 +4,7 @@
     <!-- 播放器 -->
     <div>
       <q-card 
-        class="fixed-bottom-right box-shadow audio-player" 
+        class="fixed-bottom-right audio-player" 
         @mousewheel.prevent 
         @touchmove.prevent
         :class="{showStyle: showAudioPlayer, hideStyle: !showAudioPlayer}"
@@ -17,7 +17,7 @@
           v-touch-swipe.mouse="onCoverSwipe"
         >
           <q-img fit="contain"
-            class="rounded-borders box-shadow cover-img"
+            class="rounded-borders cover-img"
             :img-style="{
               transition: 'opacity 1s, filter 1s',
             }"
@@ -808,9 +808,6 @@ export default {
 
 
 <style lang="scss" scoped>
-.box-shadow {
-  box-shadow: black 0px 4px 8px;
-}
 
 .audio-player {
 
@@ -826,6 +823,7 @@ export default {
     width: 100%;
     height: 100%;
     border-radius: 0;
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   transition: 0.6s;

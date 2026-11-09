@@ -412,14 +412,13 @@ export default {
 }
 
 .playBar {
-  bottom: 20px;
+  bottom: calc(20px + env(safe-area-inset-bottom));
   margin-left: 50%;
   max-width: 500px;
   transform: translateX(-50%) translateY(0);
 
   border-radius: 8px;
   background: rgb(var(--surface-container-high-rgb));
-  box-shadow: black 0px 0px 8px;
   overflow: hidden;
   position: fixed;
   transition: 0.5s;

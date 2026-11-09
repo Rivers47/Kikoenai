@@ -114,7 +114,7 @@
     <div :class="`row justify-center ${listMode ? 'list' : 'q-mx-md'}`">
       <q-infinite-scroll @load="onLoad" :offset="500" :disable="stopLoad" class="col">
 
-        <q-list v-if="listMode" bordered separator class="shadow-2">
+        <q-list v-if="listMode" class="bg-surface-container-low separator">
           <WorkListItem v-for="work in works" :key="work.id" :metadata="work" :showLabel="showLabel && $q.screen.width > 700" />
         </q-list>
 
@@ -135,7 +135,7 @@
             :class="detailMode ? 'col-lg-3 col-xl-2': 'col-lg-2 col-xl-2'"
             style="--sim-hover-work-card: 0"
           >
-            <WorkCard :metadata="work" :thumbnailMode="!detailMode" :oldStyle="oldWorkCardUIStyle" class="fit"/>
+            <WorkCard :metadata="work" :thumbnailMode="!detailMode" :oldStyle="oldWorkCardUIStyle" class="fit bg-surface-container-low"/>
           </div>
         </div>
 

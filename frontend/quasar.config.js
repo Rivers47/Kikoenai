@@ -2,9 +2,15 @@
 // https://quasar.dev/quasar-cli-webpack/quasar-config-js
 
 const { PUBLIC_PATH_TOKEN } = require('../backend/base-path')
+const { schemes: themeSchemes } = require('./src/material-theme.json')
 
 module.exports = function (ctx) {
   return {
+    htmlVariables: {
+      themeColor: themeSchemes.light.primary,
+      themeColorDark: themeSchemes.dark.surface,
+    },
+
     // app boot file (/src/boot)
     // --> boot files are part of "main.js"
     // https://quasar.dev/quasar-cli-webpack/boot-files
@@ -124,6 +130,8 @@ module.exports = function (ctx) {
       extendManifestJson (json) {
         json.start_url = '.'
         json.scope = '.'
+        json.background_color = themeSchemes.light.surface
+        json.theme_color = themeSchemes.light.primary
       },
       // Build-time only: what workbox-build puts into the injected precache
       // manifest. Runtime behaviour does NOT belong here anymore.

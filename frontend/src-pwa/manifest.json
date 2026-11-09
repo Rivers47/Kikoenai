@@ -4,8 +4,6 @@
   "id": "kikoeru",
   "description": "A self-hosted web media player for listening to your DLsite voice works.",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#027be3",
   "icons": [
     {
       "src": "icons/icon-128x128.png",

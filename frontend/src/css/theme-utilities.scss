@@ -23,10 +23,17 @@
 .bg-warning-container { background: var(--warning-container) !important; }
 .text-on-warning-container { color: var(--on-warning-container) !important; }
 
-// Surface container helpers
+// Surface backgrounds, one per surface role the theme emits
+.bg-surface { background: var(--surface) !important; }
 .bg-surface-container { background: var(--surface-container) !important; }
+.bg-surface-container-high { background: var(--surface-container-high) !important; }
 .bg-surface-container-highest { background: var(--surface-container-highest) !important; }
 .bg-inverse-surface { background: var(--inverse-surface) !important; }
+.bg-inverse-surface { background: var(--inverse-surface) !important; }
+.bg-surface-dim { background: var(--surface-dim) !important; }
+.bg-surface-bright { background: var(--surface-bright) !important; }
+.bg-surface-container-lowest { background: var(--surface-container-lowest) !important; }
+.bg-surface-container-low { background: var(--surface-container-low) !important; }
 
 // Bare on-color text helpers (on-<role>); Quasar provides some, but not all M3 roles
 .text-on-primary { color: var(--on-primary) !important; }

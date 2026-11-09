@@ -57,6 +57,20 @@
   --inverse-surface-rgb: 47 48 54;
   --inverse-on-surface: #F1F0F7;
   --inverse-on-surface-rgb: 241 240 247;
+  --surface-dim: #DAD9E0;
+  --surface-dim-rgb: 218 217 224;
+  --surface-bright: #FAF8FF;
+  --surface-bright-rgb: 250 248 255;
+  --surface-container-lowest: #FFFFFF;
+  --surface-container-lowest-rgb: 255 255 255;
+  --surface-container-low: #F4F3FA;
+  --surface-container-low-rgb: 244 243 250;
+  --surface-tint: #4B5C92;
+  --surface-tint-rgb: 75 92 146;
+  --scrim: #000000;
+  --scrim-rgb: 0 0 0;
+  --shadow: #000000;
+  --shadow-rgb: 0 0 0;
   // extended colors from extendedColors
   --warning: #835500;
   --warning-rgb: 131 85 0;
@@ -195,6 +209,20 @@ body.body--dark {
   --inverse-surface-rgb: 227 226 233;
   --inverse-on-surface: #2F3036;
   --inverse-on-surface-rgb: 47 48 54;
+  --surface-dim: #121318;
+  --surface-dim-rgb: 18 19 24;
+  --surface-bright: #38393F;
+  --surface-bright-rgb: 56 57 63;
+  --surface-container-lowest: #0D0E13;
+  --surface-container-lowest-rgb: 13 14 19;
+  --surface-container-low: #1A1B21;
+  --surface-container-low-rgb: 26 27 33;
+  --surface-tint: #B4C5FF;
+  --surface-tint-rgb: 180 197 255;
+  --scrim: #000000;
+  --scrim-rgb: 0 0 0;
+  --shadow: #000000;
+  --shadow-rgb: 0 0 0;
   // extended colors from extendedColors
   --warning: #feb955;
   --warning-rgb: 254 185 85;
@@ -335,6 +363,20 @@ body.body--dark {
   --inverse-surface-rgb: 47 48 54;
   --inverse-on-surface: #FFFFFF;
   --inverse-on-surface-rgb: 255 255 255;
+  --surface-dim: #B9B8BF;
+  --surface-dim-rgb: 185 184 191;
+  --surface-bright: #FAF8FF;
+  --surface-bright-rgb: 250 248 255;
+  --surface-container-lowest: #FFFFFF;
+  --surface-container-lowest-rgb: 255 255 255;
+  --surface-container-low: #F1F0F7;
+  --surface-container-low-rgb: 241 240 247;
+  --surface-tint: #4B5C92;
+  --surface-tint-rgb: 75 92 146;
+  --scrim: #000000;
+  --scrim-rgb: 0 0 0;
+  --shadow: #000000;
+  --shadow-rgb: 0 0 0;
     // extended colors from extendedColors
     --warning: #452b00;
     --warning-rgb: 69 43 0;
@@ -472,6 +514,20 @@ body.body--dark {
   --inverse-surface-rgb: 227 226 233;
   --inverse-on-surface: #000000;
   --inverse-on-surface-rgb: 0 0 0;
+  --surface-dim: #121318;
+  --surface-dim-rgb: 18 19 24;
+  --surface-bright: #4F5056;
+  --surface-bright-rgb: 79 80 86;
+  --surface-container-lowest: #000000;
+  --surface-container-lowest-rgb: 0 0 0;
+  --surface-container-low: #1E1F25;
+  --surface-container-low-rgb: 30 31 37;
+  --surface-tint: #B4C5FF;
+  --surface-tint-rgb: 180 197 255;
+  --scrim: #000000;
+  --scrim-rgb: 0 0 0;
+  --shadow: #000000;
+  --shadow-rgb: 0 0 0;
     // extended colors from extendedColors
     --warning: #ffddb4;
     --warning-rgb: 255 221 180;
@@ -612,6 +668,20 @@ body.contrast-medium {
   --inverse-surface-rgb: 47 48 54;
   --inverse-on-surface: #F1F0F7;
   --inverse-on-surface-rgb: 241 240 247;
+  --surface-dim: #C6C6CD;
+  --surface-dim-rgb: 198 198 205;
+  --surface-bright: #FAF8FF;
+  --surface-bright-rgb: 250 248 255;
+  --surface-container-lowest: #FFFFFF;
+  --surface-container-lowest-rgb: 255 255 255;
+  --surface-container-low: #F4F3FA;
+  --surface-container-low-rgb: 244 243 250;
+  --surface-tint: #4B5C92;
+  --surface-tint-rgb: 75 92 146;
+  --scrim: #000000;
+  --scrim-rgb: 0 0 0;
+  --shadow: #000000;
+  --shadow-rgb: 0 0 0;
   // extended colors from extendedColors
   --warning: #633f00;
   --warning-rgb: 99 63 0;
@@ -749,6 +819,20 @@ body.body--dark.contrast-medium {
   --inverse-surface-rgb: 227 226 233;
   --inverse-on-surface: #292A2F;
   --inverse-on-surface-rgb: 41 42 47;
+  --surface-dim: #121318;
+  --surface-dim-rgb: 18 19 24;
+  --surface-bright: #43444A;
+  --surface-bright-rgb: 67 68 74;
+  --surface-container-lowest: #06070C;
+  --surface-container-lowest-rgb: 6 7 12;
+  --surface-container-low: #1C1D23;
+  --surface-container-low-rgb: 28 29 35;
+  --surface-tint: #B4C5FF;
+  --surface-tint-rgb: 180 197 255;
+  --scrim: #000000;
+  --scrim-rgb: 0 0 0;
+  --shadow: #000000;
+  --shadow-rgb: 0 0 0;
   // extended colors from extendedColors
   --warning: #ffcc88;
   --warning-rgb: 255 204 136;
@@ -888,6 +972,20 @@ body.contrast-high {
   --inverse-surface-rgb: 47 48 54;
   --inverse-on-surface: #FFFFFF;
   --inverse-on-surface-rgb: 255 255 255;
+  --surface-dim: #B9B8BF;
+  --surface-dim-rgb: 185 184 191;
+  --surface-bright: #FAF8FF;
+  --surface-bright-rgb: 250 248 255;
+  --surface-container-lowest: #FFFFFF;
+  --surface-container-lowest-rgb: 255 255 255;
+  --surface-container-low: #F1F0F7;
+  --surface-container-low-rgb: 241 240 247;
+  --surface-tint: #4B5C92;
+  --surface-tint-rgb: 75 92 146;
+  --scrim: #000000;
+  --scrim-rgb: 0 0 0;
+  --shadow: #000000;
+  --shadow-rgb: 0 0 0;
   // extended colors from extendedColors
   --warning: #452b00;
   --warning-rgb: 69 43 0;
@@ -1025,6 +1123,20 @@ body.body--dark.contrast-high {
   --inverse-surface-rgb: 227 226 233;
   --inverse-on-surface: #000000;
   --inverse-on-surface-rgb: 0 0 0;
+  --surface-dim: #121318;
+  --surface-dim-rgb: 18 19 24;
+  --surface-bright: #4F5056;
+  --surface-bright-rgb: 79 80 86;
+  --surface-container-lowest: #000000;
+  --surface-container-lowest-rgb: 0 0 0;
+  --surface-container-low: #1E1F25;
+  --surface-container-low-rgb: 30 31 37;
+  --surface-tint: #B4C5FF;
+  --surface-tint-rgb: 180 197 255;
+  --scrim: #000000;
+  --scrim-rgb: 0 0 0;
+  --shadow: #000000;
+  --shadow-rgb: 0 0 0;
   // extended colors from extendedColors
   --warning: #ffddb4;
   --warning-rgb: 255 221 180;

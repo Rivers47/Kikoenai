@@ -24,6 +24,7 @@
     </q-header>
 
     <q-drawer
+      class="bg-surface-container"
       v-model="drawerOpen"
       show-if-above
       :mini="miniState"
@@ -495,7 +496,7 @@ aside.q-drawer:not(.q-drawer--mini) .q-scrollarea {
 
 // 为了避开底部的play bar设置的padding
 .padding-bottom-play-bar {
-  padding-bottom: 80px !important 
+  padding-bottom: calc(80px + env(safe-area-inset-bottom)) !important;
 }
 
 .scroller {

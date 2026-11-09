@@ -68,7 +68,7 @@
       </div>
 
       <!-- List View -->
-      <q-list v-else-if="listMode" bordered separator class="shadow-2">
+      <q-list v-else-if="listMode" bordered separator>
         <div v-for="work in sortedWorks" :key="work.workId">
           <WorkListItem :metadata="cardMetadata(work)" :cover-url="work.thumbUrl" :showLabel="false">
             <template v-slot:side>

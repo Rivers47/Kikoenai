@@ -26,7 +26,7 @@
       </template>
     </ImageViewer>
 
-    <q-card>
+    <q-card flat>
       <q-list separator>
         <q-item
           clickable

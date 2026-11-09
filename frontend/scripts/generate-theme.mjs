@@ -132,6 +132,20 @@ const tokenRoles = [
   ['inverse-on-surface', 'inverseOnSurface']
 ];
 
+// Roles every current export carries but older ones may not; skipped when the
+// scheme has no such key. `surface-container-lowest` is the "raised on a dimmer
+// page" tone (grouped-list idiom), and surfaceDim/surfaceBright give the scale
+// its floor and ceiling.
+const optionalTokenRoles = [
+  ['surface-dim', 'surfaceDim'],
+  ['surface-bright', 'surfaceBright'],
+  ['surface-container-lowest', 'surfaceContainerLowest'],
+  ['surface-container-low', 'surfaceContainerLow'],
+  ['surface-tint', 'surfaceTint'],
+  ['scrim', 'scrim'],
+  ['shadow', 'shadow']
+];
+
 const hexToRgb = (hex) => {
   const n = parseInt(hex.slice(1), 16);
   return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
@@ -195,6 +209,10 @@ const vars = (scheme, brandVariant) => {
     // The *-rgb triplet allows alpha variants: rgb(var(--surface-rgb) / 0.5)
     lines.push(`  --${name}: ${scheme[role]};`, `  --${name}-rgb: ${hexToRgb(scheme[role])};`);
   }
+  for (const [name, role] of optionalTokenRoles) {
+    if (!scheme[role]) continue;
+    lines.push(`  --${name}: ${scheme[role]};`, `  --${name}-rgb: ${hexToRgb(scheme[role])};`);
+  }
   return lines.join('\n');
 };
 
@@ -248,6 +266,17 @@ ${vars(dk, dkVariant)}${extendedBlock(dkVariant)}
 // Bare `text-on-<role>` for the M3 on-colors (also not all provided by
 // Quasar) and surface/on-surface helpers are included for the same reason.
 const containerRoles = ['primary', 'secondary', 'tertiary', 'error'];
+// Every surface role this export emits, derived from the two lists above so a
+// new role only has to be added in one place. Emitted as `.bg-<role>`.
+const emittedRoleNames = [
+  ...tokenRoles.map(([name]) => name),
+  ...optionalTokenRoles
+    .filter(([, role]) => light[role] || dark[role])
+    .map(([name]) => name)
+];
+const surfaceRoles = emittedRoleNames.filter(
+  (name) => name === 'surface' || name === 'inverse-surface' || /^surface-(dim|bright|container)/.test(name)
+);
 // Extended (semantic) colors are emitted only when present in extendedColors.
 const extendedContainerRoles = ['positive', 'info', 'warning'];
 const bareOnRoles = ['primary', 'secondary', 'tertiary', 'error', 'positive', 'info', 'warning'];
@@ -273,10 +302,10 @@ ${extendedContainerRoles
   )
   .join('\n')}
 
-// Surface container helpers
-.bg-surface-container { background: var(--surface-container) !important; }
-.bg-surface-container-highest { background: var(--surface-container-highest) !important; }
-.bg-inverse-surface { background: var(--inverse-surface) !important; }
+// Surface backgrounds, one per surface role the theme emits
+${surfaceRoles
+  .map((r) => `.bg-${r} { background: var(--${r}) !important; }`)
+  .join('\n')}
 
 // Bare on-color text helpers (on-<role>); Quasar provides some, but not all M3 roles
 ${bareOnRoles
