@@ -158,8 +158,12 @@ $info      : ${semantic('info')};
 $warning   : ${semantic('warning')};
 `;
 
-// --- material-theme.scss: extended tokens + dark-mode brand overrides ---
-const vars = (scheme, brand) => {
+// --- material-theme.scss: extended tokens + per-scheme brand overrides ---
+// `brandVariant` is the key into `extended[<colour>][<variant>]` whose tone the
+// Quasar brand variables (`--q-positive`/`--q-info`/`--q-warning`) should take,
+// or null to leave them to the `$positive`/`$info`/`$warning` values Quasar
+// already has from quasar.variables.scss (the light base scheme).
+const vars = (scheme, brandVariant) => {
   const lines = [];
   // RGB triplets of brand colors, for alpha variants: rgb(var(--primary-rgb) / 0.5)
   lines.push(
@@ -169,17 +173,20 @@ const vars = (scheme, brand) => {
     `  --negative-rgb: ${hexToRgb(scheme.error)};`,
     ''
   );
-  if (brand) {
+  if (brandVariant) {
     lines.push(
       '  // brand colors (Quasar components read these CSS vars)',
       `  --q-primary: ${scheme.primary};`,
       `  --q-secondary: ${scheme.secondary};`,
       `  --q-accent: ${scheme.tertiary};`,
       `  --q-negative: ${scheme.error};`,
-      // dark variants of the extended (semantic) colors
+      // Semantic brand colors take the tone of *this* variant, so they stay
+      // paired with the `--on-*` token emitted for the same variant. Taking the
+      // dark tone for a light contrast tier pairs it with a white on-color and
+      // measured 1.7:1.
       ...['positive', 'info', 'warning']
         .filter((n) => extended[n])
-        .map((n) => `  --q-${n}: ${extended[n].dark.color};`),
+        .map((n) => `  --q-${n}: ${extended[n][brandVariant].color};`),
       ''
     );
   }
@@ -201,10 +208,10 @@ if (lightHigh || darkHigh) {
 // High contrast, applied automatically when the user prefers more contrast.
 @media (prefers-contrast: more) {
 ${lightHigh ? `  :root {
-${vars(lightHigh, true)}${extendedBlock('lightHigh', '  ')}
+${vars(lightHigh, 'lightHigh')}${extendedBlock('lightHigh', '  ')}
   }
 ` : ''}${darkHigh ? `  body.body--dark {
-${vars(darkHigh, true)}${extendedBlock('darkHigh', '  ')}
+${vars(darkHigh, 'darkHigh')}${extendedBlock('darkHigh', '  ')}
   }
 ` : ''}}
 `;
@@ -221,10 +228,10 @@ for (const [cls, lt, dk, ltVariant, dkVariant] of [
   contrastBlocks += `
 // Manual ${cls} override.
 ${lt ? `body.${cls} {
-${vars(lt, true)}${extendedBlock(ltVariant)}
+${vars(lt, ltVariant)}${extendedBlock(ltVariant)}
 }
 ` : ''}${dk ? `body.body--dark.${cls} {
-${vars(dk, true)}${extendedBlock(dkVariant)}
+${vars(dk, dkVariant)}${extendedBlock(dkVariant)}
 }
 ` : ''}`;
 }
@@ -283,11 +290,11 @@ ${bareOnRoles
 const tokens = `${header}
 // Material roles Quasar doesn't have. Use as var(--primary-container) etc.
 :root {
-${vars(light, false)}${extendedBlock('light')}
+${vars(light, null)}${extendedBlock('light')}
 }
 
 body.body--dark {
-${vars(dark, true)}${extendedBlock('dark')}
+${vars(dark, 'dark')}${extendedBlock('dark')}
 }
 ${contrastBlocks}`;
 

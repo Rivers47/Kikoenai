@@ -131,20 +131,20 @@
               <q-expansion-item
                 expand-separator
                 :key="index"
-                expand-icon-class="text-white"
+                expand-icon-class="text-on-error"
                 header-class="bg-negative"
               >
                 <template v-slot:header>
                   <q-item-section avatar>
-                    <q-icon name="bug_report" color="white" size="2em" />
+                    <q-icon name="bug_report" color="on-error" size="2em" />
                   </q-item-section>
 
                   <q-item-section>
-                    <q-item-label class="text-white ellipsis" >
+                    <q-item-label class="text-on-error ellipsis" >
                       {{item.logs[item.logs.length - 1].message}}
                     </q-item-label>
 
-                    <q-item-label caption class="text-white">
+                    <q-item-label caption class="text-on-error">
                       {{ workno(item.rjcode) }}
                     </q-item-label>
                   </q-item-section>

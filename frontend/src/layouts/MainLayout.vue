@@ -1,18 +1,18 @@
 <template>
   <q-layout view="hHh Lpr lFf" class="">
-    <q-header reveal :reveal-offset="100" @reveal="onHeaderRevealChange" class="shadow-4">
+    <q-header reveal :reveal-offset="100" @reveal="onHeaderRevealChange" class="shadow-4 bg-primary text-on-primary">
       <q-toolbar class="row justify-between">
         <q-btn flat dense round @click="drawerOpen = !drawerOpen" icon="menu" aria-label="Menu" />
 
         <q-btn flat size="md" icon="arrow_back_ios" @click="back()" v-if="isNotAtHomePage"/>
 
         <q-toolbar-title class="gt-xs">
-          <router-link :to="'/'" class="text-white">
+          <router-link :to="'/'" class="text-on-primary">
             Kikoeru
           </router-link>
         </q-toolbar-title>
 
-        <q-input dark dense rounded standout v-model="filter" debounce="500" input-class="text-right" class="q-mr-sm"
+        <q-input :dark="!$q.dark.isActive" dense rounded standout v-model="filter" debounce="500" input-class="text-right" class="q-mr-sm"
           @keyup.enter="search($event.target.value); $event.target.blur()">
           <template v-slot:append>
             <q-icon v-if="filter === ''" name="search" />
@@ -145,7 +145,7 @@
     <q-dialog v-model="confirm" persistent>
       <q-card>
         <q-card-section class="row items-center">
-          <q-avatar icon="power_settings_new" color="primary" text-color="white" />
+          <q-avatar icon="power_settings_new" color="primary" text-color="on-primary" />
           <span class="q-ml-sm">{{ t('mainlayout.logoutConfirm') }}</span>
         </q-card-section>
 

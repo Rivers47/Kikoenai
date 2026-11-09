@@ -172,7 +172,6 @@ export default {
     background-color: transparent !important;
   }
   #lyricsBar {
-    /* background-color: rgba($grey-4, $alpha: 0.6); */
     position: relative;
     min-width: 1vw;
     max-width: 90vw;

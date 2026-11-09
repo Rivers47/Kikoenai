@@ -380,15 +380,11 @@ export default {
   height: 100%;
   /* width: 100%; */
   opacity: 1;
-  /* No transition: the width is bound to `currentTime`, which changes 4x/s, so
-     a .5s transition is restarted every .25s and never finishes -- a layout and
-     a composite frame for every vsync while a track plays. The bar steps 4x/s
-     instead, which is under a pixel per step at any real track length. */
 }
 
 .volumeIndicator {
   position: absolute;
-  background: rgba($warning, $alpha: 0.8);
+  background: rgb(var(--accent-rgb) / 0.8);
   height: 100%;
   right: 0;
   bottom: 0;
@@ -407,7 +403,7 @@ export default {
   top: 0;
   height: 100%;
   /* width: 100%; */
-  background-color: rgba($warning, $alpha: 0.5);
+  background-color: rgb(var(--accent-rgb) / 0.5);
   transition: opacity 0.5s;
 }
 
@@ -422,7 +418,7 @@ export default {
   transform: translateX(-50%) translateY(0);
 
   border-radius: 8px;
-  /* background: white; */
+  background: rgb(var(--surface-container-high-rgb));
   box-shadow: black 0px 0px 8px;
   overflow: hidden;
   position: fixed;

@@ -4,6 +4,10 @@
 // To change the theme: replace the JSON and run `npm run theme`.
 @import './material-theme.scss';
 @import './theme-utilities.scss';
+body,
+html body.body--dark {
+  background: rgb(var(--surface-rgb));
+}
 
 // App-specific tokens (no Material role; adjust to taste)
 :root {

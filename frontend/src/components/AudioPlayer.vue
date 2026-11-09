@@ -7,7 +7,6 @@
         class="fixed-bottom-right box-shadow audio-player" 
         @mousewheel.prevent 
         @touchmove.prevent
-        color="primary"
         :class="{showStyle: showAudioPlayer, hideStyle: !showAudioPlayer}"
       >
         <!--顶部小横条-->
@@ -236,7 +235,7 @@
               :data-id="index"
             >
               <q-item-section side v-show="editCurrentPlayList">
-                <q-icon name="clear" :color="queueIndex === index ? 'white' : 'red'" @click="removeFromQueue(index)" />
+                <q-icon name="clear" :color="queueIndex === index ? 'on-primary' : 'negative'" @click="removeFromQueue(index)" />
               </q-item-section>
 
               <q-item-section avatar>
@@ -253,7 +252,7 @@
     </q-dialog>
 
     <q-dialog v-model="lyricSyncDialog"  seamless position="top">
-      <q-card class="bg-primary text-white">
+      <q-card class="bg-primary text-on-primary">
         <q-card-section>
           <div class="text-h6">{{ t('audioplayer.lyricSyncTitle') }}</div>
         </q-card-section>
@@ -835,6 +834,11 @@ export default {
   /* flex布局，让封面占据主要空间，其余空间留给其他控件 */
   display: flex;
   flex-direction: column;
+
+  /* Material 3 surface token instead of Quasar's flat `#fff` (light) and
+     `--q-dark` (dark): the card follows the theme in both schemes and in every
+     contrast tier, and matches the surfaces the rest of the player UI uses. */
+  background: rgb(var(--surface-container-high-rgb));
 }
 
 .hideStyle {

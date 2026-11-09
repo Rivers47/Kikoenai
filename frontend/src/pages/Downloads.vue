@@ -49,8 +49,9 @@
           rounded
           v-model="listMode"
           toggle-color="primary"
-          color="white"
-          text-color="primary"
+          toggle-text-color="on-primary"
+          color="surface-container"
+          text-color="on-surface"
           :options="[
             { icon: 'apps', value: false },
             { icon: 'list', value: true }

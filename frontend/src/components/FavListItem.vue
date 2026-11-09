@@ -98,8 +98,9 @@
             no-caps
             rounded
             toggle-color="primary"
-            color="white"
-            text-color="black"
+            toggle-text-color="on-primary"
+            color="surface-container"
+            text-color="on-surface"
             class="q-pa-sm"
             :options="progressOptions"
           />

@@ -61,8 +61,9 @@
         rounded
         v-model="listMode"
         toggle-color="primary"
-        color="white"
-        text-color="primary"
+        toggle-text-color="on-primary"
+        color="surface-container"
+        text-color="on-surface"
         :options="[
           { icon: 'apps', value: false },
           { icon: 'list', value: true }
@@ -77,8 +78,9 @@
         rounded
         v-model="showLabel"
         toggle-color="primary"
-        color="white"
-        text-color="primary"
+        toggle-text-color="on-primary"
+        color="surface-container"
+        text-color="on-surface"
         :options="[
           { icon: 'label', value: true },
           { icon: 'label_off', value: false }
@@ -95,8 +97,9 @@
         :disable="$q.screen.width < 1120"
         v-model="detailMode"
         toggle-color="primary"
-        color="white"
-        text-color="primary"
+        toggle-text-color="on-primary"
+        color="surface-container"
+        text-color="on-surface"
         :options="[
           { icon: 'zoom_in', value: true },
           { icon: 'zoom_out', value: false },
