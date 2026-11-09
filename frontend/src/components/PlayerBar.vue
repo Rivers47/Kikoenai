@@ -380,7 +380,10 @@ export default {
   height: 100%;
   /* width: 100%; */
   opacity: 1;
-  transition: 0.5s;
+  /* No transition: the width is bound to `currentTime`, which changes 4x/s, so
+     a .5s transition is restarted every .25s and never finishes -- a layout and
+     a composite frame for every vsync while a track plays. The bar steps 4x/s
+     instead, which is under a pixel per step at any real track length. */
 }
 
 .volumeIndicator {

@@ -9,7 +9,6 @@
         @touchmove.prevent
         color="primary"
         :class="{showStyle: showAudioPlayer, hideStyle: !showAudioPlayer}"
-        :style="{'--cover-url': `url(${coverUrl})`}"
       >
         <!--顶部小横条-->
         <div class="pull-handler" @click="toggleHide" v-touch-swipe.mouse.down="toggleHide"></div>
@@ -838,20 +837,6 @@ export default {
   flex-direction: column;
 }
 
-.audio-player::before {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  content: "";
-  background-image: var(--cover-url);
-  background-position: 50% 50%;
-  background-size: contain;
-  background-repeat: repeat;
-  filter: blur(30px) brightness(0.7); // blur bigger than 80 will cause safari wrong render result
-}
-
 .hideStyle {
   transform: translateY(200%);
 }
@@ -888,7 +873,10 @@ export default {
 .pull-handler {
   height: 6px;
   width: 100px;
-  background: rgba(255, 255, 255, 0.3);
+  /* Drawn in the theme's own contrast colour: the card has no artwork behind it
+     any more, so a hardcoded white handle is invisible on the light (white)
+     card. */
+  background: rgb(var(--on-surface-variant-rgb) / 0.4);
   position: absolute;
   border-radius: 4px !important;
   overflow: hidden;
@@ -898,7 +886,7 @@ export default {
 }
 
 .pull-handler:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: rgb(var(--on-surface-variant-rgb) / 0.6);
 }
 
 .audio-name {

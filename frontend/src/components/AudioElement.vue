@@ -896,4 +896,16 @@ export default {
 </script>
 
 <style scoped>
+/* Quasar animates the thumb and the fill with `left`/`width` transitions while
+   the slider is not being dragged (QSlider.sass, `&--inactive`). The playhead is
+   published 4x/s, so a .28s transition is restarted every .25s and never
+   finishes: the page re-lays-out and composites a frame for every vsync of the
+   whole playback session, and the seek bar is the last thing it should be doing
+   that for. Without the transitions the fill steps 4x/s (under a pixel per step
+   at any real track length) and a seek still lands instantly. */
+.q-slider--inactive :deep(.q-slider__thumb),
+.q-slider--inactive :deep(.q-slider__selection),
+.q-slider--inactive :deep(.q-slider__text-container) {
+  transition: none;
+}
 </style>
