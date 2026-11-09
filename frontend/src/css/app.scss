@@ -20,6 +20,15 @@ aside.q-drawer {
 
 .q-card{
   background: rgb(var(--surface-container-rgb));
+  border-radius: var(--md-sys-shape-corner-medium);
+}
+
+.q-menu {
+  border-radius: var(--md-sys-shape-corner-small);
+}
+
+.q-dialog__inner > .q-card {
+  border-radius: var(--md-sys-shape-corner-extra-large);
 }
 
 .q-menu,

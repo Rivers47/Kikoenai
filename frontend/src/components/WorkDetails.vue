@@ -4,7 +4,7 @@
         class="col q-ma-md shadow-4"
         :workid="metadata.id"
         :images="images"
-        style="border-radius: 8px; overflow: hidden;"
+        style="border-radius: var(--md-sys-shape-corner-medium); overflow: hidden;"
       />
 
     <div class="col-md-6 col-12 q-pa-md">

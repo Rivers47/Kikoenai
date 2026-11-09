@@ -272,7 +272,7 @@ export default {
 <style scoped>
 .card {
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: var(--md-sys-shape-corner-medium);
 }
 
 .horize-scroll-va-list {

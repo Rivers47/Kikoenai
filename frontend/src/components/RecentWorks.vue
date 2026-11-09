@@ -144,7 +144,7 @@ export default {
 <style scoped lang="scss">
 
 .card {
-  border-radius: 8px;
+  border-radius: var(--md-sys-shape-corner-medium);
   overflow: hidden;
 }
 

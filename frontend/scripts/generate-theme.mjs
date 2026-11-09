@@ -146,6 +146,21 @@ const optionalTokenRoles = [
   ['shadow', 'shadow']
 ];
 
+// Shape (corner radius) scale. Fixed by the Material 3 spec rather than derived
+// from the seed, so it is emitted once for the whole app instead of per scheme.
+const SHAPE_SCALE = [
+  ['none', '0px'],
+  ['extra-small', '4px'],
+  ['small', '8px'],
+  ['medium', '12px'],
+  ['large', '16px'],
+  ['large-increased', '20px'],
+  ['extra-large', '28px'],
+  ['extra-large-increased', '32px'],
+  ['extra-extra-large', '48px'],
+  ['full', '9999px']
+];
+
 const hexToRgb = (hex) => {
   const n = parseInt(hex.slice(1), 16);
   return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
@@ -316,7 +331,14 @@ ${bareOnRoles
 .text-on-surface-variant { color: var(--on-surface-variant) !important; }
 `;
 
+const shapeVars = SHAPE_SCALE.map(([name, value]) => `  --md-sys-shape-corner-${name}: ${value};`).join('\n');
+
 const tokens = `${header}
+// Material 3 shape scale (spec-fixed)
+:root {
+${shapeVars}
+}
+
 // Material roles Quasar doesn't have. Use as var(--primary-container) etc.
 :root {
 ${vars(light, null)}${extendedBlock('light')}

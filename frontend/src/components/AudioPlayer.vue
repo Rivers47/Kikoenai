@@ -815,7 +815,7 @@ export default {
   @media (min-width: $breakpoint-sm-min) {
     width: 330px;
     margin: 0px 10px 10px 0px;
-    border-radius: 8px;
+    border-radius: var(--md-sys-shape-corner-medium);
   }
 
   // 宽度 < $breakpoint-xs-max (599px)

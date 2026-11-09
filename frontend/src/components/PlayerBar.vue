@@ -417,7 +417,7 @@ export default {
   max-width: 500px;
   transform: translateX(-50%) translateY(0);
 
-  border-radius: 8px;
+  border-radius: var(--md-sys-shape-corner-medium);
   background: rgb(var(--surface-container-high-rgb));
   overflow: hidden;
   position: fixed;
