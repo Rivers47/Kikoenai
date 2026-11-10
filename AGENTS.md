@@ -40,7 +40,7 @@ Run from repo root. Node **>= 24.0.0**.
 | `npm run dev:backend` / `dev:frontend` | One side only |
 | `npm run build` | Build frontend into `backend/dist/` |
 | `npm start` | Production: backend serves `backend/dist/` |
-| `npm run lint` | backend lint + frontend ESLint |
+| `npm run lint` | backend lint + frontend `test` (i18n guard, theme-colour guard, ESLint) |
 | `npm run release:patch` / `:minor` / `:major` | Full release — see §5 |
 
 Per-package scripts still work inside each workspace (e.g. `npm run scan`, `npm test` in `backend/`).

@@ -67,13 +67,13 @@
 
         <div v-if="mode === 'history'" class="full-width">
           <div class="full-width">
-            <q-btn color="primary" :label="t('favlistitem.playFromHistory')"  class="full-width" @click="playHistory(metadata.id, metadata.state)"/>
+            <q-btn color="primary" text-color="on-primary" :label="t('favlistitem.playFromHistory')"  class="full-width" @click="playHistory(metadata.id, metadata.state)"/>
           </div>
 
           <!--
           <div>
             <span class="text-accent">历史：</span>
-              <q-badge color="primary">
+              <q-badge color="primary" text-color="on-primary">
                 {{ metadata.play_updated_at }}
               </q-badge>
           </div>
@@ -97,9 +97,9 @@
             dense
             no-caps
             rounded
-            toggle-color="primary"
-            toggle-text-color="on-primary"
-            color="surface-container"
+            toggle-color="primary-container"
+            toggle-text-color="on-primary-container"
+            color="surface-container-lowest"
             text-color="on-surface"
             class="q-pa-sm"
             :options="progressOptions"

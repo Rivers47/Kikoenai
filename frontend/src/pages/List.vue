@@ -15,7 +15,7 @@
 
         <div class="row justify-center q-gutter-sm">
           <div class="col-auto" v-for="item in (keyword ? filteredItems : items)" :key="item.id">
-            <q-btn no-caps rounded color="primary" :label="itemLabel(item)" :lang="restrict === 'tags' ? tagLang : null" :to="labelRoute(searchField, item.name)" />
+            <q-btn no-caps rounded color="primary" text-color="on-primary" :label="itemLabel(item)" :lang="restrict === 'tags' ? tagLang : null" :to="labelRoute(searchField, item.name)" />
           </div>
         </div>
       </div>

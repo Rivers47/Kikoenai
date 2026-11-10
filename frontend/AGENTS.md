@@ -559,7 +559,10 @@ npm run dev        # quasar dev -m pwa (proxies /api + /socket.io to localhost:8
 npm run build      # quasar build -m pwa --debug  (NOTE: debug build)
 npm run build:prod # quasar build -m pwa          (use this for releases)
 
-npm test           # Run ESLint
+npm test           # check:i18n + check:theme + check:contrast + ESLint, in that order
+npm run check:i18n # i18n guard only (see §2.10)
+npm run check:theme # colour-name guard only (see below)
+npm run check:contrast # WCAG contrast guard only (see below)
 npm run theme      # Regenerate quasar.variables.scss / material-theme.scss / theme-utilities.scss from material-theme.json
 ```
 
@@ -573,6 +576,58 @@ latest) ships ESM with extensionless relative specifiers (`from
 `--experimental-specifier-resolution=node` no longer covers. `tsx` resolves them the way a
 bundler does. This is why the script is run rarely and by hand; do not patch `node_modules`
 expecting it to survive the next install, and do not wire a workaround into the npm script.
+
+**A colour prop takes a colour NAME, because Quasar builds the class itself. Never pass the
+class.** `color="primary"` becomes `bg-primary` and `toggle-text-color="on-primary"` becomes
+`text-on-primary`, so `toggle-text-color="text-on-primary"` produces `text-text-on-primary`
+and `color="on-info-container"` on a `q-btn` produces a `bg-on-info-container` that the theme
+does not emit (only `.text-*` exists for `on-*` roles). Either way the element renders
+completely unstyled and **nothing is logged** — Vue sees a plain string and the browser sees
+an unmatched class. `scripts/check-theme-classes.mjs` (`npm run check:theme`, part of
+`npm test`) is the only warning you get: it resolves every colour prop in `src/**/*.vue`
+against the CSS that actually ships — Quasar's palette (`colors.sass`/`dist/quasar.css`),
+the generated `src/css/theme-utilities.scss`, and hand-written classes in `src/css/*.scss`
+(which is why `color="rating-star"` passes) — reads string literals out of bound values
+(`:color="x ? 'on-primary' : 'negative'"`), and suggests the nearest name on a typo. Its
+prop→`bg-`/`text-` table is per component, because `color` means a text colour on `q-icon`,
+`q-spinner*`, `q-rating` and the progress/knob widgets but a background on `q-btn`,
+`q-badge`, `q-chip` and `q-avatar`; a prop it does not list is not checked, so adding a new
+one means adding it there.
+
+**Material 3 has ONE `on-surface` role, not one per surface.** There is a `bg-` utility per
+surface but text on any of them is `on-surface` (`on-surface-variant` when it should read
+quieter) — so the pair is `color="surface-container-low" text-color="on-surface"`, which is
+what the `q-btn-toggle` segments, chips and gallery tiles all use. `on-surface-container-low`
+et al. are **not** Material roles and have no class or variable behind them: that name renders
+in the inherited colour and logs nothing. Do not add per-surface on-colours to
+`generate-theme.mjs` to make it resolve; the single role is the standard.
+
+**A background colour does not imply a readable foreground, so `npm run check:contrast`
+measures every pair.** `use-btn.js` falls back to `text-${textColor || 'white'}`, so a solid
+`q-btn color="primary-container"` with no `text-color` renders white on pale lavender —
+**1.29:1 in light mode while dark mode measures 9.4:1 and looks fine**. That asymmetry is why
+an omitted pair survives review: it only breaks in the tier you are not looking at. The
+script resolves the pair each element actually renders (including Quasar's per-component
+defaults: white for `q-btn`/`q-badge`, `rgba(0,0,0,.87)` for `q-chip`, inherited
+`on-surface` for `q-avatar`), measures it in all six tiers (`light`, `dark`,
+`light/dark-medium`, `light/dark-high`), and fails below WCAG AA — 4.5:1 for text, 3:1 for
+icons and other non-text UI. Values are read from `material-theme.scss`, so it measures the
+real palette; `--q-<brand>` overrides are applied last, which is what makes `primary`
+resolve to the *dark* tone in dark mode. A foreground-only element is measured against the
+nearest ancestor that paints a background (`class="bg-*"`, `header-class`, or a `color` on a
+background component), and a background that only applies while active (`active-class`) is
+reported as a warning rather than a failure. Limits: static attribute values only (a bound
+`:color` is skipped, since either branch could render), and no alpha compositing beyond the
+chip default.
+
+> **The dark scheme's brand tones are light, and Quasar fills with them.** `--q-primary` is
+> `#B4C5FF` in dark mode, so a solid `q-btn color="primary"` with Quasar's default white text
+> measures **1.70:1** — the M3 pairing is `primary` background with `on-primary` text. This is
+> why the guard reports ~19 sites: the fix is `text-color="on-primary"` (or `on-secondary`,
+> `on-tertiary` for `accent`, `on-error` for `negative` — `accent`/`negative` are M3
+> `tertiary`/`error`, so there is no `on-accent`/`on-negative` token). Do not "fix" it by
+> darkening the dark-scheme brand tones: `text-primary` on a dark surface depends on them
+> being light.
 
 **Chrome colours are derived, not declared.** `quasar.config.js` reads
 `src/material-theme.json` and passes `themeColor` (light primary) / `themeColorDark` (dark
@@ -750,6 +805,7 @@ Build output goes directly into `backend/dist/` (configured via `distDir` in `qu
 ## 8. Testing
 
 - **Linting:** ESLint with Vue plugin
+- **Guards:** `npm test` runs `scripts/check-i18n.mjs` (§2.10), `scripts/check-theme-classes.mjs` and `scripts/check-theme-contrast.mjs` (§4) *before* ESLint. All three exist because their failure mode is silent: a legacy `$t` renders nothing, an unknown colour name renders unstyled, and a low-contrast pair renders unreadable — none of them is an error anywhere else. The two theme guards share `scripts/lib/theme-scan.mjs` for tag/attribute scanning.
 - **Run:** `npm test` from `frontend/`, or `npm run lint` from the repo root (there is no root `npm test`). The root script lints the backend first and **currently fails** on a pre-existing `backend/app.js` hashbang error, so run the frontend lint directly when checking frontend changes.
 
 ---

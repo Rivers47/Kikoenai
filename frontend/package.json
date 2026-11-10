@@ -20,8 +20,10 @@
     "kikoeru"
   ],
   "scripts": {
-    "test": "node scripts/check-i18n.mjs && eslint .",
+    "test": "node scripts/check-i18n.mjs && node scripts/check-theme-classes.mjs && node scripts/check-theme-contrast.mjs && eslint .",
     "check:i18n": "node scripts/check-i18n.mjs",
+    "check:theme": "node scripts/check-theme-classes.mjs",
+    "check:contrast": "node scripts/check-theme-contrast.mjs",
     "dev": "quasar dev -m pwa",
     "build": "quasar build -m pwa --debug",
     "build:prod": "quasar build -m pwa",

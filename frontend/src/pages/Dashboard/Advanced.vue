@@ -340,7 +340,7 @@
     </q-card>
 
     <div class="q-ma-lg row justify-end">
-      <q-btn :loading="loading" :label="t('common.save')" type="submit" color="primary" />
+      <q-btn :loading="loading" :label="t('common.save')" type="submit" color="primary" text-color="on-primary" />
     </div>
   </q-form>
 </template>

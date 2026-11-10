@@ -10,7 +10,7 @@
       :rules="[ val => val.length >= 5 || t('login.minLengthError') ]"
     />
 
-    <q-btn :label="t('login.login')" type="submit" color="primary" class="fit" />
+    <q-btn :label="t('login.login')" type="submit" color="primary" text-color="on-primary" class="fit" />
   </q-form>
 </template>
    

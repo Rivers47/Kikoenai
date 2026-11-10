@@ -6,7 +6,7 @@
     <div class="q-mt-lg q-ml-md row items-center">
       <span class="text-h5 text-weight-regular q-pa-xs relative-position">
         {{pageTitle}}
-        <q-badge color="secondary" floating>{{pagination.totalCount}}</q-badge>
+        <q-badge color="secondary" text-color="on-secondary" floating>{{pagination.totalCount}}</q-badge>
       </span>
       <div> <!--普通搜索模式的信息展示-->
         <!-- A filter is a list of terms, so it is shown as one removable chip
@@ -60,9 +60,9 @@
         spread
         rounded
         v-model="listMode"
-        toggle-color="primary"
-        toggle-text-color="on-primary"
-        color="surface-container"
+        toggle-color="primary-container"
+        toggle-text-color="on-primary-container"
+        color="surface-container-lowest"
         text-color="on-surface"
         :options="[
           { icon: 'apps', value: false },
@@ -77,9 +77,9 @@
         spread
         rounded
         v-model="showLabel"
-        toggle-color="primary"
-        toggle-text-color="on-primary"
-        color="surface-container"
+        toggle-color="primary-container"
+        toggle-text-color="on-primary-container"
+        color="surface-container-lowest"
         text-color="on-surface"
         :options="[
           { icon: 'label', value: true },
@@ -96,9 +96,9 @@
         rounded
         :disable="$q.screen.width < 1120"
         v-model="detailMode"
-        toggle-color="primary"
-        toggle-text-color="on-primary"
-        color="surface-container"
+        toggle-color="primary-container"
+        toggle-text-color="on-primary-container"
+        color="surface-container-lowest"
         text-color="on-surface"
         :options="[
           { icon: 'zoom_in', value: true },

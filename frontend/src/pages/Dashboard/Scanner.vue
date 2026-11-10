@@ -4,7 +4,7 @@
       <div v-if="state === 'running'" class="col-xs-12 col-sm-12 row q-pa-sm">
         <q-btn
           class="col"
-          color="negative"
+          color="negative" text-color="on-error"
           :label="t('scanner.killScan')"
           :disable="state !== 'running' || !(loggedIn || $socket.connected)"
           @click="killScanProceess()"
@@ -14,7 +14,7 @@
       <div class="col-xs-6 col-sm-4 row q-pa-sm">
         <q-btn
           class="col"
-          color="primary"
+          color="primary" text-color="on-primary"
           :label="t('scanner.scanLibrary')"
           :disable="state === 'running' || !(loggedIn || $socket.connected)"
           @click="performScan()"
@@ -24,7 +24,7 @@
       <div class="col-xs-6 col-sm-4 row q-pa-sm">
         <q-btn
           class="col"
-          color="primary"
+          color="primary" text-color="on-primary"
           :label="t('scanner.refreshLibrary')"
           :disable="state === 'running' || !(loggedIn || $socket.connected)"
           @click="performUpdate()"
@@ -34,7 +34,7 @@
       <div class="col-xs-12 col-sm-4 row q-pa-sm">
         <q-btn
           class="col"
-          color="secondary"
+          color="secondary" text-color="on-secondary"
           :label="t('scanner.scanFileChanges')"
           :disable="state === 'running' || !(loggedIn || $socket.connected)"
           @click="performWorkFileScan()"
@@ -78,10 +78,10 @@
         narrow-indicator
       >
         <q-tab name="tasks" icon="hourglass_full" :label="t('scanner.processing')">
-          <q-badge v-show="tasks.length > 0" color="primary" floating>{{tasks.length}}</q-badge>
+          <q-badge v-show="tasks.length > 0" color="primary" text-color="on-primary" floating>{{tasks.length}}</q-badge>
         </q-tab>
         <q-tab name="failedTasks" icon="error_outline" :label="t('scanner.failed')">
-          <q-badge v-show="failedTasks.length > 0" color="negative" floating>{{failedTasks.length}}</q-badge>
+          <q-badge v-show="failedTasks.length > 0" color="negative" text-color="on-error" floating>{{failedTasks.length}}</q-badge>
         </q-tab>
       </q-tabs>
 
