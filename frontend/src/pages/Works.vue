@@ -119,6 +119,7 @@
         </q-list>
 
         <!--解决android平台hover事件不像safari那样及时响应的问题，需要手动添加触摸响应时间-->
+        <!--TODO: verify this-->
         <div v-else-if="$q.platform.is.android && $q.platform.has.touch" class="row q-col-gutter-x-md q-col-gutter-y-lg">
           <div class="col-xs-12 col-sm-6 col-md-4" v-for="work in works" :key="work.id"
             @touchstart="()=>onWorkCardTouch(work.id)"

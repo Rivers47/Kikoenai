@@ -1,6 +1,6 @@
 <template>
     <div
-      v-if="hasVisibleLyric"
+      v-if="hasVisibleLyric && showLyrics"
       class="lyric-container"
       ref="draggable"
     >
@@ -43,7 +43,8 @@ export default {
   computed: {
     ...mapState('AudioPlayer', [
       'currentLyrics',
-      'lyricSpeakers'
+      'lyricSpeakers',
+      'showLyrics'
     ]),
 
     hasVisibleLyric () {
@@ -162,7 +163,7 @@ export default {
     transform: translateX(-50%);
 
     /* 垂直位置置于底部playBar尚未考上一点，这个后面可以手动调整 */
-    top: -80px;
+    top: -132px;
     
     display: flex;
     flex-direction: column;

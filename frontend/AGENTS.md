@@ -77,7 +77,8 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 │   ├── components/
 │   │   ├── AudioPlayer.vue               # Main audio player (floating panel)
 │   │   ├── AudioElement.vue              # Playback engine: hidden <audio> + Plyr + mediaSession
-│   │   ├── PlayerBar.vue                 # Mini player bar (bottom of screen)
+│   │   ├── PlayerBar.vue                 # Old floating mini bar — kept for comparison, no longer mounted
+│   │   ├── PlayerBarV2.vue               # Docked three-row player bar (mounted; see §2.5)
 │   │   ├── LyricsBar.vue                 # Lyrics display below player
 │   │   ├── WorkCard.vue                  # Work card (grid mode); `oldStyle` prop switches to the legacy look; optional `coverUrl` prop overrides the cover source
 │   │   ├── WorkListItem.vue              # Work list item (list mode); optional `coverUrl` prop + `side` slot for trailing actions
@@ -263,10 +264,10 @@ The audio player is a multi-component system fixed at the bottom of `MainLayout`
 
 ```
 MainLayout
-├── PlayerBar        # Mini bar (always visible at bottom)
+├── PlayerBarV2      # Docked bar (always visible at bottom when a track plays)
 ├── AudioPlayer      # Floating panel (toggle-able, shows cover + controls)
 │   └── AudioElement # The actual playback engine (hidden <audio> + Plyr + mediaSession)
-└── LyricsBar        # Lyrics display (below player)
+└── LyricsBar        # Lyrics display (floats above the docked bar)
 ```
 
 - **AudioPlayer.vue** — Floating card at bottom-right with cover art, track controls, seek bar, volume, playback mode. Presentational only: it renders `AudioElement` and drives it through Vuex.
@@ -275,7 +276,8 @@ MainLayout
   - Optional L/R channel swap (`applyFlipLRChannel`) via a WebAudio `createMediaElementSource → ChannelSplitter → ChannelMerger → destination` graph. `createMediaElementSource` is a one-way door — once called, that `AudioContext` owns the element's output permanently — so the graph is built lazily on first use and only *rewired* on toggle, never torn down until unmount.
   - **Background playback (Android):** `ended` is bound as a direct native listener on the media element, *not* `player.on('ended')` — Plyr proxies the same native event, and registering both advanced the queue two tracks at a time. The next track's source is loaded imperatively (`_loadSource`) **synchronously inside the `ended` handler**, because Chrome freezes hidden pages and the `nextTick`-deferred `source` watcher can lag by minutes. `_loadSource` compares `media.currentSrc` and no-ops when the watcher later fires with the same URL. Do not reintroduce a `<source :src>` binding here; see commit `6fb856c`.
   - **Lyric changes are scheduled to their cue times (§3).** `setLyricStreams` precomputes `_lyricBoundaries`: the sorted union of every cue `start` and every finite cue `end` across all streams, i.e. every instant at which `cueTextAt` can return something different. `sampleLyrics()` publishes the current frame through `SET_CURRENT_LYRICS` and then arms **one `setTimeout`** for the next boundary (`_scheduleLyricSample`), measured in media time (`(next - now) / playbackRate`) and disarmed while paused, ended, stalled or hidden. Its callback re-samples and re-arms, so a timer that fired late (coalesced by the OS, or behind a long task) corrects itself instead of accumulating error. Every other caller — `onTimeupdate`, `seeked`, `onPause`, `onPlaying`, `ratechange`, `visibilitychange`, the `lyricOffsetSeconds` watcher — just calls `sampleLyrics()`, which leaves the schedule correct as a side effect. `timeupdate` (~4x/s) is only a backstop that heals anything the OS swallowed; it publishes nothing unless the text actually changed.
-- **PlayerBar.vue** — Compact mini-bar always visible when a track is playing (contains basic controls).
+- **PlayerBarV2.vue** — The bar mounted today: a full-bleed 128px (84px under 600px) bar docked to the viewport bottom, not a floating pill. Three rows — title (`currentPlayingTitle`), work title (`currentPlayingFile.workTitle`), and the work's VAs (`playWorkVas`, joined with `、`) — with the transport centred on the bar itself and six action buttons on the right (queue, lyrics CC, play mode, sleep timer, fullscreen, more). It owns the horizontal-drag seek (rail grows 3→6px with a time bubble), the swipe-up/tap-to-open-panel gesture, and the `SleepMode` dialog. `MainLayout` must keep `.padding-bottom-play-bar` at `128px` / `84px` to match, and `LyricsBar`'s `top: -132px` clears it. The CC button toggles the `showLyrics` state row.
+- **PlayerBar.vue** — The previous floating mini-bar (max-width 500px, `translateX(-50%)`). Kept on disk for comparison; nothing imports it.
 - **LyricsBar.vue** — Draggable, resizable lyric bar. Renders one coloured line per lyric stream, stacked (§2.9); parsing and playback sync live in `AudioElement.vue`.
 - Configuration like seek times, L/R channel flip, and auto-mark-listened are persisted in `LocalStorage` (keys are exported from `store/module-AudioPlayer/state.js`).
 
