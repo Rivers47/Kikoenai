@@ -64,7 +64,6 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 │   │   ├── List.vue                      # Generic list (circles, tags, VAs)
 │   │   ├── Login.vue                     # Login page
 │   │   ├── Favourites.vue                # Favorites, history, progress
-│   │   ├── FullScreenPlayer.vue          # Full-screen player mode
 │   │   ├── TextViewer.vue                # In-app text file viewer (route /text/:trackId)
 │   │   ├── Downloads.vue                 # Offline library: manifest grouped by work, rendered with WorkCard/WorkListItem (grid/list toggle, sort), storage quota, play-all, per-work/per-track remove
 │   │   ├── Settings.vue                  # Per-user settings (theme, language, tag language, player prefs) — route /settings, in MainLayout
@@ -160,7 +159,6 @@ Main layout routes:
 | `/` | `works` | Works | Media library (grid/list, sort, filter, search) — this is the real route |
 | `/works` | — | redirect→`/` | Legacy path, redirects to `/` preserving query. Deliberate: the reverse direction caused a `replaceState` loop that broke back navigation |
 | `/work/:id` | — | Work | Work detail + track list. The browsed folder is in the query: `?path=foo/bar` (slash-joined folder names — a slash cannot occur in a folder name, so nothing needs escaping) plus the `#work-tree` anchor, and an open image preview adds `&img=<filename>`, so walking into a folder or opening an image is a history entry and Back goes up one level / closes the preview instead of leaving the work. Paging through images `replace`s rather than pushes, so a folder of 200 images does not need 200 Backs. `Work.vue` therefore watches `$route.params.id`, not `$route` — a query change must not refetch |
-| `/fullScreenPlayer/:id?` | — | FullScreenPlayer | Full-screen player mode |
 | `/text/:trackId(.*)` | — | TextViewer | In-app viewer for `.txt`/`.lrc`/`.srt`/`.ass`/`.vtt`. The param spans slashes because `trackId` is `${workId}/${relPath}`, and a relPath may itself contain subdirectories. Never link to `/api/media/stream/...` directly — a real navigation kills the SPA document (playback stops) and in an installed PWA back exits the app |
 | `/settings` | — | Settings | Per-user settings: theme, UI language, tag language, and the player/card preferences (`AudioPlayer` Vuex state). Rendered inside `MainLayout`; `/admin/settings` redirects here. The old admin-dashboard copy of this page was removed, so the only general-settings page is this one |
 | `/circles` | — | List | Browse by circle (artist group) |
@@ -601,8 +599,6 @@ hand-authored `TONES` table, so they are the part that can regress.
 Never swap the two: `title` is what the backend builds media URLs from (see `backend/AGENTS.md` §2.9b).
 
 **The player shows it too, via one getter.** `toQueueItem` carries `trackTitle` onto the queue item — but **only when the work has one**, matching how `mediaStreamUrl` is handled, since every field on a queue item is re-uploaded on each `PUT /api/history`. `AudioPlayer/currentPlayingTitle` resolves `trackTitle || title` once, and `PlayerBar`, `AudioPlayer` and the `mediaSession` metadata in `AudioElement` all read it rather than `currentPlayingFile.title`. This is the only way the player can know the display name: the resume paths hand a **stored** queue to `SET_QUEUE` and never refetch the tree.
-
-> **`FullScreenPlayer`'s title overlay is easy to miss**: it sits behind `v-if="isInFullScreen"`, true only once the browser fullscreen API engages. Opening the page shows a bare cover — the title, progress bar and `LyricsBar` all appear only after a double-click enters real fullscreen.
 
 The **history surfaces** resolve it the same way: `FavListItem.parkedTrackTitle`, `RecentWorks.getWorkHistoryInfo`, `WorkDetails.currentHistoryTrack`. They read the *stored* queue, so a row written before titles existed keeps showing the filename until that queue is rebuilt from the tree — i.e. the next time the work is played from its own page.
 

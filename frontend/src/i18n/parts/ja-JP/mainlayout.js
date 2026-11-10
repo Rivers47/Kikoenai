@@ -9,7 +9,6 @@ export default {
   logoutConfirm: 'ログアウトしますか？（認証が無効な場合は効果がありません）',
   logoutButton: 'ログアウト',
   mediaLibrary: 'ライブラリ',
-  fullScreenMode: 'フルスクリーン',
   favourites: 'お気に入り',
   downloads: 'ダウンロード',
   circles: 'サークル',

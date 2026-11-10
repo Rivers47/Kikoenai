@@ -1,6 +1,5 @@
 export default {
   switchTrack: '切換曲目',
-  fullscreen: '網頁全螢幕',
   moreSettings: '更多播放設定',
   openWorkDetail: '開啟作品詳情（或雙擊封面）',
   lyricOffset: '歌詞偏移',

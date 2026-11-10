@@ -8,5 +8,4 @@ export default {
   next: '下一個',
   setAsCover: '用作視覺化封面',
   coverSetSuccess: '封面設定成功',
-  goToFullScreen: '前往大螢幕頁面',
 }

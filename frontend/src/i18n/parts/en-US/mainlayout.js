@@ -9,7 +9,6 @@ export default {
   logoutConfirm: 'Are you sure you want to log out? (No effect if auth is disabled)',
   logoutButton: 'Logout',
   mediaLibrary: 'Media Library',
-  fullScreenMode: 'Full Screen',
   favourites: 'Favourites',
   downloads: 'Downloads',
   circles: 'Circles',

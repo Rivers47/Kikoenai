@@ -140,7 +140,7 @@
       </q-card>
     </q-dialog>
 
-    <q-page-container :class="{'page-container-style': isFullScreenPage, 'padding-bottom-play-bar': !isFullScreenPage}">
+    <q-page-container class="padding-bottom-play-bar">
       <!-- <q-page padding> -->
       <router-view v-slot="{ Component }">
         <keep-alive :include="['Works', 'Favourites']">
@@ -148,7 +148,7 @@
         </keep-alive>
       </router-view>
       <!-- </q-page> -->
-      <q-page-scroller v-if="!isFullScreenPage" position="bottom-right" :scroll-offset="150" :offset="[18, 90]" class="scroller" :class="{'scroller-hide': !showScroller, 'scroller-show': showScroller}">
+      <q-page-scroller position="bottom-right" :scroll-offset="150" :offset="[18, 90]" class="scroller" :class="{'scroller-hide': !showScroller, 'scroller-show': showScroller}">
         <q-btn dense fab icon="keyboard_arrow_up" color="accent" padding="sm" />
       </q-page-scroller>
     </q-page-container>
@@ -203,7 +203,6 @@ export default {
       contrastMode: getContrastMode(),
       links: [
         { titleKey: 'mediaLibrary', icon: 'widgets', path: '/' },
-        { titleKey: 'fullScreenMode', icon: 'play_circle', path: '/fullScreenPlayer' },
         { titleKey: 'favourites', icon: 'favorite', path: '/favourites' },
         { titleKey: 'downloads', icon: 'download_done', path: '/downloads' },
         { titleKey: 'circles', icon: 'group', path: '/circles' },
@@ -262,11 +261,6 @@ export default {
       return path && path !=='/' && path !=='/works' && path !== '/favourites';
     },
 
-    isFullScreenPage() {
-      const path = this.$route.path
-      return path && path.startsWith('/fullScreenPlayer');
-    },
-
     ...mapState('User', {
       userName: 'name',
       authEnabled: 'auth',
@@ -277,9 +271,6 @@ export default {
       return !this.authEnabled || this.userGroup === 'administrator' || this.userName === 'admin'
     },
     
-    ...mapState('AudioPlayer', [
-      'playWorkId',
-    ]),
   },
 
   methods: {
@@ -430,16 +421,8 @@ export default {
       return this.links.filter(link => {
         if (link.adminOnly && !this.isAdmin)
           return false;
-        if (link.path === '/fullScreenPlayer' && this.playWorkId == 0)
-          return false;
         return true;
-      }).map(link => {
-        const copy = { ...link, title: this.t('mainlayout.' + link.titleKey) }
-        if (link.path === '/fullScreenPlayer') {
-          copy.path += `/${this.playWorkId}`
-        }
-        return copy
-      })
+      }).map(link => ({ ...link, title: this.t('mainlayout.' + link.titleKey) }))
     },
     
     onHeaderRevealChange(isReveal) {
@@ -481,16 +464,6 @@ aside.q-drawer:not(.q-drawer--mini) .q-scrollarea {
   aside.q-drawer .q-item__label {
     white-space: normal;
     word-break: break-word;
-}
-
-// 中心主要页面的尺寸样式
-.page-container-style {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  top: 0;
-  /* overflow-y: auto; */
 }
 
 // 为了避开底部的play bar设置的padding

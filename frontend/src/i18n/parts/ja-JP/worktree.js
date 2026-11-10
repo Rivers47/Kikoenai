@@ -10,5 +10,4 @@ export default {
   next: '次へ',
   setAsCover: 'ビジュアライザーカバーに設定',
   coverSetSuccess: 'カバーを設定しました',
-  goToFullScreen: 'フルスクリーンプレイヤーへ',
 }

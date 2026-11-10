@@ -9,7 +9,6 @@ export default {
   logoutConfirm: '是否退出登录？（若未开启用户验证，则操作无效）',
   logoutButton: '退出',
   mediaLibrary: '媒体库',
-  fullScreenMode: '大图模式',
   favourites: '我的收藏',
   downloads: '离线下载',
   circles: '社团',

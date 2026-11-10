@@ -75,21 +75,6 @@
                 {{ sleepTimerTooltip }}
               </q-tooltip>
             </q-btn>
-
-            <!--大屏幕-->
-            <q-btn 
-              flat 
-              dense 
-              size="md" 
-              padding="none sm" 
-              :icon="isFullScreenPage ? 'fullscreen_exit' : 'fullscreen'"
-              @click="gotoFullScreenPlayer"
-            >
-              <q-tooltip anchor="top middle" self="bottom middle">
-                {{ t('audioplayer.fullscreen') }}
-              </q-tooltip>
-            </q-btn>
-
           <!-- 放在尾部 -->
             <q-btn
               flat 
@@ -403,10 +388,6 @@ export default {
   computed: {
     showAudioPlayer () {
       return this.currentPlayingFile.trackId && !this.hide;
-    },
-
-    isFullScreenPage () {
-      return this.$route.path.startsWith('/fullScreenPlayer');
     },
 
     coverUrl () {
@@ -746,14 +727,6 @@ export default {
       const due = trackId !== this._lastPushedTrackId
       || now - this._lastServerPush >= SERVER_PUSH_MS
       return due
-    },
-
-    gotoFullScreenPlayer() {
-      if (this.isFullScreenPage) {
-        this.$router.push(`/work/${this.playWorkId}`)
-      } else {
-        this.$router.push('/fullScreenPlayer')
-      }
     },
 
     lyricOffsetChange(seconds) {
