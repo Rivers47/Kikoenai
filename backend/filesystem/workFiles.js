@@ -33,11 +33,12 @@ const mergeOverlay = async (workId, walked) => {
 };
 
 /**
- * Shape stored rows exactly the way getTrackList shapes a walk, including the
- * sort.
+ * Turn stored rows into the same track objects getTrackList returns for a walk,
+ * in the same order. t_work_file is the only other source of a track list, and
+ * every caller expects one object type.
  */
-const shapeRows = (workId, workDir, rows) => {
-  const shaped = rows.map((row) => {
+const rowsToTracks = (workId, workDir, rows) => {
+  const tracks = rows.map((row) => {
     const relPath = row.rel_path;
     const dirName = path.dirname(relPath);
     return {
@@ -54,7 +55,7 @@ const shapeRows = (workId, workDir, rows) => {
   });
 
   // The same comparator getTrackList uses.
-  const sorted = orderBy(shaped, [v => v.subtitle, v => v.title, v => v.ext]);
+  const sorted = orderBy(tracks, [v => v.subtitle, v => v.title, v => v.ext]);
 
   // getTrackList only attaches duration/trackTitle to audio, and callers read
   // `undefined` as "unknown". Mirror that rather than exposing them on a .jpg.
@@ -71,7 +72,7 @@ const shapeRows = (workId, workDir, rows) => {
 /**
  * Walk the work folder and replace its rows. Preserves durations and track
  * titles for files that are still there.
- * @returns {Promise<Array>} the shaped track list, as listWorkTracks returns.
+ * @returns {Promise<Array>} the track list, as listWorkTracks returns.
  */
 async function indexWorkFiles (workId, workDir, tracks, dbApi = db) {
   const walked = await mergeOverlay(workId, tracks || await getTrackList(workId, workDir));
@@ -92,7 +93,7 @@ async function indexWorkFiles (workId, workDir, tracks, dbApi = db) {
   });
 
   await dbApi.replaceWorkFiles(workId, rows);
-  return shapeRows(workId, workDir, rows);
+  return rowsToTracks(workId, workDir, rows);
 }
 
 /**
@@ -108,11 +109,11 @@ async function listWorkTracks (workId, workDir, { indexedAt, dbApi = db } = {}) 
     // Durations already in the rows are carried forward by indexWorkFiles.
     return indexWorkFiles(workId, workDir, undefined, dbApi);
   }
-  return shapeRows(workId, workDir, await dbApi.getWorkFiles(workId));
+  return rowsToTracks(workId, workDir, await dbApi.getWorkFiles(workId));
 }
 
 /**
- * @returns {Promise<Array>} the shaped track list
+ * @returns {Promise<Array>} the track list
  */
 async function rescanWorkFiles (workId, workDir, dbApi = db) {
   const existing = await dbApi.getWorkFiles(workId);
@@ -126,4 +127,4 @@ async function rescanWorkFiles (workId, workDir, dbApi = db) {
   return indexWorkFiles(workId, workDir, tracks, dbApi);
 }
 
-module.exports = { listWorkTracks, indexWorkFiles, rescanWorkFiles, shapeRows, overlayDir };
+module.exports = { listWorkTracks, indexWorkFiles, rescanWorkFiles, rowsToTracks, overlayDir };
