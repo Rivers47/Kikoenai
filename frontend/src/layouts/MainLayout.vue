@@ -33,6 +33,7 @@
       mini-to-overlay
       no-mini-animation
       :width="220"
+      :mini-width="56"
       :breakpoint="500"
       bordered
       content-class=""
@@ -152,8 +153,9 @@
       </q-page-scroller>
     </q-page-container>
 
+    <PlayerBarV2 :left-offset="barInset" :behind-drawer="drawerCoversBar" />
+
     <div :style="{'z-index': miniState ? 3001 : 0}" style="position: fixed; bottom: 0;"> <!-- z-index must be greater than header z-index -->
-      <PlayerBar />
       <AudioPlayer />
       <LyricsBar />
     </div>
@@ -162,7 +164,7 @@
 
 <script>
 import { useI18n } from 'vue-i18n'
-import PlayerBar from 'components/PlayerBar'
+import PlayerBarV2 from 'components/PlayerBarV2'
 import AudioPlayer from 'components/AudioPlayer'
 import LyricsBar from 'components/LyricsBar'
 import NotifyMixin from '../mixins/Notification.js'
@@ -181,7 +183,7 @@ export default {
   mixins: [NotifyMixin],
 
   components: {
-    PlayerBar,
+    PlayerBarV2,
     AudioPlayer,
     LyricsBar,
 },
@@ -191,6 +193,7 @@ export default {
       filter: '',
       drawerOpen: false,
       miniState: true,
+
       confirm: false,
       randId: null,
       version: '',
@@ -235,6 +238,16 @@ export default {
   },
 
   computed: {
+    // The drawer's mini width (set in the template). Fixed whether it is mini or
+    // expanded, so nothing in the bar moves on hover.
+    barInset () {
+      return this.drawerOpen && this.$q.screen.width > 500 ? 56 : 0
+    },
+
+    drawerCoversBar () {
+      return this.drawerOpen && (!this.miniState || this.$q.screen.width <= 500)
+    },
+
     contrastModeLabel () {
       const labels = {
         '': this.t('mainlayout.systemDefault'),
@@ -273,6 +286,8 @@ export default {
     ...mapMutations('AudioPlayer', [
       'SET_AI_SERVER_URL',
     ]),
+
+
     // Called by the filter watcher and by Enter (which bypasses the input's debounce)
     search (filter) {
       this.filter = filter
@@ -480,7 +495,11 @@ aside.q-drawer:not(.q-drawer--mini) .q-scrollarea {
 
 // 为了避开底部的play bar设置的padding
 .padding-bottom-play-bar {
-  padding-bottom: calc(80px + env(safe-area-inset-bottom)) !important;
+  padding-bottom: calc(128px + env(safe-area-inset-bottom)) !important;
+
+  @media (max-width: $breakpoint-xs-max) {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom)) !important;
+  }
 }
 
 .scroller {

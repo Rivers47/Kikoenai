@@ -12,7 +12,9 @@ export const SLEEP_TIMER_KEY = 'sleepTimer'
 
 export default function () {
   return {
-    hide: false,
+    // `hide` true = the docked bar is shown and the floating panel is not.
+    // Wide screens default to the bar: the panel adds nothing there.
+    hide: typeof window !== 'undefined' && window.matchMedia('(min-width: 600px)').matches,
     playing: false, // 播放状态 (true/false)
     currentTime: 0, // 单位: 秒
     newCurrentTime: -1, // 单位：秒，<0 的负数表示当前无需更改媒体的currentTime，>=0 表示需要更改媒体的currentTime
@@ -50,6 +52,7 @@ export default function () {
     forwardSeekTime: LocalStorage.has(FORWARD_SEEK_TIME_KEY) ? LocalStorage.getItem(FORWARD_SEEK_TIME_KEY) : 30,
     rewindSeekMode: false,
     forwardSeekMode: false,
+    showLyrics: true, // CC toggle in the play bar; LyricsBar hides when off
     swapSeekButton: LocalStorage.has(SWAP_SEEK_BUTTON_KEY) && LocalStorage.getItem(SWAP_SEEK_BUTTON_KEY), // 交换进度按钮与切换按钮
     visualPlayerCoverUrl: '', // 可视化播放器的封面图
     playWorkId: 0, // 当前播放作品的id

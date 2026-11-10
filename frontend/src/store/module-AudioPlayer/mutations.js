@@ -174,6 +174,9 @@ const mutations = {
   SET_HAS_LYRIC: (state, value) => {
     state.hasLyric = value;
   },
+  TOGGLE_LYRICS: (state) => {
+    state.showLyrics = !state.showLyrics;
+  },
   SET_CURRENT_LYRICS: (state, lines) => {
     state.currentLyrics = lines
   },
