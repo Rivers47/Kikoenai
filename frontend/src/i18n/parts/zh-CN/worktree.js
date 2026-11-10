@@ -10,5 +10,4 @@ export default {
   next: '下一个',
   setAsCover: '用作可视化封面',
   coverSetSuccess: '封面设置成功',
-  goToFullScreen: '前往大屏页面',
 }

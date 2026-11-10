@@ -1,6 +1,5 @@
 export default {
   switchTrack: 'トラックを切り替え',
-  fullscreen: '全画面表示',
   moreSettings: 'その他の再生設定',
   openWorkDetail: '作品詳細を開く（カバーをダブルクリック）',
   lyricOffset: '歌詞オフセット',

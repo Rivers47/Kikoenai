@@ -126,19 +126,6 @@
             </q-tooltip>
           </q-btn>
 
-          <q-btn
-            flat
-            round
-            dense
-            class="action"
-            :icon="isFullScreenPage ? 'fullscreen_exit' : 'fullscreen'"
-            @click="gotoFullScreenPlayer()"
-          >
-            <q-tooltip anchor="top middle" self="bottom middle">
-              {{ t('audioplayer.fullscreen') }}
-            </q-tooltip>
-          </q-btn>
-
           <q-btn flat round dense class="action action--more" icon="more_horiz">
             <q-tooltip anchor="top middle" self="bottom middle">
               {{ t('audioplayer.moreSettings') }}
@@ -164,12 +151,6 @@
                   <q-item clickable v-ripple @click="showSleepTimer = true" v-close-popup>
                     <q-item-section avatar><q-icon name="snooze" /></q-item-section>
                     <q-item-section>{{ sleepTimerTooltip }}</q-item-section>
-                  </q-item>
-                  <q-item clickable v-ripple @click="gotoFullScreenPlayer()" v-close-popup>
-                    <q-item-section avatar>
-                      <q-icon :name="isFullScreenPage ? 'fullscreen_exit' : 'fullscreen'" />
-                    </q-item-section>
-                    <q-item-section>{{ t('audioplayer.fullscreen') }}</q-item-section>
                   </q-item>
                   <q-separator />
                 </template>
@@ -263,7 +244,7 @@ export default {
     ]),
 
     visible () {
-      return Boolean(this.currentPlayingFile.trackId) && this.hide && !this.isFullScreenPage
+      return Boolean(this.currentPlayingFile.trackId) && this.hide
     },
 
     coverUrl () {
@@ -307,10 +288,6 @@ export default {
 
     vaNames () {
       return (this.playWorkVas || []).map(va => va.name).filter(Boolean).join('、')
-    },
-
-    isFullScreenPage () {
-      return this.$route.path.startsWith('/fullScreenPlayer')
     },
 
     rewindIcon () {
@@ -384,10 +361,6 @@ export default {
       if (!trackId) return
       const url = `/work/${trackId.split('/')[0]}`
       if (this.$route.path !== url) this.$router.push(url)
-    },
-
-    gotoFullScreenPlayer () {
-      this.$router.push(this.isFullScreenPage ? `/work/${this.playWorkId}` : '/fullScreenPlayer')
     },
 
     onPointerDown (event) {

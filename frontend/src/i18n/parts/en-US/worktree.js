@@ -10,5 +10,4 @@ export default {
   next: 'Next',
   setAsCover: 'Set as visualizer cover',
   coverSetSuccess: 'Cover set successfully',
-  goToFullScreen: 'Go to full-screen player',
 }

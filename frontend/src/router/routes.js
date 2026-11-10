@@ -6,7 +6,6 @@ import Work from 'pages/Work'
 import List from 'pages/List'
 import Login from 'pages/Login'
 import Favourites from 'pages/Favourites'
-import FullScreenPlayer from 'pages/FullScreenPlayer'
 import TextViewer from 'pages/TextViewer'
 import Downloads from 'pages/Downloads'
 import Settings from 'pages/Settings'
@@ -83,10 +82,6 @@ const routes = [
         path: 'vas',
         props: { restrict: "vas" },
         component: List
-      },
-      {
-        path: 'fullScreenPlayer/:id?',
-        component: FullScreenPlayer
       },
       {
         // trackId is `${workId}/${index}`, so the param has to span the slash

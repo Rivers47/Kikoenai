@@ -1,6 +1,5 @@
 export default {
   switchTrack: 'Switch track',
-  fullscreen: 'Fullscreen',
   moreSettings: 'More playback settings',
   openWorkDetail: 'Open work details (or double-click cover)',
   lyricOffset: 'Lyric offset',

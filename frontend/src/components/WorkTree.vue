@@ -378,14 +378,6 @@ export default {
       this.$store.commit('AudioPlayer/SET_VISUAL_PLAYER_COVER_URL', urlWithoutToken);
       this.$q.notify({
         message: this.t('worktree.coverSetSuccess'),
-        actions: [
-          { label: this.t('worktree.goToFullScreen'),
-            handler: () => {
-              // this.$router.push(`/fullScreenPlayer/${this.playWorkId}`)
-              this.$router.push(`/fullScreenPlayer`)
-            }
-          }
-        ],
       });
     },
 
