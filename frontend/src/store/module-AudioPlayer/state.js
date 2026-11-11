@@ -10,6 +10,11 @@ export const FORWARD_SEEK_TIME_KEY = 'forward_seek_time'
 // sessionStorage 中持久化睡眠定时的键，值为 { type, stopAt, tracksLeft }
 export const SLEEP_TIMER_KEY = 'sleepTimer'
 
+// How long a seek-bar jump can be undone. The pill is the only way back, so the
+// memory lives exactly as long as the pill: once it is gone, the next jump
+// starts a new one.
+export const SEEK_UNDO_PILL_MS = 30000
+
 // Shared by the floating lyric bar and the full-screen lyric view, in rem.
 export const LYRIC_FONT_SIZE_KEY = 'lyricFontSize'
 
@@ -61,6 +66,12 @@ export default function () {
     // The floating lyric window vs the full-screen lyric view.
     lyricsFullScreen: false,
     lyricFontSize: readLyricFontSize(),
+    // Where a seek-bar jump came from: { time, at } — `time` is the position
+    // before the first jump of the current run, `at` the moment of the latest
+    // one. Null when there is nothing to go back to. Both the pill and the
+    // memory are derived from `at` (SEEK_UNDO_PILL_MS), so there is no second
+    // flag to fall out of sync.
+    seekUndo: null,
     sleepMode: false,          // 睡眠定时是否开启
     sleepModeType: null,       // 'minutes' | 'tracks'
     sleepStopAt: null,         // minutes 模式：停止播放的时间戳 (ms)

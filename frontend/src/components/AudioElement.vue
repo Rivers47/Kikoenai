@@ -5,13 +5,21 @@
       @mousedown.capture="onPanSlider('start')"
       @mouseup.capture="onPanSlider('end')"
   >
-    <q-slider v-model="changeCurrentTime"
-      @change="onChangeSlider"
-      @pan="onPanSlider"
-      :min="0" :max="duration" :step="0.01"
-      label
-      :label-value="formatSeconds(displayCurrentTime)"
+    <div class="seek-undo-track relative-position">
+      <q-slider v-model="changeCurrentTime"
+        @change="onChangeSlider"
+        @pan="onPanSlider"
+        :min="0" :max="duration" :step="0.01"
+        label
+        :label-value="formatSeconds(displayCurrentTime)"
+        />
+      <!-- Ghost handle: where the undo pill would take you. -->
+      <span
+        v-if="seekUndoVisible"
+        class="seek-undo-mark"
+        :style="{ left: `${seekUndoPercent}%` }"
       />
+    </div>
 
     <div ref="plyrContainer" style="display: none;">
       <!-- media src is managed imperatively (see _loadSource): a <source :src>
@@ -28,6 +36,7 @@ import { useI18n } from 'vue-i18n'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import NotifyMixin from '../mixins/Notification.js'
 import { formatSeconds } from '../utils'
+import { useSeekUndo } from 'src/utils/seek-undo'
 import { MAX_LYRIC_STREAMS } from 'src/utils/lyrics'
 import { parseLyricStreams, cueTextAt } from 'src/utils/subtitles'
 import { sendOrQueue } from '../utils/outbox'
@@ -46,7 +55,8 @@ const FINISHED_EPSILON_SECONDS = 1
 export default {
   setup () {
     const { t } = useI18n() // global scope
-    return { t }
+    const { visible, percent } = useSeekUndo()
+    return { t, seekUndoVisible: visible, seekUndoPercent: percent }
   },
   name: 'AudioElement',
 
@@ -271,6 +281,7 @@ export default {
       'SET_FORWARD_SEEK_MODE',
       'SET_HAS_LYRIC',
       'SET_LYRIC_CUES',
+      'ARM_SEEK_UNDO',
       'SET_NEW_CURRENT_TIME',
     ]),
 
@@ -790,9 +801,11 @@ export default {
     },
 
     onChangeSlider(v) {
-      console.log("player current time is ", this.plyr.currentTime)
-      console.log("slider change value to ", v)
-      console.log("global current time is ", this.currentTime)
+      // `currentTime` still holds the position the drag started from: the
+      // watcher that syncs it is held off while `isChangingCurrentTime` is set.
+      if (Math.abs(v - this.currentTime) >= 1) {
+        this.ARM_SEEK_UNDO({ time: this.currentTime, at: Date.now() })
+      }
       this.plyr.currentTime = v;
     },
     onPanSlider(phase) {
@@ -904,6 +917,28 @@ export default {
 </script>
 
 <style scoped>
+/* Quasar's slider root is `display: inline-block`, so a block wrapper keeps a
+   line box under it and the marker's 50% lands below the track. Flex makes the
+   wrapper exactly as tall as the slider. */
+.seek-undo-track {
+  display: flex;
+}
+
+/* Ghost handle on the seek slider: hollow, so it never reads as the live thumb.
+   Quasar puts the thumb's centre at `left: ratio%`, so the same rule aligns. */
+.seek-undo-mark {
+  position: absolute;
+  top: 50%;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgb(var(--primary-rgb));
+  border-radius: 50%;
+  background: rgb(var(--surface-rgb));
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
 /* Quasar animates the thumb and the fill with `left`/`width` transitions while
    the slider is not being dragged (QSlider.sass, `&--inactive`). The playhead is
    published 4x/s, so a .28s transition is restarted every .25s and never

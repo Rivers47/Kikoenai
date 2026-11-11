@@ -31,7 +31,8 @@
         </div>
 
         <!-- 设置菜单 -->
-        <div class="row justify-between q-mr-sm q-my-sm">
+        <div class="row justify-between q-mr-sm q-my-sm relative-position">
+          <SeekUndoPill class="panel-seek-undo" />
           <!-- 顶在前面 -->
             <!-- 曲目列表 -->
             <q-btn 
@@ -286,6 +287,7 @@ import { useI18n } from 'vue-i18n'
 import AudioElement from 'components/AudioElement'
 import Scrollable from 'components/Scrollable'
 import SleepMode from 'components/SleepMode'
+import SeekUndoPill from 'components/SeekUndoPill'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import { formatSeconds } from '../utils'
 import { sendOrQueue, requestSync } from '../utils/outbox'
@@ -306,6 +308,7 @@ export default {
     AudioElement,
     Scrollable,
     SleepMode,
+    SeekUndoPill,
   },
 
   data () {
@@ -808,6 +811,17 @@ export default {
 
 
 <style lang="scss" scoped>
+/* Inside the card, right-aligned, just above the seek row. It is anchored to the
+   settings row because that row sits between the artwork and the seek bar: the
+   pill then covers artwork instead of the row's trailing buttons. */
+.panel-seek-undo {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  margin-bottom: 4px;
+  z-index: 1;
+}
+
 
 .audio-player {
 

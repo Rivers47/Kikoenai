@@ -224,6 +224,18 @@ export default {
       this.search(this.filter)
     },
 
+    // The lyric view is inset against the bar, so the drawer has to go: an
+    // inset bar leaves a strip of drawer visible beside it.
+    lyricsFullScreen (open) {
+      if (open) {
+        this.drawerWasOpen = this.drawerOpen
+        this.drawerOpen = false
+      } else if (this.drawerWasOpen) {
+        this.drawerWasOpen = false
+        this.drawerOpen = true
+      }
+    },
+
     randId () {
       this.$router.push(`/work/${this.randId}`)
     },
@@ -247,20 +259,6 @@ export default {
     if (this.playerModeQuery) {
       this.playerModeQuery.removeEventListener('change', this.onPlayerModeChange)
     }
-  },
-
-  watch: {
-    // The lyric view is inset against the bar, so the drawer has to go: an
-    // inset bar leaves a strip of drawer visible beside it.
-    lyricsFullScreen (open) {
-      if (open) {
-        this.drawerWasOpen = this.drawerOpen
-        this.drawerOpen = false
-      } else if (this.drawerWasOpen) {
-        this.drawerWasOpen = false
-        this.drawerOpen = true
-      }
-    },
   },
 
   computed: {
