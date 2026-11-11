@@ -155,7 +155,7 @@
 
     <LyricsFullScreen />
 
-    <PlayerBarV2 :left-offset="barInset" :behind-drawer="drawerCoversBar" />
+    <PlayerBar :left-offset="barInset" :behind-drawer="drawerCoversBar" />
 
     <div :style="{'z-index': miniState ? 3001 : 0}" style="position: fixed; bottom: 0;"> <!-- z-index must be greater than header z-index -->
       <AudioPlayer />
@@ -166,7 +166,7 @@
 
 <script>
 import { useI18n } from 'vue-i18n'
-import PlayerBarV2 from 'components/PlayerBarV2'
+import PlayerBar from 'components/PlayerBar'
 import AudioPlayer from 'components/AudioPlayer'
 import LyricsBar from 'components/LyricsBar'
 import LyricsFullScreen from 'components/LyricsFullScreen'
@@ -186,7 +186,7 @@ export default {
   mixins: [NotifyMixin],
 
   components: {
-    PlayerBarV2,
+    PlayerBar,
     AudioPlayer,
     LyricsBar,
     LyricsFullScreen,
