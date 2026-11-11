@@ -1,11 +1,11 @@
 <template>
     <div
-      v-if="hasVisibleLyric && showLyrics"
+      v-if="hasVisibleLyric && showLyrics && !lyricsFullScreen"
       class="lyric-container"
       ref="draggable"
     >
         <div class="fontSizeBar" :class="showSizeBar ? 'showSizeBarStyle' : 'hideSizeBarStyle'">
-          <q-slider v-model="fontSize" :min="0.2" :max="10" :step="0" thumb-size="35px" @change="onFontSizeChange"/>
+          <q-slider v-model="fontSize" :min="0.2" :max="10" :step="0" thumb-size="35px"/>
         </div>
         <div
           id="lyricsBar"
@@ -34,7 +34,7 @@
 </template>
 
 <script>
-import { mapState } from 'vuex'
+import { mapState, mapMutations } from 'vuex'
 import { lyricStreamColor } from 'src/utils/lyrics'
 
 export default {
@@ -44,11 +44,20 @@ export default {
     ...mapState('AudioPlayer', [
       'currentLyrics',
       'lyricSpeakers',
+      'lyricFontSize',
+      'lyricsFullScreen',
       'showLyrics'
     ]),
 
     hasVisibleLyric () {
       return this.currentLyrics.some(line => line !== '')
+    },
+
+    // The slider and the full-screen view share one size, so a change in
+    // either place moves the words in both.
+    fontSize: {
+      get () { return this.lyricFontSize },
+      set (value) { this.setLyricFontSize(value) },
     },
   },
 
@@ -60,8 +69,6 @@ export default {
       startX: 0,
       startY: 0,
 
-      fontSize: 0, // rem
-      
       showSizeBar: false,
       laterTimer: 0,
     }
@@ -74,6 +81,10 @@ export default {
   },
 
   methods: {
+    ...mapMutations('AudioPlayer', {
+      setLyricFontSize: 'SET_LYRIC_FONT_SIZE',
+    }),
+
     lyricStreamColor,
 
     showTempSizeBar() {
@@ -122,16 +133,9 @@ export default {
       this.$refs.draggable.style.top = eleY + 'px'
     },
 
-    // 用户松开滑块之后才会触发此方法
-    onFontSizeChange(v) {
-      console.warn("fontSize change to: ", v)
-      localStorage.lyricFontSize = v;
-    }
-    
   },
 
   mounted() {
-    this.fontSize = parseFloat(localStorage.lyricFontSize || "1.5");
     // addEventListener('mousemove', onCursorMove(this), false)
     // addEventListener('touchmove', onCursorMove(this), false)
     addEventListener('mousemove', this.onCursorMove)

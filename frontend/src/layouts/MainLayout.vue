@@ -26,7 +26,7 @@
     <q-drawer
       class="bg-surface-container"
       v-model="drawerOpen"
-      show-if-above
+      :show-if-above="!lyricsFullScreen"
       :mini="miniState"
       @mouseenter="miniState = false"
       @mouseleave="miniState = true"
@@ -153,6 +153,8 @@
       </q-page-scroller>
     </q-page-container>
 
+    <LyricsFullScreen />
+
     <PlayerBarV2 :left-offset="barInset" :behind-drawer="drawerCoversBar" />
 
     <div :style="{'z-index': miniState ? 3001 : 0}" style="position: fixed; bottom: 0;"> <!-- z-index must be greater than header z-index -->
@@ -167,6 +169,7 @@ import { useI18n } from 'vue-i18n'
 import PlayerBarV2 from 'components/PlayerBarV2'
 import AudioPlayer from 'components/AudioPlayer'
 import LyricsBar from 'components/LyricsBar'
+import LyricsFullScreen from 'components/LyricsFullScreen'
 import NotifyMixin from '../mixins/Notification.js'
 import { mapMutations, mapState } from 'vuex'
 import { CONTRAST_MODES, getContrastMode, setContrastMode } from 'src/utils/contrast'
@@ -186,12 +189,14 @@ export default {
     PlayerBarV2,
     AudioPlayer,
     LyricsBar,
+    LyricsFullScreen,
 },
 
   data () {
     return {
       filter: '',
       drawerOpen: false,
+      drawerWasOpen: false,
       miniState: true,
 
       confirm: false,
@@ -230,10 +235,32 @@ export default {
     this.fetchSharedConfig();
     requestSync();
     this.initOfflineDownloads();
+
+    // The bar/panel default follows the viewport, so crossing the breakpoint
+    // switches mode instead of leaving a phone layout on a wide window.
+    this.playerModeQuery = window.matchMedia('(min-width: 600px)')
+    this.playerModeQuery.addEventListener('change', this.onPlayerModeChange)
   },
 
   beforeUnmount () {
     if (this.unsubscribeDownloadMessages) this.unsubscribeDownloadMessages();
+    if (this.playerModeQuery) {
+      this.playerModeQuery.removeEventListener('change', this.onPlayerModeChange)
+    }
+  },
+
+  watch: {
+    // The lyric view is inset against the bar, so the drawer has to go: an
+    // inset bar leaves a strip of drawer visible beside it.
+    lyricsFullScreen (open) {
+      if (open) {
+        this.drawerWasOpen = this.drawerOpen
+        this.drawerOpen = false
+      } else if (this.drawerWasOpen) {
+        this.drawerWasOpen = false
+        this.drawerOpen = true
+      }
+    },
   },
 
   computed: {
@@ -261,6 +288,10 @@ export default {
       return path && path !=='/' && path !=='/works' && path !== '/favourites';
     },
 
+    ...mapState('AudioPlayer', [
+      'lyricsFullScreen',
+    ]),
+
     ...mapState('User', {
       userName: 'name',
       authEnabled: 'auth',
@@ -276,7 +307,12 @@ export default {
   methods: {
     ...mapMutations('AudioPlayer', [
       'SET_AI_SERVER_URL',
+      'SET_HIDE',
     ]),
+
+    onPlayerModeChange (event) {
+      this.SET_HIDE(event.matches)
+    },
 
 
     // Called by the filter watcher and by Enter (which bypasses the input's debounce)

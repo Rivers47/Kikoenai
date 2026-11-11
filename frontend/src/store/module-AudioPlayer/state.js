@@ -10,6 +10,16 @@ export const FORWARD_SEEK_TIME_KEY = 'forward_seek_time'
 // sessionStorage 中持久化睡眠定时的键，值为 { type, stopAt, tracksLeft }
 export const SLEEP_TIMER_KEY = 'sleepTimer'
 
+// Shared by the floating lyric bar and the full-screen lyric view, in rem.
+export const LYRIC_FONT_SIZE_KEY = 'lyricFontSize'
+
+// Read through Quasar so both its `__q_numb|` encoding and the plain value the
+// old bar wrote with `localStorage.x = n` decode to a number.
+function readLyricFontSize () {
+  const stored = parseFloat(LocalStorage.getItem(LYRIC_FONT_SIZE_KEY))
+  return Number.isFinite(stored) && stored > 0 ? stored : 1.5
+}
+
 export default function () {
   return {
     // `hide` true = the docked bar is shown and the floating panel is not.
@@ -44,6 +54,13 @@ export default function () {
     // format carries no name. Fixed for the track, so it is set once on load.
     lyricSpeakers: [],
     lyricOffsetSeconds: 0,
+    // Every cue of every stream, so the full-screen view can render the whole
+    // timeline: `currentLyrics` only ever holds the line being spoken now.
+    // Shape: [{ name, cues: [{ start, end, text, voice }] }], times in ms.
+    lyricCues: [],
+    // The floating lyric window vs the full-screen lyric view.
+    lyricsFullScreen: false,
+    lyricFontSize: readLyricFontSize(),
     sleepMode: false,          // 睡眠定时是否开启
     sleepModeType: null,       // 'minutes' | 'tracks'
     sleepStopAt: null,         // minutes 模式：停止播放的时间戳 (ms)
