@@ -168,7 +168,6 @@
             dense
             class="action"
             :class="{ 'action--on': lyricsFullScreen }"
-            :disable="!showLyrics"
             :icon="lyricsFullScreen ? 'close_fullscreen' : 'open_in_full'"
             @click="toggleLyricsFullScreen()"
           >
@@ -214,7 +213,6 @@
                     v-if="compact"
                     clickable
                     v-ripple
-                    :disable="!showLyrics"
                     @click="toggleLyricsFullScreen"
                     v-close-popup
                   >

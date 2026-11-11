@@ -37,8 +37,7 @@
     </div>
 
     <div v-if="!rows.length" class="empty">
-      <q-icon name="closed_caption_off" size="40" />
-      <div class="empty-text">{{ t('lyricsfullscreen.empty') }}</div>
+      <q-icon name="closed_caption_off" size="md" />
     </div>
 
     <div
@@ -50,7 +49,7 @@
       @touchmove.passive="stopFollowing"
     >
       <div
-        v-for="row in rows"
+        v-for="row in displayRows"
         :key="row.id"
         class="lyric-row"
         :class="rowClass(row)"
@@ -63,7 +62,7 @@
 
     <transition name="fade">
       <q-btn
-        v-if="!following"
+        v-if="!following && displayRows.length"
         class="follow"
         rounded
         unelevated
@@ -148,8 +147,13 @@ export default {
       return found
     },
 
+    // The CC toggle silences the words, it does not close the view.
+    displayRows () {
+      return this.showLyrics ? this.rows : []
+    },
+
     visible () {
-      return this.lyricsFullScreen && this.showLyrics
+      return this.lyricsFullScreen
     },
 
     backdropStyle () {
@@ -172,6 +176,14 @@ export default {
 
     activeIndex () {
       if (this.following) this.scrollToActive('smooth')
+    },
+
+    // The rows are torn down while the CC is off, so the scroller loses its
+    // position. Re-anchor as soon as they come back rather than waiting for the
+    // next cue to change `activeIndex`.
+    'displayRows.length' (length) {
+      if (!length || !this.following) return
+      this.$nextTick(() => this.scrollToActive('auto'))
     },
   },
 
@@ -313,7 +325,7 @@ export default {
 .wash {
   position: absolute;
   inset: 0;
-  background-color: rgb(var(--surface-rgb) / 0.8);
+  background-color: rgb(var(--surface-rgb) / 0.7);
 }
 
 .top {
@@ -344,18 +356,10 @@ export default {
   position: relative;
   flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 0 24px;
   color: rgb(var(--on-surface-variant-rgb));
   opacity: 0.7;
-}
-
-.empty-text {
-  font-size: 14px;
-  text-align: center;
 }
 
 .rows {
