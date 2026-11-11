@@ -70,7 +70,7 @@
           <span class="time">{{ formatSeconds(currentTime) }}</span>
           <q-btn flat round dense class="seek" :icon="rewindIcon" @click="rewind(true)">
             <q-tooltip anchor="top middle" self="bottom middle">
-              {{ t('playerbarv2.rewind', { seconds: rewindSeekTime }) }}
+              {{ t('playerbar.rewind', { seconds: rewindSeekTime }) }}
             </q-tooltip>
           </q-btn>
           <q-btn flat round dense class="skip" icon="skip_previous" @click="previousTrack()" />
@@ -86,7 +86,7 @@
           <q-btn flat round dense class="skip" icon="skip_next" @click="nextTrack()" />
           <q-btn flat round dense class="seek" :icon="forwardIcon" @click="forward(true)">
             <q-tooltip anchor="top middle" self="bottom middle">
-              {{ t('playerbarv2.forward', { seconds: forwardSeekTime }) }}
+              {{ t('playerbar.forward', { seconds: forwardSeekTime }) }}
             </q-tooltip>
           </q-btn>
           <span class="time time--total">{{ formatSeconds(duration) }}</span>
@@ -110,7 +110,7 @@
             @click="toggleLyrics()"
           >
             <q-tooltip anchor="top middle" self="bottom middle">
-              {{ hasLyric ? t('playerbarv2.lyrics') : t('playerbarv2.noLyrics') }}
+              {{ hasLyric ? t('playerbar.lyrics') : t('playerbar.noLyrics') }}
             </q-tooltip>
           </q-btn>
 
@@ -144,7 +144,7 @@
             :icon="volumeIcon"
           >
             <q-tooltip anchor="top middle" self="bottom middle">
-              {{ t('playerbarv2.volume') }}
+              {{ t('playerbar.volume') }}
             </q-tooltip>
             <q-menu anchor="top middle" self="bottom middle" :offset="[0, 8]">
               <div class="volume-menu row items-center no-wrap">
@@ -198,7 +198,7 @@
                   <q-item v-if="compact" clickable v-ripple :disable="!hasLyric" @click="toggleLyrics()" v-close-popup>
                     <q-item-section avatar><q-icon name="closed_caption" /></q-item-section>
                     <q-item-section>
-                      {{ hasLyric ? t('playerbarv2.lyrics') : t('playerbarv2.noLyrics') }}
+                      {{ hasLyric ? t('playerbar.lyrics') : t('playerbar.noLyrics') }}
                     </q-item-section>
                     <q-item-section side v-if="showLyrics && hasLyric"><q-icon name="check" /></q-item-section>
                   </q-item>
@@ -251,7 +251,7 @@ const DRAG_THRESHOLD_PX = 8
 const SWIPE_UP_PX = 18
 
 export default {
-  name: 'PlayerBarV2',
+  name: 'PlayerBar',
   components: {
     SleepMode,
     Scrollable,
