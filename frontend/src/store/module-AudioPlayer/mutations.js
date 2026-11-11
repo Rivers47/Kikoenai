@@ -1,11 +1,13 @@
 import { LocalStorage, SessionStorage } from 'quasar'
 import getters from './getters'
-import state, { LYRIC_FONT_SIZE_KEY, SWAP_SEEK_BUTTON_KEY, FLIP_LR_CHANNEL_KEY, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, AUTO_MARK_LISTENED_KEY, REWIND_SEEK_TIME_KEY, FORWARD_SEEK_TIME_KEY, SLEEP_TIMER_KEY } from './state'
+import state, { SEEK_UNDO_PILL_MS, LYRIC_FONT_SIZE_KEY, SWAP_SEEK_BUTTON_KEY, FLIP_LR_CHANNEL_KEY, AI_SERVER_URL_KEY, OLD_WORK_CARD_UI_STYLE_KEY, AUTO_MARK_LISTENED_KEY, REWIND_SEEK_TIME_KEY, FORWARD_SEEK_TIME_KEY, SLEEP_TIMER_KEY } from './state'
 import { apiUrl } from 'src/base-path'
 
 const selectTrack = (state, index, seconds = 0) => {
   state.queueIndex = index
   state.currentTime = seconds
+  // A new track has nothing to go back to.
+  state.seekUndo = null
 }
 
 const mutations = {
@@ -206,6 +208,17 @@ const mutations = {
     // The view is inset above the docked bar, so opening it puts the player
     // into bar mode first; the panel would sit behind the lyrics otherwise.
     if (open) state.hide = true
+  },
+  // payload: { time, at }. While the pill is still up, a further jump keeps the
+  // first target, so a run of scrubbing always offers the position before the
+  // run started. Once the pill has gone, the next jump starts a new run.
+  ARM_SEEK_UNDO: (state, { time, at }) => {
+    const current = state.seekUndo
+    const keep = current && at - current.at < SEEK_UNDO_PILL_MS
+    state.seekUndo = { time: keep ? current.time : time, at }
+  },
+  CLEAR_SEEK_UNDO: (state) => {
+    state.seekUndo = null
   },
   SET_LYRIC_FONT_SIZE: (state, value) => {
     const size = Number(value)

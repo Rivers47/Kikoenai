@@ -23,6 +23,11 @@
           :style="{ width: `${previewPercent}%` }"
         ></div>
       </div>
+      <span
+        v-if="seekUndoVisible"
+        class="rail-undo"
+        :style="{ left: `${seekUndoPercent}%` }">
+      </span>
       <div
         v-if="seeking || railHovered"
         class="rail-thumb"
@@ -32,6 +37,9 @@
         {{ formatSeconds(previewTime) }}
       </span>
     </div>
+
+    <!-- The bar slides out of view in panel mode; its pill must go with it. -->
+    <SeekUndoPill v-if="visible" class="bar-seek-undo" />
 
     <div class="body">
       <div class="cover" @pointerdown.stop @click.stop="openWorkDetail">
@@ -231,6 +239,8 @@ import { useI18n } from 'vue-i18n'
 import { mapState, mapGetters, mapMutations } from 'vuex'
 import SleepMode from 'components/SleepMode'
 import Scrollable from 'components/Scrollable'
+import SeekUndoPill from 'components/SeekUndoPill'
+import { useSeekUndo } from 'src/utils/seek-undo'
 import { formatSeconds } from '../utils'
 import { apiUrl } from 'src/base-path'
 
@@ -242,6 +252,7 @@ export default {
   components: {
     SleepMode,
     Scrollable,
+    SeekUndoPill,
   },
 
   props: {
@@ -259,7 +270,8 @@ export default {
 
   setup () {
     const { t } = useI18n()
-    return { t }
+    const { visible, percent } = useSeekUndo()
+    return { t, seekUndoVisible: visible, seekUndoPercent: percent }
   },
 
   data () {
@@ -419,6 +431,7 @@ export default {
       rewind: 'SET_REWIND_SEEK_MODE',
       forward: 'SET_FORWARD_SEEK_MODE',
       setNewCurrentTime: 'SET_NEW_CURRENT_TIME',
+      armSeekUndo: 'ARM_SEEK_UNDO',
       changePlayMode: 'CHANGE_PLAY_MODE',
       toggleLyrics: 'TOGGLE_LYRICS',
       setLyricsFullScreen: 'SET_LYRICS_FULL_SCREEN',
@@ -456,6 +469,15 @@ export default {
       if (onRail) this.previewAt(event.clientX)
     },
 
+    // Only the rail counts as a seek: the ±seconds buttons and the lyric rows
+    // are deliberate jumps, not browsing.
+    seekTo (seconds) {
+      if (Math.abs(seconds - this.currentTime) >= 1) {
+        this.armSeekUndo({ time: this.currentTime, at: Date.now() })
+      }
+      this.setNewCurrentTime(seconds)
+    },
+
     previewAt (clientX) {
       if (!this.railRect || !this.railRect.width || !this.duration) return
       const ratio = (clientX - this.railRect.left) / this.railRect.width
@@ -482,7 +504,7 @@ export default {
 
     onPointerUp () {
       if (this.drag) {
-        if (this.drag.mode === 'seek' && this.seeking) this.setNewCurrentTime(this.previewTime)
+        if (this.drag.mode === 'seek' && this.seeking) this.seekTo(this.previewTime)
         // Only on phones: on a wide screen the panel has nothing to add, so a
         // tap on the bar is not a "open the big player" gesture.
         else if (!this.drag.mode && this.compact) this.openPanel()
@@ -564,6 +586,21 @@ export default {
   bottom: 0;
   left: 0;
   background: rgb(var(--primary-rgb) / 0.45);
+}
+
+/* Ghost handle: where the undo pill would take you. Hollow, so it never reads
+   as the live position. */
+.rail-undo {
+  position: absolute;
+  top: calc(var(--rail-height) / 2);
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgb(var(--primary-rgb));
+  border-radius: 50%;
+  background: rgb(var(--surface-rgb));
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 /* Ringed so the handle still reads where it sits on top of the filled part. */
@@ -763,6 +800,15 @@ export default {
   font-size: 24px;
 }
 
+/* Above the bar, clear of the rail thumb, flush with the action cluster. */
+.bar-seek-undo {
+  position: absolute;
+  right: 16px;
+  bottom: 100%;
+  margin-bottom: 16px;
+  z-index: 1;
+}
+
 .volume-menu {
   width: 176px;
   padding: 4px 12px 4px 4px;
@@ -838,6 +884,11 @@ export default {
   .texts {
     flex: 1;
     min-width: 0;
+  }
+
+  .bar-seek-undo {
+    right: 12px;
+    margin-bottom: 12px;
   }
 
   .transport,
