@@ -523,15 +523,10 @@ export default {
       // so it is kept and applied again once the file is ready. Written to the
       // media element, not Plyr, whose setter ignores seeks while the duration
       // is unknown.
-      const trackId = this.currentPlayingFile.trackId
       this._pendingStart = this.currentTime > 0 ? this.currentTime : null
       if (this.currentTime > 0) {
         media.currentTime = this.currentTime
-        if (trackId !== this._loadedTrackId) {
-          this.$q.notify({message: this.t('audioelement.resumeHistory'), timeout: 1000})
-        }
       }
-      this._loadedTrackId = trackId
       // Retarget now rather than leaving the outgoing track's length on screen.
       this.onDurationChange()
       return true

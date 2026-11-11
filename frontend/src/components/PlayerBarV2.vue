@@ -217,12 +217,7 @@
                       {{ lyricsFullScreen ? t('lyricsfullscreen.close') : t('lyricsfullscreen.open') }}
                     </q-item-section>
                   </q-item>
-                  <q-separator />
                 </template>
-                <q-item clickable v-ripple @click="openWorkDetail()" v-close-popup>
-                  <q-item-section avatar><q-icon name="info" /></q-item-section>
-                  <q-item-section>{{ t('audioplayer.openWorkDetail') }}</q-item-section>
-                </q-item>
               </q-list>
             </q-menu>
           </q-btn>

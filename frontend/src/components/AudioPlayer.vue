@@ -24,7 +24,7 @@
             transition="fade"
             :src="coverUrl"
             :ratio="4/3"
-            @dblclick.prevent="openWorkDetail()"
+            @click.prevent="openWorkDetail()"
           >
           </q-img>
 
@@ -103,15 +103,6 @@
                 {{ t('audioplayer.moreSettings') }}
               </q-tooltip>
               <q-menu anchor="bottom right" self="top right">
-                <q-item clickable v-ripple @click="openWorkDetail()" v-close-popup>
-                  <q-item-section avatar>
-                    <!-- placeholder -->
-                  </q-item-section>
-                  <q-item-section>
-                    {{ t('audioplayer.openWorkDetail') }}
-                  </q-item-section>
-                </q-item>
-
                 <q-item v-if="hasLyric">
                   <q-item-section>
                     <q-input
