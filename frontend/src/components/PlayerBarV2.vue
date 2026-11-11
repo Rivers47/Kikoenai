@@ -93,7 +93,7 @@
         </div>
 
         <div class="actions" @pointerdown.stop>
-          <q-btn flat round dense class="action" icon="queue_music" @click="openPanel">
+          <q-btn flat round dense class="action" icon="queue_music" @click="toggleQueueDialog()">
             <q-tooltip anchor="top middle" self="bottom middle">
               {{ t('audioplayer.switchTrack') }}
             </q-tooltip>
@@ -184,26 +184,34 @@
             <q-menu anchor="top right" self="bottom right">
               <q-list dense style="min-width: 15rem">
                 <template v-if="compact || narrow">
-                  <q-item clickable v-ripple @click="openPanel()" v-close-popup>
+                  <!-- Each entry appears only while its button is off the bar:
+                       phones hide everything but ⋯, narrow desktop folds play
+                       mode and the sleep timer. -->
+                  <q-item v-if="compact" clickable v-ripple @click="toggleQueueDialog()" v-close-popup>
                     <q-item-section avatar><q-icon name="queue_music" /></q-item-section>
                     <q-item-section>{{ t('audioplayer.switchTrack') }}</q-item-section>
                   </q-item>
-                  <q-item clickable v-ripple :disable="!hasLyric" @click="toggleLyrics()" v-close-popup>
+                  <q-item v-if="compact" clickable v-ripple @click="openPanel()" v-close-popup>
+                    <q-item-section avatar><q-icon name="open_in_full" /></q-item-section>
+                    <q-item-section>{{ t('audioplayer.openPanel') }}</q-item-section>
+                  </q-item>
+                  <q-item v-if="compact" clickable v-ripple :disable="!hasLyric" @click="toggleLyrics()" v-close-popup>
                     <q-item-section avatar><q-icon name="closed_caption" /></q-item-section>
                     <q-item-section>
                       {{ hasLyric ? t('playerbarv2.lyrics') : t('playerbarv2.noLyrics') }}
                     </q-item-section>
                     <q-item-section side v-if="showLyrics && hasLyric"><q-icon name="check" /></q-item-section>
                   </q-item>
-                  <q-item clickable v-ripple @click="changePlayMode()" v-close-popup>
+                  <q-item v-if="narrow" clickable v-ripple @click="changePlayMode()" v-close-popup>
                     <q-item-section avatar><q-icon :name="playModeIcon" /></q-item-section>
                     <q-item-section>{{ playModeString }}</q-item-section>
                   </q-item>
-                  <q-item clickable v-ripple @click="showSleepTimer = true" v-close-popup>
+                  <q-item v-if="narrow" clickable v-ripple @click="showSleepTimer = true" v-close-popup>
                     <q-item-section avatar><q-icon name="snooze" /></q-item-section>
                     <q-item-section>{{ sleepTimerTooltip }}</q-item-section>
                   </q-item>
                   <q-item
+                    v-if="compact"
                     clickable
                     v-ripple
                     :disable="!showLyrics"
@@ -429,6 +437,7 @@ export default {
       armSeekUndo: 'ARM_SEEK_UNDO',
       changePlayMode: 'CHANGE_PLAY_MODE',
       toggleLyrics: 'TOGGLE_LYRICS',
+      toggleQueueDialog: 'TOGGLE_QUEUE_DIALOG',
       setLyricsFullScreen: 'SET_LYRICS_FULL_SCREEN',
       toggleMuted: 'TOGGLE_MUTED',
       setVolume: 'SET_VOLUME',
@@ -440,8 +449,11 @@ export default {
       this.setLyricsFullScreen(!this.lyricsFullScreen)
     },
 
+    // The floating panel is the phone's player: above 600px the docked bar is
+    // the whole UI and there is deliberately no way to open it.
     openPanel () {
-      if (this.hide) this.toggleHide()
+      if (!this.compact || !this.hide) return
+      this.toggleHide()
     },
 
     openWorkDetail () {
