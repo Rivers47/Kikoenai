@@ -166,7 +166,6 @@ export default {
     left: 50vw;
     transform: translateX(-50%);
 
-    /* 垂直位置置于底部playBar尚未考上一点，这个后面可以手动调整 */
     top: -132px;
     
     display: flex;

@@ -1,7 +1,6 @@
 export default {
   switchTrack: 'トラックを切り替え',
   moreSettings: 'その他の再生設定',
-  openWorkDetail: '作品詳細を開く（カバーをダブルクリック）',
   lyricOffset: '歌詞オフセット',
   flipLRChannel: '左右チャンネルを入替',
   flipLRChannelCaption: '左右の音声チャンネルを入替します',

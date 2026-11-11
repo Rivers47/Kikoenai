@@ -1,7 +1,6 @@
 export default {
   switchTrack: '切換曲目',
   moreSettings: '更多播放設定',
-  openWorkDetail: '開啟作品詳情（或雙擊封面）',
   lyricOffset: '歌詞偏移',
   flipLRChannel: '交換左右聲道',
   flipLRChannelCaption: '交換左右聲道的音訊輸出',

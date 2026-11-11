@@ -1,7 +1,6 @@
 export default {
   switchTrack: 'Switch track',
   moreSettings: 'More playback settings',
-  openWorkDetail: 'Open work details (or double-click cover)',
   lyricOffset: 'Lyric offset',
   flipLRChannel: 'Swap left/right channels',
   flipLRChannelCaption: 'Swap left and right audio channels',
