@@ -1,4 +1,5 @@
 export default {
+  openPanel: '開啟播放器',
   switchTrack: '切換曲目',
   moreSettings: '更多播放設定',
   lyricOffset: '歌詞偏移',

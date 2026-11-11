@@ -66,6 +66,9 @@ export default function () {
     // The floating lyric window vs the full-screen lyric view.
     lyricsFullScreen: false,
     lyricFontSize: readLyricFontSize(),
+    // The current play list dialog. It lives in `AudioPlayer` (always mounted),
+    // and both players' queue buttons open it, so the flag cannot be local.
+    queueDialogOpen: false,
     // Where a seek-bar jump came from: { time, at } — `time` is the position
     // before the first jump of the current run, `at` the moment of the latest
     // one. Null when there is nothing to go back to. Both the pill and the

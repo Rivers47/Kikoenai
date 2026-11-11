@@ -220,6 +220,12 @@ const mutations = {
   CLEAR_SEEK_UNDO: (state) => {
     state.seekUndo = null
   },
+  SET_QUEUE_DIALOG (state, value) {
+    state.queueDialogOpen = Boolean(value)
+  },
+  TOGGLE_QUEUE_DIALOG (state) {
+    state.queueDialogOpen = !state.queueDialogOpen
+  },
   SET_LYRIC_FONT_SIZE: (state, value) => {
     const size = Number(value)
     if (!Number.isFinite(size) || size <= 0) return

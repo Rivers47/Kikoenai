@@ -1,4 +1,5 @@
 export default {
+  openPanel: 'Open player',
   switchTrack: 'Switch track',
   moreSettings: 'More playback settings',
   lyricOffset: 'Lyric offset',

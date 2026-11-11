@@ -304,7 +304,6 @@ export default {
 
   data () {
     return {
-      showCurrentPlayList: false,
       showSleepTimer: false,
       editCurrentPlayList: false,
       queueCopy: [],
@@ -398,6 +397,13 @@ export default {
   computed: {
     showAudioPlayer () {
       return this.currentPlayingFile.trackId && !this.hide;
+    },
+
+    // The play list is shared state: the docked bar's queue button opens the
+    // same dialog this card does.
+    showCurrentPlayList: {
+      get () { return this.queueDialogOpen },
+      set (value) { this.setQueueDialog(value) },
     },
 
     coverUrl () {
@@ -539,6 +545,7 @@ export default {
       'hasLyric',
       'showLyrics',
       'lyricOffsetSeconds',
+      'queueDialogOpen',
       'visualPlayerCoverUrl',
       'flipLRChannel',
     ]),
@@ -586,6 +593,7 @@ export default {
       rewind: 'SET_REWIND_SEEK_MODE',
       forward: 'SET_FORWARD_SEEK_MODE',
       setLyricOffsetSeconds: 'SET_LYRIC_OFFSET_SECONDS',
+      setQueueDialog: 'SET_QUEUE_DIALOG',
       setLyricsFullScreen: 'SET_LYRICS_FULL_SCREEN',
     }),
     ...mapMutations('AudioPlayer', [

@@ -2,6 +2,7 @@
     <div
       v-if="hasVisibleLyric && showLyrics && !lyricsFullScreen"
       class="lyric-container"
+      :style="containerStyle"
       ref="draggable"
     >
         <div class="fontSizeBar" :class="showSizeBar ? 'showSizeBarStyle' : 'hideSizeBarStyle'">
@@ -43,6 +44,7 @@ export default {
   computed: {
     ...mapState('AudioPlayer', [
       'currentLyrics',
+      'hide',
       'lyricSpeakers',
       'lyricFontSize',
       'lyricsFullScreen',
@@ -51,6 +53,14 @@ export default {
 
     hasVisibleLyric () {
       return this.currentLyrics.some(line => line !== '')
+    },
+
+    // Bound rather than written to the DOM: the element is destroyed whenever
+    // the lyrics go quiet, and the position has to survive that.
+    containerStyle () {
+      if (this.pos) return { left: `${this.pos.left}px`, top: `${this.pos.top}px` }
+      if (this.hide) return null // bar mode keeps the CSS default
+      return { top: `${-this.panelOffset}px` }
     },
 
     // The slider and the full-screen view share one size, so a change in
@@ -65,6 +75,17 @@ export default {
     return {
       beTouched: false,
 
+      // Where the user dragged the window to, in the same coordinates the
+      // original DOM writes used. Kept in data because the element is destroyed
+      // whenever the lyrics go quiet (a gap between cues), and a DOM-only
+      // position would be lost with it.
+      pos: null,
+
+      // In panel mode the window sits just above the card's controls, i.e. above
+      // the artwork. Measured, because the card's shape differs between the
+      // phone (full screen) and desktop (bottom-right) layouts.
+      panelOffset: 260,
+
       // 鼠标按下时的位置
       startX: 0,
       startY: 0,
@@ -77,7 +98,12 @@ export default {
   watch: {
     fontSize(newv, oldv) {
       if (oldv > 0) this.showTempSizeBar()
-    }
+    },
+
+    // The card changes shape with the mode, so re-measure as it appears.
+    hide() {
+      this.$nextTick(() => this.measurePanel())
+    },
   },
 
   methods: {
@@ -86,6 +112,23 @@ export default {
     }),
 
     lyricStreamColor,
+
+    // The lyric window shares its wrapper with the panel card, so the card's
+    // artwork is the edge to sit above: everything interactive is below it.
+    //
+    // Layout metrics, not `getBoundingClientRect`: the card slides in and out
+    // with a transform, and a rect read while it is off screen (or mid-slide)
+    // reports a position far below the viewport, which flipped this offset
+    // negative and put the window past the bottom edge.
+    measurePanel() {
+      const card = document.querySelector('.audio-player')
+      const art = card && card.querySelector('.albumart')
+      if (!art) return
+      const margin = parseFloat(getComputedStyle(card).marginBottom) || 0
+      const below = card.offsetHeight - (art.offsetTop + art.offsetHeight)
+      const offset = Math.round(below + margin + 8)
+      this.panelOffset = Math.min(Math.max(offset, 120), Math.max(120, window.innerHeight - 120))
+    },
 
     showTempSizeBar() {
       // return // debug only
@@ -122,15 +165,13 @@ export default {
 
     onCursorMove(ev) {
       if (!this.beTouched) { return }
-      // ev.preventDefault()
       const touch = this.getTouch(ev)
 
       // 计算 element 新位置坐标
-      const eleX = touch.clientX - this.startX
-      const eleY = touch.clientY - this.startY
-
-      this.$refs.draggable.style.left = eleX + 'px'
-      this.$refs.draggable.style.top = eleY + 'px'
+      this.pos = {
+        left: touch.clientX - this.startX,
+        top: touch.clientY - this.startY,
+      }
     },
 
   },
@@ -144,6 +185,9 @@ export default {
     addEventListener('mouseup', this.onCursorUp)
     addEventListener('touchend', this.onCursorUp)
     addEventListener('touchcancel', this.onCursorUp)
+
+    addEventListener('resize', this.measurePanel)
+    this.measurePanel()
   },
 
   beforeUnmount() {
@@ -153,6 +197,7 @@ export default {
     removeEventListener('mouseup', this.onCursorUp)
     removeEventListener('touchend', this.onCursorUp)
     removeEventListener('touchcancel', this.onCursorUp)
+    removeEventListener('resize', this.measurePanel)
   }
   
 }
@@ -172,6 +217,7 @@ export default {
     flex-direction: column;
     align-self: center;
   }
+
   .moveable-line {
     background-color: transparent !important;
   }
