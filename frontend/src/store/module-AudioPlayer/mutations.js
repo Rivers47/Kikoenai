@@ -186,8 +186,8 @@ const mutations = {
     state.hasLyric = value;
   },
   TOGGLE_LYRICS: (state) => {
+    // Only the floating window; the full-screen view is its own switch.
     state.showLyrics = !state.showLyrics;
-    if (!state.showLyrics) state.lyricsFullScreen = false;
   },
   SET_CURRENT_LYRICS: (state, lines) => {
     state.currentLyrics = lines
@@ -202,8 +202,9 @@ const mutations = {
     state.lyricCues = streams
   },
   SET_LYRICS_FULL_SCREEN: (state, value) => {
-    // A track without lyrics still opens: the view shows its empty state.
-    const open = Boolean(value) && state.showLyrics
+    // Independent of the CC toggle and of whether the track has lyrics: with
+    // nothing to show the view is simply blank.
+    const open = Boolean(value)
     state.lyricsFullScreen = open
     // The view is inset above the docked bar, so opening it puts the player
     // into bar mode first; the panel would sit behind the lyrics otherwise.

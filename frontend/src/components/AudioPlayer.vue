@@ -83,7 +83,6 @@
               size="md"
               padding="none sm"
               icon="open_in_full"
-              :disable="!showLyrics"
               @click="openLyricsFullScreen()"
             >
               <q-tooltip anchor="top middle" self="bottom middle">
