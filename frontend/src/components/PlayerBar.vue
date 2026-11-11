@@ -209,6 +209,23 @@
                     <q-item-section avatar><q-icon name="snooze" /></q-item-section>
                     <q-item-section>{{ sleepTimerTooltip }}</q-item-section>
                   </q-item>
+                  <!-- The volume button only fits on wide bars, so below that
+                       the same control lives here instead of vanishing. -->
+                  <q-item v-if="volumeInMenu" dense>
+                    <q-item-section avatar>
+                      <q-btn flat round dense :icon="volumeIcon" @click="toggleMuted()" />
+                    </q-item-section>
+                    <q-item-section>
+                      <q-slider
+                        :model-value="volume"
+                        :min="0"
+                        :max="1"
+                        :step="0.01"
+                        color="primary"
+                        @update:model-value="setVolume"
+                      />
+                    </q-item-section>
+                  </q-item>
                   <q-item
                     v-if="compact"
                     clickable
@@ -360,6 +377,12 @@ export default {
     // the transport, so the bar only carries the control on wide screens.
     showVolume () {
       return this.$q.platform.is.desktop && this.$q.screen.gt.sm
+    },
+
+    // Phones have hardware keys and no volume UI at all; a narrow desktop gets
+    // the control in the menu instead of nowhere.
+    volumeInMenu () {
+      return this.$q.platform.is.desktop && !this.showVolume
     },
 
     volumeIcon () {
