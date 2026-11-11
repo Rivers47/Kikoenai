@@ -78,7 +78,8 @@ This is the Quasar-based frontend PWA; the Express API server lives in sibling p
 │   │   ├── AudioElement.vue              # Playback engine: hidden <audio> + Plyr + mediaSession
 │   │   ├── PlayerBar.vue                 # Old floating mini bar — kept for comparison, no longer mounted
 │   │   ├── PlayerBarV2.vue               # Docked three-row player bar (mounted; see §2.5)
-│   │   ├── LyricsBar.vue                 # Lyrics display below player
+│   │   ├── LyricsBar.vue                 # Floating lyric window above the bar (see §2.9)
+│   │   ├── LyricsFullScreen.vue          # Full-screen scrolling lyrics overlay (see §2.9)
 │   │   ├── WorkCard.vue                  # Work card (grid mode); `oldStyle` prop switches to the legacy look; optional `coverUrl` prop overrides the cover source
 │   │   ├── WorkListItem.vue              # Work list item (list mode); optional `coverUrl` prop + `side` slot for trailing actions
 │   │   ├── WorkDetails.vue               # Work detail panel (metadata, review, rating; opens EditMetadata for admins)
@@ -265,18 +266,20 @@ MainLayout
 ├── PlayerBarV2      # Docked bar (always visible at bottom when a track plays)
 ├── AudioPlayer      # Floating panel (toggle-able, shows cover + controls)
 │   └── AudioElement # The actual playback engine (hidden <audio> + Plyr + mediaSession)
-└── LyricsBar        # Lyrics display (floats above the docked bar)
+├── LyricsBar        # Floating lyric window above the docked bar
+└── LyricsFullScreen # Full-screen scrolling lyrics, inset above the bar
 ```
 
-- **AudioPlayer.vue** — Floating card at bottom-right with cover art, track controls, seek bar, volume, playback mode. Presentational only: it renders `AudioElement` and drives it through Vuex.
+- **AudioPlayer.vue** — Floating card at bottom-right with cover art, track controls, seek bar, volume (desktop only — phones use the hardware keys, and iOS's media volume is read-only from script), playback mode, and an `open_in_full` button that opens `LyricsFullScreen` (disabled without lyrics). Presentational only: it renders `AudioElement` and drives it through Vuex. That button uses the same mutation as the bar's, so it also leaves panel mode — which is what closes the card.
 - **AudioElement.vue** — The playback engine, and the only component that touches the media element. Holds a `display:none` `<audio crossorigin>` with `Plyr` instantiated on it directly (`controls: ['progress']`); Plyr's own UI is never shown, so it acts purely as an event/property façade over the native element. Also owns:
   - `navigator.mediaSession` metadata and lock-screen action handlers (`updateMediaSessionMetadata`), which map play/pause/next/prev/seek back onto Vuex mutations.
   - Optional L/R channel swap (`applyFlipLRChannel`) via a WebAudio `createMediaElementSource → ChannelSplitter → ChannelMerger → destination` graph. `createMediaElementSource` is a one-way door — once called, that `AudioContext` owns the element's output permanently — so the graph is built lazily on first use and only *rewired* on toggle, never torn down until unmount.
   - **Background playback (Android):** `ended` is bound as a direct native listener on the media element, *not* `player.on('ended')` — Plyr proxies the same native event, and registering both advanced the queue two tracks at a time. The next track's source is loaded imperatively (`_loadSource`) **synchronously inside the `ended` handler**, because Chrome freezes hidden pages and the `nextTick`-deferred `source` watcher can lag by minutes. `_loadSource` compares `media.currentSrc` and no-ops when the watcher later fires with the same URL. Do not reintroduce a `<source :src>` binding here; see commit `6fb856c`.
   - **Lyric changes are scheduled to their cue times (§3).** `setLyricStreams` precomputes `_lyricBoundaries`: the sorted union of every cue `start` and every finite cue `end` across all streams, i.e. every instant at which `cueTextAt` can return something different. `sampleLyrics()` publishes the current frame through `SET_CURRENT_LYRICS` and then arms **one `setTimeout`** for the next boundary (`_scheduleLyricSample`), measured in media time (`(next - now) / playbackRate`) and disarmed while paused, ended, stalled or hidden. Its callback re-samples and re-arms, so a timer that fired late (coalesced by the OS, or behind a long task) corrects itself instead of accumulating error. Every other caller — `onTimeupdate`, `seeked`, `onPause`, `onPlaying`, `ratechange`, `visibilitychange`, the `lyricOffsetSeconds` watcher — just calls `sampleLyrics()`, which leaves the schedule correct as a side effect. `timeupdate` (~4x/s) is only a backstop that heals anything the OS swallowed; it publishes nothing unless the text actually changed.
-- **PlayerBarV2.vue** — The bar mounted today: a full-bleed 128px (84px under 600px) bar docked to the viewport bottom, not a floating pill. Three rows — title (`currentPlayingTitle`), work title (`currentPlayingFile.workTitle`), and the work's VAs (`playWorkVas`, joined with `、`) — with the transport centred on the bar itself and six action buttons on the right (queue, lyrics CC, play mode, sleep timer, fullscreen, more). It owns the horizontal-drag seek (rail grows 3→6px with a time bubble), the swipe-up/tap-to-open-panel gesture, and the `SleepMode` dialog. `MainLayout` must keep `.padding-bottom-play-bar` at `128px` / `84px` to match, and `LyricsBar`'s `top: -132px` clears it. The CC button toggles the `showLyrics` state row.
+- **PlayerBarV2.vue** — The bar mounted today: a full-bleed 128px (84px under 600px) bar docked to the viewport bottom, not a floating pill. Three rows — title (`currentPlayingTitle`), work title (`currentPlayingFile.workTitle`), and the work's VAs (`playWorkVas`, joined with `、`) — with the transport centred on the bar itself and up to seven action buttons on the right (queue, lyrics CC, play mode, sleep timer, volume, full-screen lyrics, more). The cluster thins out as the window narrows — play mode and the sleep timer move into `⋯` below 1024px (`narrow`), the transport's times drop below 900px and its seek buttons below 800px — because the transport is centred and the two would otherwise collide; the bar's own breakpoint is 600px. It owns the horizontal-drag seek (rail grows 4→8px with a time bubble), the swipe-up/tap-to-open-panel gesture (**phones only** — on a wide screen a tap on the bar does nothing), and the `SleepMode` dialog. `MainLayout` must keep `.padding-bottom-play-bar` at `128px` / `84px` to match, and `LyricsBar`'s `top: -132px` clears it. The CC button toggles the `showLyrics` state row and is disabled while `hasLyric` is false; the full-screen button only needs `showLyrics` on, since the view has an empty state. On phones every button but `⋯` collapses into its menu. The volume button is desktop-only and only from 1024px up: it opens a popover with a slider and a mute toggle (`SET_VOLUME` / `TOGGLE_MUTED`), and its icon follows the level. The `↑`/`↓` volume shortcut in `AudioPlayer.vue` is desktop-only for the same reason. `hide` follows the 600px breakpoint: `MainLayout` listens to `matchMedia('(min-width: 600px)')` and commits `SET_HIDE`, so crossing it switches bar/panel mode instead of leaving a phone layout on a wide window.
 - **PlayerBar.vue** — The previous floating mini-bar (max-width 500px, `translateX(-50%)`). Kept on disk for comparison; nothing imports it.
-- **LyricsBar.vue** — Draggable, resizable lyric bar. Renders one coloured line per lyric stream, stacked (§2.9); parsing and playback sync live in `AudioElement.vue`.
+- **LyricsBar.vue** — Draggable, resizable lyric window. Renders one coloured line per lyric stream, stacked (§2.9); parsing and playback sync live in `AudioElement.vue`. It unmounts while `LyricsFullScreen` is open, so the two views never share the screen.
+- **LyricsFullScreen.vue** — The full-screen lyric view (§2.9). An overlay, not a route: `position: fixed`, inset `0 0 128px 0` (`84px` under 600px), `z-index: 3050` — deliberately *below* the bar's `3100`, so the docked bar stays visible and clickable and keeps owning playback. Reads the whole timeline from `lyricCues`, follows the active line at 38% of its height, and seeks to a row's `start` on click. Opened by the bar's `open_in_full` button (or that item in the phones' `⋯` menu); because the inset is measured against the *bar*, `SET_LYRICS_FULL_SCREEN(true)` also forces `hide = true` — the floating panel would otherwise sit behind the lyrics — and `TOGGLE_HIDE` clears the flag when the panel opens. It opens for tracks without lyrics too and renders an empty state (`lyricsfullscreen.empty`), so the buttons only require `showLyrics`. While it is open the drawer is hidden (`:show-if-above="!lyricsFullScreen"` in `MainLayout`) so the bar spans the full width instead of leaving a strip of drawer beside it; the drawer's previous state is restored on close.
 - Configuration like seek times, L/R channel flip, and auto-mark-listened are persisted in `LocalStorage` (keys are exported from `store/module-AudioPlayer/state.js`).
 
 ### 2.6 Communication with Backend
@@ -459,6 +462,26 @@ dropped, not given a repeated colour.
 
 **Single-speaker playback is unchanged:** one stream keeps the plain
 `--on-surface-variant` colour and renders exactly as before.
+
+**Two lyric views, one timeline.** The floating `LyricsBar` shows only what is
+being said now (`currentLyrics`). `LyricsFullScreen` scrolls the whole track, so
+`setLyricStreams` also publishes every cue through `SET_LYRIC_CUES` as
+`[{ name, cues: [{ start, end, text, voice }] }]` (ms, untouched by
+`lyricOffsetSeconds`); `resetToNoLyricStatus` clears it. The overlay flattens
+that into start-sorted rows, so **several rows can be active at once** — a
+two-speaker track interleaves their cues, and `cueTextAt` lets one cue outlive
+the next one starting. Never assume exactly one active row. Clicking a row seeks
+to `start / 1000 - lyricOffsetSeconds`, because cue times sit on the lyric clock,
+not the media clock.
+
+**The overlay is not a route** — playback, queue and sockets must survive it.
+`lyricsFullScreen` (Vuex) drives it. Turning the CC off and opening the floating
+panel clear that flag; a track without lyrics does **not** — the view is a mode,
+not a property of the track, so it stays open and shows its empty state. It
+pushes a `history` entry on open so Back closes the overlay instead of leaving
+the page, and its z-index (`3050`) is below the bar's `3100` on purpose: the
+bar stays live underneath. Its rows use `.lyric-row`, not `.row` — **`.row` is
+Quasar's flex utility** and silently restyles anything that takes the name.
 
 ### 2.10 Internationalization (i18n)
 

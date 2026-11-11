@@ -75,6 +75,21 @@
                 {{ sleepTimerTooltip }}
               </q-tooltip>
             </q-btn>
+            <!--fullscreen lyrics-->
+            <q-btn
+              flat
+              dense
+              size="md"
+              padding="none sm"
+              icon="open_in_full"
+              :disable="!showLyrics"
+              @click="openLyricsFullScreen()"
+            >
+              <q-tooltip anchor="top middle" self="bottom middle">
+                {{ t('lyricsfullscreen.open') }}
+              </q-tooltip>
+            </q-btn>
+
           <!-- 放在尾部 -->
             <q-btn
               flat 
@@ -181,8 +196,9 @@
         </div>
 
         <!-- 音量控件 -->
-        <!-- HTML5 volume in iOS is read-only -->
-        <div class="row items-center q-mx-lg" style="height: 50px" v-if="!$q.platform.is.ios">
+        <!-- Phones adjust volume with the hardware keys, and iOS's media volume is
+             read-only from script in any case. -->
+        <div class="row items-center q-mx-lg" style="height: 50px" v-if="$q.platform.is.desktop">
           <q-icon name="volume_down" size="sm" class="col-auto" />
           <q-slider v-model="volume" :min="0" :max="1" :step="0.01" class="col q-mx-md"/>
           <q-icon name="volume_up" size="sm" class="col-auto" />
@@ -527,6 +543,7 @@ export default {
       'rewindSeekMode',
       'forwardSeekMode',
       'hasLyric',
+      'showLyrics',
       'lyricOffsetSeconds',
       'visualPlayerCoverUrl',
       'flipLRChannel',
@@ -540,6 +557,12 @@ export default {
 
   methods: {
     formatSeconds,
+
+    // The overlay is inset against the docked bar, so the mutation also leaves
+    // panel mode; this closes the card as it opens the lyrics.
+    openLyricsFullScreen() {
+      this.setLyricsFullScreen(true)
+    },
 
     startFixLyricSync(whoStartFirst) {
       this.fixState = "measure";
@@ -569,6 +592,7 @@ export default {
       rewind: 'SET_REWIND_SEEK_MODE',
       forward: 'SET_FORWARD_SEEK_MODE',
       setLyricOffsetSeconds: 'SET_LYRIC_OFFSET_SECONDS',
+      setLyricsFullScreen: 'SET_LYRICS_FULL_SCREEN',
     }),
     ...mapMutations('AudioPlayer', [
       'SET_TRACK',
@@ -754,9 +778,12 @@ export default {
         case "PageDown": this.nextTrack(); break;
         case "PageUp": this.previousTrack(); break;
 
-        case "ArrowUp": 
+        // Volume has no UI on phones, so the shortcut stays desktop-only.
+        case "ArrowUp":
+          if (!this.$q.platform.is.desktop) return;
           this.volume = Math.min(1.0, this.volume + volumeStep); break;
-        case "ArrowDown": 
+        case "ArrowDown":
+          if (!this.$q.platform.is.desktop) return;
           this.volume = Math.max(0.0, this.volume - volumeStep); break;
         default: return; // return now
       }

@@ -270,6 +270,7 @@ export default {
       'SET_REWIND_SEEK_MODE',
       'SET_FORWARD_SEEK_MODE',
       'SET_HAS_LYRIC',
+      'SET_LYRIC_CUES',
       'SET_NEW_CURRENT_TIME',
     ]),
 
@@ -616,6 +617,12 @@ export default {
       // than on every frame.
       this.SET_LYRIC_SPEAKERS(streams.map(stream => stream.name));
       this.SET_CURRENT_LYRICS(streams.map(() => ''));
+      // The full-screen view needs the whole timeline; the copies keep Vuex from
+      // re-observing the parser's arrays, which also carry `endsBy`.
+      this.SET_LYRIC_CUES(streams.map(stream => ({
+        name: stream.name,
+        cues: stream.cues.map(({ start, end, text, voice }) => ({ start, end, text, voice })),
+      })));
     },
 
     async loadLrcFile () {
@@ -683,6 +690,7 @@ export default {
       this._lyricFrame = [];
       this.SET_LYRIC_SPEAKERS([]);
       this.SET_CURRENT_LYRICS([]);
+      this.SET_LYRIC_CUES([]);
       this.SET_HAS_LYRIC(false);
     },
 

@@ -81,7 +81,7 @@
               {{ t('playerbarv2.forward', { seconds: forwardSeekTime }) }}
             </q-tooltip>
           </q-btn>
-          <span class="time time--remaining">-{{ formatSeconds(remaining) }}</span>
+          <span class="time time--total">{{ formatSeconds(duration) }}</span>
         </div>
 
         <div class="actions" @pointerdown.stop>
@@ -106,13 +106,14 @@
             </q-tooltip>
           </q-btn>
 
-          <q-btn flat round dense class="action" :icon="playModeIcon" @click="changePlayMode()">
+          <q-btn v-if="!narrow" flat round dense class="action" :icon="playModeIcon" @click="changePlayMode()">
             <q-tooltip anchor="top middle" self="bottom middle">
               {{ playModeString }}
             </q-tooltip>
           </q-btn>
 
           <q-btn
+            v-if="!narrow"
             flat
             round
             dense
@@ -126,13 +127,55 @@
             </q-tooltip>
           </q-btn>
 
+          <q-btn
+            v-if="showVolume"
+            flat
+            round
+            dense
+            class="action"
+            :icon="volumeIcon"
+          >
+            <q-tooltip anchor="top middle" self="bottom middle">
+              {{ t('playerbarv2.volume') }}
+            </q-tooltip>
+            <q-menu anchor="top middle" self="bottom middle" :offset="[0, 8]">
+              <div class="volume-menu row items-center no-wrap">
+                <q-btn flat round dense :icon="volumeIcon" @click="toggleMuted()" />
+                <q-slider
+                  :model-value="volume"
+                  :min="0"
+                  :max="1"
+                  :step="0.01"
+                  color="primary"
+                  class="col q-ml-sm"
+                  @update:model-value="setVolume"
+                />
+              </div>
+            </q-menu>
+          </q-btn>
+
+          <q-btn
+            flat
+            round
+            dense
+            class="action"
+            :class="{ 'action--on': lyricsFullScreen }"
+            :disable="!showLyrics"
+            :icon="lyricsFullScreen ? 'close_fullscreen' : 'open_in_full'"
+            @click="toggleLyricsFullScreen()"
+          >
+            <q-tooltip anchor="top middle" self="bottom middle">
+              {{ lyricsFullScreen ? t('lyricsfullscreen.close') : t('lyricsfullscreen.open') }}
+            </q-tooltip>
+          </q-btn>
+
           <q-btn flat round dense class="action action--more" icon="more_horiz">
             <q-tooltip anchor="top middle" self="bottom middle">
               {{ t('audioplayer.moreSettings') }}
             </q-tooltip>
             <q-menu anchor="top right" self="bottom right">
               <q-list dense style="min-width: 15rem">
-                <template v-if="compact">
+                <template v-if="compact || narrow">
                   <q-item clickable v-ripple @click="openPanel()" v-close-popup>
                     <q-item-section avatar><q-icon name="queue_music" /></q-item-section>
                     <q-item-section>{{ t('audioplayer.switchTrack') }}</q-item-section>
@@ -151,6 +194,20 @@
                   <q-item clickable v-ripple @click="showSleepTimer = true" v-close-popup>
                     <q-item-section avatar><q-icon name="snooze" /></q-item-section>
                     <q-item-section>{{ sleepTimerTooltip }}</q-item-section>
+                  </q-item>
+                  <q-item
+                    clickable
+                    v-ripple
+                    :disable="!showLyrics"
+                    @click="toggleLyricsFullScreen"
+                    v-close-popup
+                  >
+                    <q-item-section avatar>
+                      <q-icon :name="lyricsFullScreen ? 'close_fullscreen' : 'open_in_full'" />
+                    </q-item-section>
+                    <q-item-section>
+                      {{ lyricsFullScreen ? t('lyricsfullscreen.close') : t('lyricsfullscreen.open') }}
+                    </q-item-section>
                   </q-item>
                   <q-separator />
                 </template>
@@ -236,6 +293,9 @@ export default {
       'visualPlayerCoverUrl',
       'showLyrics',
       'hasLyric',
+      'lyricsFullScreen',
+      'muted',
+      'volume',
     ]),
 
     ...mapGetters('AudioPlayer', [
@@ -267,10 +327,6 @@ export default {
       return this.queue.reduce((total, track) => total + (track.duration || 0), 0)
     },
 
-    remaining () {
-      return Math.max(0, this.duration - this.currentTime)
-    },
-
     progressPercent () {
       if (!this.duration) return 0
       return (this.currentTime / this.duration) * 100
@@ -279,6 +335,23 @@ export default {
     previewPercent () {
       if (!this.duration) return 0
       return (this.previewTime / this.duration) * 100
+    },
+
+    // Play mode and the sleep timer live in ⋯ once the bar is too narrow for
+    // the full cluster to sit clear of the centred transport.
+    narrow () {
+      return this.$q.screen.lt.md
+    },
+
+    // Phones have hardware volume keys; below 1024px the cluster would reach
+    // the transport, so the bar only carries the control on wide screens.
+    showVolume () {
+      return this.$q.platform.is.desktop && this.$q.screen.gt.sm
+    },
+
+    volumeIcon () {
+      if (this.muted || this.volume === 0) return 'volume_off'
+      return this.volume < 0.5 ? 'volume_down' : 'volume_up'
     },
 
     // Phones fold every secondary action into the overflow menu.
@@ -348,9 +421,16 @@ export default {
       setNewCurrentTime: 'SET_NEW_CURRENT_TIME',
       changePlayMode: 'CHANGE_PLAY_MODE',
       toggleLyrics: 'TOGGLE_LYRICS',
+      setLyricsFullScreen: 'SET_LYRICS_FULL_SCREEN',
+      toggleMuted: 'TOGGLE_MUTED',
+      setVolume: 'SET_VOLUME',
     }),
 
     formatSeconds,
+
+    toggleLyricsFullScreen () {
+      this.setLyricsFullScreen(!this.lyricsFullScreen)
+    },
 
     openPanel () {
       if (this.hide) this.toggleHide()
@@ -643,7 +723,7 @@ export default {
   text-align: right;
 }
 
-.time--remaining {
+.time--total {
   text-align: left;
   color: rgb(var(--outline-rgb));
 }
@@ -683,6 +763,11 @@ export default {
   font-size: 24px;
 }
 
+.volume-menu {
+  width: 176px;
+  padding: 4px 12px 4px 4px;
+}
+
 .actions {
   position: absolute;
   right: 16px;
@@ -710,6 +795,21 @@ export default {
 .action.disabled {
   opacity: 0.38 !important;
   color: rgb(var(--outline-rgb));
+}
+
+// The numeric times are the widest part of the transport, then the seek
+// buttons: dropping each in turn keeps the centred transport clear of the
+// action cluster all the way down to the 600px bar breakpoint.
+@media (max-width: 899px) {
+  .time {
+    display: none;
+  }
+}
+
+@media (max-width: 799px) {
+  .seek {
+    display: none;
+  }
 }
 
 @media (max-width: 599px) {
