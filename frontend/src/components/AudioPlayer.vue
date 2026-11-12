@@ -171,8 +171,8 @@
       <q-card class="current-play-list">
         <!-- 操作当前播放列表的控制按钮 -->
         <div class="row" style="padding: 5px; height: 45px;">
-          <q-btn dense round size="md" icon="edit" color="primary" @click="editCurrentPlayList = !editCurrentPlayList" style="height: 35px; width: 35px;" class="col-auto" />
-          <q-btn dense round size="md" icon="save" color="secondary" style="height: 35px; width: 35px;" class="col-auto q-mx-sm" @click="editCurrentPlayList = false" />
+          <q-btn dense round size="md" icon="edit" color="primary" text-color="on-primary" @click="editCurrentPlayList = !editCurrentPlayList" style="height: 35px; width: 35px;" class="col-auto" />
+          <q-btn dense round size="md" icon="save" color="secondary" text-color="on-secondary" style="height: 35px; width: 35px;" class="col-auto q-mx-sm" @click="editCurrentPlayList = false" />
           <q-space />
         </div>
         

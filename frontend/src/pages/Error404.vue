@@ -7,11 +7,11 @@
       >
     </p>
     
-    <p class="text-faded">
+    <p class="text-on-surface-variant">
       Sorry, nothing here...<strong>(404)</strong>
     </p>
     <q-btn
-      color="secondary"
+      color="secondary" text-color="on-secondary"
       style="width:200px;"
       to="/"
       label="Go back"

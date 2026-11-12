@@ -67,6 +67,7 @@
         rounded
         unelevated
         color="primary"
+        text-color="on-primary"
         icon="arrow_downward"
         :label="t('lyricsfullscreen.follow')"
         @click="resumeFollowing"

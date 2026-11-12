@@ -28,7 +28,7 @@
           />
 
           <div class="row justify-end">
-            <q-btn type="submit" color="primary" :label="t('common.add')" />
+            <q-btn type="submit" color="primary" text-color="on-primary" :label="t('common.add')" />
           </div>
         </div>
       </q-form>
@@ -68,7 +68,7 @@
       </q-card>
 
       <div class="q-ma-lg row justify-end">
-        <q-btn :loading="loading" :label="t('common.save')" type="submit" color="primary" />
+        <q-btn :loading="loading" :label="t('common.save')" type="submit" color="primary" text-color="on-primary" />
       </div>
     </q-form>
   </div>

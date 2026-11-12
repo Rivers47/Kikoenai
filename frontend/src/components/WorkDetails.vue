@@ -232,7 +232,7 @@
         </q-list>
       </q-btn-dropdown>
 
-      <q-btn dense @click="showReviewDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="t('workdetails.writeReview')" />
+      <q-btn dense @click="showReviewDialog = true" color="secondary" class="q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="t('workdetails.writeReview')" />
 
       <div v-if="metadata.state" class="q-mt-sm q-px-sm">
         <div class="text-caption text-weight-medium text-on-surface-variant">{{ t('workdetails.lastPlayback') }}</div>
@@ -240,24 +240,24 @@
           <q-icon name="music_note" size="xs" class="q-mr-xs" />
           {{ currentHistoryTrack }}
         </div>
-        <div class="text-caption text-on-surface0-variant">
+        <div class="text-caption text-on-surface-variant">
           {{ t('workdetails.playedTo', { time: formatSeconds(historySeconds) }) }}
         </div>
       </div>
 
-      <q-btn v-if="metadata.state && playWorkId !== metadata.id" dense @click="resumeThisHistory" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" :label="t('workdetails.resumeHistory')" />
-      <q-btn v-if="metadata.state" dense @click="clearThisHistory" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="t('workdetails.deleteHistory')">
+      <q-btn v-if="metadata.state && playWorkId !== metadata.id" dense @click="resumeThisHistory" color="secondary" text-color="on-secondary" class="q-mt-sm shadow-4 q-mx-xs q-px-sm" :label="t('workdetails.resumeHistory')" />
+      <q-btn v-if="metadata.state" dense @click="clearThisHistory" color="secondary" class="q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="t('workdetails.deleteHistory')">
         <q-tooltip>{{ t('workdetails.deleteHistoryTooltip') }}</q-tooltip>
       </q-btn>
 
 
-      <q-btn dense @click="scanWorkFile" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="t('workdetails.scanFiles')" />
+      <q-btn dense @click="scanWorkFile" color="secondary" class="q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="t('workdetails.scanFiles')" />
 
-      <q-btn v-if="enableTranscoding" dense :loading="downloadOfflineLoading" @click="toggleWorkOfflineDownload" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="offlineDownloadLabel" />
+      <q-btn v-if="enableTranscoding" dense :loading="downloadOfflineLoading" @click="toggleWorkOfflineDownload" color="secondary" class="q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="offlineDownloadLabel" />
 
-      <q-btn v-if="isAdmin" dense @click="showEditDialog = true" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="t('workdetails.editMetadata')" />
+      <q-btn v-if="isAdmin" dense @click="showEditDialog = true" color="secondary" class="q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="t('workdetails.editMetadata')" />
 
-      <q-btn dense :loading="refreshMetadataLoading" @click="refreshMetadata" color="secondary q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="t('workdetails.refreshMetadata')" />
+      <q-btn dense :loading="refreshMetadataLoading" @click="refreshMetadata" color="secondary" class="q-mt-sm shadow-4 q-mx-xs q-px-sm" text-color="on-secondary" :label="t('workdetails.refreshMetadata')" />
 
       <WriteReview v-if="showReviewDialog" @closed="processReview" :workid="metadata.id" :metadata="metadata"></WriteReview>
 

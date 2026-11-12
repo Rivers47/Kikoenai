@@ -16,8 +16,10 @@
         <!-- Mode toggle -->
         <div class="text-center">
           <q-btn-toggle
-            toggle-color="primary"
-            text-color="primary"
+            toggle-color="primary-container"
+            toggle-text-color="on-primary-container"
+            color="surface-container-lowest"
+            text-color="on-surface"
             no-caps
             rounded
             unelevated

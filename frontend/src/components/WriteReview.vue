@@ -23,9 +23,9 @@
               rounded
               unelevated
               :padding="$q.screen.width < 400 ? 'sm': ''"
-              toggle-color="primary"
-              toggle-text-color="on-primary"
-              color="surface-container"
+              toggle-color="primary-container"
+              toggle-text-color="on-primary-container"
+              color="surface-container-lowest"
               text-color="on-surface"
               :options="progressOptions"
             />

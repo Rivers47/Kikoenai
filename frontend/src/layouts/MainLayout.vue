@@ -149,7 +149,7 @@
       </router-view>
       <!-- </q-page> -->
       <q-page-scroller position="bottom-right" :scroll-offset="150" :offset="[18, 90]" class="scroller" :class="{'scroller-hide': !showScroller, 'scroller-show': showScroller}">
-        <q-btn dense fab icon="keyboard_arrow_up" color="accent" padding="sm" />
+        <q-btn dense fab icon="keyboard_arrow_up" color="accent" text-color="on-tertiary" padding="sm" />
       </q-page-scroller>
     </q-page-container>
 

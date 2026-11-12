@@ -23,7 +23,7 @@
           />
 
           <div class="row justify-end">
-            <q-btn :loading="loadingUpdateAdminPassword" type="submit" color="primary" :label="t('usermanage.change')" />
+            <q-btn :loading="loadingUpdateAdminPassword" type="submit" color="primary" text-color="on-primary" :label="t('usermanage.change')" />
           </div>
         </div>
       </q-form>
@@ -55,7 +55,7 @@
           />
 
           <div class="row justify-end">
-            <q-btn :loading="loadingAddNewUser" type="submit" color="primary" :label="t('common.add')" />
+            <q-btn :loading="loadingAddNewUser" type="submit" color="primary" text-color="on-primary" :label="t('common.add')" />
           </div>
         </div>
       </q-form>
@@ -72,7 +72,7 @@
         :selected.sync="selected"
       />
       <div class="row justify-end">
-        <q-btn :loading="loadingDeleteUsers" :disable="selected.length === 0" @click="confirm = true" color="primary" :label="t('common.delete')" />
+        <q-btn :loading="loadingDeleteUsers" :disable="selected.length === 0" @click="confirm = true" color="primary" text-color="on-primary" :label="t('common.delete')" />
       </div>
     </q-card>
 
