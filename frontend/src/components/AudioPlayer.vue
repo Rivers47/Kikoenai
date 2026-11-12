@@ -102,40 +102,6 @@
                 {{ t('audioplayer.moreSettings') }}
               </q-tooltip>
               <q-menu anchor="bottom right" self="top right">
-                <q-item v-if="hasLyric">
-                  <q-item-section>
-                    <q-input
-                      v-if="hasLyric"
-                      :model-value="lyricOffsetSeconds"
-                      @update:model-value="lyricOffsetChange"
-                      type="number"
-                      :prefix="t('audioplayer.lyricOffset')"
-                      suffix="s"
-                      style="max-width: 100%;"
-                      outlined
-                      clearable
-                      input-style="text-align: right;"
-                    >
-                      <template v-slot:before>
-                          <q-btn size="sm" padding="md xs" icon="sync_alt" @click="lyricSyncDialog = true"></q-btn>
-                      </template>
-                      <template v-slot:append>
-                        <div class="column">
-                          <q-btn
-                            size="xs"
-                            icon="arrow_drop_up"
-                            @click="lyricOffsetChange(lyricOffsetSeconds + 0.1)"
-                          ></q-btn>
-                          <q-btn
-                            size="xs"
-                            icon="arrow_drop_down"
-                            @click="lyricOffsetChange(lyricOffsetSeconds - 0.1)"
-                          ></q-btn>
-                        </div>
-                      </template>
-                    </q-input>
-                  </q-item-section>
-                </q-item>
 
                 <q-item>
                   <q-item-section>
@@ -243,32 +209,6 @@
       </q-card>
     </q-dialog>
 
-    <q-dialog v-model="lyricSyncDialog"  seamless position="top">
-      <q-card class="bg-primary text-on-primary">
-        <q-card-section>
-          <div class="text-h6">{{ t('audioplayer.lyricSyncTitle') }}</div>
-        </q-card-section>
-
-        <q-card-section class="q-pt-none">
-          {{ t('audioplayer.lyricSyncDesc') }}
-        </q-card-section>
-
-        <q-card-section v-if="fixState === 'ready'">
-          <q-btn @click="startFixLyricSync('lyric')">{{ t('audioplayer.lyricFirst') }}</q-btn>
-          <q-btn @click="startFixLyricSync('audio')">{{ t('audioplayer.audioFirst') }}</q-btn>
-        </q-card-section>
-
-        <q-card-section v-if="fixState === 'measure'">
-          <q-btn @click="stopFixLyricSync">{{ fixWhoStartFirst == 'audio' ? t('audioplayer.lyricAppeared') : t('audioplayer.audioHeard') }}</q-btn>
-        </q-card-section>
-
-        <q-card-actions align="right">
-          <q-btn @click="lyricSyncDialog = false">{{ t('common.close') }}</q-btn>
-          <q-btn v-if="fixState !== 'ready'" @click="fixState = 'ready'" >{{ t('audioplayer.remeasureOffset') }}</q-btn>
-          <q-btn v-if="fixState === 'done'" @click="fixApply">{{ t('audioplayer.applyOffset', { delta: showDeltaSeconds }) }}</q-btn>
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
   </div>
 </template>
 
@@ -309,13 +249,6 @@ export default {
       isAndroid: navigator.userAgent.toLowerCase().indexOf('android') > -1,
       historyCheckIntervalId: -1,
       latestUpdatedHistory: null, // 记录最近一次更新的历史记录，防止反复对同一个播放历史进行远程数据更新
-
-      // 歌词偏移量修复工具
-      lyricSyncDialog: false,
-      fixState: "ready",  // ready: 准备开始, measure: 计时进行中, done: 计时完成
-      fixWhoStartFirst: "", // "audio", "lyric" // 先看到的歌词，还是先听到的声音
-      fixStartMills: 0,
-      fixStopMills: 0,
     }
   },
 
@@ -388,9 +321,6 @@ export default {
         this.onUpdatePlayingStatus()
       }
     },
-    lyricSyncDialog() {
-      this.fixState = 'ready';
-    }
   },
 
   computed: {
@@ -514,17 +444,6 @@ export default {
       }
     },
 
-    fixDeltaMills() {
-      // 音频先出现的话，需要将offset增加，使得歌词提前出现
-      let sign = this.fixWhoStartFirst == 'audio' ? +1 : -1;
-      return sign * (this.fixStopMills - this.fixStartMills);
-    },
-    showDeltaSeconds() {
-      const epsilon = 1;
-      if (Math.abs(this.fixDeltaMills) < epsilon) return ""
-      return `${this.fixDeltaMills > 0 ? '+': ''}${(this.fixDeltaMills/1000).toFixed(2)}s`;
-    },
-
     ...mapState('AudioPlayer', [
       'playing',
       'hide',
@@ -543,7 +462,6 @@ export default {
       'forwardSeekMode',
       'hasLyric',
       'showLyrics',
-      'lyricOffsetSeconds',
       'queueDialogOpen',
       'visualPlayerCoverUrl',
       'flipLRChannel',
@@ -564,24 +482,6 @@ export default {
       this.setLyricsFullScreen(true)
     },
 
-    startFixLyricSync(whoStartFirst) {
-      this.fixState = "measure";
-      this.fixWhoStartFirst = whoStartFirst;
-      this.fixStartMills = this.fixStopMills = performance.now();
-    },
-
-    stopFixLyricSync() {
-      this.fixState = "done"; // 计时结束，重制状态
-      this.fixStopMills = performance.now();
-    },
-
-    fixApply() {
-      this.lyricOffsetChange(this.fixDeltaMills / 1000);
-      this.lyricSyncDialog = false;
-      this.fixState = "ready";
-      this.$q.notify({message: this.t('audioplayer.lyricOffsetApplied', { delta: (this.fixDeltaMills/1000).toFixed(2) }), timeout: 500})
-    },
-
     ...mapMutations('AudioPlayer', {
       toggleHide: 'TOGGLE_HIDE',
       togglePlaying: 'TOGGLE_PLAYING',
@@ -591,7 +491,6 @@ export default {
       setVolume: 'SET_VOLUME',
       rewind: 'SET_REWIND_SEEK_MODE',
       forward: 'SET_FORWARD_SEEK_MODE',
-      setLyricOffsetSeconds: 'SET_LYRIC_OFFSET_SECONDS',
       setQueueDialog: 'SET_QUEUE_DIALOG',
       setLyricsFullScreen: 'SET_LYRICS_FULL_SCREEN',
     }),
@@ -752,13 +651,6 @@ export default {
       const due = trackId !== this._lastPushedTrackId
       || now - this._lastServerPush >= SERVER_PUSH_MS
       return due
-    },
-
-    lyricOffsetChange(seconds) {
-      if (seconds == null) seconds = 0;
-      seconds = Math.round(seconds * 10000) / 10000; // 解决javascript小数点精度问题，比如0.9+0.1变成0.999999这种问题，在这里修复成1.0
-      console.log("lyric offset change to ", seconds, typeof seconds)
-      this.setLyricOffsetSeconds(seconds)
     },
 
     onFlipLRChannelChange(value) {

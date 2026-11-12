@@ -241,6 +241,11 @@
                     </q-item-section>
                   </q-item>
                 </template>
+                <q-item clickable v-ripple @click="toggleFlipLRChannel()" v-close-popup>
+                  <q-item-section avatar><q-icon name="swap_horiz" /></q-item-section>
+                  <q-item-section>{{ t('audioplayer.flipLRChannel') }}</q-item-section>
+                  <q-item-section side v-if="flipLRChannel"><q-icon name="check" /></q-item-section>
+                </q-item>
               </q-list>
             </q-menu>
           </q-btn>
@@ -324,6 +329,7 @@ export default {
       'showLyrics',
       'hasLyric',
       'lyricsFullScreen',
+      'flipLRChannel',
       'muted',
       'volume',
     ]),
@@ -461,10 +467,15 @@ export default {
       toggleQueueDialog: 'TOGGLE_QUEUE_DIALOG',
       setLyricsFullScreen: 'SET_LYRICS_FULL_SCREEN',
       toggleMuted: 'TOGGLE_MUTED',
+      setFlipLRChannel: 'SET_FLIP_LR_CHANNEL',
       setVolume: 'SET_VOLUME',
     }),
 
     formatSeconds,
+
+    toggleFlipLRChannel () {
+      this.setFlipLRChannel(!this.flipLRChannel)
+    },
 
     toggleLyricsFullScreen () {
       this.setLyricsFullScreen(!this.lyricsFullScreen)
