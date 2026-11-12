@@ -184,8 +184,6 @@ export default {
       detailMode: true,
       stopLoad: false,
       works: [],
-      pageTitle: '',
-      searchMetas: [],
       page: 1,
       pagination: { currentPage:0, pageSize:12, totalCount:0 },
       seed: 7, // random sort
@@ -209,7 +207,6 @@ export default {
     }
   },
   created () {
-    this.refreshPageTitle();
     this.seed = Math.floor(Math.random() * 100);
     this._lastFilter = this.filter
   },
@@ -240,6 +237,14 @@ export default {
   computed: {
     filter () {
       return this.$route.query.filter || ''
+    },
+
+    pageTitle () {
+      return this.filter ? this.t('works.searchKeyword') : this.t('works.allWorks')
+    },
+
+    searchMetas () {
+      return this.filter ? [this.filter] : []
     },
 
     url () {
@@ -352,20 +357,9 @@ export default {
         })
     },
 
-    refreshPageTitle () {
-      if (this.filter) {
-        this.pageTitle = this.t('works.searchKeyword');
-        this.searchMetas = [this.filter];
-      } else {
-        this.pageTitle = this.t('works.allWorks')
-        this.searchMetas = [];
-      }
-    },
-
     reset () {
       this.seed = Math.floor(Math.random() * 100);
       this.stopLoad = true
-      this.refreshPageTitle()
       this.pagination = { currentPage:0, pageSize:12, totalCount:0 }
       this._lastFilter = this.filter
       window.scrollTo(0, 0)

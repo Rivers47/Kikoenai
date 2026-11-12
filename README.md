@@ -10,6 +10,7 @@ So this repo is created to make the project monorepo again and to continue the d
 
 ## Project screenshot
 ![](./demo.png)
+![](./demo2.png)
 
 ## Structure
 
