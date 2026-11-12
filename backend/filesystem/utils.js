@@ -4,7 +4,20 @@ const path = require('path');
 // Replacement for recursive-readdir: returns all files recursively as absolute paths
 // Uses sync glob since the walked directories are bounded and the result is needed immediately.
 const recursiveReaddir = (dir) => {
-  return fs.globSync('**/*', { cwd: dir }).map(f => path.resolve(dir, f));
+  return fs.globSync('**/*', { cwd: dir })
+    .map(f => path.resolve(dir, f))
+    // glob lists directories too, so one whose name ends in a known extension
+    // (`bonus.txt/`) would otherwise be served as a ghost file of that type.
+    // statSync follows symlinks, so a symlinked file still counts and a
+    // symlinked directory still does not.
+    .filter((file) => {
+      try {
+        return fs.statSync(file).isFile();
+      } catch (err) {
+        // Vanished between the walk and the stat; the walk itself is best effort.
+        return false;
+      }
+    });
 };
 const { orderBy } = require('natural-orderby');
 const { joinFragments, encodeTrackId } = require('../routes/utils/url');
@@ -208,7 +221,7 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
   // 插入文件夹
   tracks.forEach(track => {
     let fatherFolder = tree;
-    // subtitle is forward-slash on every platform (getTrackList and shapeRows
+    // subtitle is forward-slash on every platform (getTrackList and rowsToTracks
     // normalize it), so split on '/' -- path.sep left a Windows tree flat.
     const pathParts = track.subtitle ? track.subtitle.split('/') : [];
     pathParts.forEach(folderName => {
