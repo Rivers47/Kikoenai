@@ -9,7 +9,13 @@ Another heavily modified [closed source version](https://asmr.one) seems to exis
 So this repo is created to make the project monorepo again and to continue the development of the project.
 
 ## Project screenshot
-![](./demo.png)
+
+<table>
+  <tr>
+    <td width="77%"><img src="./demo.png" alt="Kikoenai desktop UI" width="100%"></td>
+    <td width="23%"><img src="./demo2.png" alt="Kikoenai on a phone" width="100%"></td>
+  </tr>
+</table>
 
 ## Structure
 
