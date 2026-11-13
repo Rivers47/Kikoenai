@@ -161,6 +161,14 @@ import RecentWorks from 'src/components/RecentWorks'
 import { mapState } from 'vuex'
 import FilterTerms from 'components/FilterTerms'
 
+// Read into the initial state: restoring these in mounted() sent a first request
+// with the defaults, so that response could win over the stored settings.
+const stored = (key) => localStorage.getItem(key)
+const storedBool = (key, fallback) => {
+  const raw = stored(key)
+  return raw === null || raw === '' ? fallback : raw === 'true'
+}
+
 export default {
   setup () {
     const { t } = useI18n() // global scope
@@ -179,9 +187,9 @@ export default {
 
   data () {
     return {
-      listMode: false,
-      showLabel: true,
-      detailMode: true,
+      listMode: storedBool('listMode', false),
+      showLabel: storedBool('showLabel', true),
+      detailMode: storedBool('detailMode', true),
       stopLoad: false,
       works: [],
       page: 1,
@@ -189,49 +197,30 @@ export default {
       seed: 7, // random sort
 
       // 排序种类，例如可以选择按照发售日期来排序结果
-      sortCategoryOption: "release",
+      sortCategoryOption: stored('sortCategoryOption') || "release",
       sortCategoryOptions: ["release", "rating", "created_at", "random"],
 
-      nsfwOption: "nsfw_0", 
+      nsfwOption: stored('nsfwOption') || "nsfw_0",
       nsfwOptions: ["nsfw_0", "nsfw_1", "nsfw_2"], // nsfw_0无年龄限制，nsfw_1全年龄，nsfw_2十八禁
 
 
 
       // 排序顺序，true表示降序，false表示升序
-      sortInDesc: true,
+      sortInDesc: storedBool('sortInDesc', true),
 
       touchedWorkId: 0, // 用来解决android移动端设备没有hover事件导致workCard不能跟随手指显示标签的问题
 
       isActive: false,
       _lastFilter: null,
+      // Bumped by reset(); a response from an older generation is dropped, so a
+      // slow page from the previous filter can never repaint the current list.
+      _generation: 0,
+      _inFlight: null,
     }
   },
   created () {
     this.seed = Math.floor(Math.random() * 100);
     this._lastFilter = this.filter
-  },
-
-  mounted() {
-    if (localStorage.sortCategoryOption) {
-      this.sortCategoryOption = localStorage.sortCategoryOption;
-    }
-    if (localStorage.nsfwOption) {
-      this.nsfwOption = localStorage.nsfwOption;
-    }
-
-    if (localStorage.sortInDesc) {
-      this.sortInDesc = (localStorage.sortInDesc === 'true');
-    }
-    if (localStorage.showLabel) {
-      this.showLabel = (localStorage.showLabel === 'true');
-    }
-    if (localStorage.listMode) {
-      this.listMode = (localStorage.listMode === 'true');
-    }
-    if (localStorage.detailMode) {
-      this.detailMode = (localStorage.detailMode === 'true');
-    }
-
   },
 
   computed: {
@@ -245,10 +234,6 @@ export default {
 
     searchMetas () {
       return this.filter ? [this.filter] : []
-    },
-
-    url () {
-      return this.filter ? '/api/search' : '/api/works'
     },
 
 
@@ -321,30 +306,38 @@ export default {
         .then(() => done())
     },
 
+    // Concurrent callers join the pending request instead of asking for the same
+    // page twice; `page` is read once here so a late response cannot rewrite it.
     requestWorksQueue () {
+      if (this._inFlight) return this._inFlight
+
+      const generation = this._generation
+      const filter = this.filter
+      const page = this.pagination.currentPage + 1
       const params = {
-        page: this.pagination.currentPage + 1 || 1,
+        page,
         sort: this.sortInDesc ? "desc" : "asc",
         order: this.sortCategoryOption,
         nsfw: parseInt(this.nsfwOption.replace("nsfw_", "")), // 'nsfw_0' => 0, 'nsfw_1' => 1, 'nsfw_2' => 2
         seed: this.seed,
       }
 
-      if (this.filter) {
-        params.filter = this.filter
+      if (filter) {
+        params.filter = filter
       }
 
-      return this.$axios.get(this.url, { params })
+      this._inFlight = this.$axios.get(filter ? '/api/search' : '/api/works', { params })
         .then((response) => {
-          const works = response.data.works
-          this.works = (params.page === 1) ? works.concat() : this.works.concat(works)
-          this.pagination = response.data.pagination
+          if (generation !== this._generation) return
 
-          if (this.works.length >= this.pagination.totalCount) {
-            this.stopLoad = true
-          }
+          const works = response.data.works
+          this.works = (page === 1) ? works.concat() : this.works.concat(works)
+          this.pagination = response.data.pagination
+          this.stopLoad = this.works.length >= this.pagination.totalCount
         })
         .catch((error) => {
+          if (generation !== this._generation) return
+
           if (error.response) {
             // 请求已发出，但服务器响应的状态码不在 2xx 范围内
             if (error.response.status !== 401) {
@@ -355,18 +348,24 @@ export default {
           }
           this.stopLoad = true
         })
+        .finally(() => {
+          if (generation === this._generation) this._inFlight = null
+        })
+
+      return this._inFlight
     },
 
     reset () {
+      this._generation += 1
+      this._inFlight = null
       this.seed = Math.floor(Math.random() * 100);
       this.stopLoad = true
+      this.works = []
       this.pagination = { currentPage:0, pageSize:12, totalCount:0 }
       this._lastFilter = this.filter
       window.scrollTo(0, 0)
+      // The page-1 response re-arms the scroller once the new list is known.
       this.requestWorksQueue()
-        .then(() => {
-          this.stopLoad = false
-        })
     },
 
     // 将一些标签名称转换成可阅读的文字
