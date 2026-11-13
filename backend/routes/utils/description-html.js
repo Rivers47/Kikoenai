@@ -120,7 +120,12 @@ function sanitizeDescriptionHtml(html, workId, sampleImages = []) {
   const localPrefix = `${config.basePath}/api/image/`;
 
   $(DROPPED_TAGS.join(',')).remove();
-  $('comment').remove();
+  // DLsite's page is Vue SSR, so the block is speckled with hydration markers
+  // (<!--[-->, <!---->) that a tag selector does not reach.
+  $('*').add($.root())
+    .contents()
+    .filter((i, node) => node.type === 'comment')
+    .remove();
 
   // Images first, and with them the links DLsite wraps around them, so the
   // link pass below sees a local url rather than rewriting one to img.dlsite.jp.

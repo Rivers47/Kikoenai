@@ -413,7 +413,7 @@ Works whose audio files are named `01.mp3` / `#2.wav` show only the filename. `t
 
 > **`isVerbatim` retries with the track marker stripped.** Small models copy the title but rewrite the numbering (`①　はじまり` → `1. はじまり`), and rejecting that threw away good answers. The stripped form must keep two non-space characters, or `01.` reduces to `''` and matches anything; there is deliberately no length floor on the exact match, since a short title (`朝`) must still pass.
 
-> **The haystack must include the structured titles.** `descriptionToText` strips `ul.work_tracklist` out of `description` so titles are not duplicated in the prose — validating against prose alone rejects every structured work. `buildHaystack` joins both.
+> **The haystack must include the structured titles.** `description_parts[].tracks[]` (rows scraped before DLsite dropped its structured track list — see §2.9) is title data that is *not* in the prose, so validating against `description` alone rejects every structured work. `buildHaystack` joins both.
 
 Every precondition failure is loud and exits non-zero — unknown id, no scraped description, no audio on disk, unconfigured root folder, or titles already present without `--force`. The caller named the work explicitly, so silently doing nothing would be the wrong answer; the uninformative-filename check is advisory only, printed but never a skip. `--dry-run` prints the result, then asks `write N titles? [y/N]` so an expensive model call need not be repeated to apply it; without a TTY it never writes.
 
@@ -510,18 +510,24 @@ suite needs no socket.
 
 ### 2.9 Work-Page Extras (description, images, author, reviews)
 
-The DLsite scraper reads more than the `#work_outline` spec table. The description and the images are served by `GET /api/work/:id/extras` and `GET /api/image/:id/:name` and rendered on the work page (`WorkDescription.vue`, `WorkGallery.vue`); **the scraped DLsite reviews and `authors[]` are still unexposed** — scaffolding for later features. Everything below is DLsite-only; `fanza.js` is unchanged and Fanza works get none of it, so a Fanza work shows no description tab.
+The DLsite scraper reads more than the 作品情報 spec table. The description and the images are served by `GET /api/work/:id/extras` and `GET /api/image/:id/:name` and rendered on the work page (`WorkDescription.vue`, `WorkGallery.vue`); **the scraped DLsite reviews and `authors[]` are still unexposed** — scaffolding for later features. Everything below is DLsite-only; `fanza.js` is unchanged and Fanza works get none of it, so a Fanza work shows no description tab.
 
 **Scraped fields** (`scraper/dlsite.js`, returned on the metadata object):
 
 | Field | Source | Notes |
 |-------|--------|-------|
-| `authors[]` | `作者` row of `#work_outline` | The creator credit on works with no VA/illustrator/scenario breakdown. Rarely set. `{id: nameToUUID(name), name}`, same shape as `vas`/`scriptWriters`. |
-| `description` | `div[itemprop="description"]` | **The block's markup, as the seller wrote it**, stored unsanitized — the allowlist lives at the serving end (see below). The JSON fallback still writes plain text here (`intro_s` is all it has), as do rows scraped before this. |
-| `descriptionParts[]` | same block, per `.work_parts` | `{type, heading, images[], tracks[]}`. `type` comes from the `type_*` class: `text`, `image`, `tracklist`. The per-part `text` is gone — the markup carries it — but `images[]` still drives the downloader and `tracks[]` still feeds the track-title extractor. |
-| `descriptionParts[].tracks[]` | `.work_parts.type_tracklist` | `{title, time}`. **Only ~16% of works use this structured part** (measured over 40 random library works: 16% structured, 43% track list written as prose inside a `type_text` part, 40% no track list). The prose case is still captured — as `text` under a heading like `☆トラックリスト&プレイ内容` — but `tracks[]` is empty for it, and the numbering varies wildly (`Track1`, `①`, bare `1`, `◆01`). Parsing that is the LLM's job, not the scraper's. |
-| `descriptionParts[].type` | the `type_*` class | Seen in the wild: `text`, `image`, `multiimages`, `tracklist`, `list`. Unknown types still parse — the type is recorded and text/images extracted generically. |
-| `sampleImages[]` | `.product-slider-data div[data-src]` | `{url, thumb, width, height}`. The slides are rendered client-side by Vue, so the visible `<img>` tags are **not** in the HTML — only these empty data divs are. The first slide (`_img_main`) is dropped; it is the cover. |
+| `authors[]` | `作者` row of 作品情報 | The creator credit on works with no VA/illustrator/scenario breakdown. Rarely set. `{id: nameToUUID(name), name}`, same shape as `vas`/`scriptWriters`. |
+| `description` | the `.c-productInfo__inner` that holds the `section.c-productContent` block | **The block's markup, as the seller wrote it**, stored unsanitized — the allowlist lives at the serving end (see below). The JSON fallback still writes plain text here (`intro_s` is all it has), as do rows scraped before this. |
+| `descriptionParts[]` | the `section.c-productContent` sections of the same block | `{type, heading, images[]}`. `type` is derived from the markup: `image_list` when the section holds a `ul.c-productContent__imageList`, `image` when it holds a `.c-productContent__image` banner, `text` otherwise. The per-part text is not copied out — the markup carries it — only `images[]`, which drives the downloader. |
+| `descriptionParts[].heading` | `.headline__title` of the section | The seller's `h3`. `null` for an untitled section. |
+| `sampleImages[]` | `.key-visual-slider img[src]` | `{url, thumb, width, height}`, one per `<picture>` slide, with the full-size JPEG as the `<img src>`. The first slide (`_img_main`) is dropped; it is the cover. `thumb`/`width`/`height` are `null` — this markup does not carry them, and nothing reads them; the JSON fallback still fills all three. |
+
+**作品情報 rows** are `<dt class="c-productInfo__key">` / `<dd class="c-productInfo__value">` pairs, read through `infoValue($, label)`. The same labels as the old table (`サークル名`, `販売日`, `シリーズ名`, `声優`, `イラスト`, `シナリオ`, `作者`, `ジャンル`, `年齢指定`) plus ones nothing reads yet (`音楽`, `作品形式`, `ファイル形式`, `対応言語`, `ファイル容量`, CPU/メモリ). Two details this markup changed:
+
+- **`販売日` is not zero-padded** (`2025年4月12日`), so the date is read field by field — the old digits-only run turned that into `2025412`.
+- **Genre ids come from the `fsr` URL** (`/maniax/fsr/=/genre/431/from/work.genre/…`), matched as 2-4 digits so the `096` spelling still parses to `96`.
+
+**DLsite dropped its structured track list.** `ul.work_tracklist` (and the `.work_parts.type_tracklist` part the scraper used to read it from) is gone from the work page: sellers write the list as prose under a `トラック構成` heading, and `introductions` no longer carries a track-list entry either. So a fresh scrape writes no `tracks[]` and the track-title extractor always takes the model path for it, from the `description` the page already has. Rows scraped earlier keep their `tracks[]`, and `structuredTitles` still reads them.
 
 The JSON fallback (`scrapeStaticWorkMetadataFromDLsiteJson`) fills the same fields from `product.json`: `creaters.created_by`, `intro_s` (a plain-text summary DLsite has already truncated — no parts, no track list) and `image_samples`.
 

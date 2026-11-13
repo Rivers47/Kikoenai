@@ -27,32 +27,62 @@ const absoluteAssetUrl = (u) => {
   return '';
 };
 
+// Every row of the 作品情報 block is a <dt> label with its <dd> value beside it.
+const DESCRIPTION_SECTION = 'section.c-productContent';
+
+/**
+ * The value cell of one 作品情報 row.
+ * @param {Function} $ Cheerio instance.
+ * @param {String} label Row label, e.g. 声優.
+ * @returns {Object} Cheerio selection of the <dd>, empty when there is no such row.
+ */
+const infoValue = ($, label) => $('dt.c-productInfo__key')
+  .filter(function() { return $(this).text().trim() === label; })
+  .first()
+  .next('dd.c-productInfo__value');
+
+/**
+ * The 作品内容 block: the container holding the seller's `.c-productContent`
+ * sections. `.c-productInfo__inner` is a shared wrapper, so the sections are
+ * what identifies the right one -- the same class inside
+ * `.c-productSystemRequirements` holds the spec table.
+ * @param {Function} $ Cheerio instance.
+ * @returns {Object} Cheerio selection, empty when the work has no description.
+ */
+const descriptionBlock = ($) => $('.c-productInfo__inner')
+  .filter((i, el) => $(el).find(DESCRIPTION_SECTION).length > 0)
+  .first();
+
 /**
  * Parses the 作品内容 block into structured parts.
  *
- * The block is a sequence of `.work_parts` sections, each tagged by a
- * `type_*` class: `type_text` (a blurb), `type_image` (a banner plus caption)
- * and `type_tracklist` (the per-track titles, which the files on disk usually
- * lack). Sellers mix them freely, so the parts are kept in page order rather
- * than flattened into one string.
+ * The block is a sequence of `.c-productContent` sections: a blurb, a banner
+ * with a caption, or a row of images each with its own caption. Sellers mix
+ * them freely, so the parts are kept in page order rather than flattened into
+ * one string. The text stays in the markup, which is where the page reads it
+ * from, so a part carries only what the markup cannot: its heading and the
+ * images the downloader has to fetch.
+ *
+ * The per-track list DLsite used to publish as its own part is gone from the
+ * work page: sellers now write the track list as prose inside a section, and
+ * the track-title extractor reads it from there.
  * @param {Function} $ Cheerio instance.
- * @returns {Array<Object>} [{ type, heading, text, images, tracks }]
+ * @returns {Array<Object>} [{ type, heading, images }]
  */
 const parseDescriptionParts = ($) => {
   const parts = [];
 
-  $('div[itemprop="description"] .work_parts').each(function () {
+  $(DESCRIPTION_SECTION).each(function () {
     const $part = $(this);
-    const typeClass = ($part.attr('class') || '').split(/\s+/).find(c => c.startsWith('type_'));
-    const type = typeClass ? typeClass.replace('type_', '') : 'text';
+    const type = $part.find('ul.c-productContent__imageList').length ? 'image_list'
+      : ($part.find('.c-productContent__image').length ? 'image' : 'text');
 
-    const heading = $part.children('.work_parts_heading').text().trim();
-    const $area = $part.children('.work_parts_area');
+    const heading = $part.find('.headline__title').first().text().trim();
 
     // Full-size image first: the <a> wrapper points at the original, the <img>
     // inside it may be a resized copy.
     const images = [];
-    $area.find('a[href], img[src]').each(function () {
+    $part.find('a[href], img[src]').each(function () {
       const el = $(this);
       const raw = el.is('a') ? el.attr('href') : el.attr('src');
       const abs = absoluteAssetUrl(raw);
@@ -61,18 +91,10 @@ const parseDescriptionParts = ($) => {
       }
     });
 
-    const tracks = [];
-    $area.find('ul.work_tracklist li.work_tracklist_item').each(function () {
-      const title = $(this).children('.title').text().trim();
-      const time = $(this).children('.time').text().trim();
-      if (title) tracks.push({ title, time });
-    });
-
     parts.push({
       type,
       heading: heading || null,
       images,
-      tracks,
     });
   });
 
@@ -89,36 +111,32 @@ const parseDescriptionParts = ($) => {
  * @returns {String} Inner HTML of the description block, '' when it has none.
  */
 const descriptionHtml = ($) => {
-  const html = $('div[itemprop="description"]').html();
+  const html = descriptionBlock($).html();
   return html ? html.trim() : '';
 };
 
 /**
  * Parses the work's sample images from the product slider.
  *
- * `.product-slider-data` holds one empty <div> per slide carrying the real
- * asset URL, dimensions and thumbnail — the visible <img> tags are rendered
- * client-side by Vue and are not in the HTML. The first slide is the cover
- * (`_img_main`), which the cover download already handles, so it is dropped.
+ * The slider is server-rendered: one <picture> per slide, with the full-size
+ * JPEG as the `<img src>` and a webp twin as its `<source>`.
+ *
+ * The first slide is the cover (`_img_main`), which the cover download already
+ * handles, so it is dropped. Dimensions and the 100x100 thumbnail the old
+ * markup carried are not in this one; both are stored as null, and nothing
+ * reads them.
  * @param {Function} $ Cheerio instance.
  * @returns {Array<Object>} [{ url, thumb, width, height }]
  */
 const parseSampleImages = ($) => {
   const samples = [];
+  const seen = new Set();
 
-  $('.product-slider-data div[data-src]').each(function () {
-    const el = $(this);
-    const url = absoluteAssetUrl(el.attr('data-src'));
-    if (!url || url.includes('_img_main')) return;
-
-    const width = parseInt(el.attr('data-width'), 10);
-    const height = parseInt(el.attr('data-height'), 10);
-    samples.push({
-      url,
-      thumb: absoluteAssetUrl(el.attr('data-thumb')) || null,
-      width: Number.isNaN(width) ? null : width,
-      height: Number.isNaN(height) ? null : height,
-    });
+  $('.key-visual-slider img[src]').each(function () {
+    const url = absoluteAssetUrl($(this).attr('src'));
+    if (!url || url.includes('_img_main') || seen.has(url)) return;
+    seen.add(url);
+    samples.push({ url, thumb: null, width: null, height: null });
   });
 
   return samples;
@@ -142,118 +160,89 @@ const scrapeStaticWorkMetadataFromDLsite = (id) => new Promise((resolve, reject)
       const $ = cheerio.load(data);
 
       // 标题
-      work.title = $('meta[property="og:title"]').attr('content');
-      // fallback
-      if (work.title === undefined) {
-        work.title = $(`a[href="${url}"] span`).text();
-      }
-      
+      work.title = $('meta[property="og:title"]').attr('content')
+        || $('h1.headline__title').first().text().trim();
+
       const titlePattern = / \[.+\] \| DLsite$/;
       work.title = work.title.replace(titlePattern, '');
 
       // 社团
-      const circleElement = $('span[class="maker_name"]').children('a');
+      const circleElement = $('a.c-productInfo__makerName').first();
       const circleUrl = circleElement.attr('href');
-      const circleName = circleElement.text();
+      const circleName = circleElement.text().trim();
       work.circle = (circleUrl && circleName) ? { name: circleName } : {};
 
-      const workOutline = $('#work_outline');
       // NSFW
-      const R18 = workOutline.children('tbody').children('tr').children('th')
-        .filter(function() {
-          return $(this).text() === AGE_RATINGS;
-        }).parent().children('td').find('span:first').text();
+      const R18 = infoValue($, AGE_RATINGS).text().trim();
       work.nsfw = R18 === '18禁' || R18 === 'R18';
 
-      // 贩卖日 (YYYY-MM-DD)
-      const release = workOutline.children('tbody').children('tr').children('th')
-        .filter(function() {
-          return $(this).text() === RELEASE;
-        }).parent().children('td').text().replace(/[^0-9]/ig,'');
-      work.release = (release.length >= 8)
-        ? `${release.slice(0, 4)}-${release.slice(4, 6)}-${release.slice(6, 8)}`
+      // 贩卖日 (YYYY-MM-DD). The month and day are not zero-padded, so the
+      // value is read field by field rather than as one run of digits.
+      const release = /(\d{4})\D+(\d{1,2})\D+(\d{1,2})/.exec(infoValue($, RELEASE).text());
+      work.release = release
+        ? `${release[1]}-${release[2].padStart(2, '0')}-${release[3].padStart(2, '0')}`
         : '';
 
       // 系列
-      const seriesElement = workOutline.children('tbody').children('tr').children('th')
-        .filter(function() {
-          return $(this).text() === SERIES;
-        }).parent().children('td').children('a');
-      if (seriesElement.length) {
-        const seriesUrl = seriesElement.attr('href');
-        if (seriesUrl.match(/SRI(\d{10})/)) {
-          work.series = {
-            id: parseInt(seriesUrl.match(/SRI(\d{10})/)[1]),
-            name: seriesElement.text()
-          };
-        }
+      const seriesElement = infoValue($, SERIES).find('a').first();
+      const seriesUrl = seriesElement.attr('href') || '';
+      if (seriesUrl.match(/SRI(\d{10})/)) {
+        work.series = {
+          id: parseInt(seriesUrl.match(/SRI(\d{10})/)[1]),
+          name: seriesElement.text().trim()
+        };
       }
-      
+
       // 标签
-        workOutline.children('tbody').children('tr').children('th')
-        .filter(function() {
-          return $(this).text() === GENRE;
-        }).parent().children('td').children('div').children('a').each(function() {
-          const tagUrl = $(this).attr('href');
-          const tagName = $(this).text();
-          if (tagUrl.match(/genre\/(\d{3})/)) {
-            work.tags.push({
-              id: parseInt(tagUrl.match(/genre\/(\d{3})/)[1]),
-              name: tagName
-            });
-          }
-        });
-      
+      infoValue($, GENRE).find('a').each(function() {
+        const tagUrl = $(this).attr('href') || '';
+        const tagName = $(this).text();
+        if (tagUrl.match(/genre\/(\d{2,4})/)) {
+          work.tags.push({
+            id: parseInt(tagUrl.match(/genre\/(\d{2,4})/)[1]),
+            name: tagName
+          });
+        }
+      });
+
       // 声优
-        workOutline.children('tbody').children('tr').children('th')
-        .filter(function() {
-          return $(this).text() === VA;
-        }).parent().children('td').children('a').each(function() {
-          const vaName = $(this).text().trim();
-          work.vas.push({
-            id: nameToUUID(vaName),
-            name: vaName
-          });
+      infoValue($, VA).find('a').each(function() {
+        const vaName = $(this).text().trim();
+        work.vas.push({
+          id: nameToUUID(vaName),
+          name: vaName
         });
-      
+      });
+
       // イラスト
-        workOutline.children('tbody').children('tr').children('th')
-        .filter(function() {
-          return $(this).text() === ILLUSTRATOR;
-        }).parent().children('td').children('a').each(function() {
-          const illustratorName = $(this).text().trim();
-          work.illustrators.push({
-            id: nameToUUID(illustratorName),
-            name: illustratorName
-          });
+      infoValue($, ILLUSTRATOR).find('a').each(function() {
+        const illustratorName = $(this).text().trim();
+        work.illustrators.push({
+          id: nameToUUID(illustratorName),
+          name: illustratorName
         });
-      
+      });
+
       // シナリオ
-        workOutline.children('tbody').children('tr').children('th')
-        .filter(function() {
-          return $(this).text() === SCRIPT_WRITER;
-        }).parent().children('td').children('a').each(function() {
-          const scriptWriterName = $(this).text().trim();
-          work.scriptWriters.push({
-            id: nameToUUID(scriptWriterName),
-            name: scriptWriterName
-          });
+      infoValue($, SCRIPT_WRITER).find('a').each(function() {
+        const scriptWriterName = $(this).text().trim();
+        work.scriptWriters.push({
+          id: nameToUUID(scriptWriterName),
+          name: scriptWriterName
         });
+      });
 
       // 作者 — the creator credit on works that have no separate VA/illustrator
       // /scenario breakdown (mostly manga and older voice works). Rarely set.
-        workOutline.children('tbody').children('tr').children('th')
-        .filter(function() {
-          return $(this).text() === AUTHOR;
-        }).parent().children('td').children('a').each(function() {
-          const authorName = $(this).text().trim();
-          if (authorName) {
-            work.authors.push({
-              id: nameToUUID(authorName),
-              name: authorName
-            });
-          }
-        });
+      infoValue($, AUTHOR).find('a').each(function() {
+        const authorName = $(this).text().trim();
+        if (authorName) {
+          work.authors.push({
+            id: nameToUUID(authorName),
+            name: authorName
+          });
+        }
+      });
 
       // 作品内容 (description) and the sample images from the product slider
       work.descriptionParts = parseDescriptionParts($);
