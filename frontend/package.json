@@ -30,7 +30,7 @@
     "theme": "node scripts/generate-theme.mjs"
   },
   "dependencies": {
-    "@quasar/extras": "^1.18.0",
+    "@quasar/extras": "^2.1.0",
     "axios": "^1.21.0",
     "plyr": "^3.8.5",
     "quasar": "^2.23.1",
