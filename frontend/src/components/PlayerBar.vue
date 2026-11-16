@@ -496,7 +496,9 @@ export default {
     },
 
     onPointerDown (event) {
-      if (event.target.closest('.q-btn')) return
+      // The pill is its own action: a press there must not become the bar's
+      // seek or "open the panel" tap.
+      if (event.target.closest('.q-btn, .seek-undo')) return
       if (event.pointerType === 'mouse' && event.button !== 0) return
       const rail = this.$refs.rail
       if (!rail) return
