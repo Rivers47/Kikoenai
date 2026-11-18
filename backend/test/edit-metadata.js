@@ -261,23 +261,16 @@ describe('editWorkMetadata', function () {
     let work = await db.knex('t_work').select('title').where('id', workId).first();
     expect(work.title).to.equal('原子测试');
 
-    // Attempt an edit that will fail (e.g. circle name unusually long shouldn't fail - let's use a bad type)
-    // SQLite doesn't enforce types strictly. Let's try passing an undefined series that causes our code issue.
-    // Actually, the simplest way: try calling with data that would fail in a unique constraint
-    // Since t_tag name is not unique by constraint, let's just test the transaction rolls back on error
-    // by passing an undefined value that causes a crash.
+    // Force a failure after the t_work update has run, so only a rollback can
+    // explain the unchanged title: a missing tag list throws while iterating.
     let threw = false;
     try {
-      // Force an error by passing null for title which should be validated upstream but calling directly
-      // The resolveCircle should fail if we pass null... no it won't since it's already validated.
-      // Let's just verify the function doesn't leave partial state when it throws for another reason.
-      // Pass a bad circle type that will cause an unhandled error
       await db.editWorkMetadata(workId, {
         title: '不应该生效',
         nsfw: false,
         release: null,
-        circle: null, // This will cause an error in resolveCircle
-        tags: [],
+        circle: null,
+        tags: null,
         vas: [],
         illustrators: [],
         scriptWriters: [],

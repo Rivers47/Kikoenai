@@ -288,7 +288,7 @@ export default {
       return {
         id: work.workId,
         title: work.workTitle,
-        circle: { id: 0, name: '' },
+        circle: null,
         tags: [],
         vas: [],
         release: '',

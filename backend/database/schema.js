@@ -1,6 +1,6 @@
 const { knex } = require('./db');
 
-const dbVersion = '20260915000001';
+const dbVersion = '20260916000000';
 
 // 数据库结构
 const createSchema = () => knex.schema
@@ -16,7 +16,7 @@ const createSchema = () => knex.schema
     table.string('root_folder').notNullable(); // VARCHAR 类型 [根文件夹别名]
     table.string('dir').notNullable(); // VARCHAR 类型 [相对存储路径]
     table.string('title').notNullable(); // VARCHAR 类型 [音声名称]
-    table.string('circle_id').notNullable(); // UUID 类型 [社团id]
+    table.string('circle_id'); // UUID 类型 [社团id]，自定义作品（kikoenai.nfo）可以为空
     table.boolean('nsfw'); // BOOLEAN 类型
     table.string('release');  // VARCHAR 类型 [贩卖日 (YYYY-MM-DD)]
 

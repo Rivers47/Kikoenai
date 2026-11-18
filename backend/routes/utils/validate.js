@@ -1,5 +1,5 @@
 const { validationResult } = require('express-validator');
-const { canonicalizeWorkId } = require('../../work-id');
+const { canonicalizeWorkId, CUSTOM_WORK_ID_PATTERN } = require('../../work-id');
 
 const isValidRequest = (req, res, sendMessage = true) => {
   const errors = validationResult(req);
@@ -35,9 +35,9 @@ const normalizeWorkId = (id) => canonicalizeWorkId(padLegacyId(id));
  * Work-id shape: a DLsite doujin id is
  * \d{6,8} (zero-padded 6 or 8 digits), a DLsite books id keeps its BJ prefix,
  * a Fanza id is d\d+ — the legacy d_\d+ spelling is accepted and sanitized to
- * the canonical form.
+ * the canonical form — and a custom work is a UUID v5 (see work-id.js).
  */
-const WORK_ID_RE = /^(bj\d{6,8}|\d{6,8}|d_?\d+)$/i;
+const WORK_ID_RE = new RegExp(`^(?:bj\\d{6,8}|\\d{6,8}|d_?\\d+|${CUSTOM_WORK_ID_PATTERN})$`, 'i');
 
 /**
  * Returns an express-validator chain for a work id param (route param).

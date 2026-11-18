@@ -12,7 +12,8 @@ const { sanitizeDescriptionHtml, looksLikeHtml } = require('./utils/description-
 const { formatID, coverFileName, workImageFileNamePattern } = require('../filesystem/utils');
 const { scrapeWorkMetadataFromDLsite } = require('../scraper/dlsite');
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
-const { isFanzaId } = require('../work-id');
+const { isFanzaId, isCustomWorkId } = require('../work-id');
+const { refreshCustomWork, CustomWorkError } = require('../filesystem/customWork');
 const { saveWorkImages, saveWorkReviews, skipWorkExtras, REFRESH_IMAGE_CONCURRENCY } = require('../filesystem/workExtras');
 
 // HTTP cache, not for crawling the source sites.
@@ -431,13 +432,33 @@ router.post('/scan/:id',
   } 
 );
 
-// refresh metadata of a work from DLsite or Fanza, and update the database.
+// refresh metadata of a work from DLsite, Fanza, or its own kikoenai.nfo file.
 router.post('/refresh/:id',
   workIdParam(),
   async function(req, res) {
     if(!isValidRequest(req, res)) return;
 
     const work_id = req.params.id;
+
+    // A custom work has no store page to scrape: the sidecar is its source.
+    if (isCustomWorkId(work_id)) {
+      try {
+        await refreshCustomWork(work_id);
+        const username = config.auth ? req.user.name : 'admin';
+        const work = await db.getWorkMetadata(work_id, username);
+        normalize(work);
+        res.send({ message: '元数据更新成功', metadata: work[0] });
+      } catch (err) {
+        if (err instanceof CustomWorkError) {
+          res.status(err.status).send({ error: err.message });
+          return;
+        }
+        console.error(err);
+        res.status(500).send({ error: '更新元数据失败: ' + err.message });
+      }
+      return;
+    }
+
     try {
       let metadata;
       if (isFanzaId(work_id)) {

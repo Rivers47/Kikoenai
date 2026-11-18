@@ -19,9 +19,30 @@ export function isBooksId(id) {
   return /^bj\d+$/i.test(String(id));
 }
 
+/** Mirrors backend/work-id.js: a custom work (kikoenai.nfo) id is a UUID v5. */
+const CUSTOM_WORK_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isCustomWorkId(id) {
+  return CUSTOM_WORK_ID_RE.test(String(id));
+}
+
+
 /** `d215444` → `d_215444`, the content id DMM's own URLs take. */
 export function fanzaCid(id) {
   return String(id).replace(/^d(\d+)$/i, 'd_$1');
+}
+
+/**
+ * The id as it fits in a chip or a caption.
+ *
+ * A custom work's UUID would dominate the cover it labels, so only its first
+ * segment (8 hex chars, about the width of `RJ01647038`) is shown. The full id
+ * stays in the URL, in the log file and in every request; this is display only.
+ */
+export function displayWorkCode(id) {
+  const canonical = String(id);
+  if (isCustomWorkId(canonical)) return canonical.split('-')[0];
+  return workno(canonical);
 }
 
 /** The prefixed spelling DLsite and Fanza use: `'635795'` → `'RJ635795'`. */
@@ -29,6 +50,8 @@ export function workno(id) {
   const canonical = String(id).replace(/^bj(\d+)$/i, 'BJ$1');
   if (isFanzaId(canonical)) return fanzaCid(canonical);
   if (isBooksId(canonical)) return canonical;
+  // A custom work has no store code; its id is already the display form.
+  if (isCustomWorkId(canonical)) return canonical;
   return `RJ${canonical}`;
 }
 

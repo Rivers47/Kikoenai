@@ -76,7 +76,7 @@
 <script>
 import { useI18n } from 'vue-i18n'
 import { apiUrl } from 'src/base-path'
-import { workImageUrl, workno } from 'src/utils'
+import { displayWorkCode, workImageUrl } from 'src/utils'
 import ImageViewer from './ImageViewer'
 
 export default {
@@ -119,7 +119,7 @@ export default {
     // the carousel and the viewer cannot drift apart: an image with no local
     // file drops out of both at once.
     viewerImages() {
-      const cover = { name: workno(this.workid), url: this.workid ? apiUrl(`/api/cover/${this.workid}`) : '' }
+      const cover = { name: displayWorkCode(this.workid), url: this.workid ? apiUrl(`/api/cover/${this.workid}`) : '' }
       const scraped = this.images.map(image => ({
         name: image.file || '',
         url: workImageUrl(this.workid, image),

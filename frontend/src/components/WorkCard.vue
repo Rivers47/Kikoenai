@@ -18,8 +18,8 @@
         </router-link>
       </div>
 
-      <!-- 社团 -->
-      <div class="q-ml-sm q-mt-sm q-mb-xs text-subtitle1 text-weight-regular ellipsis">
+      <!-- 社团（自定义作品可以没有社团） -->
+      <div v-if="metadata.circle" class="q-ml-sm q-mt-sm q-mb-xs text-subtitle1 text-weight-regular ellipsis">
         <SearchableLabel
           :to="labelRoute('circle', metadata.circle.name)"
           field="circle"
@@ -74,8 +74,8 @@
           <span class="text-muted"> ({{ metadata.review_count }})</span>
         </div>
 
-        <!-- DLsite链接 -->
-        <div class="col-auto">
+        <!-- DLsite链接（自定义作品没有商店页面） -->
+        <div v-if="sourceLink" class="col-auto">
           <q-icon name="launch" size="xs" />
           <a class="text-primary" :href="sourceLink" rel="noreferrer noopener" target="_blank">{{sourceLabel}}</a>
         </div>
@@ -143,7 +143,7 @@ import { useI18n } from 'vue-i18n'
 import { useTagTranslate } from '../i18n'
 import Cover from 'components/Cover'
 import NotifyMixin from '../mixins/Notification.js'
-import { isFanzaId, fanzaCid, dlsiteWorkUrl, labelRoute } from 'src/utils'
+import { isFanzaId, isCustomWorkId, fanzaCid, dlsiteWorkUrl, labelRoute } from 'src/utils'
 import SearchableLabel from './SearchableLabel'
 import LabelDropdown from './LabelDropdown'
 
@@ -209,6 +209,7 @@ export default {
       return isFanzaId(this.metadata.id);
     },
     sourceLink() {
+      if (this.isCustomWork) return '';
       if (this.isFanza) {
         return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${fanzaCid(this.metadata.id)}/`;
       }
@@ -216,6 +217,9 @@ export default {
     },
     sourceLabel() {
       return this.isFanza ? 'Fanza' : 'DLsite';
+    },
+    isCustomWork() {
+      return isCustomWorkId(this.metadata.id);
     }
   },
 

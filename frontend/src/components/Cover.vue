@@ -44,7 +44,7 @@
 <script>
 import { useTagTranslate } from '../i18n'
 
-import { workno, labelRoute } from 'src/utils'
+import { displayWorkCode, labelRoute } from 'src/utils'
 import LabelDropdown from './LabelDropdown'
 import { apiUrl } from 'src/base-path'
 
@@ -91,7 +91,7 @@ export default {
     },
 
     code () {
-      return workno(this.workid)
+      return displayWorkCode(this.workid)
     },
 
   },

@@ -15,17 +15,19 @@
         </q-item-label>
 
         <div class="row q-gutter-x-sm col-auto" >
-          <SearchableLabel
-            :to="labelRoute('circle', metadata.circle.name)"
-            field="circle"
-            :name="metadata.circle.name"
-            link-class="text-muted"
-            class="col-auto"
-          >
-            {{metadata.circle.name}}
-          </SearchableLabel>
+          <template v-if="metadata.circle">
+            <SearchableLabel
+              :to="labelRoute('circle', metadata.circle.name)"
+              field="circle"
+              :name="metadata.circle.name"
+              link-class="text-muted"
+              class="col-auto"
+            >
+              {{metadata.circle.name}}
+            </SearchableLabel>
 
-          <span class="col-auto">/</span>
+            <span class="col-auto">/</span>
+          </template>
           <span class="col-auto text-muted"> {{metadata.release}}</span>
           <span class="col-auto">/</span>
 

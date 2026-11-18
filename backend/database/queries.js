@@ -155,7 +155,7 @@ const makeQueries = (knex) => {
     const byId = new Map();
     for (const row of coreRows) {
       const a = { ...row };
-      a.circleObj = JSON.stringify({ id: row.circle_id, name: row.name });
+      a.circleObj = row.circle_id ? JSON.stringify({ id: row.circle_id, name: row.name }) : null;
       a.tagObj = JSON.stringify({ tags: [] });
       a.vaObj = JSON.stringify({ vas: [] });
       a.illustratorObj = JSON.stringify({ illustrators: [] });
@@ -239,8 +239,10 @@ const makeQueries = (knex) => {
    * @param {Object} work Work object.
    */
   const insertWorkMetadata = async work => knex.transaction(async (trx) => {
-    // Resolve circle UUID by name
-    const circleId = await resolveLabel(trx, 't_circle', work.circle.name);
+    // A custom work (sidecar-declared folder) may have no circle at all, which
+    // is why t_work.circle_id is nullable since migration 20260916000000.
+    const circleName = work.circle && work.circle.name ? String(work.circle.name).trim() : '';
+    const circleId = circleName ? await resolveLabel(trx, 't_circle', circleName) : null;
 
     await trx('t_work')
       .insert({
@@ -256,7 +258,7 @@ const makeQueries = (knex) => {
         review_count: work.review_count,
         rate_count: work.rate_count,
         rate_average_2dp: work.rate_average_2dp,
-        rate_count_detail: JSON.stringify(work.rate_count_detail),
+        rate_count_detail: work.rate_count_detail ? JSON.stringify(work.rate_count_detail) : null,
         rank: work.rank ? JSON.stringify(work.rank) : null,
         description: work.description || null,
         description_parts: work.descriptionParts ? JSON.stringify(work.descriptionParts) : null,
@@ -460,14 +462,18 @@ const makeQueries = (knex) => {
     if (data.title !== undefined) patch.title = data.title;
     if (data.nsfw !== undefined) patch.nsfw = data.nsfw;
     if (data.release !== undefined) patch.release = data.release;
+    // '' clears the description, which an emptied sidecar key must be able to do.
+    if (data.description !== undefined) patch.description = data.description || null;
     if (Object.keys(patch).length) {
       await trx('t_work').where('id', workId).update(patch);
     }
 
-    // 2. Circle
+    // 2. Circle — a name is optional: '' or null clears it
     const prevWork = await trx('t_work').select('circle_id').where('id', workId).first();
     const prevCircleId = prevWork ? prevWork.circle_id : null;
-    const newCircleId = await resolveLabel(trx, 't_circle', data.circle);
+    const circleName = data.circle && typeof data.circle === 'object' ? data.circle.name : data.circle;
+    const trimmedCircle = typeof circleName === 'string' ? circleName.trim() : '';
+    const newCircleId = trimmedCircle ? await resolveLabel(trx, 't_circle', trimmedCircle) : null;
     await trx('t_work').where('id', workId).update({ circle_id: newCircleId });
 
     // 3. Tags
@@ -550,7 +556,7 @@ const makeQueries = (knex) => {
    */
   const getWorkMetadata = async (id, username) => {
     const row = await knex('t_work')
-      .join('t_circle', 't_circle.id', 't_work.circle_id')
+      .leftJoin('t_circle', 't_circle.id', 't_work.circle_id')
       .select(
         't_work.id', 't_work.created_at', 't_work.updated_at',
         't_work.title', 't_work.circle_id', 't_circle.name',
@@ -741,7 +747,7 @@ const makeQueries = (knex) => {
   const getWorksBy = async ({username = '', nsfw = 0, order = 'release', sort = 'desc', limit, offset, seed} = {}) => {
     // Build the core query (t_work ⋈ t_circle)
     let coreQ = knex('t_work')
-      .join('t_circle', 't_circle.id', 't_work.circle_id')
+      .leftJoin('t_circle', 't_circle.id', 't_work.circle_id')
       .select(
         't_work.id', 't_work.created_at', 't_work.updated_at',
         't_work.title', 't_work.circle_id', 't_circle.name',
@@ -914,7 +920,7 @@ const makeQueries = (knex) => {
 
   const getWorksByFilter = async ({filter, username = 'admin', nsfw = 0, order = 'release', sort = 'desc', limit, offset, seed} = {}) => {
     let coreQ = knex('t_work')
-      .join('t_circle', 't_circle.id', 't_work.circle_id')
+      .leftJoin('t_circle', 't_circle.id', 't_work.circle_id')
       .select(
         't_work.id', 't_work.created_at', 't_work.updated_at',
         't_work.title', 't_work.circle_id', 't_circle.name',
@@ -1128,7 +1134,7 @@ const makeQueries = (knex) => {
         this.on('t_review.work_id', '=', 't_work.id')
           .andOn('t_review.user_name', '=', knex.raw('?', [username]));
       })
-      .join('t_circle', 't_circle.id', 't_work.circle_id')
+      .leftJoin('t_circle', 't_circle.id', 't_work.circle_id')
       .select(
         't_work.id', 't_work.created_at', 't_work.updated_at',
         't_work.title', 't_work.circle_id', 't_circle.name',
@@ -1174,7 +1180,7 @@ const makeQueries = (knex) => {
         this.on('t_play_history.work_id', '=', 't_work.id')
           .andOn('t_play_history.user_name', '=', knex.raw('?', [username]));
       })
-      .join('t_circle', 't_circle.id', 't_work.circle_id')
+      .leftJoin('t_circle', 't_circle.id', 't_work.circle_id')
       .leftJoin('t_review', function() {
         this.on('t_review.work_id', '=', 't_work.id')
           .andOn('t_review.user_name', '=', knex.raw('?', [username]));

@@ -68,7 +68,7 @@ export default {
       workid: this.$route.params.id,
       metadata: {
         id: this.$route.params.id,
-        circle: {}
+        circle: null
       },
       tree: [],
       trackProgress: {},
