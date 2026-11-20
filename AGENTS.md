@@ -51,7 +51,7 @@ Per-package scripts still work inside each workspace (e.g. `npm run scan`, `npm 
 
 - **Build pipeline:** Frontend builds directly into `backend/dist/` (`distDir` in `frontend/quasar.config.js`); Express serves it as static content. No separate frontend deploy.
 - **Dev proxy:** `quasar dev` (:8080) proxies `/api` and `/socket.io` to the backend (:8888). In production `connect-history-api-fallback` lets Vue Router own all non-`/api` routes — no hash routing.
-- **Shared contracts:** The REST API and Socket.IO event names are documented identically in `backend/AGENTS.md` §6 and `frontend/AGENTS.md` §6. **When changing an endpoint or event, update both sub-guides.** Scanning runs over Socket.IO (not REST); metadata editing is admin-gated via `PUT /api/work/:id`.
+- **Shared contracts:** The REST API and Socket.IO event names are documented identically in `backend/AGENTS.md` §6 and `frontend/AGENTS.md` §6. **When changing an endpoint or event, update both sub-guides.** Scanning runs over Socket.IO (not REST); metadata editing is admin-gated via `PUT /api/work/:id`. Two payload shapes the frontend must keep guarding: a work id can be a **UUID v5** (custom works, backend `§2.5b`), and `circle` can be **`null`** — see `frontend/AGENTS.md` §5.
 - **Deploy path prefix (`config.basePath`):** the app can be served under a sub-path (`https://example.com/kikoeru/`) from a single build, so URLs are owned jointly by both packages. `backend/base-path.js` holds the contract — `frontend/quasar.config.js` requires `PUBLIC_PATH_TOKEN` straight from it, so there is one definition, not two. Read `backend/AGENTS.md` §2.4b **and** `frontend/AGENTS.md` §2.6b before touching asset paths, the service worker, Socket.IO mounting, or anything that builds a URL.
 
 ---
@@ -65,6 +65,7 @@ Per-package scripts still work inside each workspace (e.g. `npm run scan`, `npm 
 | Root scripts, release flow, CI, container | This file + `README.md` |
 | E2E browser tests | `tests/playwright.config.js` (needs frontend on :8080) |
 | Fanza scraping source | `backend/AGENTS.md` §6 + `scraper/fanza.js` + `backend/work-id.js` — Fanza work ids are stored underscore-free (`d215444`) since migration `20260828000000`; `d_215444` is DMM's own form and survives only in DMM URLs, cover/image file names and folder names. DLsite ids stored RJ-padded (6/8 digit); all label ids are UUIDs |
+| Custom works (`kikoenai.nfo` / `.kikoenai.nfo`), scan aborts on conflicts | `backend/AGENTS.md` §2.5b + `backend/filesystem/nfo.js` + `backend/filesystem/customWork.js` — id is a UUID v5 of root alias + relative path, read from the sidecar only at import and refresh, `circle` may be NULL (migration `20260916000000`), covers come from `cover.jpg` |
 | Serving under a sub-path, asset URLs, service-worker scope | `backend/AGENTS.md` §2.4b + `frontend/AGENTS.md` §2.6b + `backend/base-path.js` |
 | Tag rename canonicalization / tag identity | `backend/AGENTS.md` §2.3 (tag canonicalization) + `scraper/tag-aliases.json` + `scraper/tag-aliases.js` |
 

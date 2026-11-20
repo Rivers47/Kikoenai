@@ -22,7 +22,8 @@ const recursiveReaddir = (dir) => {
 const { orderBy } = require('natural-orderby');
 const { joinFragments, encodeTrackId } = require('../routes/utils/url');
 const { config } = require('../config');
-const { workno } = require('../work-id');
+const { workno, isCustomWorkId, customWorkId } = require('../work-id');
+const { findNfoEntry, readNfoMetadata, NfoConflictError } = require('./nfo');
 
 const supportedMediaExtList = ['.mp3', '.ogg', '.opus', '.wav', '.aac', '.flac', '.webm', '.mp4', '.m4a', '.mka'];
 const supportedSubtitleExtList = ['.lrc', '.srt', '.ass', ".vtt"]; // '.ass' only support show on file list, not for play lyric
@@ -324,67 +325,157 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
 };
 
 /**
- * 返回一个成员为指定根文件夹下所有包含 RJ 号或 d_ 前缀的音声文件夹对象的数组，
+ * 音声文件夹名称 → 音声ID，三种命名约定：DLsite 的 RJ、DLsite books 的 BJ、Fanza 的 d_。
+ * @param {String} name Folder name.
+ * @returns {String|null} Work id, null when the name carries no work code.
+ */
+function matchWorkFolderName(name) {
+  const rjMatch = name.match(/RJ(\d+)/i);
+  if (rjMatch) return formatID(parseInt(rjMatch[1], 10));
+
+  // DLsite's books floor (成年コミック/出版社) numbers its voice works
+  // BJ instead of RJ; the prefix is kept in the id because the digits
+  // alone would collide with an RJ work.
+  const bjMatch = name.match(/BJ(\d+)/i);
+  if (bjMatch) return `BJ${formatID(parseInt(bjMatch[1], 10))}`;
+
+  // Fanza names its folders after the cid (`d_215444`); the underscore-free
+  // spelling is accepted too, but only at a word boundary and with enough
+  // digits that a folder like `Sound_CD1` cannot be read as a work code.
+  const fanzaMatch = name.match(/d_(\d+)/) || name.match(/(?:^|[^a-z0-9])d(\d{4,})/i);
+  if (fanzaMatch) return 'd' + fanzaMatch[1];
+
+  return null;
+}
+
+/** Directory entries, tolerating the unreadable system folders Windows leaves behind. */
+async function readEntries(dirPath, logger) {
+  try {
+    return await fs.promises.readdir(dirPath, { withFileTypes: true });
+  } catch (err) {
+    if (err.code === 'EPERM') {
+      if (err.path && !err.path.endsWith('System Volume Information')) {
+        logger.error(` ! 无法访问 ${err.path}`);
+      }
+      return [];
+    }
+    throw err;
+  }
+}
+
+/**
+ * Every direct child that claims itself as a work.
+ *
+ * A sidecar folder owning such a child would put the same files in two works,
+ * so the scan refuses to guess which one wins.
+ */
+async function findNestedClaims(dirPath, entries, logger) {
+  const claims = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+
+    const childPath = path.join(dirPath, entry.name);
+    if (matchWorkFolderName(entry.name)) {
+      claims.push(childPath);
+      continue;
+    }
+    if (findNfoEntry(await readEntries(childPath, logger))) {
+      claims.push(childPath);
+    }
+  }
+  return claims;
+}
+
+/**
+ * 返回一个成员为指定根文件夹下所有音声文件夹对象的数组，
  * 音声文件夹对象 { relativePath: '相对路径', rootFolderName: '根文件夹别名', id: '音声ID' }
+ *
+ * A folder belongs to exactly one work. A work code in the name claims it, or a
+ * `kikoenai.nfo` / `.kikoenai.nfo` sidecar does (see nfo.js). Both at once — or
+ * a sidecar folder that contains another claim — throws NfoConflictError and
+ * stops the walk: the files would otherwise belong to two works at once.
+ *
  * @param {Object} rootFolder 根文件夹对象 { name: '别名', path: '绝对路径' }
  */
-async function* getFolderList(rootFolder, current = '', depth = 0, logger = console ) { // 异步生成器函数 async function*() {}
-  // 浅层遍历
-  const folders = await fs.promises.readdir(path.join(rootFolder.path, current));    
+async function* getFolderList(rootFolder, current = '', depth = 0, logger = console, entries = null) { // 异步生成器函数 async function*() {}
+  const currentEntries = entries || await readEntries(path.join(rootFolder.path, current), logger);
 
-  for (const folder of folders) {
-    const absolutePath = path.resolve(rootFolder.path, current, folder);
-    const relativePath = path.join(current, folder);
+  for (const entry of currentEntries) {
+    const name = entry.name;
+    const absolutePath = path.resolve(rootFolder.path, current, name);
+    const relativePath = path.join(current, name);
 
-    try {
-     
-      if ((await fs.promises.stat(absolutePath)).isDirectory()) { // 检查是否为文件夹
-          const rjMatch = folder.match(/RJ(\d+)/i);
-          // DLsite's books floor (成年コミック/出版社) numbers its voice works
-          // BJ instead of RJ; the prefix is kept in the id because the digits
-          // alone would collide with an RJ work.
-          const bjMatch = folder.match(/BJ(\d+)/i);
-          // Fanza names its folders after the cid (`d_215444`); the
-          // underscore-free spelling is accepted too, but only at a word
-          // boundary and with enough digits that a folder like `Sound_CD1`
-          // cannot be read as a work code.
-          const fanzaMatch = folder.match(/d_(\d+)/) || folder.match(/(?:^|[^a-z0-9])d(\d{4,})/i);
-          if (rjMatch) {
-            // Found a DLsite work folder
-            yield { absolutePath, relativePath, rootFolderName: rootFolder.name, id: formatID(parseInt(rjMatch[1], 10)) };
-          } else if (bjMatch) {
-            // Found a DLsite books work folder
-            yield { absolutePath, relativePath, rootFolderName: rootFolder.name, id: `BJ${formatID(parseInt(bjMatch[1], 10))}` };
-          } else if (fanzaMatch) {
-            // Found a Fanza work folder
-            yield { absolutePath, relativePath, rootFolderName: rootFolder.name, id: 'd' + fanzaMatch[1] };
-          } else if (depth + 1 < config.scannerMaxRecursionDepth) {
-            // 若文件夹名称中不含有RJ号，就进入该文件夹内部
-            // Found a folder that's not a work folder, go inside if allowed.
-            yield* getFolderList(rootFolder, relativePath, depth + 1);
-          }
-        }
-    } catch (err) {
-      if (err.code === 'EPERM') {
+    let isDirectory = entry.isDirectory();
+    if (!isDirectory && entry.isSymbolicLink()) {
+      // stat follows symlinks, so a linked folder still counts -- as it did when
+      // every entry was stat'ed here.
+      try {
+        isDirectory = (await fs.promises.stat(absolutePath)).isDirectory();
+      } catch (err) {
+        if (err.code !== 'EPERM') throw err;
         if (err.path && !err.path.endsWith('System Volume Information')) {
           logger.error(` ! 无法访问 ${err.path}`);
         }
-      } else {
-        throw err;
+        continue;
       }
+    }
+    if (!isDirectory) continue;
+
+    const childEntries = await readEntries(absolutePath, logger);
+    const workId = matchWorkFolderName(name);
+    const nfoName = findNfoEntry(childEntries);
+
+    if (workId && nfoName) {
+      throw new NfoConflictError(
+        '文件夹同时有作品编号和 nfo 文件，请移除其中一个后重新扫描',
+        [absolutePath, path.join(absolutePath, nfoName)],
+      );
+    }
+
+    if (nfoName) {
+      const claims = await findNestedClaims(absolutePath, childEntries, logger);
+      if (claims.length) {
+        throw new NfoConflictError(
+          '自定义作品文件夹内还有别的作品，请分开后再重新扫描',
+          [absolutePath, ...claims],
+        );
+      }
+
+      yield {
+        absolutePath,
+        relativePath,
+        rootFolderName: rootFolder.name,
+        id: customWorkId(rootFolder.name, relativePath),
+        // Parsed here so a broken file aborts the scan before anything is written.
+        nfoMetadata: readNfoMetadata(absolutePath, nfoName),
+      };
+      continue;
+    }
+
+    if (workId) {
+      yield { absolutePath, relativePath, rootFolderName: rootFolder.name, id: workId };
+      continue;
+    }
+
+    if (depth + 1 < config.scannerMaxRecursionDepth) {
+      // 若文件夹名称中不含有RJ号，就进入该文件夹内部
+      // Found a folder that's not a work folder, go inside if allowed.
+      yield* getFolderList(rootFolder, relativePath, depth + 1, logger, childEntries);
     }
   }
 }
 
 /**
  * Generate the cover filename for a given work id and type.
- * @param {String} id Work id (e.g. '123456', '01134567', 'd215444')
+ * @param {String} id Work id (e.g. '123456', '01134567', 'd215444', or a custom uuid)
  * @param {String} type Cover type: 'main', 'sam', '240x240', '360x360'
  * @returns {String} Filename like 'RJ123456_img_main.jpg' or 'd_215444_img_main.jpg'
- *          (on-disk names keep Fanza's own underscore form — see work-id.js)
+ *          (on-disk names keep Fanza's own underscore form — see work-id.js).
+ *          A custom work has no store code, so its id is the prefix.
  */
 function coverFileName(id, type) {
-  return `${workno(id)}_img_${type}.jpg`;
+  const prefix = isCustomWorkId(id) ? String(id).toLowerCase() : workno(id);
+  return `${prefix}_img_${type}.jpg`;
 }
 
 /**
@@ -550,6 +641,7 @@ module.exports = {
   getTrackList,
   toTree,
   getFolderList,
+  matchWorkFolderName,
   deleteCoverImageFromDisk,
   saveCoverImageToDisk,
   collectWorkImages,

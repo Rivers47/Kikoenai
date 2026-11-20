@@ -16,8 +16,8 @@
           </router-link>
         </div>
 
-        <!-- 社团名 -->
-        <div class="text-subtitle1 text-weight-regular">
+        <!-- 社团名（自定义作品可以没有社团） -->
+        <div v-if="metadata.circle" class="text-subtitle1 text-weight-regular">
           <SearchableLabel
             :to="labelRoute('circle', metadata.circle.name)"
             field="circle"
@@ -73,8 +73,8 @@
             <q-icon name="chat" size="xs" /> <span class="text-muted"> ({{metadata.review_count}})</span>
           </div>
 
-          <!-- DLsite链接 -->
-          <div class="col-auto">
+          <!-- DLsite链接（自定义作品没有商店页面） -->
+          <div v-if="sourceLink" class="col-auto">
             <q-icon name="launch" size="xs" /><a class="text-primary" :href="sourceLink" rel="noreferrer noopener" target="_blank">{{sourceLabel}}</a>
           </div>
         </div>
@@ -277,7 +277,7 @@ import SearchableLabel from './SearchableLabel'
 import LabelDropdown from './LabelDropdown'
 import NotifyMixin from '../mixins/Notification.js'
 import { mapState, mapGetters } from 'vuex'
-import { isFanzaId, fanzaCid, dlsiteWorkUrl, labelRoute, workno } from 'src/utils'
+import { isFanzaId, isCustomWorkId, fanzaCid, dlsiteWorkUrl, labelRoute, workno } from 'src/utils'
 import { uncacheFile, buildWorkDownloadPlan, startWorkDownload, bgFetchIdFor, canBackgroundFetch } from '../utils/downloads'
 import { activeRegistration } from '../utils/service-worker'
 
@@ -357,6 +357,7 @@ export default {
     },
 
     sourceLink() {
+      if (this.isCustomWork) return '';
       if (this.isFanza) {
         return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${fanzaCid(this.metadata.id)}/`;
       }
@@ -365,6 +366,10 @@ export default {
 
     sourceLabel() {
       return this.isFanza ? 'Fanza' : 'DLsite';
+    },
+
+    isCustomWork() {
+      return isCustomWorkId(this.metadata.id);
     },
 
     currentHistoryTrack() {

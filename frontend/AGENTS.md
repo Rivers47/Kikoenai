@@ -709,6 +709,15 @@ configured value, which is never sent to the browser.
 
 ## 5. API Contract (Consumed from Backend)
 
+**Two shapes to guard, both from custom works** (backend `AGENTS.md` §2.5b): a
+work id may be a **UUID v5** instead of a store code, and `metadata.circle` may
+be **`null`**. `isCustomWorkId()`/`workno()` in `src/utils.js` handle the first
+(`workno` returns the UUID unchanged, which is what keeps cover alt text and the
+Scanner page from printing `RJ<uuid>`); every component that renders a circle
+wraps it in `v-if="metadata.circle"`, and `WorkCard.vue`/`WorkDetails.vue` return
+`''` from `sourceLink` so the store link disappears — there is no store page to
+link to. Only an admin edit can set a circle again, and an empty name clears it.
+
 | Endpoint | Method | Used In | Purpose |
 |----------|--------|---------|---------|
 | `/api/auth/me` | GET | `MainLayout.vue` | Get current user + auth status |
@@ -725,7 +734,7 @@ configured value, which is never sent to the browser.
 | `/api/media/download/:trackId` | GET | `WorkTree.vue` | Download a file |
 | `/api/media/offline/:trackId` | GET | `AudioElement.vue`, `WorkTree.vue`, `WorkDetails.vue`, `src/utils/downloads.js` | Best offline-friendly copy of a track (transcoded Opus for lossless sources, as-is otherwise). Populates the `offline-tracks` Cache Storage bucket via the explicit download action; `AudioElement.vue`'s `source` computed prefers this URL once a track is downloaded, online or offline (see `module-Downloads`). |
 | `/api/media/check-lrc/:trackId` | GET | `AudioElement.vue` | Lyric sidecar files for a track; returns `{result, message, lyrics: [{trackId, lyricExtension}]}`, one entry per speaker (see §2.9). The flat pre-multi-speaker `trackId`/`lyricExtension` fields were removed at the 1.0 freeze, along with the fallback that read them. |
-| `/api/cover/:id` | GET | `Cover.vue`, `AudioElement.vue`, `WorkListItem.vue`, `Downloads.vue` | Get cover image (`?type=main\|240x240\|sam`). Each variant is its own cache key — see the cover-cache-keys note in §3 |
+| `/api/cover/:id` | GET | `Cover.vue`, `AudioElement.vue`, `WorkListItem.vue`, `Downloads.vue` | Get cover image (`?type=main\|240x240\|sam`). Each variant is its own cache key — see the cover-cache-keys note in §3. A custom work's covers are generated from its own `cover.jpg` at scan/refresh time; with no such file the placeholder is served |
 | `/api/tracks/:id` | GET | `Work.vue` | Track tree for a work |
 | `/api/review` | GET | `Favourites.vue` | List works the user has reviewed/rated/progress-marked |
 | `/api/review/:id` | PUT/DELETE | `WorkDetails.vue`, `WorkCard.vue`, `FavListItem.vue`, `WriteReview.vue`, `AudioElement.vue` | Create/update or delete one work's review. PUT with `progressOnly=true` and `autoMark=true` only writes `progress='listened'` if existing is not terminal (listened/replay/postponed) |

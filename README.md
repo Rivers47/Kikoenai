@@ -62,6 +62,27 @@ The server scans for folder names containing `RJxxxxxxx` for DLsite works;
 or `d_xxxxxx` or `dxxxxxx` for Fanza(DMM) works.
 You can configure the search depth in settings.
 
+#### Custom works (`.nfo`)
+
+You can also define custom works by putting a `kikoenai.nfo` or `.kikoenai.nfo` TOML file in its folder.
+The file can be empty.
+
+Sample:
+```toml
+title = "雨の日"          # defaults to the folder name
+nsfw = false              # defaults to false
+release = "2024-03-05"    # defaults to the day it was imported
+circle = "サークル"        # optional
+tags = ["ASMR"]
+vas = ["声優"]
+illustrators = ["絵師"]
+scriptwriters = ["脚本"]
+series = "シリーズ"
+description = "<p>HTML</p>"   # inline HTML, sanitized like a scraped description
+```
+
+Put a `cover.jpg` (or `.jpeg`/`.png`/`.webp`) in the same folder and the server will use it as the cover.
+
 ### Container
 
 An OCI container image is built at [here](https://github.com/Rivers47/Kikoenai/pkgs/container/kikoenai)

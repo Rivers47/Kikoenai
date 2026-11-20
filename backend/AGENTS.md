@@ -122,7 +122,7 @@ SQLite3 via Knex.js with the following tables:
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
-| `t_work` | Voice works (audio albums) | `id` (TEXT — see id note below), `title`, `dir`, `circle_id`, `nsfw`, `release`, `dl_count`, `price`, `rate_average_2dp`, `description` (**markup** as scraped; plain text on older rows and from the JSON fallback), `description_parts` (JSON), `sample_images` (JSON) |
+| `t_work` | Voice works (audio albums) | `id` (TEXT — see id note below), `title`, `dir`, `circle_id` (**nullable** — a custom work may have no circle), `nsfw`, `release`, `dl_count`, `price`, `rate_average_2dp`, `description` (**markup** as scraped; plain text on older rows and from the JSON fallback), `description_parts` (JSON), `sample_images` (JSON) |
 | `t_circle` | Circles (artist groups) | `id` (UUID), `name` |
 | `t_tag` | Tags | `id` (UUID), `name` |
 | `t_va` | Voice actors | `id` (UUID v5), `name` |
@@ -142,7 +142,7 @@ SQLite3 via Knex.js with the following tables:
 | `t_work_file` | A work's file listing, so a request never walks the filesystem (§2.9-0) | `work_id`, `rel_path` (PK), `duration`, `mtime`, `track_title` |
 | `t_dlsite_review` | Scraped DLsite user reviews | `id` (DLsite `member_review_id`), `work_id`, `rate`, `review_title`, `review_text`, `genres` (JSON) |
 
-**Work id / label id note (since migration `20260802000000`):** `t_work.id` and all `work_id` foreign keys are **TEXT**. A DLsite doujin work id is stored already RJ-padded (`'123456'` 6-digit, or `'01134567'` 8-digit — matching `formatID`), so the work URL `/work/123456` shows the original RJ id directly; a DLsite **books** work id keeps its prefix, `'BJ635795'`; a Fanza (DMM doujin) work id is the content-id **without its underscore**, `'d215444'` (migration `20260828000000`; DMM writes it `d_215444`). The prefix distinguishes the source — there is no separate source column. **`RJ` is stripped because it is implicit; `BJ` is not, and dropping it would collide `BJ635795` with `RJ635795`.** `work-id.js` owns the helpers: `isFanzaId`, `isBooksId`, `canonicalizeWorkId` (`d_215444` → `d215444`, `bj…` → `BJ…`), `fanzaCid` (back to DMM's form), and `workno` (the prefixed spelling each store uses in URLs and asset file names — the single source for `RJ…`/`BJ…`/`d_…`). **All** label ids (circle/tag/va/illustrator/script_writer/series/author) are name-based UUIDs (TEXT PK) resolved by `resolveLabel` in `queries.js`; DLsite RG/genre/SRI ids scraped from the storefront are no longer used as DB ids, and a label shared across DLsite + Fanza merges into one row.
+**Work id / label id note (since migration `20260802000000`):** `t_work.id` and all `work_id` foreign keys are **TEXT**. A DLsite doujin work id is stored already RJ-padded (`'123456'` 6-digit, or `'01134567'` 8-digit — matching `formatID`), so the work URL `/work/123456` shows the original RJ id directly; a DLsite **books** work id keeps its prefix, `'BJ635795'`; a Fanza (DMM doujin) work id is the content-id **without its underscore**, `'d215444'` (migration `20260828000000`; DMM writes it `d_215444`). The prefix distinguishes the source — there is no separate source column. **`RJ` is stripped because it is implicit; `BJ` is not, and dropping it would collide `BJ635795` with `RJ635795`.** `work-id.js` owns the helpers: `isFanzaId`, `isBooksId`, `isCustomWorkId`, `canonicalizeWorkId` (`d_215444` → `d215444`, `bj…` → `BJ…`), `fanzaCid` (back to DMM's form), `customWorkId` (UUID v5 from root alias + relative path, §2.5b), and `workno` (the prefixed spelling each store uses in URLs and asset file names — the single source for `RJ…`/`BJ…`/`d_…`). **A custom work's id is a UUID v5** and `workno`/`coverFileName` pass it through unchanged: there is no store code to prefix, which is also how the UI knows to hide the store link. **All** label ids (circle/tag/va/illustrator/script_writer/series/author) are name-based UUIDs (TEXT PK) resolved by `resolveLabel` in `queries.js`; DLsite RG/genre/SRI ids scraped from the storefront are no longer used as DB ids, and a label shared across DLsite + Fanza merges into one row.
 
 **Tag canonicalization (rename protection):** tag names are canonicalized via `scraper/tag-aliases.json` before UUID resolution. `resolveTagLabel` in `queries.js` (the single choke point covering scan-insert, scan-update, and admin-edit) maps a scraped new Japanese tag name back to its canonical old name so a DLsite rename folds onto the existing `t_tag` row instead of splitting into two. The map is hand-maintained (`scraper/tag-aliases.json`, loaded once at require time — restart to apply); tags not in the map pass through unchanged. Rows that already exist in a deployed DB are folded by migration `20260825000000_merge_tag_aliases.js`, which reads the same JSON — **adding a new alias entry after that migration has run needs a fresh migration** (or a re-scan of the affected works) to merge the existing rows. Other label tables (circle/illustrator/script_writer/series) are not canonicalized. The backend always serves canonical Japanese tag names; UI/tag translation is client-side (see `frontend/AGENTS.md` i18n).
 
@@ -267,6 +267,50 @@ The three pieces that keep it that way:
 **The scan outcome outlives the socket.** `socket.js` remembers the last `SCAN_FINISHED`/`SCAN_ERROR` in `lastScanEvent` and replays it when `ON_SCANNER_PAGE` arrives with no scanner running; `Scanner.vue` re-emits that on Socket.IO's `connect`, so a reconnect resyncs. **A multi-hour scan only needs the socket to drop once**, from any cause — a suspended laptop, a locked phone, a wifi handover, a proxy reload — and Socket.IO reconnects with a *fresh* socket that missed the terminal event. There is no total connection time limit to work around (verified against `engine.io` 6.6.9: `pingInterval` 25s / `pingTimeout` 20s, client side 45s since the last packet; `connectTimeout` 45s and `upgradeTimeout` 10s cover only the handshake and the polling→WebSocket upgrade; nothing caps a socket's lifetime). The heartbeat is also real traffic every 25s, so a *quiet* scan cannot idle out of an nginx `proxy_read_timeout` either. The gap was purely that nothing resynced after a reconnect. A clean child exit whose `SCAN_FINISHED` never made it out (see `LOG.finish`) synthesises one, and `KILL_SCAN_PROCESS` with no live scanner answers the same way instead of throwing on `null` — which used to take the server down with it.
 
 > **A page stuck on `running` is not always the page's fault.** The scan can genuinely never finish: `retryGet` (`scraper/axios.js`) arms its cancel-token timeout around `axios.get`, which with `responseType: 'stream'` resolves as soon as **headers** arrive — so `clearTimeout` fires before a single body byte is read, and `saveWorkImageToDisk` then pipes the stream with no timeout at all. A remote that accepts, sends headers and stalls hangs that promise forever, holds its `limitP` slot, and with `config.maxParallelism` of them the run stops without ever reaching `LOG.finish`. The per-image log lines are the diagnostic: a hung run stops mid-count and the log file names the file and URL it died on.
+
+### 2.5b Custom works (`filesystem/nfo.js`, `filesystem/customWork.js`)
+
+A folder with no `RJ`/`BJ`/`d_` code can still be a work: a `kikoenai.nfo` or
+`.kikoenai.nfo` sidecar declares it (priority in that order; a bare `.nfo` is
+never read — Kodi and scene releases use it).
+
+- **Identity is positional, never textual.** `customWorkId(rootAlias, relativePath)`
+  is a UUID v5 over `length\0alias\0posixPath`, so it survives moving the whole
+  library on disk, and renaming the folder deliberately creates a new work (the
+  old row is then removed by the path-based cleanup, with its ratings/progress).
+  The newline separator is length-prefixed so no alias/path pair can spell
+  another pair's key; the path is POSIX-normalised and NFC-normalised so the same
+  folder hashes the same on Windows and macOS.
+- **Parsing happens inside the walk** (`getFolderList`), so a broken file aborts
+  the scan *before* any database write. `NfoError` (bad TOML, wrong type,
+  impossible `release`) and `NfoConflictError` both land in `tryScanRootFolders`,
+  which logs the file/paths and `process.exit(1)`s. Conflicts are: a work-named
+  folder that also holds a sidecar, and a sidecar folder whose direct child is
+  itself claimed (work name or another sidecar). The user fixes the folders and
+  restarts the scan; guessing which folder owns the files is not the scanner's
+  call.
+- **The file is an import source, not the source of truth.** It is read when the
+  work is inserted and again on refresh (`POST /api/refresh/:id` for custom ids,
+  and `performUpdate`/`updater.js`, which re-read it or skip with a log). A plain
+  scan never re-reads it. Deleting it leaves the work alone — `performCleanup`
+  keys off directory existence (§2.5), which is exactly the behaviour wanted
+  here. **Do not add "delete rows the scan did not see" reconciliation**: a
+  sidecar-less folder is by definition unseen, and that rule would delete these
+  works.
+- **Field defaults on first import** live in `customWorkFields`: title from the
+  folder name, `nsfw` false, `release` = local today, everything else empty. On
+  refresh, an omitted key keeps what the row already has (an empty string counts
+  as omitted). Sidecar list keys are `undefined` when absent and `[]` when
+  explicitly empty — that distinction is what makes the refresh rule possible.
+- **Covers** come from `cover.jpg`/`.jpeg`/`.png`/`.webp` via `customCovers.js`
+  (`ffmpeg`, already a runtime dependency): `main` at source size, `sam` at 640
+  wide, `240x240` square-cropped. Only missing types are written, so an existing
+  cover is never overwritten, and a failure is logged and degrades to the
+  placeholder rather than failing the work. There is no video-frame extraction.
+- **`circle_id` is nullable** (migration `20260916000000`) because a custom work
+  need not have a circle; the five queries that join `t_circle` use `LEFT JOIN`
+  and `normalize()` turns a missing circle into `circle: null`. `editWorkMetadata`
+  treats an empty/absent circle name as NULL, which is also how an admin clears it.
 
 ### 2.6 Scraping (`scraper/`)
 
@@ -656,7 +700,7 @@ node ./scripts/rekey-track-progress.js --dry-run
 
 Every route mounted under `/api`, as of the 1.0 freeze. **This table is the contract** — keep it exact, and mirror any change into `frontend/AGENTS.md` §6.
 
-**Id formats:** work-id route params (`:id` on `/api/work`, `/api/cover`, `/api/tracks`, `/api/media/*`, `/api/refresh`, `/api/scan`, `/api/review`, `/api/history`, `/api/track-progress`) are **strings** matching `WORK_ID_RE` = `^(bj\d{6,8}|\d{6,8}|d_?\d+)$` (case-insensitive) — DLsite doujin ids are already RJ-padded digit strings, DLsite books ids keep their `BJ` prefix, Fanza ids are `d`-prefixed and underscore-free. `workIdParam` in `routes/utils/validate.js` validates and sanitizes them (the legacy `d_` spelling and 7-digit ids self-heal), so a stale PWA cache or an old bookmark (`/work/d_215444`) keeps resolving. Label ids are UUID v5 of the label's own name, so they are no longer addressable as route params: `/api/<field>s/:id` still resolves a *name*, but filtering by label goes through `/api/search` (§2.3b).
+**Id formats:** work-id route params (`:id` on `/api/work`, `/api/cover`, `/api/tracks`, `/api/media/*`, `/api/refresh`, `/api/scan`, `/api/review`, `/api/history`, `/api/track-progress`) are **strings** matching `WORK_ID_RE` = `^(?:bj\d{6,8}|\d{6,8}|d_?\d+|<uuid>)$` (case-insensitive) — DLsite doujin ids are already RJ-padded digit strings, DLsite books ids keep their `BJ` prefix, Fanza ids are `d`-prefixed and underscore-free, and a **custom work** (a folder declared by `kikoenai.nfo`, §2.5b) is a UUID v5. The UUID alternative is composed from `CUSTOM_WORK_ID_PATTERN` in `work-id.js`, so there is one definition; `suggest-track-titles.js` and `transcribe-work.js` share the same regex. **`circle` in a work payload may be `null`** — custom works need not have one — so consumers must guard it. `workIdParam` in `routes/utils/validate.js` validates and sanitizes them (the legacy `d_` spelling and 7-digit ids self-heal), so a stale PWA cache or an old bookmark (`/work/d_215444`) keeps resolving. Label ids are UUID v5 of the label's own name, so they are no longer addressable as route params: `/api/<field>s/:id` still resolves a *name*, but filtering by label goes through `/api/search` (§2.3b).
 
 **Work id is always a path param.** No route takes `work_id` in a body or query string; `workIdBody`/`workIdQuery` are gone.
 
@@ -689,7 +733,7 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 | `/api/circles` `/api/tags` `/api/vas` `/api/illustrators` `/api/script_writers` `/api/series` | GET | List all labels of that kind, ordered by name |
 | `/api/circles/:id` … `/api/series/:id` | GET | Resolve one label id (UUID) to its row; 404 otherwise |
 | `/api/scan/:id` | POST | Re-walk one work, re-probe changed durations, and rewrite its `t_work_file` listing → `{files}`, the re-listed track count. Was `{memo}`, which no longer exists — see §2.9a |
-| `/api/refresh/:id` | POST | Re-scrape one work from DLsite/Fanza: metadata (`refreshAll`), then sample/description images and DLsite reviews. Returns `{message, metadata, images, reviews}` where `images`/`reviews` are counts. Image and review failures are non-fatal (metadata is already committed) |
+| `/api/refresh/:id` | POST | Re-scrape one work from DLsite/Fanza: metadata (`refreshAll`), then sample/description images and DLsite reviews. Returns `{message, metadata, images, reviews}` where `images`/`reviews` are counts. Image and review failures are non-fatal (metadata is already committed). **A custom id takes a third branch**: the sidecar is re-read and re-applied, missing cover sizes are regenerated from `cover.jpg`, and the response is `{message, metadata}` like the admin edit route. A missing or unusable sidecar is a `400` and writes nothing (`reason: 'no-nfo'` internally); a missing work or folder is `404` |
 
 > **The six label route segments are `ROUTE_SEGMENT(field)` in `metadata.js`**, which is `${field}s` for everything except `series` (already plural). They are registered as a **literal-path loop** over `FIELDS`, because Express 5 (path-to-regexp v8) dropped regex char-classes in route strings; each handler gets its `field` by closure.
 

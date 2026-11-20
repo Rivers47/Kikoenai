@@ -5,7 +5,9 @@ const LimitPromise = require('limit-promise'); // 限制并发数量
 const axios = require('../scraper/axios.js'); // 数据请求
 const { scrapeWorkMetadataFromDLsite, scrapeWorkMetadataFromDLsiteJson, scrapeDynamicWorkMetadataFromDLsite, scrapeCoverIdForTranslatedWorkFromDLsite } = require('../scraper/dlsite');
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
-const { isFanzaId, isBooksId, fanzaCid, workno } = require('../work-id');
+const { isFanzaId, isBooksId, isCustomWorkId, fanzaCid, workno } = require('../work-id');
+const { NfoError, NfoConflictError } = require('./nfo');
+const { insertCustomWork, generateCovers, refreshCustomWork, CustomWorkError } = require('./customWork');
 const { scrapeWorkMetadataFromAsmrOne } = require('../scraper/asmrOne');
 const db = require('../database/db');
 const { createSchema } = require('../database/schema');
@@ -512,6 +514,7 @@ async function processFolder(folder) {
 
   const workId = folder.id;
   const isFanza = isFanzaId(workId);
+  const isCustom = isCustomWorkId(workId);
   const coverTypes = ['main', 'sam', '240x240'];
   const count = res['count(*)'];
 
@@ -530,9 +533,13 @@ async function processFolder(folder) {
     
     if (lostCoverTypes.length) {
       LOG.task.add(workId);
-      LOG.task.info(workId, '封面图片缺失，重新下载封面图片...');
+      LOG.task.info(workId, '封面图片缺失，重新获取封面图片...');
 
-      if (isFanza) {
+      if (isCustom) {
+        // A custom work regenerates from its own cover.jpg; there is nowhere to
+        // download it from.
+        coverResult = await generateCovers(workId, folder.absolutePath, lostCoverTypes, LOG.task);
+      } else if (isFanza) {
         coverResult = await getFanzaCoverImage(workId, lostCoverTypes);
       } else {
         coverResult = await getCoverImageForTranslated(workId, lostCoverTypes);
@@ -543,6 +550,21 @@ async function processFolder(folder) {
     } else {
       coverResult = 'skipped';
     }
+  } else if (isCustom) {
+    LOG.task.add(workId);
+    LOG.task.info(workId, `发现自定义作品文件夹: "${folder.absolutePath}"`);
+
+    try {
+      await insertCustomWork(folder, LOG.task);
+    } catch (error) {
+      LOG.task.error(workId, `元数据添加失败: ${error.message}`);
+      return 'failed';
+    }
+
+    LOG.task.info(workId, '扫描音频文件时长');
+    await rescanWorkFiles(workId, folder.absolutePath);
+
+    coverResult = await generateCovers(workId, folder.absolutePath, coverTypes, LOG.task);
   } else {
     LOG.task.add(workId);
     LOG.task.info(workId, `发现新文件夹: "${folder.absolutePath}"`);
@@ -702,6 +724,24 @@ async function tryScanRootFolders() {
     }
     LOG.main.info(`共找到 ${folderList.length} 个音声文件夹.`);
   } catch (err) {
+    // Ambiguous or unusable work declarations stop the scan before anything is
+    // written: guessing which folder owns the files is the user's call.
+    if (err instanceof NfoConflictError) {
+      LOG.main.error(`文件夹冲突，扫描已中止: ${err.message}`);
+      for (const offending of err.paths) {
+        LOG.main.error(`  -> ${offending}`);
+      }
+      LOG.main.error('请调整文件夹后重新扫描。本次扫描没有写入任何数据.');
+      process.exit(1);
+    }
+
+    if (err instanceof NfoError) {
+      LOG.main.error(`nfo 文件无法使用，扫描已中止: ${err.message}`);
+      LOG.main.error(`  -> ${err.filePath}${err.key ? ` (${err.key})` : ''}`);
+      LOG.main.error('请修正该文件后重新扫描。本次扫描没有写入任何数据.');
+      process.exit(1);
+    }
+
     LOG.main.error(`在扫描根文件夹的过程中出错: ${err.message}`);
     process.exit(1);
   }
@@ -820,11 +860,37 @@ async function performScan() {
 }
 
 /**
+ * Refresh one custom work from its sidecar.
+ *
+ * A custom id has no store page to scrape, and its sidecar may already be gone:
+ * that is a skip, not a failure, because the database stays authoritative.
+ * @param {String} id Custom work id.
+ * @returns {Promise<'updated'|'skipped'|'failed'>}
+ */
+async function updateCustomWork(id) {
+  LOG.task.add(id);
+  try {
+    await refreshCustomWork(id, LOG.task);
+    return 'updated';
+  } catch (err) {
+    // The sidecar is optional after the first scan: its absence is not a failure.
+    if (err instanceof CustomWorkError && err.reason === 'no-nfo') {
+      LOG.task.log(id, '未找到 kikoenai.nfo，跳过.');
+      return 'skipped';
+    }
+    LOG.task.error(id, `刷新自定义作品失败: ${err.message}`);
+    return 'failed';
+  }
+}
+
+/**
  * 更新音声的动态元数据
  * @param {string} id work id (e.g. '123456', 'd215444')
  * @param {options = {}} options includeVA, includeTags, refreshAll, etc.
  */
 async function updateMetadata(id, options = {}) {
+  if (isCustomWorkId(id)) return updateCustomWork(id);
+
   const isFanza = isFanzaId(id);
 
   let scrapeProcessor;
@@ -959,4 +1025,6 @@ async function performWorkFileScan() {
   process.exit(0);
 }
 
-module.exports = { performScan, performUpdate, performWorkFileScan, LOG };
+// performCleanup is exported for the test that pins its rule: a work survives as
+// long as its folder does, which is what lets a custom work outlive its sidecar.
+module.exports = { performScan, performUpdate, performWorkFileScan, performCleanup, LOG };

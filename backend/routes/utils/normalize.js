@@ -4,7 +4,8 @@ const strftime  = require('./strftime');
 const normalize = (works, options = {}) => {
   works.map(record => {
     record.nsfw = Boolean(record.nsfw);
-    record.circle = JSON.parse(record.circleObj);
+    // Custom works may have no circle at all; the id is the only marker.
+    record.circle = record.circleObj ? JSON.parse(record.circleObj) : null;
     record.rate_count_detail = JSON.parse(record.rate_count_detail);
     record.rank = record.rank ? JSON.parse(record.rank) : null;
 
