@@ -1,11 +1,18 @@
-# Backend Dockerfile
-# Build stage: install production dependencies
-FROM node:24-alpine AS build
+# Backend container image.
+# The runtime is Google's distroless Node.js image -- no shell, no package
+# manager -- so ffmpeg, ffprobe and tini are built or collected in earlier stages.
+
+# Build stage: install production dependencies.
+# Debian/glibc: the native sqlite3 addon must be compiled against the same libc
+# the distroless runtime loads it with.
+FROM node:24-trixie-slim AS build
 
 WORKDIR /usr/src/kikoeru
 
-# Install build dependencies required by some native npm modules
-RUN apk add --no-cache python3 make gcc g++
+# Toolchain node-gyp needs when sqlite3 has no prebuilt binary for this platform
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy root package files and backend workspace package.json
 COPY package*.json ./
@@ -18,8 +25,91 @@ RUN npm ci -w backend --omit=dev && npm cache clean --force \
     && rm -rf node_modules/node-gyp node_modules/tar \
     && rm -rf backend/node_modules/sqlite3/deps backend/node_modules/sqlite3/src backend/node_modules/sqlite3/binding.gyp
 
-# Final stage
-FROM node:24-alpine
+# The backend tree is staged here rather than copied straight into the final
+# stage so its size can be measured: a data root that .containerignore missed
+# (a 5.4 GB test library did) otherwise only shows up as a huge image.
+COPY ./backend/ /app/
+RUN set -eux; \
+    size=$(du -sm /app | cut -f1); \
+    test "$size" -lt 200 || { \
+        echo "backend/ is ${size} MB -- a data folder leaked past .containerignore" >&2; \
+        exit 1; \
+    }
+
+# ffmpeg
+# Bumping a component means updating its version and hash together;
+FROM debian:trixie-slim AS ffmpeg
+
+ARG FFMPEG_VERSION=9.1
+ARG FFMPEG_SHA256=1a4d394ae63d190a526cd052eb4415c156b5c5e2df37efab41a7de0b8fde2433
+ARG OPUS_VERSION=1.6.1
+ARG OPUS_SHA256=6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1
+ARG ZLIB_VERSION=1.4
+ARG ZLIB_SHA256=02dd159783677a749c04adbdd02b55b8a2bcc7e054f51b76b549199a916ad584
+
+# tini is installed here only to be copied into the runtime image
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential ca-certificates curl nasm pkg-config tini xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+
+ENV PKG_CONFIG_PATH=/opt/lib/pkgconfig
+
+RUN set -eux; \
+    curl -fsSLo ffmpeg.tar.xz "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz"; \
+    curl -fsSLo opus.tar.gz "https://downloads.xiph.org/releases/opus/opus-${OPUS_VERSION}.tar.gz"; \
+    curl -fsSLo zlib.tar.gz "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.gz"; \
+    echo "${FFMPEG_SHA256}  ffmpeg.tar.xz" > sums.txt; \
+    echo "${OPUS_SHA256}  opus.tar.gz" >> sums.txt; \
+    echo "${ZLIB_SHA256}  zlib.tar.gz" >> sums.txt; \
+    sha256sum -c sums.txt; \
+    mkdir ffmpeg opus zlib; \
+    tar -xJf ffmpeg.tar.xz -C ffmpeg --strip-components=1; \
+    tar -xzf opus.tar.gz -C opus --strip-components=1; \
+    tar -xzf zlib.tar.gz -C zlib --strip-components=1
+
+# zlib and opus first: `--enable-static` on ffmpeg's own libs pulls both in
+RUN set -eux; \
+    cd /src/zlib; \
+    ./configure --prefix=/opt --static; \
+    make -j"$(nproc)"; \
+    make install; \
+    cd /src/opus; \
+    ./configure --prefix=/opt --disable-shared --enable-static --disable-doc --disable-extra-programs; \
+    make -j"$(nproc)"; \
+    make install
+
+RUN set -eux; \
+    cd /src/ffmpeg; \
+    decoders=$(./configure --list-decoders | tr -s ' \n' '\n' \
+        | grep -vE '^(lib|vulkan)' \
+        | grep -vE '_(at|mediacodec|v4l2m2m|cuvid|qsv|rkmpp|omx|videotoolbox)$' \
+        | paste -sd,); \
+    demuxers=$(./configure --list-demuxers | tr -s ' \n' '\n' | grep -vE '^lib' | paste -sd,); \
+    parsers=$(./configure --list-parsers | tr -s ' \n' '\n' | grep -vE '^lib' | paste -sd,); \
+    ./configure \
+        --prefix=/opt \
+        --pkg-config-flags=--static \
+        --extra-cflags=-I/opt/include \
+        --extra-ldflags=-L/opt/lib \
+        --disable-shared --enable-static \
+        --disable-doc --disable-debug --disable-autodetect \
+        --disable-everything --disable-network \
+        --disable-hwaccels --disable-cuda --disable-nvdec \
+        --disable-vaapi --disable-vdpau --disable-vulkan \
+        --enable-zlib --enable-libopus --enable-protocol=file \
+        --enable-encoder=libopus,mjpeg \
+        --enable-muxer=null,opus,ogg,image2,mjpeg \
+        --enable-filter=aresample,aformat,format,anull,null,scale,crop,atrim,asetpts,volume,concat,abuffer,abuffersink,buffer,buffersink,trim \
+        --enable-decoder="$decoders" \
+        --enable-demuxer="$demuxers" \
+        --enable-parser="$parsers"; \
+    make -j"$(nproc)"; \
+    make install
+
+FROM gcr.io/distroless/nodejs24-debian13:latest
 
 # NODE_ENV=production forces auth on (see backend/config.js) and cannot be
 # overridden via the admin config -- required so the shipped image is never
@@ -31,21 +121,16 @@ ENV IS_DOCKER=true \
     KIKO_DATA_DIR=/appdata
 WORKDIR /usr/src/kikoeru
 
-# Install runtime dependencies: tini for signal handling, ffmpeg for audio processing
-RUN apk add --no-cache tini ffmpeg
+COPY --from=ffmpeg /opt/bin/ffmpeg /opt/bin/ffprobe /usr/bin/
+COPY --from=ffmpeg /usr/bin/tini-static /usr/bin/tini
 
 # Copy production dependencies from build stage
-# Backend workspace node_modules first (non-hoisted packages: jsonwebtoken, knex, sqlite3, jimp, etc.)
 COPY --from=build /usr/src/kikoeru/backend/node_modules ./node_modules
-# Then root node_modules on top (hoisted packages: mime@1.6.0 for express/send, etc.)
-# Root wins on the 3 overlapping packages (@jimp, mime, ms) — correct since
-# express/send needs mime@1.6.0, not mime@3.0.0 from jimp's dependency tree
 COPY --from=build /usr/src/kikoeru/node_modules ./node_modules
 
-# Copy backend source (including frontend build artifacts from backend/dist/)
-COPY ./backend/ ./
+COPY --from=build /app/ ./
 
 EXPOSE 8888
 
-ENTRYPOINT ["/sbin/tini", "--"]
-CMD [ "node", "app.js" ]
+ENTRYPOINT ["/usr/bin/tini", "--", "/nodejs/bin/node"]
+CMD ["app.js"]
