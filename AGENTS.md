@@ -21,6 +21,7 @@ kikoenai/
 ├── .github/workflows/build.yml         # CI: production container image
 ├── .github/workflows/build-debug.yml   # Manual-only: `-debug` container image
 ├── Containerfile           # OCI image (ghcr.io/rivers47/kikoenai)
+├── Containerfile-debug     # Pre-distroless Alpine build, for a shell in the image
 ├── .containerignore        # Build-context excludes (buildah reads this, not .dockerignore)
 └── compose-example.yaml
 ```
