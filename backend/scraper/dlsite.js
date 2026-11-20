@@ -583,6 +583,26 @@ const scrapeWorkReviewsFromDLsite = async (id, options = {}) => {
 };
 
 /**
+ * The cover image URL the work page renders, '' when it renders none.
+ *
+ * og:image repeats the slider's first slide, which is the cover, and outlives
+ * a redesign of the slider; both carry the work's own asset spelling.
+ * @param {Function} $ Cheerio instance.
+ * @returns {String} absolute URL, '' when the page renders no cover
+ */
+const pageCoverUrl = ($) => {
+  const candidates = [
+    $('meta[property="og:image"]').attr('content'),
+    $('.key-visual-slider img[src]').first().attr('src'),
+  ];
+  for (const raw of candidates) {
+    const abs = absoluteAssetUrl(raw);
+    if (abs && /_img_main\.(?:jpe?g|png|webp)$/i.test(abs)) return abs;
+  }
+  return '';
+};
+
+/**
  * Scrapes the source cover work id which holds the cover image, 
  * since some translated work(id_translated) in dlsite do not has its own cover, 
  * but share the cover from original cover work(id_source).
@@ -598,7 +618,10 @@ const scrapeCoverIdForTranslatedWorkFromDLsite = (id_translated) => new Promise(
     .then(response => response.data)
     .then((data) => {
       const $ = cheerio.load(data);
+      const workId = formatID(id_translated);
 
+      // Older pages list the other editions of a work and repeat the shared
+      // cover among their srcset images.
       const linked_id_list = $('.work_edition_linklist.type_trans a.work_edition_linklist_item').get()
         .map(l => l.attribs['href'])
         .filter(h => typeof h === 'string')
@@ -622,52 +645,30 @@ const scrapeCoverIdForTranslatedWorkFromDLsite = (id_translated) => new Promise(
 
       const hit_id_list = linked_id_list.filter(id => possible_image_id_list.includes(id));
 
-      // New-style pages replace the work_edition_linklist markup with a
-      // <translation-product-slider> component that carries the real cover
-      // URLs directly (under the original work id). When present, expose them
-      // so the caller can download without guessing paths.
-      const realCoverUrls = {};
-      const slider = $('translation-product-slider').first();
-      if (slider.length) {
-        const sliderSrc = slider.attr('src') || '';
-        const sliderThumb = slider.attr('thumb') || '';
-        // src/thumb may be protocol-relative or root-relative; resolve against
-        // the work page so a malformed value can't throw out of the scrape.
-        // Anything that doesn't resolve to an image path is not a cover — a
-        // placeholder like "#" would otherwise resolve to the page itself.
-        const toAbsolute = (u) => {
-          try {
-            const resolved = new URL(u, url);
-            return /\.(jpe?g|png|webp|gif)$/i.test(resolved.pathname) ? resolved.href : '';
-          } catch {
-            return '';
-          }
-        };
-        const mainUrl = sliderSrc && toAbsolute(sliderSrc);
-        if (mainUrl) {
-          realCoverUrls.main = mainUrl;
-          // DLsite names the variants by suffix, whatever the extension is.
-          const samUrl = mainUrl.replace('_img_main', '_img_sam');
-          if (samUrl !== mainUrl) realCoverUrls.sam = samUrl;
-          if (sliderThumb) {
-            const thumbUrl = toAbsolute(sliderThumb);
-            if (thumbUrl) realCoverUrls['240x240'] = thumbUrl;
-          }
+      // Newer pages render the real cover URL instead: it names the work the
+      // cover is filed under, which for a translation is the original.
+      const coverUrl = pageCoverUrl($);
+      const hasCover = coverUrl !== '' && !coverUrl.includes('no_img_main');
+      if (!hasCover && coverUrl) isNoImgMain = true;
+      const coverIdMatch = hasCover ? /((?:RJ|BJ)\d{6,8})_img_main\./i.exec(coverUrl) : null;
+      const coverId = coverIdMatch ? coverIdMatch[1].replace(/^rj/i, '') : '';
 
-          // The cover usually belongs to the original (Japanese) work; prefer
-          // its id for the guessed-path fallback in guessDLsiteCoverUrl.
-          const mainUrlMatch = /RJ(\d{6,8})[_\w.]+$/.exec(new URL(mainUrl).pathname);
-          if (mainUrlMatch) {
-            const realCoverFromId = mainUrlMatch[1];
-            if (realCoverFromId !== formatID(id_translated) && !hit_id_list.includes(realCoverFromId)) {
-              hit_id_list.unshift(realCoverFromId);
-            }
-          }
-        }
+      const realCoverUrls = {};
+      if (hasCover) {
+        realCoverUrls.main = coverUrl;
+        realCoverUrls.sam = coverUrl.replace('_img_main', '_img_sam');
       }
+      // <translation-product-slider> is the markup between the two: it carries
+      // the 100x100 thumbnail, which the cover URL does not.
+      const thumbUrl = absoluteAssetUrl($('translation-product-slider').first().attr('thumb'));
+      if (thumbUrl) realCoverUrls['240x240'] = thumbUrl;
+
+      // A cover filed under another id is the translated-work case: download
+      // it from there, and let guessDLsiteCoverUrl guess paths under that id.
+      const coverFromId = [coverId, ...hit_id_list].find(id => id && id !== workId) || workId;
 
       const result = {
-        coverFromId: hit_id_list.length > 0 ? hit_id_list[0] : id_translated,
+        coverFromId,
         isNoImgMain,
         coverUrls: Object.keys(realCoverUrls).length > 0 ? realCoverUrls : undefined,
       };

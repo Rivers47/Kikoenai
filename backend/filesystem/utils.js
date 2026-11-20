@@ -418,7 +418,8 @@ const saveCoverImageToDisk = (stream, id, type) => new Promise((resolve, reject)
   try {
     stream.pipe(
       fs.createWriteStream(path.join(config.coverFolderDir, coverFileName(id, type)))
-        .on('close', () => resolve()),
+        .on('close', () => resolve())
+        .on('error', reject),
     );
   } catch (err) {
     reject(err);
