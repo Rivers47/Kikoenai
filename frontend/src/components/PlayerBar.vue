@@ -7,6 +7,7 @@
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
     @pointercancel="onPointerUp"
+    @click="onBarClick"
     @wheel.prevent
   >
     <div
@@ -301,6 +302,8 @@ export default {
     return {
       showSleepTimer: false,
       seeking: false,
+      // Set by a tap on the bar, consumed by the click that ends it.
+      tapPending: false,
       railHovered: false,
       previewTime: 0,
       drag: null,
@@ -496,6 +499,7 @@ export default {
     },
 
     onPointerDown (event) {
+      this.tapPending = false
       // The pill is its own action: a press there must not become the bar's
       // seek or "open the panel" tap.
       if (event.target.closest('.q-btn, .seek-undo')) return
@@ -547,12 +551,20 @@ export default {
       if (this.drag) {
         if (this.drag.mode === 'seek' && this.seeking) this.seekTo(this.previewTime)
         // Only on phones: on a wide screen the panel has nothing to add, so a
-        // tap on the bar is not a "open the big player" gesture.
-        else if (!this.drag.mode && this.compact) this.openPanel()
+        // tap on the bar is not a "open the big player" gesture. A tap is only
+        // recognised here -- it is acted on in `onBarClick`.
+        else if (!this.drag.mode && this.compact) this.tapPending = true
       }
       this.drag = null
       this.seeking = false
       this.previewTime = 0
+    },
+
+    onBarClick (event) {
+      if (!this.tapPending) return
+      this.tapPending = false
+      if (event.target.closest('.q-btn, .seek-undo')) return
+      this.openPanel()
     },
   },
 }
