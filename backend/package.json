@@ -28,7 +28,7 @@
       "config/*",
       "sqlite/*"
     ],
-    "delay": "2500"
+    "delay": 2500
   },
   "bin": "app.js",
   "pkg": {
@@ -72,7 +72,7 @@
     "socket.io": "^4.8.4",
     "sqlite3": "^6.0.1",
     "string-random": "^1.0.0",
-    "undici": "^7.29.0",
+    "undici": "^8.13.1",
     "tunnel-agent": "^0.6.0",
     "url-join": "^4.0.1",
     "uuid": "^14.0.3",
