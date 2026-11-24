@@ -138,7 +138,7 @@ SQLite3 via Knex.js with the following tables:
 | `r_author_work` | Author-work many-to-many | `author_id`, `work_id` |
 | `r_series_work` | Series-work many-to-many | `series_id`, `work_id` |
 | `t_user` | Users | `name` (PK), `password`, `group` |
-| `t_review` | Reviews & progress | `user_name`, `work_id`, `rating`, `review_text`, `progress` |
+| `t_review` | Reviews & progress | `user_name`, `work_id`, `rating`, `review_text`, `progress` (`marked`\|`listened`\|`postponed`\|NULL — `listening`/`replay` were merged away by `20260915000002`) |
 | `t_play_history` | Playback state | `user_name`, `work_id`, `state` (JSON) |
 | `t_work_file` | A work's file listing, so a request never walks the filesystem (§2.9-0) | `work_id`, `rel_path` (PK), `duration`, `mtime`, `track_title` |
 | `t_dlsite_review` | Scraped DLsite user reviews | `id` (DLsite `member_review_id`), `work_id`, `rate`, `review_title`, `review_text`, `genres` (JSON) |
@@ -680,8 +680,8 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/works` | GET | List works. Query `page`, `order`, `sort`, `nsfw`, `seed` → `{works, pagination}` |
-| `/api/search` | GET | Filter search — `filter` is the advanced filter syntax (§2.3b), e.g. `va:"name$" -tag:NTR`. Same response shape as `/api/works` |
+| `/api/works` | GET | List works. Query `page`, `order` (`release`/`rating`/`created_at`/`played`/`random`/`betterRandom`), `sort`, `seed`, plus the library filter, three **independent** comma lists → `{works, pagination}`: `rating` (`sfw`,`nsfw`, the work's age rating), `progress` (`marked`,`listened`,`postponed`,`unmarked`) and `review` (`has`,`none`, whether the user starred the work or left a review text on it). Omitting a list means no restriction, ticking every value of one means the same, and a value outside the set is a 400. `unmarked` is not a `t_review.progress` value: it matches a work with no progress at all (no row, or a rating-only row). **`review` deliberately excludes `progress`** — status is its own list, so `progress=marked&review=none` is a real question (a work 想听'd but unstarred) rather than a contradiction. It is predicated on the fields, so an all-NULL `t_review` row counts as `none`. Legacy `nsfw=0\|1\|2` still works |
+| `/api/search` | GET | Filter search — `filter` is the advanced filter syntax (§2.3b), e.g. `va:"name$" -tag:NTR`. Takes the same `order`/`sort`/`rating`/`progress`/`review` and returns the same shape as `/api/works` |
 | `/api/work/:id` | GET | Work metadata + playback state |
 | `/api/work/:id` | PUT | Manually edit metadata — title, nsfw, release, circle, tags[], vas[], illustrators[], scriptWriters[], series (admin only) |
 | `/api/work/:id/file-metadata` | PUT | Set editable fields on the work's `t_work_file` rows. Body `{files: {<relPath>: {trackTitle}}}`; an empty title clears to NULL. Only the named rows and whitelisted fields are touched (admin only) |
@@ -700,12 +700,12 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/history` | GET | Works the user has playback history for. Query `excludeFinished` (`all`\|`listened`, default `listened`): when `listened`, excludes rows where `t_review.progress='listened'`. Items carry a nullable `progress` |
+| `/api/history` | GET | Works the user has playback history for. Query `excludeFinished` (`all`\|`listened`, default `listened`): when `listened`, excludes rows where `t_review.progress='listened'`. Query `rating` (`sfw`\|`nsfw`) narrows by age rating. Items carry a nullable `progress` |
 | `/api/history/:id` | PUT | Save playback state. Body `{state}` (the serialized queue + index; carries no position) |
 | `/api/history/:id` | DELETE | Delete this work's playback history |
 | `/api/track-progress/:id/*path` | PUT | Report per-track position. Body `{seconds, completed, observedAt?}` — `observedAt` is epoch ms for when the client *measured* the position, and the write is applied only if it is at least as new as the stored one (see §2.9c). Omitting it falls back to server-now, i.e. the old unconditional overwrite. The track is addressed exactly as the media routes address it, so the client posts to `/api/track-progress/${encodeTrackId(trackId)}` and carries no second identifier. The path is resolved against the work's track list, so a path that is not a file of this work is a 404 rather than a row keyed by junk |
-| `/api/review` | GET | Works the user has reviewed/rated/progress-marked. Query `filter` (one of the five progress values) |
-| `/api/review/:id` | PUT | Create/update review, rating, or progress. Query `starOnly`, `progressOnly`, `autoMark`. With `progressOnly=true&autoMark=true` it only writes `progress='listened'` when existing progress is null/empty/marked/listening; no-op on listened/replay/postponed |
+| `/api/review` | GET | Works the user has reviewed/rated/progress-marked — every work with a `t_review` row. Note this is **not** `/api/works?review=has`: that one asks only about `rating`/`review_text`, so it excludes status-only works and the all-NULL rows. Query `filter` (one of the three progress values) |
+| `/api/review/:id` | PUT | Create/update review, rating, or progress. Query `starOnly`, `progressOnly`, `autoMark`. With `progressOnly=true&autoMark=true` it only writes `progress='listened'` when existing progress is null/empty/marked; no-op on listened/postponed |
 | `/api/review/:id` | DELETE | Delete the whole review row (rating + review_text + progress) |
 | `/api/review/:id/progress` | DELETE | Clear only `progress` (set NULL), preserving rating/review_text. If the row has no rating **and** no review_text (e.g. an auto-marked rating-null row), the whole row is deleted to avoid an all-NULL empty row |
 
@@ -746,7 +746,7 @@ Every route mounted under `/api`, as of the 1.0 freeze. **This table is the cont
 > **Do not expect these rows to age out.** A stored queue is only rewritten in
 > the new form when it is rebuilt from the tree, which happens in `WorkTree.vue`
 > via `toQueueItem` — i.e. when the user plays from the work page. Resuming from
-> Recent Works or Favourites hands the *stored* queue to `SET_QUEUE` and
+> Recent Works or History hands the *stored* queue to `SET_QUEUE` and
 > `PUT /api/history/:id` persists it back unchanged, so a work that is only ever
 > resumed keeps its legacy handles forever. Retiring this branch therefore needs
 > a deliberate one-off normalizer that resolves each legacy handle against the

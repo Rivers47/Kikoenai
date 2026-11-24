@@ -121,7 +121,7 @@ async function runBackfill({ dryRun = false, log = (m) => console.log(m), dbApi 
       .where('user_name', '=', username)
       .andWhere('work_id', '=', workId)
       .first();
-    if (existingReview && ['listened', 'replay', 'postponed'].includes(existingReview.progress)) {
+    if (existingReview && ['listened', 'postponed'].includes(existingReview.progress)) {
       summary.skippedTerminal++;
       // Still fall through to Phase 2 below
     }
@@ -135,7 +135,7 @@ async function runBackfill({ dryRun = false, log = (m) => console.log(m), dbApi 
       const hasDuration = !!(lastTrack && typeof lastTrack.duration === 'number' && lastTrack.duration > 0);
       if (completedFlag || hasDuration) {
         if (completedFlag || (seconds !== null && seconds >= 0.95 * lastTrack.duration)) {
-          if (!existingReview || !['listened', 'replay', 'postponed'].includes(existingReview.progress)) {
+          if (!existingReview || !['listened', 'postponed'].includes(existingReview.progress)) {
             if (dryRun) {
               const position = seconds === null ? '?' : Math.round(seconds);
               const total = hasDuration ? Math.round(lastTrack.duration) : '?';

@@ -2,7 +2,7 @@
   <div>
     <div class="row justify-between q-mt-lg q-ml-md">
       <div class="col text-h5 text-weight-regular">{{ t('recentworks.recentPlayed') }}</div>
-      <q-btn flat icon="navigate_next" @click="$router.push('/favourites/history')"></q-btn>
+      <q-btn flat icon="navigate_next" @click="$router.push('/history')"></q-btn>
     </div>
     <q-virtual-scroll
       class="q-px-sm"

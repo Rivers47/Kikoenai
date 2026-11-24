@@ -1,6 +1,5 @@
 export default {
   sortBy: 'Sort by',
-  nsfw: 'Age rating',
   desc: 'Descending',
   asc: 'Ascending',
   noMoreWorks: 'No more works',
@@ -10,7 +9,14 @@ export default {
   rating: 'My rating',
   createdAt: 'Added',
   random: 'Random',
-  nsfwAll: 'All ratings',
   nsfwAllAges: 'All ages',
   nsfwAdult: 'Adult',
+  played: 'Play history',
+  filter: 'Filter',
+  statusMarked: 'Want to listen',
+  statusListened: 'Listened',
+  statusPostponed: 'Postponed',
+  statusNoProgress: 'No progress',
+  starOrComment: 'reviewed',
+  noStarOrComment: 'no review',
 }

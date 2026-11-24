@@ -5,6 +5,7 @@ const { config } = require('../config');
 const db = require('../database/db');
 const normalize = require('./utils/normalize');
 const { isValidRequest, workIdParam } = require('./utils/validate');
+const { RATING_VALUES, INVALID_FILTER_MESSAGE, parseFilterList } = require('./utils/filters');
 
 const PAGE_SIZE = config.pageSize || 12;
 
@@ -22,6 +23,11 @@ router.get('/',
     const offset = (currentPage - 1) * PAGE_SIZE;
     const username = config.auth ? req.user.name : 'admin';
     const excludeFinished = req.query.excludeFinished || 'listened';
+    const rating = parseFilterList(req.query.rating, RATING_VALUES);
+
+    if (rating === null) {
+      return res.status(400).send({ error: INVALID_FILTER_MESSAGE });
+    }
     
     try {
       const {works, totalCount} = await db.getPlayHistory({
@@ -30,6 +36,7 @@ router.get('/',
         offset: offset,
         sortOption: sort,
         excludeFinished: excludeFinished,
+        rating: rating,
       });
       // console.log(`works = ${works}, totalCount = ${totalCount[0]['count']}`)
 

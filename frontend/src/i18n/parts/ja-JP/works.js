@@ -1,6 +1,5 @@
 export default {
   sortBy: '並び替え',
-  nsfw: '年齢制限',
   desc: '降順',
   asc: '昇順',
   noMoreWorks: 'これ以上作品はありません',
@@ -10,7 +9,14 @@ export default {
   rating: '自分の評価',
   createdAt: '追加日',
   random: 'ランダム',
-  nsfwAll: 'すべての年齢制限',
   nsfwAllAges: '全年齢',
   nsfwAdult: '18禁',
+  played: '再生履歴',
+  filter: '絞り込み',
+  statusMarked: '聴きたい',
+  statusListened: '聴いた',
+  statusPostponed: '後で',
+  statusNoProgress: '進捗なし',
+  starOrComment: 'レビューあり',
+  noStarOrComment: 'レビューなし',
 }

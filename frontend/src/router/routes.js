@@ -5,7 +5,7 @@ import Works from 'pages/Works'
 import Work from 'pages/Work'
 import List from 'pages/List'
 import Login from 'pages/Login'
-import Favourites from 'pages/Favourites'
+import History from 'pages/History'
 import TextViewer from 'pages/TextViewer'
 import Downloads from 'pages/Downloads'
 import Settings from 'pages/Settings'
@@ -14,13 +14,6 @@ import Folders from 'pages/Dashboard/Folders'
 import Scanner from 'pages/Dashboard/Scanner'
 import Advanced from 'pages/Dashboard/Advanced'
 import UserManage from 'pages/Dashboard/UserManage'
-
-function prefixRoutes(prefix, routes) {
-  return routes.map((route) => {
-    route.path = prefix + '' + route.path;
-    return route;
-  });
-}
 
 const routes = [
   {
@@ -96,55 +89,17 @@ const routes = [
         path: 'settings',
         component: Settings
       },
-      ...prefixRoutes('favourites', [
-        {
-          path: '',
-          props: { route: 'history'},
-          component: Favourites,
-        },
-        {
-          path: '/review',
-          props: { route: 'review'},
-          component: Favourites,
-        },
-        ...prefixRoutes('/progress', [
-          {
-            path: '',
-            props: { route: 'progress', progress: 'marked'},
-            component: Favourites,
-          },
-          {
-            path: '/marked',
-            props: { route: 'progress', progress: 'marked'},
-            component: Favourites,
-          },
-          {
-            path: '/listening',
-            props: { route: 'progress', progress: 'listening'},
-            component: Favourites,
-          },
-          {
-            path: '/listened',
-            props: { route: 'progress', progress: 'listened'},
-            component: Favourites,
-          },
-          {
-            path: '/replay',
-            props: { route: 'progress', progress: 'replay'},
-            component: Favourites,
-          },
-          {
-            path: '/postponed',
-            props: { route: 'progress', progress: 'postponed'},
-            component: Favourites,
-          },
-        ]),
-        {
-          path: '/history',
-          props: { route: 'history'},
-          component: Favourites,
-        },
-      ]),
+      {
+        path: 'history',
+        name: 'history',
+        component: History
+      },
+      // The favourites page is now the history list; the review and progress
+      // tabs are covered by the library page's filter, so old links land here.
+      {
+        path: 'favourites/:pathMatch(.*)*',
+        redirect: '/history'
+      },
     ],
     meta: {
       auth: true

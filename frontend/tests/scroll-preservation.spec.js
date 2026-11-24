@@ -87,7 +87,7 @@ test.describe('Works page state management', () => {
     expect(scrollY).toBeLessThan(50);
   });
 
-  test('TC4: back from favourites to / preserves scroll', async ({ page }) => {
+  test('TC4: back from history to / preserves scroll', async ({ page }) => {
     await page.goto(`${BASE}/`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('a[href^="/work/"]', { timeout: 15000 });
     await page.waitForTimeout(2000);
@@ -98,9 +98,9 @@ test.describe('Works page state management', () => {
     const scrollBefore = await page.evaluate(() => window.scrollY);
     console.log(`TC4: ScrollY before: ${scrollBefore}`);
 
-    // SPA-internal navigation: click favourites link in sidebar
-    const favLink = page.locator('a[href="/favourites"]');
-    await favLink.first().click();
+    // SPA-internal navigation: click the history link in the sidebar
+    const historyLink = page.locator('a[href="/history"]');
+    await historyLink.first().click();
     await page.waitForTimeout(2000);
 
     // Back navigation (popstate)

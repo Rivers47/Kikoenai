@@ -143,7 +143,7 @@
     <q-page-container class="padding-bottom-play-bar">
       <!-- <q-page padding> -->
       <router-view v-slot="{ Component }">
-        <keep-alive :include="['Works', 'Favourites']">
+        <keep-alive :include="['Works', 'History']">
           <component :is="Component" />
         </keep-alive>
       </router-view>
@@ -208,7 +208,7 @@ export default {
       contrastMode: getContrastMode(),
       links: [
         { titleKey: 'mediaLibrary', icon: 'widgets', path: '/' },
-        { titleKey: 'favourites', icon: 'favorite', path: '/favourites' },
+        { titleKey: 'history', icon: 'history', path: '/history' },
         { titleKey: 'downloads', icon: 'download_done', path: '/downloads' },
         { titleKey: 'circles', icon: 'group', path: '/circles' },
         { titleKey: 'tags', icon: 'label', path: '/tags' },
@@ -283,7 +283,7 @@ export default {
 
     isNotAtHomePage () {
       const path = this.$route.path
-      return path && path !=='/' && path !=='/works' && path !== '/favourites';
+      return path && path !=='/' && path !=='/works' && path !== '/history';
     },
 
     ...mapState('AudioPlayer', [
