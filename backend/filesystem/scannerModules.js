@@ -2,16 +2,16 @@ const fs = require('fs');
 const path = require('path');
 const LimitPromise = require('limit-promise'); // 限制并发数量
 
-const axios = require('../scraper/axios.js'); // 数据请求
-const { scrapeWorkMetadataFromDLsite, scrapeWorkMetadataFromDLsiteJson, scrapeDynamicWorkMetadataFromDLsite, scrapeCoverIdForTranslatedWorkFromDLsite } = require('../scraper/dlsite');
+const { scrapeWorkMetadataFromDLsite, scrapeWorkMetadataFromDLsiteJson, scrapeDynamicWorkMetadataFromDLsite } = require('../scraper/dlsite');
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
-const { isFanzaId, isBooksId, fanzaCid, workno } = require('../work-id');
 const { scrapeWorkMetadataFromAsmrOne } = require('../scraper/asmrOne');
+const { isFanzaId, isBooksId, workno } = require('../work-id');
 const db = require('../database/db');
 const { createSchema } = require('../database/schema');
-const { getFolderList, deleteCoverImageFromDisk, saveCoverImageToDisk, coverFileName, formatID,
-  deleteWorkImagesFromDisk } = require('./utils');
+const { getFolderList, deleteCoverImageFromDisk, formatID,
+  COVER_TYPES, missingCoverTypes, deleteWorkImagesFromDisk } = require('./utils');
 const workExtras = require('./workExtras');
+const workCovers = require('./workCovers');
 const scanLog = require('./scanLog');
 const { rescanWorkFiles } = require('./workFiles');
 const { md5 } = require('../auth/utils');
@@ -296,198 +296,6 @@ async function getMetadata(id, rootFolderName, dir) {
 }
 
 
-/**
- * 从 DLsite 下载封面图片，处理翻译作品本身没有封面的情况，并保存到 Images 文件夹，
- * 返回一个 Promise 对象，处理结果: 'added' 'failed' 'skipped' return skipped means work do not have cover in dlsite by default
- *
- * Each type is tried against DLsite first — the real URL parsed from the work
- * page, then the guessed path — and only falls back to the ASMR.one cover
- * proxy when DLsite yields nothing. The guessed path 404s for translated and
- * newer works, whose covers live under the original work id.
- * @param {number} id work id
- * @param {Array} types img types: ['main', 'sam', 'sam@2x', 'sam@3x', '240x240', '360x360']
- * @param {Object} [asmrOneCoverUrls] cover urls already known from an ASMR.one metadata scrape
- */
-async function getCoverImageForTranslated(id, types, asmrOneCoverUrls) {
-  const rjcode = formatID(id); // zero-pad to 6/8 digits
-  let coverFromId = rjcode; // 默认就使用原始的作品id
-  let isNoImgMain = false;
-  let realCoverUrls = {};
-
-  try {
-    // 抓取一次网页，检查当前作品封面到底使用的哪一个id
-    // 因为有些翻译作品id自身没有封面文件，而是使用原版日文作品id对应的封面
-    const tryScrapResult = await scrapeCoverIdForTranslatedWorkFromDLsite(rjcode);
-    coverFromId = tryScrapResult.coverFromId;
-    isNoImgMain = tryScrapResult.isNoImgMain;
-    // Modern translated works carry the real cover URLs on a
-    // <translation-product-slider> (see dlsite.js); prefer them over the guess.
-    realCoverUrls = tryScrapResult.coverUrls || {};
-    if (coverFromId != rjcode) {
-      LOG.task.info(rjcode, `当前作品${workno(rjcode)}似乎不包含封面资源，例如一些翻译作品。从 DLsite 对应的原始作品${workno(coverFromId)}下载封面...`);
-    }
-  } catch (err) {
-    LOG.task.error(rjcode, `在获取真实的封面id（适配那些翻译作品的封面问题） 过程中出错: ${err.message}`);
-  }
-
-  LOG.task.info(rjcode, `从 DLsite 下载封面...`);
-  let failedTypes = await downloadCovers(id, types, (type) => [
-    realCoverUrls[type],
-    guessDLsiteCoverUrl(coverFromId, type),
-  ]);
-
-  if (failedTypes.length) {
-    const urls = await getAsmrOneCoverUrls(id, asmrOneCoverUrls);
-    if (urls) {
-      LOG.task.info(rjcode, `DLsite 封面下载失败，尝试从 ASMR.one 下载...`);
-      failedTypes = await downloadCovers(id, failedTypes, (type) => [urls[type]]);
-    }
-  }
-
-  if (!failedTypes.length) {
-    return 'added';
-  }
-
-  if (isNoImgMain) {
-    LOG.main.warn(`${workno(rjcode)} 作品本身在DlSite上没有封面图片，无法抓取封面`);
-    return 'skipped';
-  }
-
-  return 'failed';
-}
-
-/**
- * Cover URLs from ASMR.one's cover proxy, reusing the ones a metadata scrape
- * already returned when available.
- * @param {number} id work id
- * @param {Object} [known] map of type -> url from a previous ASMR.one scrape
- * @returns {Promise<Object|null>} map of type -> url, or null when unavailable
- */
-async function getAsmrOneCoverUrls(id, known) {
-  if (known && (known.main || known.sam || known['240x240'])) {
-    return known;
-  }
-
-  try {
-    const meta = await scrapeWorkMetadataFromAsmrOne(id);
-    return {
-      main: meta.mainCoverUrl,
-      sam: meta.samCoverUrl,
-      '240x240': meta.thumbnailCoverUrl,
-    };
-  } catch (err) {
-    LOG.task.warn(formatID(id), `尝试从 ASMR.one 获取封面 URL 失败: ${err.message}`);
-    return null;
-  }
-}
-
-/**
- * DLsite stores covers in a folder named after the work id rounded up to the
- * next thousand — a guess, since only the work page holds the real URL.
- * @param {number} cover_from_id download cover from work id, since some translated work are using non-translated work's cover resource
- * @param {String} type img type
- * @returns {String} guessed cover URL
- */
-function guessDLsiteCoverUrl(cover_from_id, type) {
-  // The books floor keeps its assets under work/books/BJ..., the doujin floor
-  // under work/doujin/RJ...; the bucket rule is the same on both.
-  const books = isBooksId(cover_from_id);
-  const floor = books ? 'books' : 'doujin';
-  const codeFor = num => workno(books ? `BJ${formatID(num)}` : formatID(num));
-
-  const n = parseInt(String(cover_from_id).replace(/\D/g, ''), 10);
-  const id2 = (n % 1000 === 0) ? n : Math.floor(n / 1000) * 1000 + 1000;
-
-  return (type === '240x240' || type === '360x360')
-    ? `https://img.dlsite.jp/resize/images2/work/${floor}/${codeFor(id2)}/${codeFor(n)}_img_main_${type}.jpg`
-    : `https://img.dlsite.jp/modpub/images2/work/${floor}/${codeFor(id2)}/${codeFor(n)}_img_${type}.jpg`;
-}
-
-/**
- * Download one cover image per type, saving it to the Images 文件夹. Each
- * type falls through its candidate URLs until one downloads, so a source that
- * only knows some of the types does not defeat the others.
- * @param {number} cover_for_id download cover for this work id
- * @param {Array} types img types: ['main', 'sam', 'sam@2x', 'sam@3x', '240x240', '360x360']
- * @param {Function} candidatesFor type => candidate URLs, tried in order (falsy entries skipped)
- * @returns {Promise<Array>} the types that could not be downloaded
- */
-async function downloadCovers(cover_for_id, types, candidatesFor) {
-  const cover_for_rjcode = formatID(cover_for_id);
-  const results = await Promise.all(types.map(async (type) => {
-    for (const url of candidatesFor(type).filter(Boolean)) {
-      try {
-        const imageRes = await axios.retryGet(url, { responseType: "stream", retry: {} });
-        await saveCoverImageToDisk(imageRes.data, cover_for_rjcode, type);
-        LOG.task.info(cover_for_rjcode, `封面 ${coverFileName(cover_for_rjcode, type)} 下载成功.`);
-        return null;
-      } catch (err) {
-        LOG.task.warn(cover_for_rjcode, `在下载封面 ${coverFileName(cover_for_rjcode, type)} 过程中出错: ${err.message} (URL: ${url})`);
-      }
-    }
-    return type;
-  }));
-
-  return results.filter(Boolean);
-}
-
-/**
- * Download cover images from Fanza (DMM) for a Fanza work.
- * @param {String} id Work id (e.g. 'd215444')
- * @param {Array} types img types: ['main', 'sam', '240x240']
- * @param {Object} [coverUrls] URLs scraped from the work page ({ main, sam }).
- *        The asset path segment varies by content type (digital/doujin,
- *        digital/cg_game, ...), so prefer these over the guessed fallback.
- * @returns {Promise<String>} 'added' or 'failed'
- */
-async function getFanzaCoverImage(id, types, coverUrls) {
-  const cid = fanzaCid(id);
-  if (!coverUrls) {
-    try {
-      const metadata = await scrapeWorkMetadataFromFanza(id);
-      coverUrls = metadata.coverUrls;
-    } catch (err) {
-      LOG.task.warn(id, `重新抓取 Fanza 页面以获取封面 URL 失败: ${err.message}，将尝试推测的封面 URL`);
-    }
-  }
-  // Fallback only: wrong for works whose assets are not under digital/doujin.
-  // Fanza doujin only serves pl/pr cover variants (no ps), and pl == pr.
-  const mainUrl = (coverUrls && coverUrls.main) || `https://doujin-assets.dmm.co.jp/digital/doujin/${cid}/${cid}pl.jpg`;
-  const samUrl = (coverUrls && coverUrls.sam) || `https://doujin-assets.dmm.co.jp/digital/doujin/${cid}/${cid}pl.jpg`;
-  LOG.task.info(id, `从 Fanza 下载封面...`);
-  const results = await Promise.all(types.map(async (type) => {
-    let url;
-    if (type === 'main') {
-      url = mainUrl;
-    } else if (type === 'sam' || type === '240x240') {
-      url = samUrl;
-    } else {
-      return 'failed';
-    }
-
-    try {
-      const imageRes = await axios.retryGet(url, { responseType: "stream", retry: {} });
-      // DMM serves a 302 to a now_printing.jpg placeholder for nonexistent
-      // cover variants (axios follows it silently). Never save that as a cover.
-      const finalUrl = imageRes.request && imageRes.request.res && imageRes.request.res.responseUrl;
-      if (finalUrl && finalUrl.includes('now_printing')) {
-        LOG.task.warn(id, `封面 ${coverFileName(id, type)} 不存在（FANZA 返回了占位图，URL: ${url}）`);
-        return 'failed';
-      }
-      await saveCoverImageToDisk(imageRes.data, id, type);
-      LOG.task.info(id, `封面 ${coverFileName(id, type)} 下载成功.`);
-      return 'added';
-    } catch(err) {
-      LOG.task.warn(id, `在下载封面 ${coverFileName(id, type)} 过程中出错: ${err.message} (URL: ${url})`);
-      return 'failed';
-    }
-  }));
-
-  return results.includes("failed") 
-      ? "failed" 
-      : "added";
-}
-
 // Route workExtras' output through the scanner's task log so image and review
 // progress shows up in the Scanner page like every other per-work message.
 const extrasLogger = {
@@ -496,6 +304,10 @@ const extrasLogger = {
 };
 
 const saveWorkImages = (id, metadata) => workExtras.saveWorkImages(id, metadata, extrasLogger);
+const getCoverImageForTranslated = (id, types, coverUrls) =>
+  workCovers.getCoverImageForTranslated(id, types, coverUrls, extrasLogger);
+const getFanzaCoverImage = (id, types, coverUrls) =>
+  workCovers.getFanzaCoverImage(id, types, coverUrls, extrasLogger);
 const saveWorkReviews = id => workExtras.saveWorkReviews(id, extrasLogger);
 
 /**
@@ -512,7 +324,7 @@ async function processFolder(folder) {
 
   const workId = folder.id;
   const isFanza = isFanzaId(workId);
-  const coverTypes = ['main', 'sam', '240x240'];
+  const coverTypes = COVER_TYPES;
   const count = res['count(*)'];
 
   let coverResult = "unknown";
@@ -520,14 +332,8 @@ async function processFolder(folder) {
   if (count) { // 查询数据库，检查是否已经写入该音声的元数据
     // 已经成功写入元数据
     // 检查音声封面图片是否缺失
-    const lostCoverTypes = [];
-    coverTypes.forEach(type => {
-      const coverPath = path.join(config.coverFolderDir, coverFileName(workId, type));
-      if (!fs.existsSync(coverPath)) {
-        lostCoverTypes.push(type);
-      }
-    });
-    
+    const lostCoverTypes = missingCoverTypes(workId);
+
     if (lostCoverTypes.length) {
       LOG.task.add(workId);
       LOG.task.info(workId, '封面图片缺失，重新下载封面图片...');

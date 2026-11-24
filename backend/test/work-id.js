@@ -9,7 +9,8 @@ const { existsSync, unlinkSync } = require('fs');
 const { join } = require('path');
 
 const { isFanzaId, isBooksId, canonicalizeWorkId, fanzaCid, workno } = require('../work-id');
-const { coverFileName, workImageFileName, getFolderList } = require('../filesystem/utils');
+const { coverFileName, workImageFileName, getFolderList, missingCoverTypes } = require('../filesystem/utils');
+const { config } = require('../config');
 const migration = require('../database/migrations/20260828000000_canonical_fanza_id');
 
 describe('work-id helpers', function () {
@@ -58,6 +59,43 @@ describe('work-id helpers', function () {
     expect(workno('01134567')).to.equal('RJ01134567');
     expect(workno('BJ635795')).to.equal('BJ635795');
     expect(workno('d215444')).to.equal('d_215444');
+  });
+});
+
+describe('missingCoverTypes()', function () {
+  const { mkdtempSync, writeFileSync, rmSync } = require('fs');
+  let dir, saved;
+
+  before('Point the covers folder at a temp dir', function () {
+    saved = config.coverFolderDir;
+    dir = mkdtempSync(join(__dirname, 'covers-'));
+    config.coverFolderDir = dir;
+  });
+
+  after(function () {
+    config.coverFolderDir = saved;
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('lists every type for a work with no cover at all', function () {
+    expect(missingCoverTypes('01233895')).to.deep.equal(['main', 'sam', '240x240']);
+  });
+
+  it('lists only what is absent, by the on-disk name', function () {
+    writeFileSync(join(dir, 'RJ01233895_img_main.jpg'), 'x');
+    writeFileSync(join(dir, 'RJ01233895_img_240x240.jpg'), 'x');
+    expect(missingCoverTypes('01233895')).to.deep.equal(['sam']);
+  });
+
+  it('is empty once all three are there — which is what stops a scan', function () {
+    writeFileSync(join(dir, 'RJ01233895_img_sam.jpg'), 'x');
+    expect(missingCoverTypes('01233895')).to.deep.equal([]);
+  });
+
+  it('keeps Fanza\'s own file spelling', function () {
+    expect(missingCoverTypes('d215444')).to.deep.equal(['main', 'sam', '240x240']);
+    writeFileSync(join(dir, 'd_215444_img_main.jpg'), 'x');
+    expect(missingCoverTypes('d215444')).to.deep.equal(['sam', '240x240']);
   });
 });
 

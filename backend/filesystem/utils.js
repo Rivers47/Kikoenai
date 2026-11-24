@@ -388,11 +388,28 @@ function coverFileName(id, type) {
 }
 
 /**
+ * The cover types every work is expected to have on disk. 360x360 is never
+ * downloaded, so it is not listed here.
+ */
+const COVER_TYPES = ['main', 'sam', '240x240'];
+
+/**
+ * Cover types whose file is absent from the covers folder. Nothing else records
+ * whether a work's cover download finished — there is no column for it.
+ * @param {String} id Work id.
+ * @returns {String[]} e.g. ['sam', '240x240']; empty when the cover is complete.
+ */
+function missingCoverTypes(id) {
+  return COVER_TYPES.filter(type =>
+    !fs.existsSync(path.join(config.coverFolderDir, coverFileName(id, type))));
+}
+
+/**
  * Deletes a work's cover image from disk.
  * @param {String} id Work id (e.g. '123456', '01134567', 'd215444').
  */
 const deleteCoverImageFromDisk = id => new Promise((resolve, reject) => {
-  const types = ['main', 'sam', '240x240', '360x360'];
+  const types = [...COVER_TYPES, '360x360'];
   types.forEach(type => {
     try {
       fs.unlinkSync(path.join(config.coverFolderDir, coverFileName(id, type)));
@@ -559,6 +576,8 @@ module.exports = {
   deleteWorkImagesFromDisk,
   formatID,
   coverFileName,
+  COVER_TYPES,
+  missingCoverTypes,
   probeAudioDurations,
   transcodeFileName,
   transcodeToOpusLimited,

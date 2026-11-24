@@ -14,6 +14,7 @@ const { scrapeWorkMetadataFromDLsite } = require('../scraper/dlsite');
 const { scrapeWorkMetadataFromFanza } = require('../scraper/fanza');
 const { isFanzaId } = require('../work-id');
 const { saveWorkImages, saveWorkReviews, skipWorkExtras, REFRESH_IMAGE_CONCURRENCY } = require('../filesystem/workExtras');
+const { repairMissingCovers } = require('../filesystem/workCovers');
 
 // HTTP cache, not for crawling the source sites.
 const COVER_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
@@ -448,6 +449,18 @@ router.post('/refresh/:id',
       metadata.id = work_id;
       await db.updateWorkMetadata(metadata, { refreshAll: true });
 
+      // Covers are not "extras": the scanner downloads them regardless of
+      // skipWorkExtras, and a work whose cover download never finished has no
+      // other single-work repair path. Metadata is already committed here, so
+      // a cover failure must not fail the refresh.
+      let covers = { missing: [], downloaded: [], failed: [] };
+      try {
+        covers = await repairMissingCovers(work_id, metadata.coverUrls);
+      } catch (err) {
+        console.error(`Repairing covers for ${work_id} failed:`, err);
+        covers = { missing: [], downloaded: [], failed: ['main', 'sam', '240x240'], error: err.message };
+      }
+
       // Gated by config.skipWorkExtras like the scanner. `updater.js --images`
       // / `--reviews` remain the way to fetch them for one work regardless.
       const [images, reviews] = skipWorkExtras()
@@ -462,6 +475,7 @@ router.post('/refresh/:id',
         metadata,
         images,
         reviews,
+        covers,
       });
     } catch (err) {
       console.error(err);

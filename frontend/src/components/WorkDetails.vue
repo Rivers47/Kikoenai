@@ -562,8 +562,13 @@ export default {
     async refreshMetadata() {
       this.refreshMetadataLoading = true;
       try {
-        await this.$axios.post(`/api/refresh/${this.metadata.id}`);
-        this.showSuccNotif(this.t('workdetails.refreshMetadataSuccess'));
+        const { data } = await this.$axios.post(`/api/refresh/${this.metadata.id}`);
+        const failedCovers = (data && data.covers && data.covers.failed) || [];
+        if (failedCovers.length) {
+          this.showErrNotif(this.t('workdetails.coverRepairFailed', { types: failedCovers.join(', ') }));
+        } else {
+          this.showSuccNotif(this.t('workdetails.refreshMetadataSuccess'));
+        }
         this.$emit('reset');
       } catch(err) {
         console.error(err);

@@ -736,7 +736,7 @@ configured value, which is never sent to the browser.
 | `/api/version` | GET | `MainLayout.vue` | Version + update info |
 | `/api/config/admin` | GET/PUT | `Folders.vue`, `Advanced.vue` | Admin config read/write |
 | `/api/credentials/users` | GET/POST/PUT/DELETE | `UserManage.vue` | List / create / update / delete users (admin). Was `/user` for the three write verbs |
-| `/api/refresh/:id` | POST | `WorkDetails.vue` | Re-fetch metadata for one work |
+| `/api/refresh/:id` | POST | `WorkDetails.vue` | Re-fetch metadata for one work, and repair any missing cover types. The response carries `covers: {missing, downloaded, failed}`; `WorkDetails.refreshMetadata` shows a warning naming the types still missing rather than the usual success toast |
 | `/api/scan/:id` | POST | `WorkDetails.vue` | Re-walk one work and rewrite its file listing. Returns `{files}`, the re-listed track count — `WorkDetails.scanWorkFile` reloads the page when it is a number. Was `{memo}`, which no longer exists |
 | `/api/tracks/:id` | GET | `EditTrackTitles.vue`, `TranscribeTracks.vue` | Also read here, to list a work's audio files for the title editor and the transcription dialog (`trackProgress` ignored) |
 | `/api/work/:id/file-metadata` | PUT | `EditTrackTitles.vue` | Set editable fields on a work's `t_work_file` rows (admin only). Body `{files: {<relPath>: {trackTitle}}}` — only the rows being changed; an empty title clears back to the filename. Returns `{message, updated}`, the row count actually written |
