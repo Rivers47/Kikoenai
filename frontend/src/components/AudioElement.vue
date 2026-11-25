@@ -47,10 +47,16 @@ import { apiUrl, encodeTrackId } from 'src/base-path'
 // Every media session action this component registers; teardown walks this
 // list to unregister them one by one.
 const MEDIA_SESSION_ACTIONS = [
-  'play', 'pause', 'nexttrack', 'previoustrack', 'seekbackward', 'seekforward'
+  'play', 'pause', 'nexttrack', 'previoustrack', 'seekbackward', 'seekforward',
+  'seekto'
 ]
 
 const FINISHED_EPSILON_SECONDS = 1
+
+// How often the lock-screen timeline is re-published while playing. The OS
+// extrapolates the playhead from the last position state by itself, so this is
+// only a drift/stall correction, not a per-frame sync.
+const POSITION_STATE_REFRESH_MS = 1000
 
 export default {
   setup () {
@@ -185,14 +191,16 @@ export default {
     },
     rewindSeekMode(rewind) {
       if (rewind && this.plyr) {
-        this.plyr.rewind(this._osRewindOffset || this.rewindSeekTime);
+        // Not plyr.rewind(): it goes through the same setter Plyr's
+        // `currentTime` is, which clamps against the element's own duration.
+        this.seekMedia(this._playheadSeconds() - (this._osRewindOffset || this.rewindSeekTime))
         this._osRewindOffset = null;
         this.SET_REWIND_SEEK_MODE(false);
       }
     },
     forwardSeekMode(forward) {
       if (forward && this.plyr) {
-        this.plyr.forward(this._osForwardOffset || this.forwardSeekTime);
+        this.seekMedia(this._playheadSeconds() + (this._osForwardOffset || this.forwardSeekTime))
         this._osForwardOffset = null;
         this.SET_FORWARD_SEEK_MODE(false);
       }
@@ -203,9 +211,7 @@ export default {
     },
     newCurrentTime(v) {
       if (v < 0) return;
-      if (this.plyr) {
-        this.plyr.currentTime = v;
-      }
+      this.seekMedia(v)
       this.SET_NEW_CURRENT_TIME(-1);
     },
     lyricOffsetSeconds() {
@@ -222,6 +228,14 @@ export default {
     // waiting for the next one. Both are per-track state, not reactive.
     this._lyricBoundaries = [];
     this._lyricTimer = null;
+    // When the OS was last told where the playhead is (ms, 0 = never).
+    this._positionStateAt = 0;
+    // The position the last seek asked for, until `seeked` reports where it
+    // actually landed (null = nothing outstanding).
+    this._seekAsked = null;
+    // trackId the duration disagreement was already logged for, so a stream of
+    // `durationchange` events cannot turn one diagnostic into a flood.
+    this._durationConflictReported = null;
   },
 
   methods: {
@@ -232,11 +246,15 @@ export default {
       // without arming a boundary timer.
       this.sampleLyrics()
       this.PAUSE()
+      // Freeze the widget's playhead where the element stopped instead of
+      // letting the OS keep extrapolating it.
+      this.updatePositionState()
     },
     onPlaying() {
       this.resumeAudioContext()
       this.PLAY()
       this.sampleLyrics()
+      this.updatePositionState()
     },
 
     resumeAudioContext () {
@@ -253,6 +271,8 @@ export default {
 
     onRateChange() {
       this.sampleLyrics()
+      // The OS extrapolates with the rate it was last given.
+      this.updatePositionState()
     },
 
     onVisibilityChange() {
@@ -288,8 +308,29 @@ export default {
     // Memo (ffprobe) wins: Safari's own Ogg/Opus duration is an estimate it
     // never corrects. Element value is the fallback for tracks without a memo.
     onDurationChange () {
-      const memo = this.currentPlayingFile.duration
-      this.SET_DURATION(memo > 0 ? memo : (this.plyr ? this.plyr.duration : 0))
+      this.SET_DURATION(this._trackDuration())
+      // A late element duration is the only length some tracks ever get.
+      this.updatePositionState()
+      this._reportDurationConflict()
+    },
+
+    // One line per track when the element's length and the memo disagree, because
+    // that single pair of numbers is what says which side is wrong: an Ogg/Opus
+    // estimate that is far too long (Safari), or a stale memo that does not
+    // belong to this file. Neither is visible from anywhere but the device that
+    // has the file, and both read as "the duration is wrong again".
+    _reportDurationConflict () {
+      if (!this.plyr) return
+      const element = Number(this.plyr.duration)
+      const memo = Number(this.currentPlayingFile && this.currentPlayingFile.duration)
+      if (!(element > 0) || !(memo > 0) || Math.abs(element - memo) < 2) return
+      const trackId = this.currentPlayingFile.trackId
+      if (this._durationConflictReported === trackId) return
+      this._durationConflictReported = trackId
+      console.warn(
+        `duration disagreement on ${trackId}: element ${element}s, memo ${memo}s ` +
+        `(${this.source})`
+      )
     },
 
     onCanplay () {
@@ -314,6 +355,12 @@ export default {
       // the clock it reads. Publishing is conditional, so when the text has not
       // changed this does no work.
       this.sampleLyrics()
+
+      // Backstop for the widget's timeline as well: a stall, a rate the OS
+      // never received, or a clock that drifted are all corrected here.
+      if (Date.now() - this._positionStateAt >= POSITION_STATE_REFRESH_MS) {
+        this.updatePositionState()
+      }
 
       if (this.sleepMode && this.sleepModeType === 'minutes' && this.sleepStopAt && Date.now() >= this.sleepStopAt) {
         this._stopBySleepTimer()
@@ -352,7 +399,10 @@ export default {
       const file = this.currentPlayingFile
       if (!file || !file.trackId || this.playWorkId === 0) return
       const seconds = this.plyr ? this.plyr.currentTime : 0
-      const duration = this.plyr ? this.plyr.duration : 0
+      // The memo, not the element: Safari's Ogg/Opus estimate is often far
+      // larger than the real length, which would keep `completed` false
+      // forever and the work from ever being auto-marked.
+      const duration = this._trackDuration()
       const completed = duration > 0 && seconds >= 0.95 * duration
       const observedAt = Date.now()
 
@@ -379,7 +429,7 @@ export default {
     // Chrome rewinds to 0 and replays it, Firefox fires `ended`. See §2.7.3.
     _atEndOfTrack () {
       if (!this.plyr) return false
-      const duration = Number(this.currentPlayingFile.duration) || this.plyr.duration
+      const duration = this._trackDuration()
       if (!(duration > 0)) return false
       // Until the element has loaded the current track, its clock belongs to
       // the outgoing one (or says 0); the store describes the current track.
@@ -409,6 +459,28 @@ export default {
       return media.currentSrc === new URL(this.source, window.location.href).href
     },
 
+    // How long this track really runs. The queue item's ffprobe memo wins;
+    // Safari's own Ogg/Opus duration is an estimate read off the bitrate, which
+    // it never corrects, and the element value is only the fallback for tracks
+    // scanned before durations were recorded.
+    _trackDuration () {
+      const memo = Number(this.currentPlayingFile && this.currentPlayingFile.duration)
+      if (memo > 0) return memo
+      const element = this.plyr ? Number(this.plyr.duration) : 0
+      return element > 0 ? element : 0
+    },
+
+    // Where the playhead is, in the current track's own timeline.
+    _playheadSeconds () {
+      // Until the element has loaded the current track its clock belongs to
+      // the outgoing one (or says 0); the store describes the current track.
+      const loaded = this.plyr
+        && this._mediaHoldsCurrentTrack()
+        && this.plyr.media.readyState >= HTMLMediaElement.HAVE_METADATA
+      const seconds = Number(loaded ? this.plyr.currentTime : this.currentTime)
+      return Number.isFinite(seconds) ? seconds : 0
+    },
+
     _advanceIfAtEndOfTrack () {
       if (!this._atEndOfTrack()) return false
       // Still describes the finished track.
@@ -418,7 +490,7 @@ export default {
         return true
       }
       // Nothing to advance to on the last track.
-      this.plyr.currentTime = 0
+      this.seekMedia(0)
       return false
     },
 
@@ -460,7 +532,7 @@ export default {
           }
           break
         case "repeat once":
-          this.plyr.currentTime = 0
+          this.seekMedia(0)
           this.plyr.play()
           this.PLAY()
           break
@@ -468,7 +540,7 @@ export default {
           const index = Math.floor(Math.random()*this.queue.length)
           this.SET_TRACK(index)
           if (index === this.queueIndex) {
-            this.plyr.currentTime = 0
+            this.seekMedia(0)
           }
           break
         }
@@ -522,7 +594,8 @@ export default {
       // (Opus in WebM) has nothing to seek against yet, and Safari drops it --
       // so it is kept and applied again once the file is ready. Written to the
       // media element, not Plyr, whose setter ignores seeks while the duration
-      // is unknown.
+      // is unknown. See `seekMedia` for what that does to every other seek.
+      this._seekAsked = null
       this._pendingStart = this.currentTime > 0 ? this.currentTime : null
       if (this.currentTime > 0) {
         media.currentTime = this.currentTime
@@ -545,6 +618,27 @@ export default {
 
     onSeeked() {
       this.sampleLyrics();
+      // Landed where the widget asked (or where the app seeked): republish so
+      // the OS scrubber follows a jump it did not originate.
+      this.updatePositionState()
+      this._reportSeekClamp()
+    },
+
+    // An element whose own duration is wrong is free to clamp the seek we asked
+    // for, and Safari does exactly that for Ogg/Opus. Nothing in the app can
+    // undo it, so the landed position is the only evidence it happened: report
+    // the disagreement once per seek instead of leaving the next "seeking is
+    // broken" report unactionable.
+    _reportSeekClamp () {
+      const asked = this._seekAsked
+      if (asked === null) return
+      this._seekAsked = null
+      const landed = this.plyr.media.currentTime
+      if (Math.abs(landed - asked) <= 1) return
+      console.warn(
+        `seek not honoured: asked ${asked}s, landed ${landed}s ` +
+        `(element duration ${this.plyr.duration}s, memo ${this._trackDuration()}s)`
+      )
     },
 
     // Read what every speaker is saying at the playhead and publish it as one
@@ -711,6 +805,102 @@ export default {
       }
     },
 
+    // Publish the playhead to the OS, so the lock screen / Now Playing widget
+    // shows this track's real length and where in it we are.
+    //
+    // Without a position state the widget reads the media element's own clock,
+    // and Safari's duration for Ogg/Opus is an estimate it derives from the
+    // bitrate: routinely several times the real length, and occasionally
+    // shorter than it. That is what made the end time on the widget wrong (and
+    // a scrub on the widget land outside the track) even though the in-app bar
+    // already read the ffprobe memo. The spec rejects a position outside
+    // [0, duration] with a TypeError, so everything is clamped: with a short
+    // estimate the element's own clock can sit past the length we publish.
+    updatePositionState () {
+      const session = navigator.mediaSession
+      if (!session || typeof session.setPositionState !== 'function') return
+
+      const duration = this._trackDuration()
+      if (!(duration > 0)) {
+        this.clearPositionState()
+        return
+      }
+      const position = Math.min(Math.max(this._playheadSeconds(), 0), duration)
+      const rate = this.plyr && this.plyr.media.playbackRate > 0
+        ? this.plyr.media.playbackRate
+        : 1
+      try {
+        session.setPositionState({ duration, playbackRate: rate, position })
+        this._positionStateAt = Date.now()
+      } catch (e) {
+        // Older WebKit throws for the whole call rather than ignoring it.
+        console.warn('mediasession: setPositionState failed', e)
+      }
+    },
+
+    // `setPositionState()` with no argument clears it (the spec's empty-state
+    // case), which is how a stopped session stops advertising a timeline.
+    clearPositionState () {
+      const session = navigator.mediaSession
+      if (!session || typeof session.setPositionState !== 'function') return
+      try {
+        session.setPositionState()
+        this._positionStateAt = 0
+      } catch (e) { /* nothing was published */ }
+    },
+
+    // Every seek in this component goes through here -- the seek bar, the rail,
+    // the lyric rows, the seek buttons, the lock-screen scrubber and the
+    // restart after `ended`.
+    //
+    // Plyr's `currentTime` setter cannot be used for it:
+    //
+    //     set currentTime (input) {
+    //       if (!this.duration) return                          // dropped out
+    //       this.media.currentTime = Math.min(input, this.duration)
+    //     }
+    //
+    // and `this.duration` is the *element's*, which for Ogg/Opus on Safari is a
+    // bitrate estimate -- short as often as it is long (see `_trackDuration`).
+    // Two failures follow, both of which read as "seeking is broken": a seek
+    // past that estimate is clamped *to* it, so it lands somewhere else or at
+    // the end (which fires `ended` and advances the queue), and a seek before
+    // the element has metadata -- Opus in WebM carries no duration in its
+    // header -- is dropped outright, so playback simply keeps running from
+    // where it was. `_loadSource` and `_applyPendingStart` already avoided
+    // Plyr for the same reason; this is that rule applied to every other seek,
+    // so exactly one place clamps against the memo. `plyr.rewind()` and
+    // `plyr.forward()` are only arithmetic over the same setter, so they go
+    // through here too. The element itself may still clamp (see
+    // `_reportSeekClamp`), but it is no longer given a wrong bound to clamp to.
+    seekMedia (seconds) {
+      if (!this.plyr) return
+      let target = Number(seconds)
+      if (!Number.isFinite(target)) return
+      const duration = this._trackDuration()
+      target = Math.max(target, 0)
+      if (duration > 0) target = Math.min(target, duration)
+
+      const media = this.plyr.media
+      // Armed only when this is a real move, so a seek to where the element
+      // already is cannot leave the diagnostic pending for someone else's
+      // `seeked` to trip over later.
+      this._seekAsked = Math.abs(media.currentTime - target) > 0.5 ? target : null
+      if (media.readyState < HTMLMediaElement.HAVE_METADATA) {
+        // Nothing to seek against yet: `_applyPendingStart` retries it on
+        // loadedmetadata and again on canplay. It also replaces any resume
+        // point still waiting, which is the position the user actually wants.
+        this._pendingStart = target
+      } else {
+        this._pendingStart = null
+        media.currentTime = target
+      }
+      // Publish now, so the bar and the lock screen do not snap back to the
+      // pre-seek playhead while the element catches up (`timeupdate` is 4x/s).
+      this.SET_CURRENT_TIME(target)
+      this.updatePositionState()
+    },
+
     updateMediaSessionMetadata() {
       console.log("try update media session")
       if (!('mediaSession' in navigator) || !window.MediaMetadata) return
@@ -718,6 +908,7 @@ export default {
       if (this.playWorkId == 0) {
         navigator.mediaSession.metadata = null;
         MEDIA_SESSION_ACTIONS.forEach(action => this.setMediaSessionHandler(action, null));
+        this.clearPositionState()
         return
       }
 
@@ -783,6 +974,19 @@ export default {
         this._osForwardOffset = (details && details.seekOffset) || null
         this.SET_FORWARD_SEEK_MODE(true)
       })
+      // Dragging the widget's scrubber. It is only offered once a position
+      // state exists, and it is measured against that same timeline.
+      this.setMediaSessionHandler('seekto', (details) => {
+        if (!details || typeof details.seekTime !== 'number') return
+        // The OS sends the position in *our* published timeline, so it needs no
+        // mapping -- only the same clamp every other seek gets.
+        this.seekMedia(details.seekTime)
+      })
+
+      // Retarget the widget's timeline at this track now, rather than leaving
+      // the outgoing track's length on it (the element has not loaded the new
+      // one yet, hence the store's currentTime as the starting position).
+      this.updatePositionState()
     },
 
     genCoverUrl(workId, type) {
@@ -801,7 +1005,7 @@ export default {
       if (Math.abs(v - this.currentTime) >= 1) {
         this.ARM_SEEK_UNDO({ time: this.currentTime, at: Date.now() })
       }
-      this.plyr.currentTime = v;
+      this.seekMedia(v);
     },
     onPanSlider(phase) {
       console.warn(" pan with phase = ", phase)
