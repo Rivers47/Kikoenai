@@ -33,7 +33,7 @@
     "version:sync": "node scripts/sync-version.js"
   },
   "devDependencies": {
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "concurrently": "^10.0.7"
   },
   "engines": {
