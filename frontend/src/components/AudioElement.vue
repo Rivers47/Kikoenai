@@ -1,6 +1,6 @@
 <template>
 
-  <!--在进度条周围监听mouseup、mousedown事件，辅助进度条状态切换-->
+  <!-- Captures mouseup/mousedown around the seek bar to track the drag state -->
   <div class="q-px-md"
       @mousedown.capture="onPanSlider('start')"
       @mouseup.capture="onPanSlider('end')"
@@ -22,9 +22,8 @@
     </div>
 
     <div ref="plyrContainer" style="display: none;">
-      <!-- media src is managed imperatively (see _loadSource): a <source :src>
-           binding only takes effect via media.load() and races with the
-           nextTick-deferred watcher when Chrome freezes the hidden page -->
+      <!-- src is set imperatively by _loadSource: a <source :src> binding only
+           applies via media.load() and races the nextTick watcher when frozen -->
       <audio crossorigin="anonymous">
       </audio>
     </div>
@@ -44,10 +43,10 @@ import { savePosition } from '../utils/positions'
 import Plyr from 'plyr'
 import { apiUrl, encodeTrackId } from 'src/base-path'
 
-// Every media session action this component registers; teardown walks this
-// list to unregister them one by one.
+// Every media session action this component registers; teardown unregisters each one.
 const MEDIA_SESSION_ACTIONS = [
-  'play', 'pause', 'nexttrack', 'previoustrack', 'seekbackward', 'seekforward'
+  'play', 'pause', 'nexttrack', 'previoustrack', 'seekbackward', 'seekforward',
+  'seekto'
 ]
 
 const FINISHED_EPSILON_SECONDS = 1
@@ -69,7 +68,7 @@ export default {
       isChangingCurrentTime: false,
       changeCurrentTime: 0,
 
-      // 防止重复自动标记（同一次播放会话只提示一次）
+      // The auto-mark notice fires once per playback session.
       workMarkedComplete: false,
     }
   },
@@ -138,11 +137,8 @@ export default {
         if (this._advanceIfAtEndOfTrack()) return
       }
       if (this.plyr && this.plyr.duration) {
-        // Only touch the element when it actually disagrees with the state.
-        // Vue watchers are async, so a redundant play() from here lands a tick
-        // after the lock-screen tap, outside its activation context. iOS then
-        // leaves the element in a playing state whose clock never advances and
-        // whose audio session is never reactivated: silent, frozen currentTime.
+        // Async watcher, so this play() lands outside the activation context of
+        // the lock-screen tap: iOS then stays silent with a frozen clock.
         if (flag) {
           if (this.plyr.paused) this.plyr.play().catch(() => {})
         } else if (!this.plyr.paused) {
@@ -163,7 +159,7 @@ export default {
     },
 
     playWorkId (newId, oldId) {
-      // 切换作品时重置自动标记提示状态
+      // Reset the auto-mark notice when the work changes.
       if (newId !== oldId) {
         this.workMarkedComplete = false
       }
@@ -185,14 +181,16 @@ export default {
     },
     rewindSeekMode(rewind) {
       if (rewind && this.plyr) {
-        this.plyr.rewind(this._osRewindOffset || this.rewindSeekTime);
+        // plyr.rewind() is arithmetic on Plyr's currentTime setter, which clamps
+        // to the element's duration.
+        this.seekMedia(this._playheadSeconds() - (this._osRewindOffset || this.rewindSeekTime))
         this._osRewindOffset = null;
         this.SET_REWIND_SEEK_MODE(false);
       }
     },
     forwardSeekMode(forward) {
       if (forward && this.plyr) {
-        this.plyr.forward(this._osForwardOffset || this.forwardSeekTime);
+        this.seekMedia(this._playheadSeconds() + (this._osForwardOffset || this.forwardSeekTime))
         this._osForwardOffset = null;
         this.SET_FORWARD_SEEK_MODE(false);
       }
@@ -203,9 +201,7 @@ export default {
     },
     newCurrentTime(v) {
       if (v < 0) return;
-      if (this.plyr) {
-        this.plyr.currentTime = v;
-      }
+      this.seekMedia(v)
       this.SET_NEW_CURRENT_TIME(-1);
     },
     lyricOffsetSeconds() {
@@ -222,6 +218,10 @@ export default {
     // waiting for the next one. Both are per-track state, not reactive.
     this._lyricBoundaries = [];
     this._lyricTimer = null;
+    // Target of the last seek, until `seeked` reports where it landed (null = none).
+    this._seekAsked = null;
+    // trackId already reported, so a stream of `durationchange` cannot repeat it.
+    this._durationConflictReported = null;
   },
 
   methods: {
@@ -232,11 +232,14 @@ export default {
       // without arming a boundary timer.
       this.sampleLyrics()
       this.PAUSE()
+      // Freeze the widget's playhead where the element stopped.
+      this.updatePositionState()
     },
     onPlaying() {
       this.resumeAudioContext()
       this.PLAY()
       this.sampleLyrics()
+      this.updatePositionState()
     },
 
     resumeAudioContext () {
@@ -253,6 +256,8 @@ export default {
 
     onRateChange() {
       this.sampleLyrics()
+      // The OS extrapolates with the rate it was last given.
+      this.updatePositionState()
     },
 
     onVisibilityChange() {
@@ -285,11 +290,26 @@ export default {
       'SET_NEW_CURRENT_TIME',
     ]),
 
-    // Memo (ffprobe) wins: Safari's own Ogg/Opus duration is an estimate it
-    // never corrects. Element value is the fallback for tracks without a memo.
     onDurationChange () {
-      const memo = this.currentPlayingFile.duration
-      this.SET_DURATION(memo > 0 ? memo : (this.plyr ? this.plyr.duration : 0))
+      this.SET_DURATION(this._trackDuration())
+      this.updatePositionState()
+      this._reportDurationConflict()
+    },
+
+    // Element duration vs the ffprobe memo: the pair that says which side is
+    // wrong, and only this device has it. Logged once per track.
+    _reportDurationConflict () {
+      if (!this.plyr) return
+      const element = Number(this.plyr.duration)
+      const memo = Number(this.currentPlayingFile && this.currentPlayingFile.duration)
+      if (!(element > 0) || !(memo > 0) || Math.abs(element - memo) < 2) return
+      const trackId = this.currentPlayingFile.trackId
+      if (this._durationConflictReported === trackId) return
+      this._durationConflictReported = trackId
+      console.warn(
+        `duration disagreement on ${trackId}: element ${element}s, memo ${memo}s ` +
+        `(${this.source})`
+      )
     },
 
     onCanplay () {
@@ -303,16 +323,13 @@ export default {
     },
 
     onTimeupdate () {
-      // Until the start position has been applied, the element's clock is the
-      // pre-seek one -- publishing it would overwrite where this track should
-      // start, and then there would be nothing left to seek to.
+      // Until the pending start is applied the clock is the pre-seek one, and
+      // publishing it would overwrite where this track should start.
       if (this._pendingStart === null && this.plyr.media.readyState >= HTMLMediaElement.HAVE_METADATA) {
         this.SET_CURRENT_TIME(this.plyr.currentTime)
       }
-      // Backstop for the boundary timer: a coalesced or swallowed timer costs
-      // at most this ~4x/s interval, and one that fired late is corrected from
-      // the clock it reads. Publishing is conditional, so when the text has not
-      // changed this does no work.
+      // Backstop for the lyric timer: a swallowed timer costs one timeupdate.
+      // Publishing is conditional, so unchanged text does no work.
       this.sampleLyrics()
 
       if (this.sleepMode && this.sleepModeType === 'minutes' && this.sleepStopAt && Date.now() >= this.sleepStopAt) {
@@ -347,12 +364,12 @@ export default {
     },
 
     // Fire-and-forget per-track progress report.
-    // Reports the current track's position via its trackId.
     _reportTrackProgress () {
       const file = this.currentPlayingFile
       if (!file || !file.trackId || this.playWorkId === 0) return
       const seconds = this.plyr ? this.plyr.currentTime : 0
-      const duration = this.plyr ? this.plyr.duration : 0
+      // Uses the memo: an inflated element duration would keep `completed` false.
+      const duration = this._trackDuration()
       const completed = duration > 0 && seconds >= 0.95 * duration
       const observedAt = Date.now()
 
@@ -379,19 +396,17 @@ export default {
     // Chrome rewinds to 0 and replays it, Firefox fires `ended`. See §2.7.3.
     _atEndOfTrack () {
       if (!this.plyr) return false
-      const duration = Number(this.currentPlayingFile.duration) || this.plyr.duration
+      const duration = this._trackDuration()
       if (!(duration > 0)) return false
-      // Until the element has loaded the current track, its clock belongs to
-      // the outgoing one (or says 0); the store describes the current track.
+      // Before the element holds this track its clock is the outgoing one's.
       const loaded = this._mediaHoldsCurrentTrack()
         && this.plyr.media.readyState >= HTMLMediaElement.HAVE_METADATA
       const position = loaded ? this.plyr.currentTime : this.currentTime
       return position >= duration - FINISHED_EPSILON_SECONDS
     },
 
-    // Apply the start position this track was loaded with, now that the file is
-    // further along. `last` is canplay: hold it no longer, so a file the browser
-    // will not seek in ends up owning its own clock again.
+    // Apply the start position this track was loaded with. `last` is canplay:
+    // hold it no longer, so a file the browser will not seek in owns its clock.
     _applyPendingStart (last) {
       const seconds = this._pendingStart
       if (seconds === null) return
@@ -409,6 +424,25 @@ export default {
       return media.currentSrc === new URL(this.source, window.location.href).href
     },
 
+    // Real track length: the ffprobe memo, else the element's -- Safari reports
+    // Ogg/Opus duration as a bitrate estimate it never corrects.
+    _trackDuration () {
+      const memo = Number(this.currentPlayingFile && this.currentPlayingFile.duration)
+      if (memo > 0) return memo
+      const element = this.plyr ? Number(this.plyr.duration) : 0
+      return element > 0 ? element : 0
+    },
+
+    _playheadSeconds () {
+      // Before the element holds this track its clock is the outgoing one's;
+      // the store's currentTime always describes this track.
+      const loaded = this.plyr
+        && this._mediaHoldsCurrentTrack()
+        && this.plyr.media.readyState >= HTMLMediaElement.HAVE_METADATA
+      const seconds = Number(loaded ? this.plyr.currentTime : this.currentTime)
+      return Number.isFinite(seconds) ? seconds : 0
+    },
+
     _advanceIfAtEndOfTrack () {
       if (!this._atEndOfTrack()) return false
       // Still describes the finished track.
@@ -418,7 +452,7 @@ export default {
         return true
       }
       // Nothing to advance to on the last track.
-      this.plyr.currentTime = 0
+      this.seekMedia(0)
       return false
     },
 
@@ -443,9 +477,8 @@ export default {
       
       if (this.sleepMode && this.sleepModeType === 'tracks') {
         if (this.sleepTracksLeft <= 0) {
-          // Stay on the finished track: advancing here would make the
-          // queueIndex watcher report progress for a track the user never
-          // played. The advance is deferred to their next play.
+          // Stay on the finished track: advancing would make queueIndex report
+          // progress for a track the user never played.
           this._stopBySleepTimer()
           return
         }
@@ -460,7 +493,7 @@ export default {
           }
           break
         case "repeat once":
-          this.plyr.currentTime = 0
+          this.seekMedia(0)
           this.plyr.play()
           this.PLAY()
           break
@@ -468,7 +501,7 @@ export default {
           const index = Math.floor(Math.random()*this.queue.length)
           this.SET_TRACK(index)
           if (index === this.queueIndex) {
-            this.plyr.currentTime = 0
+            this.seekMedia(0)
           }
           break
         }
@@ -479,11 +512,6 @@ export default {
           this.NEXT_TRACK()
         }
       }
-      // Load and play the next track synchronously, inside the event handler.
-      // Chrome freezes hidden pages: Vue's nextTick-based `source` watcher
-      // may be deferred for minutes, so the watcher-driven load happens far
-      // too late. When the watcher eventually fires with the same URL,
-      // _loadSource sees the element already has it and skips the reload.
       if (this.playing && this.plyr && this.playMode.name !== "repeat once") {
         const newUrl = this.source
         if (newUrl) {
@@ -492,10 +520,6 @@ export default {
       }
     },
 
-    // Imperatively point the media element at `url` and load it.
-    // Returns true if a new source was actually loaded; false if the element
-    // already has this exact source (and is not in an error state), meaning
-    // no reload is needed.
     _loadSource (url) {
       const media = this.plyr && this.plyr.media
       if (!media) return false
@@ -508,32 +532,22 @@ export default {
       if (media.currentSrc === absUrl && !media.error) {
         return false
       }
-      // The cue table describes the outgoing track and the clock is about to
-      // belong to the new one, so the schedule is dropped rather than sampling
-      // new positions against old cues. The lines on screen stay until
-      // loadLrcFile installs this track's cues (or finds it has none).
       this._clearLyricTimer()
       this._lyricStreams = null
       this._lyricBoundaries = []
       media.src = url
       media.load()
-      // Start where the store says this track is. Setting it before metadata
-      // arrives is only a request: a container with no duration in its header
-      // (Opus in WebM) has nothing to seek against yet, and Safari drops it --
-      // so it is kept and applied again once the file is ready. Written to the
-      // media element, not Plyr, whose setter ignores seeks while the duration
-      // is unknown.
+      this._seekAsked = null
       this._pendingStart = this.currentTime > 0 ? this.currentTime : null
       if (this.currentTime > 0) {
         media.currentTime = this.currentTime
       }
-      // Retarget now rather than leaving the outgoing track's length on screen.
+      // Retarget the widget before the element has the new track.
       this.onDurationChange()
       return true
     },
 
-    // Shared body for reacting to a source change: load the new track,
-    // refresh lyrics/metadata, and start playback.
+    // Load `url`, refresh lyrics and metadata, and start playback if playing.
     _onSourceChange (url) {
       if (!this._loadSource(url)) return
       this.loadLrcFile();
@@ -545,13 +559,27 @@ export default {
 
     onSeeked() {
       this.sampleLyrics();
+      // Republish so the OS scrubber follows a jump it did not originate.
+      this.updatePositionState()
+      this._reportSeekClamp()
     },
 
-    // Read what every speaker is saying at the playhead and publish it as one
-    // frame, so a line arriving for one speaker never drops the line another
-    // is still holding on screen. Then re-arm the timer for the next change:
-    // every call site -- seek, pause, offset change, `timeupdate` -- therefore
-    // leaves the schedule correct without handling it themselves.
+    // An element with a wrong duration can clamp the seek it was given; the
+    // landed position is the only evidence. Reported once per seek.
+    _reportSeekClamp () {
+      const asked = this._seekAsked
+      if (asked === null) return
+      this._seekAsked = null
+      const landed = this.plyr.media.currentTime
+      if (Math.abs(landed - asked) <= 1) return
+      console.warn(
+        `seek not honoured: asked ${asked}s, landed ${landed}s ` +
+        `(element duration ${this.plyr.duration}s, memo ${this._trackDuration()}s)`
+      )
+    },
+
+    // One frame for every speaker, so a new line for one cannot drop another's;
+    // then re-arm the timer, leaving the schedule correct at every call site.
     sampleLyrics () {
       const media = this.plyr && this.plyr.media;
       if (!media) return;
@@ -619,12 +647,8 @@ export default {
       this._lyricStreams = streams;
       this._lyricBoundaries = this._lyricBoundariesOf(streams);
       this._lyricFrame = streams.map(() => '');
-      // Speaker names are fixed for the track, so they go out once here rather
-      // than on every frame.
       this.SET_LYRIC_SPEAKERS(streams.map(stream => stream.name));
       this.SET_CURRENT_LYRICS(streams.map(() => ''));
-      // The full-screen view needs the whole timeline; the copies keep Vuex from
-      // re-observing the parser's arrays, which also carry `endsBy`.
       this.SET_LYRIC_CUES(streams.map(stream => ({
         name: stream.name,
         cues: stream.cues.map(({ start, end, text, voice }) => ({ start, end, text, voice })),
@@ -640,8 +664,6 @@ export default {
         const check_response = await this.$axios.get(url)
         if (loadId !== this._lrcLoadId) return;
         if (!check_response.data.result) {
-          // No lyric for this track: clear the previous track's lines rather
-          // than leaving them on screen.
           this.resetToNoLyricStatus();
           return;
         }
@@ -700,15 +722,67 @@ export default {
       this.SET_HAS_LYRIC(false);
     },
 
-    // setActionHandler throws TypeError for actions the browser doesn't
-    // support. Wrap each call so one unsupported action can't prevent the
-    // remaining handlers from being registered.
+    // setActionHandler throws TypeError for actions the browser lacks.
     setMediaSessionHandler(action, handler) {
       try {
         navigator.mediaSession.setActionHandler(action, handler)
       } catch (e) {
         console.warn(`mediasession: action "${action}" not supported`, e)
       }
+    },
+
+    // Publishes the widget's timeline; without it the OS reads the element clock.
+    // This is so that OS doesn't try to guess the duration of a track.
+    updatePositionState () {
+      const session = navigator.mediaSession
+      if (!session || typeof session.setPositionState !== 'function') return
+
+      const duration = this._trackDuration()
+      if (!(duration > 0)) {
+        this.clearPositionState()
+        return
+      }
+      const position = Math.min(Math.max(this._playheadSeconds(), 0), duration)
+      const rate = this.plyr && this.plyr.media.playbackRate > 0
+        ? this.plyr.media.playbackRate
+        : 1
+      try {
+        session.setPositionState({ duration, playbackRate: rate, position })
+      } catch (e) {
+        // Older WebKit throws for the whole call.
+        console.warn('mediasession: setPositionState failed', e)
+      }
+    },
+
+    // setPositionState() with no argument clears the published timeline.
+    clearPositionState () {
+      const session = navigator.mediaSession
+      if (!session || typeof session.setPositionState !== 'function') return
+      try {
+        session.setPositionState()
+      } catch (e) { /* nothing was published */ }
+    },
+
+    // Writes media.currentTime directly: Plyr's `currentTime` setter drops the
+    // seek while the element duration is falsy, then clamps to that duration.
+    seekMedia (seconds) {
+      if (!this.plyr) return
+      let target = Number(seconds)
+      if (!Number.isFinite(target)) return
+      const duration = this._trackDuration()
+      target = Math.max(target, 0)
+      if (duration > 0) target = Math.min(target, duration)
+
+      const media = this.plyr.media
+      this._seekAsked = Math.abs(media.currentTime - target) > 0.5 ? target : null
+      if (media.readyState < HTMLMediaElement.HAVE_METADATA) {
+        this._pendingStart = target
+      } else {
+        this._pendingStart = null
+        media.currentTime = target
+      }
+      this.SET_CURRENT_TIME(target)
+      this.updatePositionState()
     },
 
     updateMediaSessionMetadata() {
@@ -718,6 +792,7 @@ export default {
       if (this.playWorkId == 0) {
         navigator.mediaSession.metadata = null;
         MEDIA_SESSION_ACTIONS.forEach(action => this.setMediaSessionHandler(action, null));
+        this.clearPositionState()
         return
       }
 
@@ -748,10 +823,8 @@ export default {
         console.warn("set mediasession metadata failed, because: ", e)
       }
 
-      // Drive the element synchronously here, before the mutation: this call
-      // is inside the activation context of the lock-screen tap, which is what
-      // iOS needs in order to reactivate the audio session. The watcher the
-      // mutation wakes up runs a tick later and will no-op.
+      // Synchronously, inside the tap's activation context: iOS needs that to
+      // reactivate the audio session. The watcher a tick later is too late.
       this.setMediaSessionHandler('play', () => {
         // Resume here as well as in onPlaying: a media session action counts as
         // an activation gesture, which iOS requires to honour resume().
@@ -772,9 +845,8 @@ export default {
       this.setMediaSessionHandler('previoustrack', () => {
         this.PREVIOUS_TRACK()
       })
-      // details.seekOffset is the offset suggested by the OS; prefer it, and
-      // fall back to the user's configured rewind/forward seconds when the OS
-      // doesn't supply one.
+      // details.seekOffset is the OS's suggestion; fall back to the user's
+      // configured seconds when it is absent.
       this.setMediaSessionHandler('seekbackward', (details) => {
         this._osRewindOffset = (details && details.seekOffset) || null
         this.SET_REWIND_SEEK_MODE(true)
@@ -783,6 +855,15 @@ export default {
         this._osForwardOffset = (details && details.seekOffset) || null
         this.SET_FORWARD_SEEK_MODE(true)
       })
+      // Offered once a position state exists, and measured against it.
+      this.setMediaSessionHandler('seekto', (details) => {
+        if (!details || typeof details.seekTime !== 'number') return
+        // The OS sends seekTime in our published timeline: only the clamp applies.
+        this.seekMedia(details.seekTime)
+      })
+
+      // Retarget the widget at this track; the element has not loaded it yet.
+      this.updatePositionState()
     },
 
     genCoverUrl(workId, type) {
@@ -801,7 +882,7 @@ export default {
       if (Math.abs(v - this.currentTime) >= 1) {
         this.ARM_SEEK_UNDO({ time: this.currentTime, at: Date.now() })
       }
-      this.plyr.currentTime = v;
+      this.seekMedia(v);
     },
     onPanSlider(phase) {
       console.warn(" pan with phase = ", phase)
@@ -837,14 +918,8 @@ export default {
       player.on('waiting', () => this.onWaiting());
       player.on('pause', () => this.onPause());
 
-      // Single source of truth for 'ended': a direct listener on the media
-      // element. Plyr's container-level 'ended' event is proxied from this
-      // same native event, so it can never fire when this listener doesn't
-      // — and registering both makes onEnded run twice per track end.
       media.addEventListener('ended', this.onEnded);
 
-      // Native listener: 'durationchange' is absent from Plyr's bubble list
-      // (config/defaults.js `events`), so player.on() would never fire.
       media.addEventListener('durationchange', this.onDurationChange);
 
       media.addEventListener('ratechange', this.onRateChange);
@@ -912,9 +987,8 @@ export default {
 </script>
 
 <style scoped>
-/* Quasar's slider root is `display: inline-block`, so a block wrapper keeps a
-   line box under it and the marker's 50% lands below the track. Flex makes the
-   wrapper exactly as tall as the slider. */
+/* Quasar's slider root is inline-block, so its line box puts the marker's 50%
+   below the track. Flex sizes the wrapper to the slider. */
 .seek-undo-track {
   display: flex;
 }
@@ -934,13 +1008,8 @@ export default {
   pointer-events: none;
 }
 
-/* Quasar animates the thumb and the fill with `left`/`width` transitions while
-   the slider is not being dragged (QSlider.sass, `&--inactive`). The playhead is
-   published 4x/s, so a .28s transition is restarted every .25s and never
-   finishes: the page re-lays-out and composites a frame for every vsync of the
-   whole playback session, and the seek bar is the last thing it should be doing
-   that for. Without the transitions the fill steps 4x/s (under a pixel per step
-   at any real track length) and a seek still lands instantly. */
+/* Quasar transitions `left`/`width` at .28s while the slider is inactive; the
+   playhead is published 4x/s, so each transition restarts and never finishes. */
 .q-slider--inactive :deep(.q-slider__thumb),
 .q-slider--inactive :deep(.q-slider__selection),
 .q-slider--inactive :deep(.q-slider__text-container) {
