@@ -20,7 +20,11 @@
       </div>
     </div>
 
-    <div class="row justify-between q-mb-md q-mx-sm">
+    <div
+      ref="toolbar"
+      class="sticky-toolbar row justify-between bg-surface q-px-sm q-py-sm q-mt-sm"
+      :class="{ 'sticky-toolbar--stuck': toolbarStuck }"
+    >
       <!-- 排序属性 -->
       <q-select
         dense
@@ -285,6 +289,7 @@ export default {
       touchedWorkId: 0, // 用来解决android移动端设备没有hover事件导致workCard不能跟随手指显示标签的问题
 
       isActive: false,
+      toolbarStuck: false,
       _lastFilter: null,
       // Bumped by reset(); a response from an older generation is dropped, so a
       // slow page from the previous filter can never repaint the current list.
@@ -353,10 +358,28 @@ export default {
       'oldWorkCardUIStyle',
     ]),
   },
+  mounted () {
+    // The window is the scroll container here (nothing between the page and the
+    // viewport clips), so a plain listener is enough to drive the stuck shadow.
+    this.onWindowScroll = () => {
+      if (this._scrollRaf) return
+      this._scrollRaf = requestAnimationFrame(() => {
+        this._scrollRaf = 0
+        this.updateToolbarStuck()
+      })
+    }
+    window.addEventListener('scroll', this.onWindowScroll, { passive: true })
+  },
+  beforeUnmount () {
+    window.removeEventListener('scroll', this.onWindowScroll)
+    if (this._scrollRaf) cancelAnimationFrame(this._scrollRaf)
+  },
+
   activated () {
     this.isActive = true
     this.$nextTick(() => {
       this.stopLoad = false
+      this.updateToolbarStuck()
     })
     if (this.filter !== this._lastFilter) {
       this.reset()
@@ -365,6 +388,7 @@ export default {
   deactivated () {
     this.isActive = false
     this.stopLoad = true
+    this.toolbarStuck = false
   },
 
   watch: {
@@ -410,6 +434,15 @@ export default {
   },
 
   methods: {
+    // Stuck once its top edge reaches the sticky offset — 0 while the header is
+    // slid away, the header's height while it is showing.
+    updateToolbarStuck () {
+      const toolbar = this.$refs.toolbar
+      if (!toolbar || !this.isActive) return
+      const offset = parseFloat(getComputedStyle(toolbar).top) || 0
+      this.toolbarStuck = toolbar.getBoundingClientRect().top <= offset + 0.5
+    },
+
     // Dropping the last term leaves no filter at all, which is the whole
     // library rather than an empty search.
     applyFilter (filter) {

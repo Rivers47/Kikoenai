@@ -204,6 +204,9 @@ export default {
       version: '',
       uiVersion: process.env.APP_VERSION,
       showScroller: false,
+      // Tracks the reveal state separately: the header starts visible while
+      // showScroller starts false, and the sticky offset has to be right then.
+      headerVisible: true,
       unsubscribeDownloadMessages: null,
       contrastMode: getContrastMode(),
       links: [
@@ -247,6 +250,8 @@ export default {
     this.fetchSharedConfig();
     requestSync();
     this.initOfflineDownloads();
+
+    this.applyStickyOffset();
 
     // The bar/panel default follows the viewport, so crossing the breakpoint
     // switches mode instead of leaving a phone layout on a wide window.
@@ -461,7 +466,16 @@ export default {
     
     onHeaderRevealChange(isReveal) {
       this.showScroller = isReveal;
-    }
+      this.headerVisible = isReveal;
+      this.applyStickyOffset();
+    },
+
+    // Measured rather than assumed: the header carries the iOS safe-area inset.
+    applyStickyOffset() {
+      const header = document.querySelector('.q-header');
+      const offset = (this.headerVisible && header) ? header.offsetHeight : 0;
+      document.documentElement.style.setProperty('--kiko-sticky-top', `${offset}px`);
+    },
   },
 }
 </script>
