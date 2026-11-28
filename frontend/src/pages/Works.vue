@@ -20,7 +20,11 @@
       </div>
     </div>
 
-    <div class="row justify-between q-mb-md q-mx-sm">
+    <div
+      ref="toolbar"
+      class="sticky-toolbar row justify-between bg-surface q-px-sm q-py-sm q-mt-sm"
+      :class="{ 'sticky-toolbar--stuck': toolbarStuck }"
+    >
       <!-- 排序属性 -->
       <q-select
         dense
@@ -36,20 +40,52 @@
         class="col-auto"
       />
 
-      <!-- 年龄分级 -->
-      <q-select
+      <!-- 筛选：年龄分级与播放状态为两组独立条件，全部勾选等于不筛选 -->
+      <q-btn
         dense
-        rounded
-        outlined
-        bg-color=""
-        transition-show="scale"
-        transition-hide="scale"
-        v-model="nsfwOption"
-        :options="nsfwOptions"
-        :option-label="humanReadableLabel"
-        :label="t('works.nsfw')"
+        round
+        outline
+        padding="sm"
+        icon="filter_list"
         class="col-auto"
-      />
+        :aria-label="t('works.filter')"
+      >
+        <q-badge
+          v-if="excludedFilterCount"
+          color="primary"
+          text-color="on-primary"
+          floating
+        >{{ excludedFilterCount }}</q-badge>
+        <q-tooltip>{{ t('works.filter') }}</q-tooltip>
+        <q-menu anchor="bottom left" self="top left">
+          <q-list dense style="min-width: 240px">
+            <q-item v-for="option in ratingFilterOptions" :key="option.value" tag="label" dense>
+              <q-item-section side>
+                <q-checkbox v-model="filters" :val="option.value" />
+              </q-item-section>
+              <q-item-section>{{ option.label }}</q-item-section>
+            </q-item>
+
+            <q-separator />
+
+            <q-item v-for="option in statusFilterOptions" :key="option.value" tag="label" dense>
+              <q-item-section side>
+                <q-checkbox v-model="filters" :val="option.value" />
+              </q-item-section>
+              <q-item-section>{{ option.label }}</q-item-section>
+            </q-item>
+
+            <q-separator />
+
+            <q-item v-for="option in reviewFilterOptions" :key="option.value" tag="label" dense>
+              <q-item-section side>
+                <q-checkbox v-model="filters" :val="option.value" />
+              </q-item-section>
+              <q-item-section>{{ option.label }}</q-item-section>
+            </q-item>
+          </q-list>
+        </q-menu>
+      </q-btn>
 
       <!-- 排序顺序 -->
       <q-toggle v-model="sortInDesc" :label="sortInDesc ? t('works.desc') : t('works.asc')" />
@@ -169,6 +205,50 @@ const storedBool = (key, fallback) => {
   return raw === null || raw === '' ? fallback : raw === 'true'
 }
 
+// Orthogonal dropdown groups: a work matches if its rating is one of the ticked
+// ratings AND its progress is one of the ticked states.
+const RATING_FILTERS = ['sfw', 'nsfw']
+const STATUS_FILTERS = ['marked', 'listened', 'postponed', 'unmarked']
+// Star or review text — deliberately not progress, which has its own group, so
+// the two axes stay independent: a work can be 想听 and unstarred.
+const REVIEW_FILTERS = ['has', 'none']
+const FILTER_GROUPS = [RATING_FILTERS, STATUS_FILTERS, REVIEW_FILTERS]
+const ALL_FILTERS = FILTER_GROUPS.flat()
+
+// A group with nothing ticked can never match, so "empty group" means either the
+// user emptied it or it did not exist yet when this array was saved; start it
+// fully ticked either way, which is also what makes an added group safe.
+const withGroupsFilled = (values) => {
+  const filled = [...values]
+  for (const group of FILTER_GROUPS) {
+    if (!group.some((value) => filled.includes(value))) filled.push(...group)
+  }
+  return filled
+}
+
+// The filter started life as a single age-rating select stored as 'nsfw_0|1|2';
+// keep the rating a user had picked rather than resetting them to everything.
+const storedFilters = () => {
+  const raw = stored('worksFilter')
+  if (raw) {
+    try {
+      const saved = JSON.parse(raw)
+      if (Array.isArray(saved)) {
+        const known = saved.filter((v) => ALL_FILTERS.includes(v))
+        // An empty array is the user unticking everything; anything unrecognised
+        // means this is not our format, so fall through to the defaults.
+        if (known.length || !saved.length) return withGroupsFilled(known)
+      }
+    } catch {
+      localStorage.removeItem('worksFilter')
+    }
+  }
+  const legacy = stored('nsfwOption')
+  if (legacy === 'nsfw_1') return withGroupsFilled(['sfw'])
+  if (legacy === 'nsfw_2') return withGroupsFilled(['nsfw'])
+  return [...ALL_FILTERS]
+}
+
 export default {
   setup () {
     const { t } = useI18n() // global scope
@@ -198,12 +278,10 @@ export default {
 
       // 排序种类，例如可以选择按照发售日期来排序结果
       sortCategoryOption: stored('sortCategoryOption') || "release",
-      sortCategoryOptions: ["release", "rating", "created_at", "random"],
+      sortCategoryOptions: ["release", "rating", "created_at", "played", "random"],
 
-      nsfwOption: stored('nsfwOption') || "nsfw_0",
-      nsfwOptions: ["nsfw_0", "nsfw_1", "nsfw_2"], // nsfw_0无年龄限制，nsfw_1全年龄，nsfw_2十八禁
-
-
+      // Checked values of the filter menu; every one ticked means no filtering.
+      filters: storedFilters(),
 
       // 排序顺序，true表示降序，false表示升序
       sortInDesc: storedBool('sortInDesc', true),
@@ -211,6 +289,7 @@ export default {
       touchedWorkId: 0, // 用来解决android移动端设备没有hover事件导致workCard不能跟随手指显示标签的问题
 
       isActive: false,
+      toolbarStuck: false,
       _lastFilter: null,
       // Bumped by reset(); a response from an older generation is dropped, so a
       // slow page from the previous filter can never repaint the current list.
@@ -236,15 +315,71 @@ export default {
       return this.filter ? [this.filter] : []
     },
 
+    ratingFilterOptions () {
+      return [
+        { value: 'sfw', label: this.t('works.nsfwAllAges') },
+        { value: 'nsfw', label: this.t('works.nsfwAdult') },
+      ]
+    },
+
+    statusFilterOptions () {
+      return [
+        { value: 'marked', label: this.t('works.statusMarked') },
+        { value: 'listened', label: this.t('works.statusListened') },
+        { value: 'postponed', label: this.t('works.statusPostponed') },
+        { value: 'unmarked', label: this.t('works.statusNoProgress') },
+      ]
+    },
+
+    reviewFilterOptions () {
+      return [
+        { value: 'has', label: this.t('works.starOrComment') },
+        { value: 'none', label: this.t('works.noStarOrComment') },
+      ]
+    },
+
+    selectedRatings () {
+      return RATING_FILTERS.filter((value) => this.filters.includes(value))
+    },
+
+    selectedStatuses () {
+      return STATUS_FILTERS.filter((value) => this.filters.includes(value))
+    },
+
+    selectedReviews () {
+      return REVIEW_FILTERS.filter((value) => this.filters.includes(value))
+    },
+
+    excludedFilterCount () {
+      return ALL_FILTERS.length - this.filters.length
+    },
 
     ...mapState('AudioPlayer', [
       'oldWorkCardUIStyle',
     ]),
   },
+  mounted () {
+    // The window is the scroll container here (nothing between the page and the
+    // viewport clips), so a plain listener is enough to drive the stuck shadow.
+    this.onWindowScroll = () => {
+      if (this._scrollRaf) return
+      this._scrollRaf = requestAnimationFrame(() => {
+        this._scrollRaf = 0
+        this.updateToolbarStuck()
+      })
+    }
+    window.addEventListener('scroll', this.onWindowScroll, { passive: true })
+  },
+  beforeUnmount () {
+    window.removeEventListener('scroll', this.onWindowScroll)
+    if (this._scrollRaf) cancelAnimationFrame(this._scrollRaf)
+  },
+
   activated () {
     this.isActive = true
     this.$nextTick(() => {
       this.stopLoad = false
+      this.updateToolbarStuck()
     })
     if (this.filter !== this._lastFilter) {
       this.reset()
@@ -253,6 +388,7 @@ export default {
   deactivated () {
     this.isActive = false
     this.stopLoad = true
+    this.toolbarStuck = false
   },
 
   watch: {
@@ -269,9 +405,12 @@ export default {
       this.reset()
     },
 
-    nsfwOption (v) {
-      localStorage.nsfwOption = v;
-      this.reset()
+    filters: {
+      deep: true,
+      handler (v) {
+        localStorage.worksFilter = JSON.stringify(v)
+        this.reset()
+      }
     },
 
 
@@ -295,6 +434,15 @@ export default {
   },
 
   methods: {
+    // Stuck once its top edge reaches the sticky offset — 0 while the header is
+    // slid away, the header's height while it is showing.
+    updateToolbarStuck () {
+      const toolbar = this.$refs.toolbar
+      if (!toolbar || !this.isActive) return
+      const offset = parseFloat(getComputedStyle(toolbar).top) || 0
+      this.toolbarStuck = toolbar.getBoundingClientRect().top <= offset + 0.5
+    },
+
     // Dropping the last term leaves no filter at all, which is the whole
     // library rather than an empty search.
     applyFilter (filter) {
@@ -314,13 +462,29 @@ export default {
       const generation = this._generation
       const filter = this.filter
       const page = this.pagination.currentPage + 1
+      const ratings = this.selectedRatings
+      const statuses = this.selectedStatuses
+      const reviews = this.selectedReviews
+
+      // Nothing ticked in a group matches nothing, so answer it here instead of
+      // inventing a query parameter that means "no rows".
+      if (!ratings.length || !statuses.length || !reviews.length) {
+        this.works = []
+        this.pagination = { currentPage: 0, pageSize: 12, totalCount: 0 }
+        this.stopLoad = true
+        return Promise.resolve()
+      }
+
       const params = {
         page,
         sort: this.sortInDesc ? "desc" : "asc",
         order: this.sortCategoryOption,
-        nsfw: parseInt(this.nsfwOption.replace("nsfw_", "")), // 'nsfw_0' => 0, 'nsfw_1' => 1, 'nsfw_2' => 2
         seed: this.seed,
       }
+
+      if (ratings.length < RATING_FILTERS.length) params.rating = ratings.join(',')
+      if (statuses.length < STATUS_FILTERS.length) params.progress = statuses.join(',')
+      if (reviews.length < REVIEW_FILTERS.length) params.review = reviews.join(',')
 
       if (filter) {
         params.filter = filter
@@ -376,10 +540,8 @@ export default {
         case "release": return this.t('works.release');
         case "rating": return this.t('works.rating');
         case "created_at": return this.t('works.createdAt');
+        case "played": return this.t('works.played');
         case "random": return this.t('works.random');
-        case "nsfw_0": return this.t('works.nsfwAll');
-        case "nsfw_1": return this.t('works.nsfwAllAges');
-        case "nsfw_2": return this.t('works.nsfwAdult');
         default: return label;
       }
     },

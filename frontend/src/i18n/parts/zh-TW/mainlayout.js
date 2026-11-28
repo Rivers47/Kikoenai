@@ -9,7 +9,7 @@ export default {
   logoutConfirm: '是否登出？（若未啟用使用者驗證，則操作無效）',
   logoutButton: '登出',
   mediaLibrary: '媒體庫',
-  favourites: '我的收藏',
+  history: '播放紀錄',
   circles: '社團',
   tags: '標籤',
   voiceActors: '聲優',

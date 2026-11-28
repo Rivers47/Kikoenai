@@ -13,6 +13,19 @@ html body.body--dark {
   padding-top: env(safe-area-inset-top);
 }
 
+// Page toolbars that stay reachable while scrolling. The offset comes from
+// MainLayout's --kiko-sticky-top, because `top: 0` would pin them under the header.
+.sticky-toolbar {
+  position: sticky;
+  top: var(--kiko-sticky-top, 0px);
+  z-index: 10; // over work cards (1), under the header (2000) and the player bar
+  transition: top 0.2s, box-shadow 0.2s;
+}
+
+.sticky-toolbar--stuck {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
 aside.q-drawer {
   top: env(safe-area-inset-top);
   background: rgb(var(--surface-container-high-rgb));

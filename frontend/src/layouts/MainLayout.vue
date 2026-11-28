@@ -143,7 +143,7 @@
     <q-page-container class="padding-bottom-play-bar">
       <!-- <q-page padding> -->
       <router-view v-slot="{ Component }">
-        <keep-alive :include="['Works', 'Favourites']">
+        <keep-alive :include="['Works', 'History']">
           <component :is="Component" />
         </keep-alive>
       </router-view>
@@ -204,11 +204,14 @@ export default {
       version: '',
       uiVersion: process.env.APP_VERSION,
       showScroller: false,
+      // Tracks the reveal state separately: the header starts visible while
+      // showScroller starts false, and the sticky offset has to be right then.
+      headerVisible: true,
       unsubscribeDownloadMessages: null,
       contrastMode: getContrastMode(),
       links: [
         { titleKey: 'mediaLibrary', icon: 'widgets', path: '/' },
-        { titleKey: 'favourites', icon: 'favorite', path: '/favourites' },
+        { titleKey: 'history', icon: 'history', path: '/history' },
         { titleKey: 'downloads', icon: 'download_done', path: '/downloads' },
         { titleKey: 'circles', icon: 'group', path: '/circles' },
         { titleKey: 'tags', icon: 'label', path: '/tags' },
@@ -248,6 +251,8 @@ export default {
     requestSync();
     this.initOfflineDownloads();
 
+    this.applyStickyOffset();
+
     // The bar/panel default follows the viewport, so crossing the breakpoint
     // switches mode instead of leaving a phone layout on a wide window.
     this.playerModeQuery = window.matchMedia('(min-width: 600px)')
@@ -283,7 +288,7 @@ export default {
 
     isNotAtHomePage () {
       const path = this.$route.path
-      return path && path !=='/' && path !=='/works' && path !== '/favourites';
+      return path && path !=='/' && path !=='/works' && path !== '/history';
     },
 
     ...mapState('AudioPlayer', [
@@ -461,7 +466,16 @@ export default {
     
     onHeaderRevealChange(isReveal) {
       this.showScroller = isReveal;
-    }
+      this.headerVisible = isReveal;
+      this.applyStickyOffset();
+    },
+
+    // Measured rather than assumed: the header carries the iOS safe-area inset.
+    applyStickyOffset() {
+      const header = document.querySelector('.q-header');
+      const offset = (this.headerVisible && header) ? header.offsetHeight : 0;
+      document.documentElement.style.setProperty('--kiko-sticky-top', `${offset}px`);
+    },
   },
 }
 </script>

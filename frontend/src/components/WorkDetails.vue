@@ -186,28 +186,12 @@
             </q-item-section>
           </q-item>
 
-          <q-item clickable @click="setProgress('listening')">
-            <q-item-section avatar>
-              <q-icon name="headset" v-show="progress === 'listening'" />
-            </q-item-section>
-            <q-item-section>
-              <q-item-label>{{ t('workdetails.listening') }}</q-item-label>
-            </q-item-section>
-          </q-item>
           <q-item clickable @click="setProgress('listened')">
             <q-item-section avatar>
               <q-icon name="headset" v-show="progress === 'listened'" />
             </q-item-section>
             <q-item-section>
               <q-item-label>{{ t('workdetails.listened') }}</q-item-label>
-            </q-item-section>
-          </q-item>
-          <q-item clickable @click="setProgress('replay')">
-            <q-item-section avatar>
-              <q-icon name="headset" v-show="progress === 'replay'" />
-            </q-item-section>
-            <q-item-section>
-              <q-item-label>{{ t('workdetails.replay') }}</q-item-label>
             </q-item-section>
           </q-item>
           <q-item clickable @click="setProgress('postponed')">
@@ -344,9 +328,7 @@ export default {
     progressLabel() {
       const labels = {
         marked: this.t('workdetails.marked'),
-        listening: this.t('workdetails.listening'),
         listened: this.t('workdetails.listened'),
-        replay: this.t('workdetails.replay'),
         postponed: this.t('workdetails.postponed')
       };
       return labels[this.progress] || this.t('workdetails.markProgress');

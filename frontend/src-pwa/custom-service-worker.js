@@ -55,7 +55,7 @@ registerRoute(
   })
 )
 
-const WORK_DATA_PATH = /^\/api\/(work|tracks)\/[^/]+$|^\/api\/review$/
+const WORK_DATA_PATH = /^\/api\/(work|tracks)\/[^/]+$/
 registerRoute(
   ({ url }) => sameOrigin(url) && WORK_DATA_PATH.test(appPath(url)),
   new NetworkFirst({

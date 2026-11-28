@@ -1,6 +1,5 @@
 export default {
   sortBy: '排序屬性',
-  nsfw: '年齡分級',
   desc: '降序',
   asc: '升序',
   noMoreWorks: '無更多作品',
@@ -10,7 +9,14 @@ export default {
   rating: '我的評價',
   createdAt: '新增時間',
   random: '隨機排序',
-  nsfwAll: '所有分級',
   nsfwAllAges: '全年齡',
   nsfwAdult: '十八禁',
+  played: '最近播放',
+  filter: '篩選',
+  statusMarked: '想聽',
+  statusListened: '聽過',
+  statusPostponed: '擱置',
+  statusNoProgress: '無進度',
+  starOrComment: '含評價',
+  noStarOrComment: '不含評價',
 }

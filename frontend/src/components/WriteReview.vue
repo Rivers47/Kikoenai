@@ -108,9 +108,7 @@ export default {
     progressOptions() {
       return [
         {label: this.t('workdetails.marked'), value: 'marked'},
-        {label: this.t('workdetails.listening'), value: 'listening'},
         {label: this.t('workdetails.listened'), value: 'listened'},
-        {label: this.t('workdetails.replay'), value: 'replay'},
         {label: this.t('workdetails.postponed'), value: 'postponed'}
       ]
     }

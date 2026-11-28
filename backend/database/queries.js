@@ -48,6 +48,89 @@ const makeQueries = (knex) => {
     }
   }
 
+  const UNMARKED = 'unmarked';
+
+  /**
+   * Age-rating filter for the library list, as the set of ratings the user left
+   * ticked. An empty set is a caller error (the routes reject it); both ticked
+   * means no restriction.
+   * @param {String[]} [rating] subset of ['sfw', 'nsfw']
+   */
+  function ratingFilter(rating, knexQuery) {
+    if (!rating || !rating.length) return knexQuery;
+    const sfw = rating.includes('sfw');
+    const nsfw = rating.includes('nsfw');
+    if (sfw === nsfw) return knexQuery;
+    return knexQuery.where('t_work.nsfw', '=', nsfw);
+  }
+
+  /**
+   * Keeps the works the user starred or left a review text on, or the ones they
+   * did not. Progress is deliberately not part of this: it has its own filter,
+   * so the two dimensions stay independent (a work can be 想听 with no star).
+   * Predicated on the fields, not on row existence — an all-NULL t_review row
+   * carries no more information than a missing one.
+   * @param {String[]} [review] subset of ['has', 'none']; both = no restriction
+   */
+  function reviewFilter(review, knexQuery, username) {
+    if (!review || !review.length) return knexQuery;
+    const has = review.includes('has');
+    if (has === review.includes('none')) return knexQuery;
+
+    const written = knex('t_review')
+      .select('work_id')
+      .where('user_name', username)
+      .where(function () {
+        this.whereNotNull('rating')
+          .orWhere(function () {
+            this.whereNotNull('review_text').andWhere('review_text', '!=', '');
+          });
+      });
+
+    return has
+      ? knexQuery.whereIn('t_work.id', written)
+      : knexQuery.whereNotIn('t_work.id', written);
+  }
+
+  /**
+   * Left-joins the user's own t_review row as `userprogress`. t_review is keyed
+   * by (user_name, work_id), so this adds at most one row per work.
+   */
+  function userProgressJoin(knexQuery, username) {
+    const userprogress = knex('t_review')
+      .select('work_id', 'progress')
+      .where('user_name', username)
+      .as('userprogress');
+    return knexQuery.leftJoin(userprogress, 'userprogress.work_id', 't_work.id');
+  }
+
+  /**
+   * Keeps the works whose progress is in `progress`. `unmarked` stands for a
+   * work with no progress at all — no t_review row, or a rating-only row.
+   * Requires userProgressJoin().
+   */
+  function progressFilter(progress, knexQuery) {
+    const states = progress.filter((p) => p !== UNMARKED);
+    if (!states.length) return knexQuery.whereNull('userprogress.progress');
+    return knexQuery.where(function () {
+      this.whereIn('userprogress.progress', states);
+      if (progress.includes(UNMARKED)) this.orWhereNull('userprogress.progress');
+    });
+  }
+
+  /**
+   * Left-joins the user's play history as `playhistory` (one row per work), so
+   * 'played' can order the whole library by last playback. Works never played
+   * have NULL there: last in DESC, first in ASC.
+   */
+  function playHistoryJoin(knexQuery, username) {
+    const playhistory = knex('t_play_history')
+      .select('work_id', 'updated_at')
+      .where('user_name', username)
+      .as('playhistory');
+    return knexQuery.leftJoin(playhistory, 'playhistory.work_id', 't_work.id');
+  }
+
 
   /**
    * Setter for track progress
@@ -206,6 +289,24 @@ const makeQueries = (knex) => {
 
     // Return in the same order as coreRows
     return coreRows.map(r => byId.get(r.id));
+  }
+
+  /**
+   * Batch-attaches `userRating` to assembled works for orderings that do not
+   * join t_review themselves.
+   */
+  async function attachUserRatings(works, username) {
+    const ids = works.map(w => w.id);
+    if (!ids.length) return works;
+    const ratings = await knex('t_review')
+      .select('work_id', 'rating as userRating')
+      .where('user_name', username)
+      .whereIn('work_id', ids);
+    const ratingMap = new Map(ratings.map(r => [r.work_id, r.userRating]));
+    for (const w of works) {
+      w.userRating = ratingMap.get(w.id) || null;
+    }
+    return works;
   }
 
   /**
@@ -730,15 +831,18 @@ const makeQueries = (knex) => {
    * getWorksByFilter, which is the only filter mechanism.
    * @param {Object} opts
    * @param {String} [opts.username='']
-   * @param {Number} [opts.nsfw=0] - 0=all, 1=全年龄, 2=R18
-   * @param {String} [opts.order='release'] - sort column; 'rating' for userRating; 'random'/'betterRandom'
+   * @param {Number} [opts.nsfw=0] - legacy 0=all, 1=全年龄, 2=R18; superseded by `rating`
+   * @param {String[]} [opts.rating] - subset of ['sfw', 'nsfw']; both = no restriction
+   * @param {String[]} [opts.progress] - t_review.progress values to keep, plus 'unmarked'
+   * @param {String[]} [opts.review] - subset of ['has', 'none']: whether the user starred or commented
+   * @param {String} [opts.order='release'] - sort column; 'rating' for userRating; 'played' for last playback; 'random'/'betterRandom'
    * @param {String} [opts.sort='desc']
    * @param {Number} [opts.limit] - page size; omit for all rows
    * @param {Number} [opts.offset]
    * @param {Number} [opts.seed] - shuffle seed for random order
    * @returns {Promise<{works: Object[], totalCount: Array<{count: number}>}>}
    */
-  const getWorksBy = async ({username = '', nsfw = 0, order = 'release', sort = 'desc', limit, offset, seed} = {}) => {
+  const getWorksBy = async ({username = '', nsfw = 0, rating, progress, review, order = 'release', sort = 'desc', limit, offset, seed} = {}) => {
     // Build the core query (t_work ⋈ t_circle)
     let coreQ = knex('t_work')
       .join('t_circle', 't_circle.id', 't_work.circle_id')
@@ -752,6 +856,11 @@ const makeQueries = (knex) => {
 
     // Apply nsfw filter
     coreQ = nsfwFilter(nsfw, coreQ);
+    coreQ = ratingFilter(rating, coreQ);
+    coreQ = reviewFilter(review, coreQ, username);
+    if (progress && progress.length) {
+      coreQ = progressFilter(progress, userProgressJoin(coreQ, username));
+    }
 
     // Compute totalCount
     const countRow = await coreQ.clone().count('t_work.id as count').first();
@@ -771,6 +880,14 @@ const makeQueries = (knex) => {
         .orderBy(knex.raw('random()'))
         .limit(1);
       works = await assembleWorks(rows, { username });
+    } else if (order === 'played') {
+      let playedQ = playHistoryJoin(coreQ.clone(), username)
+        .orderBy('playhistory.updated_at', sort)
+        .orderBy([{ column: 't_work.release', order: 'desc' }, { column: 't_work.id', order: 'desc' }]);
+      if (limit != null) {
+        playedQ = playedQ.limit(limit).offset(offset || 0);
+      }
+      works = await attachUserRatings(await assembleWorks(await playedQ, { username }), username);
     } else {
       // Standard ordering — may need userrate for 'rating' order
       let orderedQ = coreQ.clone();
@@ -798,20 +915,8 @@ const makeQueries = (knex) => {
       // If we ordered by rating, userRating is already on the rows; assembleWorks passes it through
       works = await assembleWorks(rows, { username });
 
-      // If userRating was selected via LEFT JOIN, it's already on the rows
       if (order !== 'rating') {
-        // Batch-fetch user ratings for the page
-        const ids = works.map(w => w.id);
-        if (ids.length > 0) {
-          const ratings = await knex('t_review')
-            .select('work_id', 'rating as userRating')
-            .where('user_name', username)
-            .whereIn('work_id', ids);
-          const ratingMap = new Map(ratings.map(r => [r.work_id, r.userRating]));
-          for (const w of works) {
-            w.userRating = ratingMap.get(w.id) || null;
-          }
-        }
+        works = await attachUserRatings(works, username);
       }
     }
 
@@ -912,7 +1017,7 @@ const makeQueries = (knex) => {
       .orWhereIn('t_work.id', tags.union([vas, illustrators, scriptWriters, series, authors]));
   };
 
-  const getWorksByFilter = async ({filter, username = 'admin', nsfw = 0, order = 'release', sort = 'desc', limit, offset, seed} = {}) => {
+  const getWorksByFilter = async ({filter, username = 'admin', nsfw = 0, rating, progress, review, order = 'release', sort = 'desc', limit, offset, seed} = {}) => {
     let coreQ = knex('t_work')
       .join('t_circle', 't_circle.id', 't_work.circle_id')
       .select(
@@ -932,6 +1037,11 @@ const makeQueries = (knex) => {
     }
 
     coreQ = nsfwFilter(nsfw, coreQ);
+    coreQ = ratingFilter(rating, coreQ);
+    coreQ = reviewFilter(review, coreQ, username);
+    if (progress && progress.length) {
+      coreQ = progressFilter(progress, userProgressJoin(coreQ, username));
+    }
 
     const countRow = await coreQ.clone().count('t_work.id as count').first();
     const totalCount = [{ count: countRow ? countRow.count : 0 }];
@@ -944,6 +1054,14 @@ const makeQueries = (knex) => {
         .limit(limit)
         .offset(offset || 0);
       works = await assembleWorks(rows, { username });
+    } else if (order === 'played') {
+      let playedQ = playHistoryJoin(coreQ.clone(), username)
+        .orderBy('playhistory.updated_at', sort)
+        .orderBy([{ column: 't_work.release', order: 'desc' }, { column: 't_work.id', order: 'desc' }]);
+      if (limit != null) {
+        playedQ = playedQ.limit(limit).offset(offset || 0);
+      }
+      works = await attachUserRatings(await assembleWorks(await playedQ, { username }), username);
     } else {
       let orderedQ = coreQ.clone();
       if (order === 'rating') {
@@ -969,17 +1087,7 @@ const makeQueries = (knex) => {
 
       // Batch-fetch user ratings if not already joined
       if (order !== 'rating') {
-        const ids = works.map(w => w.id);
-        if (ids.length > 0) {
-          const ratings = await knex('t_review')
-            .select('work_id', 'rating as userRating')
-            .where('user_name', username)
-            .whereIn('work_id', ids);
-          const ratingMap = new Map(ratings.map(r => [r.work_id, r.userRating]));
-          for (const w of works) {
-            w.userRating = ratingMap.get(w.id) || null;
-          }
-        }
+        works = await attachUserRatings(works, username);
       }
     }
 
@@ -1069,7 +1177,7 @@ const makeQueries = (knex) => {
 
   // 添加星标或评语或进度
   // autoMark: when progressOnly=true, only writes/inserts progress='listened' if the
-  // existing progress (if any) is not in the terminal set ('listened','replay','postponed').
+  // existing progress (if any) is not in the terminal set ('listened','postponed').
   // This prevents auto-marking from overwriting an explicit user state.
   const updateUserReview = async (username, workid, rating, review_text = '', progress = '', starOnly = true, progressOnly = false, autoMark = false) => knex.transaction(async(trx) => {
       // UPSERT
@@ -1080,7 +1188,7 @@ const makeQueries = (knex) => {
         // Auto-mark: only write/insert 'listened' if terminal state is not set.
         const existing = await trx.raw('SELECT progress FROM t_review WHERE user_name = ? AND work_id = ?;', [username, workid]);
         const existingProgress = existing[0] ? existing[0].progress : null;
-        const terminal = ['listened', 'replay', 'postponed'];
+        const terminal = ['listened', 'postponed'];
         if (existingProgress && terminal.includes(existingProgress)) {
           // No-op — user has explicitly set a terminal state, do not overwrite.
           return;
@@ -1146,9 +1254,9 @@ const makeQueries = (knex) => {
     }
 
     // Order by
-    // 'userRating' is what the Favourites page sends as its sort option key;
-    // 'rating' is the value used elsewhere (e.g. getWorksBy). Treat both as
-    // the user's review rating, which lives on t_review (aliased as userRating).
+    // 'rating' is the key getWorksBy uses; 'userRating' is the one the
+    // /api/review list takes. Both mean the user's review rating, which lives
+    // on t_review (aliased as userRating).
     let orderCol;
     if (orderBy === 'rating' || orderBy === 'userRating') {
       orderCol = 't_review.rating';
@@ -1168,7 +1276,7 @@ const makeQueries = (knex) => {
     return {works, totalCount};
   };
 
-  const getPlayHistory = async ({username = '', sortOption = 'desc', limit = 1000, offset = 0, excludeFinished = 'listened'}) => {
+  const getPlayHistory = async ({username = '', sortOption = 'desc', limit = 1000, offset = 0, excludeFinished = 'listened', rating}) => {
     let coreQ = knex('t_work')
       .join('t_play_history', function() {
         this.on('t_play_history.work_id', '=', 't_work.id')
@@ -1189,6 +1297,8 @@ const makeQueries = (knex) => {
         't_play_history.state', 't_play_history.updated_at as play_updated_at',
         't_review.progress')
       .orderBy('t_play_history.updated_at', sortOption);
+
+    coreQ = ratingFilter(rating, coreQ);
 
     if (excludeFinished === 'listened') {
       coreQ = coreQ.where(function() {

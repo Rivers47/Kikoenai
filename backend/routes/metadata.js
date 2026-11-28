@@ -8,6 +8,7 @@ const { listWorkTracks, rescanWorkFiles } = require('../filesystem/workFiles');
 const { config } = require('../config');
 const normalize = require('./utils/normalize');
 const { isValidRequest, workIdParam } = require('./utils/validate');
+const { RATING_VALUES, PROGRESS_VALUES, REVIEW_VALUES, INVALID_FILTER_MESSAGE, parseFilterList } = require('./utils/filters');
 const { sanitizeDescriptionHtml, looksLikeHtml } = require('./utils/description-html');
 const { formatID, coverFileName, workImageFileNamePattern } = require('../filesystem/utils');
 const { scrapeWorkMetadataFromDLsite } = require('../scraper/dlsite');
@@ -165,7 +166,7 @@ router.get('/tracks/:id',
 // GET list of work ids without any search
 router.get('/works', 
   query('page').optional().isInt(),
-  query('order').optional().isIn(["release", "rating", "created_at", "random", "betterRandom"]),
+  query('order').optional().isIn(["release", "rating", "created_at", "played", "random", "betterRandom"]),
   query('sort').optional().isIn(['desc', 'asc']),
   query('nsfw').optional().isInt().isIn([0/* 无年龄限制 */, 1 /* 全年龄 */, 2 /* 仅R18 */]),
   query('seed').optional().isInt(),
@@ -174,18 +175,25 @@ router.get('/works',
     if(!isValidRequest(req, res)) return;
 
     const currentPage = parseInt(req.query.page) || 1;
-    // 通过 "音声id, 贩卖日, 评价, 用户评价, 售出数, 评论数量, 价格, 平均评价, 全年龄新作， 入库时间， 随机， 随机一个" 排序
+    // 通过 "音声id, 贩卖日, 评价, 用户评价, 售出数, 评论数量, 价格, 平均评价, 全年龄新作， 入库时间， 最近播放， 随机， 随机一个" 排序
     // ['id', 'release', 'rating', 'dl_count', 'review_count', 'price', 'rate_average_2dp', 'nsfw', 'created_at']
     const order = req.query.order || 'release';
     const sort = req.query.sort || 'desc';
     const nsfw = parseInt(req.query.nsfw || '0');
+    const rating = parseFilterList(req.query.rating, RATING_VALUES);
+    const progress = parseFilterList(req.query.progress, PROGRESS_VALUES);
+    const review = parseFilterList(req.query.review, REVIEW_VALUES);
     const offset = (currentPage - 1) * PAGE_SIZE;
     const username = config.auth ? req.user.name : 'admin';
     const shuffleSeed = req.query.seed ? req.query.seed : 7;
 
+    if (rating === null || progress === null || review === null) {
+      return res.status(400).send({ error: INVALID_FILTER_MESSAGE });
+    }
+
     try {
       const { works, totalCount } = await db.getWorksBy({
-        username, nsfw, order, sort, limit: PAGE_SIZE, offset, seed: shuffleSeed
+        username, nsfw, rating, progress, review, order, sort, limit: PAGE_SIZE, offset, seed: shuffleSeed
       });
       normalize(works);
     
@@ -240,13 +248,20 @@ router.get('/search', async (req, res, next) => {
   const order = req.query.order || 'release';
   const sort = req.query.sort || 'desc';
   const nsfw = parseInt(req.query.nsfw || '0'); 
+  const rating = parseFilterList(req.query.rating, RATING_VALUES);
+  const progress = parseFilterList(req.query.progress, PROGRESS_VALUES);
+  const review = parseFilterList(req.query.review, REVIEW_VALUES);
   const offset = (currentPage - 1) * PAGE_SIZE;
   const username = config.auth ? req.user.name : 'admin';
   const shuffleSeed = req.query.seed ? req.query.seed : 7;
+
+  if (rating === null || progress === null || review === null) {
+    return res.status(400).send({ error: INVALID_FILTER_MESSAGE });
+  }
   
   try {
     const { works, totalCount } = await db.getWorksByFilter({
-      filter, username, nsfw, order, sort, limit: PAGE_SIZE, offset, seed: shuffleSeed
+      filter, username, nsfw, rating, progress, review, order, sort, limit: PAGE_SIZE, offset, seed: shuffleSeed
     });
     normalize(works);
 

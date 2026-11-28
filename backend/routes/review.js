@@ -13,7 +13,7 @@ router.get('/',
   query('page').optional().isInt(),
   query('sort').optional().isIn(['desc', 'asc']),
   query('seed').optional().isInt(),
-  query('filter').optional().isIn(['marked', 'listening', 'listened', 'replay', 'postponed']),
+  query('filter').optional().isIn(['marked', 'listened', 'postponed']),
    
   async (req, res, next) => {
     if(!isValidRequest(req, res)) return;
@@ -50,7 +50,7 @@ router.get('/',
 router.put('/:id',
   workIdParam(),
   body('rating').optional().isInt(),
-  body('progress').optional().isIn(['marked', 'listening', 'listened', 'replay', 'postponed']),
+  body('progress').optional().isIn(['marked', 'listened', 'postponed']),
   body('starOnly').optional().isBoolean(),
   body('progressOnly').optional().isBoolean(),
   query('autoMark').optional().isBoolean(),
