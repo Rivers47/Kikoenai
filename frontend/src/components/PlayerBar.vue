@@ -6,8 +6,7 @@
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
-    @pointercancel="onPointerUp"
-    @click="onBarClick"
+    @pointercancel="onPointerCancel"
     @wheel.prevent
   >
     <div
@@ -302,13 +301,25 @@ export default {
     return {
       showSleepTimer: false,
       seeking: false,
-      // Set by a tap on the bar, consumed by the click that ends it.
-      tapPending: false,
+      // True while the click ending the current press belongs to the bar.
+      swallowClick: false,
       railHovered: false,
       previewTime: 0,
       drag: null,
       railRect: null,
     }
+  },
+
+  mounted () {
+    // Only the click ending the bar's own press is the bar's to swallow: any new
+    // press starts a gesture of its own.
+    window.addEventListener('pointerdown', this.clearSwallowClick, true)
+    window.addEventListener('click', this.onGestureClick, true)
+  },
+
+  beforeUnmount () {
+    window.removeEventListener('pointerdown', this.clearSwallowClick, true)
+    window.removeEventListener('click', this.onGestureClick, true)
   },
 
   computed: {
@@ -499,7 +510,6 @@ export default {
     },
 
     onPointerDown (event) {
-      this.tapPending = false
       // The pill is its own action: a press there must not become the bar's
       // seek or "open the panel" tap.
       if (event.target.closest('.q-btn, .seek-undo')) return
@@ -512,6 +522,7 @@ export default {
       const onRail = Boolean(event.target.closest('.rail'))
       this.drag = { x0: event.clientX, y0: event.clientY, mode: onRail ? 'seek' : null }
       if (onRail) this.previewAt(event.clientX)
+      this.swallowClick = true
     },
 
     // Only the rail counts as a seek: the ±seconds buttons and the lyric rows
@@ -551,20 +562,39 @@ export default {
       if (this.drag) {
         if (this.drag.mode === 'seek' && this.seeking) this.seekTo(this.previewTime)
         // Only on phones: on a wide screen the panel has nothing to add, so a
-        // tap on the bar is not a "open the big player" gesture. A tap is only
-        // recognised here -- it is acted on in `onBarClick`.
-        else if (!this.drag.mode && this.compact) this.tapPending = true
+        // tap on the bar is not an "open the big player" gesture.
+        else if (!this.drag.mode && this.compact) this.openPanel()
       }
+      this.resetGesture()
+    },
+
+    // The browser took the gesture over (an edge swipe, a system sheet): it never
+    // became a tap, so it must open nothing.
+    onPointerCancel () {
+      this.resetGesture()
+    },
+
+    resetGesture () {
       this.drag = null
       this.seeking = false
       this.previewTime = 0
     },
 
-    onBarClick (event) {
-      if (!this.tapPending) return
-      this.tapPending = false
-      if (event.target.closest('.q-btn, .seek-undo')) return
-      this.openPanel()
+    clearSwallowClick () {
+      this.swallowClick = false
+    },
+
+    // The press was acted on already, so its click now aims at whatever the bar
+    // hides (a track row) -- swallow it before any listener runs.
+    onGestureClick (event) {
+      if (!this.swallowClick) return
+      if (this.$el.contains(event.target)) {
+        // The bar is still under the finger: nothing behind it can get this one.
+        this.swallowClick = false
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
     },
   },
 }
